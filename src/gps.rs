@@ -59,6 +59,11 @@ pub struct NmeaParser {
     warmup_count: u8,
     warmup_lat_sum: f64,
     warmup_lon_sum: f64,
+    // Position-based speed calculation
+    last_valid_lat: f64,
+    last_valid_lon: f64,
+    last_valid_time_ms: u32,
+    pub position_based_speed: f32,
 }
 
 const GPS_WARMUP_FIXES: u8 = 5;
@@ -72,6 +77,10 @@ impl NmeaParser {
             warmup_count: 0,
             warmup_lat_sum: 0.0,
             warmup_lon_sum: 0.0,
+            last_valid_lat: 0.0,
+            last_valid_lon: 0.0,
+            last_valid_time_ms: 0,
+            position_based_speed: 0.0,
         }
     }
     
@@ -177,6 +186,13 @@ impl NmeaParser {
                 self.reference.lat = self.warmup_lat_sum / self.warmup_count as f64;
                 self.reference.lon = self.warmup_lon_sum / self.warmup_count as f64;
                 self.reference.set = true;
+                
+                // Initialize position tracking
+                self.last_valid_lat = lat;
+                self.last_valid_lon = lon;
+                self.last_valid_time_ms = unsafe { 
+                    (esp_idf_svc::sys::esp_timer_get_time() / 1000) as u32 
+                };
             }
             
             // Don't update last_fix position until reference is set
@@ -184,6 +200,33 @@ impl NmeaParser {
             self.last_fix.valid = false;
             return;
         }
+        
+        // Calculate position-based speed to detect stopped motion
+        let now_ms = unsafe { (esp_idf_svc::sys::esp_timer_get_time() / 1000) as u32 };
+        let dt = (now_ms - self.last_valid_time_ms) as f32 / 1000.0;
+        
+        if dt > 0.1 && dt < 2.0 {  // Reasonable time delta (0.1s to 2s)
+            let dlat = lat - self.last_valid_lat;
+            let dlon = lon - self.last_valid_lon;
+            
+            // Convert to meters
+            let dy = (dlat * 111320.0) as f32;
+            let dx = (dlon * 111320.0 * self.reference.lat.to_radians().cos()) as f32;
+            let dist = (dx * dx + dy * dy).sqrt();
+            
+            self.position_based_speed = dist / dt;
+            
+            // Override GPS speed if position says we're stopped
+            // This handles GPS Doppler lag when coming to a stop
+            if self.position_based_speed < 0.3 && self.last_fix.speed > 0.5 {
+                self.last_fix.speed = self.position_based_speed;
+            }
+        }
+        
+        // Update tracking variables
+        self.last_valid_lat = lat;
+        self.last_valid_lon = lon;
+        self.last_valid_time_ms = now_ms;
         
         // Reference is set, now we can process positions normally
         self.last_fix.lat = lat;

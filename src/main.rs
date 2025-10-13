@@ -5,6 +5,7 @@ mod mqtt;
 mod rgb_led;
 mod ekf;
 mod transforms;
+mod mode;
 
 use esp_idf_hal::delay::FreeRtos;
 use esp_idf_hal::peripherals::Peripherals;
@@ -20,6 +21,7 @@ use mqtt::MqttClient;
 use rgb_led::RgbLed;
 use ekf::Ekf;
 use transforms::{body_to_earth, remove_gravity};
+use mode::ModeClassifier;
 
 const CALIB_SAMPLES: usize = 500;
 const WIFI_SSID: &str = "GiraffeWireless";
@@ -240,17 +242,24 @@ fn main() {
     let mut imu_parser = Wt901Parser::new();
     imu_parser.set_bias(bias);
     let mut gps_parser = NmeaParser::new();
-    let mut ekf = Ekf::new();  // Initialize EKF
+    let mut ekf = Ekf::new();
+    let mut mode_classifier = ModeClassifier::new();
+    
+    // GPS state tracking (proper state machine, not one-time flags)
+    let mut gps_was_locked = false;           // Previous loop GPS state
+    let mut last_gps_status_ms = 0u32;        // Last status message sent
+    let mut last_warmup_progress = 0.0f32;    // Track warmup progress changes
+    
+    // ZUPT state tracking
+    let mut stationary_count = 0u32;          // Consecutive stationary detections
     
     if let Some(ref mut mqtt) = mqtt_opt {
         mqtt.publish_status("waiting_gps", None).ok();
     }
     
-    // Main loop - cyan heartbeat every 2s
+    // Main loop
     let mut last_mqtt_ms = 0u32;
     let mut last_imu_us = unsafe { esp_idf_svc::sys::esp_timer_get_time() as u64 };
-    let mut gps_warmup_announced = false;
-    let mut gps_fix_announced = false;
     let mut buf = [0u8; 1];
     
     loop {
@@ -303,52 +312,26 @@ fn main() {
         // Read GPS and update EKF
         if gps_uart.read(&mut buf, 0).unwrap_or(0) > 0 {
             if gps_parser.feed_byte(buf[0]) {
-                // GPS warmup phase - collecting initial fixes
-                if !gps_parser.is_warmed_up() && !gps_warmup_announced {
-                    if let Some(ref mut mqtt) = mqtt_opt {
-                        let progress = gps_parser.warmup_progress();
-                        mqtt.publish_status("gps_warmup", Some(progress)).ok();
-                    }
-                    // Yellow LED pulses during warmup
-                    if now_ms % 500 < 250 {
-                        led.yellow().ok();
-                    } else {
-                        led.set_low().ok();
-                    }
-                }
-                
-                // GPS warmup complete - announce lock
-                if gps_parser.is_warmed_up() && !gps_fix_announced {
-                    if let Some(ref mut mqtt) = mqtt_opt {
-                        mqtt.publish_status("gps_lock", None).ok();
-                    }
-                    // Green flash = GPS locked
-                    for _ in 0..3 {
-                        led.green().unwrap();
-                        FreeRtos::delay_ms(100);
-                        led.set_low().unwrap();
-                        FreeRtos::delay_ms(100);
-                    }
-                    gps_warmup_announced = true;
-                    gps_fix_announced = true;
-                }
-                
                 // Update EKF with GPS measurements (only after warmup)
                 if gps_parser.last_fix.valid {
-                    if let Some((x, y)) = gps_parser.to_local_coords() {
-                        ekf.update_position(x, y);
-                    }
+                    let (ax_corr, ay_corr, _) = imu_parser.get_accel_corrected();
                     
-                    if let Some((vx, vy)) = gps_parser.get_velocity_enu() {
-                        let speed = (vx * vx + vy * vy).sqrt();
-                        ekf.update_velocity(vx, vy);
-                        ekf.update_speed(speed);
+                    // Check if stationary BEFORE updating position
+                    if is_stationary(
+                        ax_corr, 
+                        ay_corr, 
+                        imu_parser.data.wz, 
+                        gps_parser.last_fix.speed,
+                        gps_parser.position_based_speed
+                    ) {
+                        stationary_count += 1;
                         
-                        // Zero velocity update if stationary
-                        let (ax_corr, ay_corr, _) = imu_parser.get_accel_corrected();
-                        if is_stationary(ax_corr, ay_corr, imu_parser.data.wz, speed) {
+                        // After 5 consecutive stationary detections (~1 second @ 5 Hz)
+                        // Apply ZUPT but DON'T update position (prevents indoor drift)
+                        if stationary_count >= 5 {
                             ekf.zupt();
-                            // Also update biases when stationary
+                            
+                            // Update biases when stationary
                             let (ax_b, ay_b, _) = remove_gravity(
                                 ax_corr, ay_corr, imu_parser.data.az,
                                 imu_parser.data.roll, imu_parser.data.pitch,
@@ -358,22 +341,121 @@ fn main() {
                                 imu_parser.data.roll, imu_parser.data.pitch, ekf.yaw(),
                             );
                             ekf.update_bias(ax_e, ay_e);
+                            
+                            // Reset display speed
+                            mode_classifier.reset_speed();
+                            
+                            // Don't update position - it's just GPS noise
+                        } else {
+                            // Still counting - update position normally
+                            if let Some((x, y)) = gps_parser.to_local_coords() {
+                                ekf.update_position(x, y);
+                            }
                         }
+                    } else {
+                        // Moving - reset counter and update normally
+                        stationary_count = 0;
+                        
+                        if let Some((x, y)) = gps_parser.to_local_coords() {
+                            ekf.update_position(x, y);
+                        }
+                    }
+                    
+                    // Always update velocity and speed (even when stationary)
+                    if let Some((vx, vy)) = gps_parser.get_velocity_enu() {
+                        let speed = (vx * vx + vy * vy).sqrt();
+                        ekf.update_velocity(vx, vy);
+                        ekf.update_speed(speed);
                     }
                 }
             }
         }
         
+        // ====== GPS STATE MACHINE (proper state tracking) ======
+        let gps_locked_now = gps_parser.is_warmed_up() && gps_parser.last_fix.valid;
+        
+        // Detect GPS ACQUIRED (transition: false -> true)
+        if gps_locked_now && !gps_was_locked {
+            if let Some(ref mut mqtt) = mqtt_opt {
+                mqtt.publish_status("gps_lock", None).ok();
+            }
+            // Green flash = GPS locked
+            for _ in 0..3 {
+                led.green().unwrap();
+                FreeRtos::delay_ms(100);
+                led.set_low().unwrap();
+                FreeRtos::delay_ms(100);
+            }
+        }
+        
+        // Detect GPS LOST (transition: true -> false)
+        if !gps_locked_now && gps_was_locked {
+            if let Some(ref mut mqtt) = mqtt_opt {
+                mqtt.publish_status("gps_lost", None).ok();
+            }
+        }
+        
+        // Continuous status updates based on CURRENT state
+        if !gps_locked_now && now_ms - last_gps_status_ms >= 5000 {
+            if !gps_parser.is_warmed_up() {
+                // Still waiting for first fix
+                if let Some(ref mut mqtt) = mqtt_opt {
+                    mqtt.publish_status("waiting_gps", None).ok();
+                }
+            } else {
+                // Warmup complete but fix lost (tunnel scenario)
+                if let Some(ref mut mqtt) = mqtt_opt {
+                    mqtt.publish_status("gps_lost", None).ok();
+                }
+            }
+            last_gps_status_ms = now_ms;
+        }
+        
+        // Warmup progress updates (if actively warming up)
+        if gps_parser.is_warmed_up() && !gps_locked_now {
+            let progress = gps_parser.warmup_progress();
+            if (progress - last_warmup_progress).abs() > 0.1 {  // Update every 10%
+                if let Some(ref mut mqtt) = mqtt_opt {
+                    mqtt.publish_status("gps_warmup", Some(progress)).ok();
+                }
+                last_warmup_progress = progress;
+            }
+        }
+        
+        // Update previous state for next iteration
+        gps_was_locked = gps_locked_now;
+        
         // Publish telemetry at 5 Hz if MQTT available
-        if mqtt_opt.is_some() && now_ms - last_mqtt_ms >= 200 {
-            publish_telemetry_ekf(mqtt_opt.as_mut().unwrap(), &imu_parser, &gps_parser, &ekf);
+        if mqtt_opt.is_some() && now_ms - last_mqtt_ms >= 10 {
+            // Update mode classifier before publishing
+            let (vx, vy) = ekf.velocity();
+            let (ax_corr, ay_corr, _) = imu_parser.get_accel_corrected();
+            let (ax_b, ay_b, _) = remove_gravity(
+                ax_corr, ay_corr, imu_parser.data.az,
+                imu_parser.data.roll, imu_parser.data.pitch,
+            );
+            let (ax_e, ay_e) = body_to_earth(
+                ax_b, ay_b, 0.0,
+                imu_parser.data.roll, imu_parser.data.pitch, ekf.yaw(),
+            );
+            mode_classifier.update(ax_e, ay_e, ekf.yaw(), imu_parser.data.wz, vx, vy);
+            
+            publish_telemetry_ekf(mqtt_opt.as_mut().unwrap(), &imu_parser, &gps_parser, &ekf, &mode_classifier);
             last_mqtt_ms = now_ms;
         }
         
-        // Heartbeat LED - CYAN pulse (only after GPS locked)
-        if gps_fix_announced {
+        // LED reflects CURRENT GPS state
+        if gps_locked_now {
+            // Cyan heartbeat when GPS locked
             if now_ms % 2000 < 100 {
                 led.cyan().ok();
+            } else {
+                led.set_low().ok();
+            }
+        } else {
+            // Yellow pulse when waiting for GPS
+            if now_ms % 500 < 250 {
+                led.yellow().ok();
             } else {
                 led.set_low().ok();
             }
@@ -416,21 +498,39 @@ fn calibrate_imu_optional(
     calibrator.compute_bias().ok_or("Failed to compute bias")
 }
 
-/// Check if vehicle is stationary
-fn is_stationary(ax: f32, ay: f32, wz: f32, gps_speed: f32) -> bool {
-    const ACC_THR: f32 = 0.08 * 9.80665; // 0.08 g
-    const WZ_THR: f32 = 5.0 * 0.017453293; // 5 degrees/s in rad/s
+/// Check if vehicle is stationary (outdoor-optimized thresholds)
+fn is_stationary(ax: f32, ay: f32, wz: f32, gps_speed: f32, position_speed: f32) -> bool {
+    const ACC_THR: f32 = 0.18 * 9.80665;     // 0.18 g (slightly relaxed for outdoor)
+    const WZ_THR: f32 = 12.0 * 0.017453293;  // 12 degrees/s (lenient for outdoor)
+    const GPS_SPEED_THR: f32 = 3.5;          // 3.5 m/s (~12.6 km/h) - outdoor optimized
+    const POS_SPEED_THR: f32 = 5.0;          // 5 m/s - handles GPS noise after smoothing
     
-    ax.abs() < ACC_THR && ay.abs() < ACC_THR && wz.abs() < WZ_THR && gps_speed < 0.15
+    let low_inertial = ax.abs() < ACC_THR && ay.abs() < ACC_THR && wz.abs() < WZ_THR;
+    let low_speed = gps_speed < GPS_SPEED_THR && position_speed < POS_SPEED_THR;
+    
+    low_inertial && low_speed
 }
 
-fn publish_telemetry_ekf(mqtt: &mut MqttClient, imu: &Wt901Parser, gps: &NmeaParser, ekf: &Ekf) {
+fn publish_telemetry_ekf(
+    mqtt: &mut MqttClient, 
+    imu: &Wt901Parser, 
+    gps: &NmeaParser, 
+    ekf: &Ekf,
+    mode_classifier: &ModeClassifier
+) {
     use serde_json::json;
     
     let (ax, ay, az) = imu.get_accel_corrected();
     let (ekf_x, ekf_y) = ekf.position();
-    let (ekf_vx, ekf_vy) = ekf.velocity();
-    let ekf_speed_kmh = ekf.speed() * 3.6;
+    let (mut ekf_vx, mut ekf_vy) = ekf.velocity();
+    let mut ekf_speed_kmh = mode_classifier.get_speed_kmh();
+    
+    // Clamp very small values to zero (noise floor) - improves display
+    if ekf_speed_kmh < 0.5 {
+        ekf_speed_kmh = 0.0;
+        ekf_vx = 0.0;
+        ekf_vy = 0.0;
+    }
     
     let payload = json!({
         "t": unsafe { esp_idf_svc::sys::esp_timer_get_time() / 1000 },
@@ -438,44 +538,18 @@ fn publish_telemetry_ekf(mqtt: &mut MqttClient, imu: &Wt901Parser, gps: &NmeaPar
         "wz": imu.data.wz,
         "roll": imu.data.roll.to_radians(),
         "pitch": imu.data.pitch.to_radians(),
-        "yaw": ekf.yaw(),  // Use EKF yaw
-        "x": ekf_x,        // Use EKF position
+        "yaw": ekf.yaw(),
+        "x": ekf_x,
         "y": ekf_y,
-        "vx": ekf_vx,      // Use EKF velocity
+        "vx": ekf_vx,
         "vy": ekf_vy,
-        "kmh": ekf_speed_kmh,  // Use EKF speed
+        "kmh": ekf_speed_kmh,
         "lat": if gps.last_fix.valid { gps.last_fix.lat } else { f64::NAN },
         "lon": if gps.last_fix.valid { gps.last_fix.lon } else { f64::NAN },
-        "gps_warmup": gps.is_warmed_up(),  // Add warmup status
-        "mode": "IDLE"
-    }).to_string();
-    
-    mqtt.publish("car/telemetry", &payload, false).ok();
-}
-
-// Old telemetry function - keeping for reference but not used
-#[allow(dead_code)]
-fn publish_telemetry(mqtt: &mut MqttClient, imu: &Wt901Parser, gps: &NmeaParser) {
-    use serde_json::json;
-    
-    let (ax, ay, az) = imu.get_accel_corrected();
-    let (x, y) = gps.to_local_coords().unwrap_or((0.0, 0.0));
-    let (vx, vy) = gps.get_velocity_enu().unwrap_or((0.0, 0.0));
-    let speed_kmh = (vx * vx + vy * vy).sqrt() * 3.6;
-    
-    let payload = json!({
-        "t": unsafe { esp_idf_svc::sys::esp_timer_get_time() / 1000 },
-        "ax": ax, "ay": ay, "az": az,
-        "wz": imu.data.wz,
-        "roll": imu.data.roll.to_radians(),
-        "pitch": imu.data.pitch.to_radians(),
-        "yaw": imu.data.yaw.to_radians(),
-        "x": x, "y": y,
-        "vx": vx, "vy": vy,
-        "kmh": speed_kmh,
-        "lat": if gps.last_fix.valid { gps.last_fix.lat } else { f64::NAN },
-        "lon": if gps.last_fix.valid { gps.last_fix.lon } else { f64::NAN },
-        "mode": "IDLE"
+        "gps_warmup": gps.is_warmed_up(),
+        "gps_spd": gps.last_fix.speed * 3.6,
+        "pos_spd": gps.position_based_speed * 3.6,
+        "mode": mode_classifier.get_mode().as_str()
     }).to_string();
     
     mqtt.publish("car/telemetry", &payload, false).ok();
