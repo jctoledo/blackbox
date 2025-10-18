@@ -141,10 +141,11 @@ We love new ideas! Before suggesting a feature:
 
 We especially welcome contributions in these areas:
 
-1. **Sensor Support**
-   - Additional IMU drivers (MPU6050, BMI088, LSM6DSO)
-   - GPS improvements (GPGGA parsing, RTK, SBAS)
-   - Barometer/temperature sensors
+1. **Sensor Drivers** (in `drivers/`)
+   - Additional IMU driver crates (MPU6050, BMI088, LSM6DSO)
+   - GPS improvements to neo6m (GPGGA parsing, RTK, SBAS)
+   - New driver crates (barometer, temperature, pressure sensors)
+   - All drivers should be no-std compatible with zero dependencies
 
 2. **Communication**
    - BLE streaming for mobile apps
@@ -194,16 +195,27 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 cargo install cargo-espflash espflash ldproxy
 
 # Install Python dependencies (for telemetry receivers)
-pip3 install paho-mqtt
+pip3 install -r sensors/active-wing/tools/python/requirements.txt
 ```
 
 ### Building the Project
 
+This is a Cargo workspace. Build commands from the repository root:
+
 ```bash
-# Check code compiles
+# Check all workspace members compile
+cargo check
+
+# Build entire workspace (framework + drivers + active-wing)
 cargo build
 
-# Build release binary
+# Build specific package
+cargo build -p active-wing
+cargo build -p wt901
+cargo build -p neo6m
+
+# Build release binary for ESP32
+cd sensors/active-wing
 cargo build --release
 
 # Flash to ESP32 (will auto-detect port)
@@ -213,17 +225,20 @@ cargo espflash flash --release --monitor
 ### Testing Locally
 
 ```bash
-# Run Rust tests
+# Run Rust tests (workspace-wide)
 cargo test
 
-# Format code
+# Format code (uses shared .rustfmt.toml)
 cargo fmt
 
-# Run linter
+# Run linter (uses shared clippy.toml)
 cargo clippy -- -D warnings
 
+# Test Python syntax
+python3 -m py_compile sensors/active-wing/tools/python/*.py
+
 # Test telemetry receiver
-python3 tools/python/tcp_telemetry_server.py
+python3 sensors/active-wing/tools/python/tcp_telemetry_receiver.py
 ```
 
 ## Pull Request Process
@@ -373,7 +388,10 @@ Contributors are recognized in:
 ### Questions?
 
 Don't hesitate to ask questions:
-- Check [docs/FAQ.md](docs/FAQ.md) first
+- Check existing documentation:
+  - [SENSOR_DRIVERS.md](SENSOR_DRIVERS.md) - Driver crates architecture
+  - [WORKSPACE_STRUCTURE.md](WORKSPACE_STRUCTURE.md) - Cargo workspace organization
+  - [CLAUDE.md](CLAUDE.md) - Architecture overview
 - Open a GitHub issue with the `question` label
 - Comment on relevant PRs or issues
 

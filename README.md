@@ -155,7 +155,7 @@ fn main() {
 
 ## What's Included
 
-### Reusable Framework Components (in `/src`)
+### Reusable Framework Components (in `/framework`)
 
 Build any sensor system using these modules:
 - **`sensor_framework.rs`** - Plugin architecture, sensor registry
@@ -163,13 +163,21 @@ Build any sensor system using these modules:
 - **`transforms.rs`** - Coordinate frame transformations
 - **`sensors.rs`** - Sensor trait abstractions
 
+### Standalone Sensor Drivers (in `/drivers`)
+
+Reusable, no-std compatible sensor drivers:
+- **`wt901`** - WT901 9-axis IMU driver (UART protocol parser)
+- **`neo6m`** - NEO-6M GPS driver (NMEA parser + coordinate transforms)
+
+These drivers have zero dependencies and work in any Rust embedded project.
+
 ### Active Wing Reference Implementation (in `/sensors/active-wing`)
 
 A complete working example showing the framework in action:
 - **ESP32-C3 firmware** with sensor fusion
-- **WT901 IMU driver** (200Hz sampling)
-- **NEO-6M GPS driver** (5Hz with NMEA parsing)
-- **Binary telemetry protocol** (66-byte packets, 20Hz over TCP)
+- **WT901 IMU adapter** (wraps driver crate, 200Hz sampling)
+- **NEO-6M GPS adapter** (wraps driver crate, 5Hz with NMEA parsing)
+- **Binary telemetry protocol** (67-byte versioned packets, 20Hz over TCP)
 - **Python visualization tools** for data display
 - **Full documentation** and build instructions
 
@@ -178,6 +186,8 @@ A complete working example showing the framework in action:
 Learn the framework and build your own systems:
 - **[Sensor Toolkit Guide](docs/SENSOR_TOOLKIT_GUIDE.md)** - Step-by-step sensor integration
 - **[Architecture Guide](docs/ARCHITECTURE.md)** - System design patterns
+- **[Sensor Drivers Guide](SENSOR_DRIVERS.md)** - Standalone driver crates architecture
+- **[Workspace Structure](WORKSPACE_STRUCTURE.md)** - Cargo workspace organization
 - **[Active Wing README](sensors/active-wing/README.md)** - Reference implementation details
 
 ---
@@ -303,54 +313,77 @@ See the [Sensor Toolkit Guide](docs/SENSOR_TOOLKIT_GUIDE.md) for step-by-step in
 
 ## Repository Structure
 
+This is a **Cargo workspace** containing multiple related packages:
+
 ```
-automotive-sensor-fusion/
+active_wing/
 │
-├── src/                           ← FRAMEWORK (reusable)
-│   ├── lib.rs                     ← Framework entry point
-│   ├── sensor_framework.rs        ← Plugin architecture
-│   ├── ekf.rs                     ← Extended Kalman Filter
-│   ├── transforms.rs              ← Coordinate transformations
-│   └── sensors.rs                 ← Sensor trait abstractions
+├── Cargo.toml                     ← Workspace definition
+├── .rustfmt.toml                  ← Shared formatting config
+├── clippy.toml                    ← Shared linting config
 │
-├── docs/                          ← Framework documentation
-│   ├── SENSOR_TOOLKIT_GUIDE.md    ← How to add sensors
-│   ├── ARCHITECTURE.md            ← System design
-│   └── ARCHITECTURE_CLARIFICATION.md
+├── framework/                     ← FRAMEWORK (reusable)
+│   ├── Cargo.toml
+│   └── src/
+│       ├── lib.rs                 ← Framework entry point
+│       ├── sensor_framework.rs    ← Plugin architecture
+│       ├── ekf.rs                 ← Extended Kalman Filter
+│       ├── transforms.rs          ← Coordinate transformations
+│       └── sensors.rs             ← Sensor trait abstractions
+│
+├── drivers/                       ← SENSOR DRIVERS (reusable)
+│   ├── wt901/                     ← WT901 IMU driver crate
+│   │   ├── Cargo.toml             ← No dependencies, no-std
+│   │   ├── README.md              ← Driver documentation
+│   │   └── src/lib.rs             ← Parser, state machine
+│   │
+│   └── neo6m/                     ← NEO-6M GPS driver crate
+│       ├── Cargo.toml             ← No dependencies, no-std
+│       ├── README.md              ← Driver documentation
+│       └── src/lib.rs             ← NMEA parser, transforms
 │
 ├── sensors/                       ← SENSOR PROJECTS
-│   │
-│   ├── active-wing/               ← Reference implementation
-│   │   ├── src/                   ← ESP32 application code
-│   │   │   ├── main.rs            ← Application entry
-│   │   │   ├── imu.rs             ← WT901 driver
-│   │   │   ├── gps.rs             ← NEO-6M driver
-│   │   │   └── ...
-│   │   ├── tools/python/          ← Telemetry receivers
-│   │   ├── docs/                  ← Project-specific docs
-│   │   ├── Cargo.toml             ← Depends on framework
-│   │   └── README.md              ← Build instructions
-│   │
-│   └── your-project/              ← Your custom sensor system
+│   └── active-wing/               ← Reference implementation
+│       ├── Cargo.toml             ← Depends on framework + drivers
+│       ├── config.toml.example    ← Runtime configuration
 │       ├── src/
-│       ├── Cargo.toml             ← Depends on framework
-│       └── README.md
+│       │   ├── main.rs            ← Application entry
+│       │   ├── config.rs          ← Configuration management
+│       │   ├── imu.rs             ← WT901 adapter (wraps driver)
+│       │   ├── gps.rs             ← NEO-6M adapter (wraps driver)
+│       │   ├── system.rs          ← System architecture
+│       │   └── ...
+│       ├── tools/python/          ← Telemetry receivers
+│       ├── docs/                  ← Project-specific docs
+│       └── README.md              ← Build instructions
 │
-├── Cargo.toml                     ← Framework library config
-└── README.md                      ← This file
+└── docs/                          ← Framework documentation
+    ├── SENSOR_TOOLKIT_GUIDE.md    ← How to add sensors
+    ├── ARCHITECTURE.md            ← System design
+    ├── SENSOR_DRIVERS.md          ← Driver crates guide
+    └── WORKSPACE_STRUCTURE.md     ← Workspace organization
 ```
 
-**Framework vs Projects:**
-- **Framework** (`/src`) - Reusable components for ANY sensor system
-- **Active Wing** (`/sensors/active-wing`) - ONE example using the framework
-- **Your Project** (`/sensors/your-project`) - YOUR sensor system using the framework
+**Workspace Structure Benefits:**
+- **Shared configuration** - Single .rustfmt.toml and clippy.toml
+- **Unified builds** - `cargo build` builds everything
+- **Local dependencies** - Drivers reference each other via `path = "../.."`
+- **Publishable crates** - Drivers can be published to crates.io independently
+
+See [WORKSPACE_STRUCTURE.md](WORKSPACE_STRUCTURE.md) for detailed explanation.
+
+**Package Roles:**
+- **Framework** (`framework/`) - Reusable sensor fusion components
+- **Drivers** (`drivers/`) - Standalone, reusable sensor parsers (no dependencies)
+- **Active Wing** (`sensors/active-wing/`) - Complete ESP32 application
+- **Your Project** - Add to `sensors/` and reference framework + drivers
 
 ---
 
 ## Data Export & Analysis
 
 ### Real-Time Streaming
-- **TCP binary protocol** (66 bytes/packet, 20Hz)
+- **TCP binary protocol** (67 bytes/packet, 20Hz, versioned)
 - **MQTT status messages** (JSON)
 - **WebSocket** support (coming soon)
 
@@ -364,9 +397,10 @@ automotive-sensor-fusion/
 
 ### Telemetry Format
 
-Binary packet (66 bytes):
+Binary packet (67 bytes, versioned):
 ```c
 struct TelemetryPacket {
+    uint8_t version;       // Protocol version (currently 1)
     uint16_t header;       // 0xAA55
     uint32_t timestamp_ms;
     float ax, ay, az;      // Acceleration (m/s²)
@@ -375,10 +409,10 @@ struct TelemetryPacket {
     float x, y;            // Position (m)
     float vx, vy;          // Velocity (m/s)
     float speed_kmh;       // Speed (km/h)
-    double lat, lon;       // GPS (degrees)
+    float lat, lon;        // GPS (degrees)
     uint8_t gps_valid;
     uint8_t mode;          // Driving mode
-    uint16_t crc;
+    uint16_t checksum;
 }
 ```
 
@@ -398,9 +432,12 @@ struct TelemetryPacket {
 ### Current (v0.1)
 -  ESP32-C3 + WT901 IMU + NEO-6M GPS
 -  Extended Kalman Filter fusion
--  TCP telemetry (20Hz)
+-  TCP telemetry (20Hz, versioned protocol)
 -  Python visualization
 -  Plugin architecture
+-  Cargo workspace structure
+-  Standalone driver crates (wt901, neo6m)
+-  Configuration management system
 
 ### Next Release (v0.2)
 -  Web-based dashboard (real-time)
