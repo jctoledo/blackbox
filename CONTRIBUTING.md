@@ -90,7 +90,7 @@ If you experience or witness unacceptable behavior, please report it by opening 
    ```
 3. **Add upstream remote**:
    ```bash
-   git remote add upstream https://github.com/ORIGINAL_OWNER/active_wing.git
+   git remote add upstream https://github.com/jctoledo/active_wing.git
    ```
 4. **Create a branch** for your work:
    ```bash
@@ -102,7 +102,7 @@ If you experience or witness unacceptable behavior, please report it by opening 
 ### Reporting Bugs
 
 Before submitting a bug report:
-- Check the [existing issues](https://github.com/ORIGINAL_OWNER/active_wing/issues) to avoid duplicates
+- Check the [existing issues](https://github.com/jctoledo/active_wing/issues) to avoid duplicates
 - Try the latest version from `main` branch
 - Collect information about your setup
 
@@ -124,7 +124,7 @@ Before submitting a bug report:
 
 We love new ideas! Before suggesting a feature:
 
-- Check if it's already been proposed in [issues](https://github.com/ORIGINAL_OWNER/active_wing/issues)
+- Check if it's already been proposed in [issues](https://github.com/jctoledo/active_wing/issues)
 - Consider if it fits the project's scope (vehicle telemetry/data acquisition)
 - Think about how it benefits the community
 

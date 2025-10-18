@@ -1,6 +1,8 @@
 /// Driving mode classifier
 /// Detects IDLE, ACCEL, BRAKE, and CORNER modes based on acceleration and yaw rate
 
+use crate::transforms::earth_to_car;
+
 const G: f32 = 9.80665; // m/s²
 
 /// Driving modes
@@ -97,13 +99,13 @@ impl ModeClassifier {
         if self.v_disp < 0.5 / 3.6 {  // < 0.5 km/h
             self.v_disp = 0.0;
         }
-        
+
         // Transform earth-frame acceleration to car-frame
-        let cos_yaw = yaw_rad.cos();
-        let sin_yaw = yaw_rad.sin();
-        
-        let a_lon = (cos_yaw * ax_earth + sin_yaw * ay_earth) / G;  // Convert to g
-        let a_lat = (-sin_yaw * ax_earth + cos_yaw * ay_earth) / G; // Convert to g
+        let (a_lon_ms2, a_lat_ms2) = earth_to_car(ax_earth, ay_earth, yaw_rad);
+
+        // Convert to g units
+        let a_lon = a_lon_ms2 / G;
+        let a_lat = a_lat_ms2 / G;
         
         // Update EMA filters
         let alpha = self.config.alpha;

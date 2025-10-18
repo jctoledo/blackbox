@@ -1,0 +1,24 @@
+[package]
+name = "active-wing-framework"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+
+[lib]
+name = "active_wing_framework"
+
+[dependencies]
+# Use workspace dependencies
+log.workspace = true
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+
+# ESP32-specific dependencies (optional for non-embedded use)
+esp-idf-hal = { workspace = true, optional = true }
+esp-idf-svc = { workspace = true, optional = true, features = ["binstart", "alloc", "std"] }
+esp-idf-sys = { workspace = true, optional = true }
+
+[features]
+default = []
+esp32 = ["esp-idf-hal", "esp-idf-svc", "esp-idf-sys"]
+mqtt = ["serde", "serde_json"]

@@ -5,34 +5,60 @@ use core::f32::consts::PI;
 
 const N: usize = 7; // State dimension
 
-// Process noise
-const Q_ACC: f32 = 0.40;   // (m/s²)²
-const Q_GYRO: f32 = 0.005; // (rad/s)²
-const Q_BIAS: f32 = 1e-3;  // (m/s²)²
+/// EKF tuning configuration
+/// Allows runtime adjustment of filter parameters (Open/Closed Principle)
+#[derive(Debug, Clone, Copy)]
+pub struct EkfConfig {
+    // Process noise parameters
+    pub q_acc: f32,    // (m/s²)² - Acceleration process noise
+    pub q_gyro: f32,   // (rad/s)² - Gyro process noise
+    pub q_bias: f32,   // (m/s²)² - Bias evolution noise
 
-// Measurement noise
-const R_POS: f32 = 20.0;   // (m)²
-const R_VEL: f32 = 0.2;    // (m/s)²
-const R_YAW: f32 = 0.10;   // (rad)²
+    // Measurement noise parameters
+    pub r_pos: f32,    // (m)² - GPS position measurement noise
+    pub r_vel: f32,    // (m/s)² - GPS velocity measurement noise
+    pub r_yaw: f32,    // (rad)² - Magnetometer yaw measurement noise
+
+    // Model parameters
+    pub min_speed: f32,  // m/s - Minimum speed for CTRA model
+}
+
+impl Default for EkfConfig {
+    fn default() -> Self {
+        Self {
+            q_acc: 0.40,
+            q_gyro: 0.005,
+            q_bias: 1e-3,
+            r_pos: 20.0,
+            r_vel: 0.2,
+            r_yaw: 0.10,
+            min_speed: 2.0,
+        }
+    }
+}
 
 /// EKF state and covariance
 pub struct Ekf {
     /// State: [x, y, ψ, vx, vy, bax, bay]
     pub x: [f32; N],
-    
+
     /// Covariance matrix (diagonal approximation for efficiency)
     pub p: [f32; N],
-    
-    /// Minimum speed for CTRA model (m/s)
-    pub min_speed: f32,
+
+    /// Filter configuration
+    pub config: EkfConfig,
 }
 
 impl Ekf {
     pub fn new() -> Self {
+        Self::with_config(EkfConfig::default())
+    }
+
+    pub fn with_config(config: EkfConfig) -> Self {
         Self {
             x: [0.0; N],
             p: [100.0, 100.0, 100.0, 100.0, 100.0, 1.0, 1.0],
-            min_speed: 2.0, // ~7 km/h
+            config,
         }
     }
     
@@ -65,7 +91,7 @@ impl Ekf {
     /// Prediction step using CTRA or constant acceleration model
     pub fn predict(&mut self, ax_earth: f32, ay_earth: f32, wz: f32, dt: f32) {
         let speed = self.speed();
-        let use_ctra = speed > self.min_speed;
+        let use_ctra = speed > self.config.min_speed;
         
         // Copy values to avoid borrowing issues
         let mut x = self.x[0];
@@ -106,42 +132,42 @@ impl Ekf {
         // Biases remain constant (self.x[5] and self.x[6] unchanged)
         
         // Update covariance (diagonal approximation)
-        let qx = 0.25 * Q_ACC * dt * dt;
-        let qv = Q_ACC * dt * dt;
+        let qx = 0.25 * self.config.q_acc * dt * dt;
+        let qv = self.config.q_acc * dt * dt;
         self.p[0] += qx;
         self.p[1] += qx;
-        self.p[2] += Q_GYRO * dt * dt;
+        self.p[2] += self.config.q_gyro * dt * dt;
         self.p[3] += qv;
         self.p[4] += qv;
-        self.p[5] += Q_BIAS * dt + 1e-6;
-        self.p[6] += Q_BIAS * dt + 1e-6;
+        self.p[5] += self.config.q_bias * dt + 1e-6;
+        self.p[6] += self.config.q_bias * dt + 1e-6;
     }
     
     /// Update with GPS position measurement
     pub fn update_position(&mut self, z_x: f32, z_y: f32) {
         // X position update
-        let s_x = self.p[0] + R_POS;
+        let s_x = self.p[0] + self.config.r_pos;
         let k_x = self.p[0] / s_x;
         self.x[0] += k_x * (z_x - self.x[0]);
         self.p[0] *= 1.0 - k_x;
-        
+
         // Y position update
-        let s_y = self.p[1] + R_POS;
+        let s_y = self.p[1] + self.config.r_pos;
         let k_y = self.p[1] / s_y;
         self.x[1] += k_y * (z_y - self.x[1]);
         self.p[1] *= 1.0 - k_y;
     }
-    
+
     /// Update with GPS velocity measurement
     pub fn update_velocity(&mut self, z_vx: f32, z_vy: f32) {
         // VX update
-        let s_x = self.p[3] + R_VEL;
+        let s_x = self.p[3] + self.config.r_vel;
         let k_x = self.p[3] / s_x;
         self.x[3] += k_x * (z_vx - self.x[3]);
         self.p[3] *= 1.0 - k_x;
-        
+
         // VY update
-        let s_y = self.p[4] + R_VEL;
+        let s_y = self.p[4] + self.config.r_vel;
         let k_y = self.p[4] / s_y;
         self.x[4] += k_y * (z_vy - self.x[4]);
         self.p[4] *= 1.0 - k_y;
@@ -178,10 +204,10 @@ impl Ekf {
     pub fn update_yaw(&mut self, z_yaw: f32) {
         // Wrap innovation to [-π, π]
         let dy = wrap_angle(z_yaw - self.x[2]);
-        
-        let s = self.p[2] + R_YAW;
+
+        let s = self.p[2] + self.config.r_yaw;
         let k = self.p[2] / s;
-        
+
         self.x[2] += k * dy;
         self.x[2] = wrap_angle(self.x[2]);
         self.p[2] *= 1.0 - k;

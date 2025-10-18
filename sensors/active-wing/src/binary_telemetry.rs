@@ -1,13 +1,19 @@
 /// Binary telemetry encoding for high-speed MQTT publishing
-/// Reduces payload from ~300 bytes JSON to ~64 bytes binary
+/// Reduces payload from ~300 bytes JSON to ~67 bytes binary
 /// Target: 20 Hz (50ms intervals) sustainable over MQTT
+///
+/// Protocol Version: 1
 
 use core::mem;
 
-/// Telemetry packet structure (64 bytes total, aligned)
+/// Current protocol version
+pub const PROTOCOL_VERSION: u8 = 1;
+
+/// Telemetry packet structure (67 bytes total with version field)
 #[repr(C, packed)]
 #[derive(Copy, Clone)]
 pub struct TelemetryPacket {
+    pub version: u8,        // Protocol version (1)
     pub header: u16,        // 0xAA55 magic
     pub timestamp_ms: u32,  // milliseconds
     
@@ -39,6 +45,7 @@ pub struct TelemetryPacket {
 impl TelemetryPacket {
     pub fn new() -> Self {
         Self {
+            version: PROTOCOL_VERSION,
             header: 0xAA55,
             timestamp_ms: 0,
             ax: 0.0, ay: 0.0, az: 0.0,
@@ -150,9 +157,16 @@ pub fn publish_telemetry_binary(
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_packet_size() {
-        assert_eq!(mem::size_of::<TelemetryPacket>(), 64);
+        assert_eq!(mem::size_of::<TelemetryPacket>(), 67);
+    }
+
+    #[test]
+    fn test_version_field() {
+        let packet = TelemetryPacket::new();
+        assert_eq!(packet.version, PROTOCOL_VERSION);
+        assert_eq!(packet.version, 1);
     }
 }

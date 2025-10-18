@@ -1,0 +1,43 @@
+[package]
+name = "active-wing"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+
+[profile.release]
+opt-level = "s"
+
+[profile.dev]
+debug = true
+opt-level = "z"
+
+[dependencies]
+# Sensor fusion framework (workspace member)
+active-wing-framework = { path = "../../framework" }
+
+# Sensor drivers (workspace members)
+wt901 = { path = "../../drivers/wt901" }
+neo6m = { path = "../../drivers/neo6m" }
+
+# ESP32 HAL and services
+esp-idf-hal = "0.45"
+esp-idf-svc = { version = "0.51", default-features = false, features = [
+    "binstart",
+    "alloc",
+    "std",
+] }
+esp-idf-sys = { version = "0.36", default-features = false }
+log = "0.4"
+embedded-svc = "0.28"
+serde = { version = "1.0", default-features = false, features = ["derive"] }
+serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
+
+# RGB LED support - use git version for compatibility with esp-idf-sys 0.36
+ws2812-esp32-rmt-driver = { git = "https://github.com/cat-in-136/ws2812-esp32-rmt-driver", branch = "main" }
+smart-leds = "0.4"
+
+[build-dependencies]
+embuild = "0.33"
+
+[package.metadata.esp-idf-sys]
+esp_idf_version = "v5.1.4"

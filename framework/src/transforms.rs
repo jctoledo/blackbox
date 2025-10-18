@@ -1,6 +1,7 @@
 /// Coordinate frame transformations
 
 const G: f32 = 9.80665; // m/s²
+const METERS_PER_DEGREE_LAT: f64 = 111320.0; // Approximate meters per degree latitude
 
 /// Transform body-frame acceleration to earth frame (ENU)
 /// 
@@ -92,10 +93,72 @@ pub fn earth_to_car(ax_earth: f32, ay_earth: f32, yaw_rad: f32) -> (f32, f32) {
     (a_lon, a_lat)
 }
 
+/// Convert latitude difference to meters
+///
+/// # Arguments
+/// * `dlat` - Latitude difference in degrees
+///
+/// # Returns
+/// * Distance in meters (north positive)
+pub fn lat_to_meters(dlat: f64) -> f32 {
+    (dlat * METERS_PER_DEGREE_LAT) as f32
+}
+
+/// Convert longitude difference to meters
+///
+/// # Arguments
+/// * `dlon` - Longitude difference in degrees
+/// * `ref_lat` - Reference latitude in degrees
+///
+/// # Returns
+/// * Distance in meters (east positive)
+pub fn lon_to_meters(dlon: f64, ref_lat: f64) -> f32 {
+    (dlon * METERS_PER_DEGREE_LAT * ref_lat.to_radians().cos()) as f32
+}
+
+/// Convert GPS coordinates to local ENU frame
+///
+/// # Arguments
+/// * `lat` - Current latitude (degrees)
+/// * `lon` - Current longitude (degrees)
+/// * `ref_lat` - Reference latitude (degrees)
+/// * `ref_lon` - Reference longitude (degrees)
+///
+/// # Returns
+/// * `(east, north)` - Position in meters relative to reference point
+pub fn gps_to_local(lat: f64, lon: f64, ref_lat: f64, ref_lon: f64) -> (f32, f32) {
+    let dlat = lat - ref_lat;
+    let dlon = lon - ref_lon;
+
+    let north = lat_to_meters(dlat);
+    let east = lon_to_meters(dlon, ref_lat);
+
+    (east, north)
+}
+
+/// Calculate distance between two GPS positions
+///
+/// # Arguments
+/// * `lat1, lon1` - First position (degrees)
+/// * `lat2, lon2` - Second position (degrees)
+/// * `ref_lat` - Reference latitude for longitude scaling (degrees)
+///
+/// # Returns
+/// * Distance in meters
+pub fn gps_distance(lat1: f64, lon1: f64, lat2: f64, lon2: f64, ref_lat: f64) -> f32 {
+    let dlat = lat2 - lat1;
+    let dlon = lon2 - lon1;
+
+    let dy = lat_to_meters(dlat);
+    let dx = lon_to_meters(dlon, ref_lat);
+
+    (dx * dx + dy * dy).sqrt()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_body_to_earth_no_rotation() {
         // No rotation, should pass through
@@ -103,7 +166,7 @@ mod tests {
         assert!((ax - 1.0).abs() < 0.001);
         assert!((ay - 0.0).abs() < 0.001);
     }
-    
+
     #[test]
     fn test_remove_gravity_level() {
         // Level sensor, gravity on Z axis
@@ -111,5 +174,20 @@ mod tests {
         assert!(ax.abs() < 0.001);
         assert!(ay.abs() < 0.001);
         assert!(az.abs() < 0.001);
+    }
+
+    #[test]
+    fn test_gps_to_local() {
+        // Test small displacement (~1 meter north)
+        let ref_lat = 37.0;
+        let ref_lon = -122.0;
+        let (east, north) = gps_to_local(
+            ref_lat + 0.00001,  // ~1.1m north
+            ref_lon,
+            ref_lat,
+            ref_lon
+        );
+        assert!(east.abs() < 0.1);  // Should be near zero
+        assert!((north - 1.11).abs() < 0.1);  // Should be ~1.11m
     }
 }
