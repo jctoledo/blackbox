@@ -1,4 +1,4 @@
-/// MQTT client wrapper
+/// MQTT client wrapper with binary support
 use esp_idf_svc::mqtt::client::{EspMqttClient, MqttClientConfiguration, QoS};
 use serde_json::json;
 use esp_idf_hal::delay::FreeRtos;
@@ -10,23 +10,22 @@ pub struct MqttClient {
 
 impl MqttClient {
     pub fn new(broker_url: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        info!("Creating MQTT config with large buffers");
+        info!("Creating MQTT config with optimized buffers for 20 Hz");
         
         let mqtt_config = MqttClientConfiguration {
             client_id: None,
             keep_alive_interval: Some(core::time::Duration::from_secs(30)),
-            network_timeout: core::time::Duration::from_secs(5),
-            buffer_size: 4096,
-            out_buffer_size: 4096,
+            network_timeout: core::time::Duration::from_secs(2),  // Reduced timeout
+            buffer_size: 2048,       // Smaller buffer, faster throughput
+            out_buffer_size: 4096,   // Larger outgoing for high-freq publishing
             ..Default::default()
         };
         
         info!("Creating MQTT client (non-blocking)");
-        // Don't keep the connection handle - let it be managed automatically
         let (client, _connection) = EspMqttClient::new(broker_url, &mqtt_config)?;
         
         info!("MQTT client created, waiting for async connection");
-        FreeRtos::delay_ms(5000);
+        FreeRtos::delay_ms(3000);  // Reduced wait time
         
         info!("Returning MQTT client");
         Ok(Self { client })
@@ -34,9 +33,15 @@ impl MqttClient {
     
     pub fn publish(&mut self, topic: &str, payload: &str, retain: bool) -> Result<(), Box<dyn std::error::Error>> {
         let qos = if retain { QoS::AtLeastOnce } else { QoS::AtMostOnce };
-        
-        // Use enqueue which is non-blocking - perfect for high-frequency publishing
         self.client.enqueue(topic, qos, retain, payload.as_bytes())?;
+        Ok(())
+    }
+    
+    /// Publish binary data (for high-speed telemetry)
+    pub fn publish_binary(&mut self, topic: &str, payload: &[u8], retain: bool) -> Result<(), Box<dyn std::error::Error>> {
+        // Always use QoS 0 (AtMostOnce) for high-frequency telemetry
+        // This is non-blocking and won't wait for ACKs
+        self.client.enqueue(topic, QoS::AtMostOnce, retain, payload)?;
         Ok(())
     }
     

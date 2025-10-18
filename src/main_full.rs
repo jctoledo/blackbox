@@ -7,7 +7,6 @@ mod ekf;
 mod transforms;
 mod mode;
 mod binary_telemetry;
-mod tcp_stream;
 
 use esp_idf_hal::delay::FreeRtos;
 use esp_idf_hal::peripherals::Peripherals;
@@ -24,34 +23,38 @@ use rgb_led::RgbLed;
 use ekf::Ekf;
 use transforms::{body_to_earth, remove_gravity};
 use mode::ModeClassifier;
-use tcp_stream::TcpTelemetryStream;
 
 const CALIB_SAMPLES: usize = 500;
 const WIFI_SSID: &str = "GiraffeWireless";
 const WIFI_PASSWORD: &str = "basicchair411";
 const MQTT_BROKER: &str = "mqtt://192.168.50.46:1883";
-const TCP_SERVER: &str = "192.168.50.46:9000";
 
-const TELEMETRY_INTERVAL_MS: u32 = 50;  // 20 Hz via TCP
+// Binary protocol allows 20 Hz (50ms) sustainable rate
+const MQTT_PUBLISH_INTERVAL_MS: u32 = 200;  // 20 Hz with binary encoding
 
 fn main() {
     esp_idf_svc::sys::link_patches();
     esp_idf_svc::log::EspLogger::initialize_default();
     
-    info!("=== ESP32-C3 Telemetry System ===");
-    info!("MQTT: Status messages");
-    info!("TCP:  Binary telemetry @ 20 Hz");
+    info!("=== ESP32-C3 Telemetry System (Binary Protocol @ 20 Hz) ===");
+    info!("Free heap at start: {} bytes", unsafe { 
+        esp_idf_svc::sys::esp_get_free_heap_size() 
+    });
     
     let peripherals = Peripherals::take().unwrap();
     let sysloop = EspSystemEventLoop::take().unwrap();
     let nvs = EspDefaultNvsPartition::take().ok();
     
+    // Initialize RGB LED
+    info!("Initializing RGB LED");
     let mut led = RgbLed::new(peripherals.rmt.channel0, peripherals.pins.gpio8)
         .expect("Failed to initialize RGB LED");
     
     led.set_low().unwrap();
     FreeRtos::delay_ms(1000);
     
+    // Boot blinks
+    info!("Boot sequence - 3 BLUE blinks");
     for i in 0..3 {
         led.blue().unwrap();
         FreeRtos::delay_ms(300);
@@ -61,6 +64,7 @@ fn main() {
     }
     FreeRtos::delay_ms(1000);
     
+    // WiFi setup
     info!("Initializing WiFi");
     let mut wifi = WifiManager::new(peripherals.modem, sysloop.clone(), nvs)
         .expect("WiFi init failed");
@@ -68,16 +72,18 @@ fn main() {
     info!("Connecting to WiFi: {}", WIFI_SSID);
     match wifi.connect(WIFI_SSID, WIFI_PASSWORD) {
         Ok(_) => {
-            info!("WiFi connected");
-            for _ in 0..5 {
+            info!("WiFi connected successfully");
+            for i in 0..5 {
                 led.green().unwrap();
                 FreeRtos::delay_ms(200);
                 led.set_low().unwrap();
                 FreeRtos::delay_ms(200);
+                info!("WiFi success blink {}/5", i + 1);
             }
+            FreeRtos::delay_ms(1500);
         }
         Err(e) => {
-            info!("WiFi failed: {:?}", e);
+            info!("WiFi connection failed: {:?}", e);
             loop {
                 led.red().unwrap();
                 FreeRtos::delay_ms(500);
@@ -87,39 +93,98 @@ fn main() {
         }
     }
     
-    // MQTT for status
+    // MQTT setup with better error handling
+    info!("About to initialize MQTT");
+    led.set_high().unwrap();
+    FreeRtos::delay_ms(300);
+    led.set_low().unwrap();
+    FreeRtos::delay_ms(300);
+    
     info!("Initializing MQTT");
     let mut mqtt_opt = match MqttClient::new(MQTT_BROKER) {
         Ok(m) => {
-            info!("MQTT connected");
+            info!("MQTT client created successfully");
+            for _ in 0..2 {
+                led.set_high().unwrap();
+                FreeRtos::delay_ms(200);
+                led.set_low().unwrap();
+                FreeRtos::delay_ms(200);
+            }
             Some(m)
         }
         Err(e) => {
-            info!("MQTT failed: {:?}", e);
-            None
-        }
-    };
-    
-    // TCP for telemetry
-    info!("Connecting TCP stream to {}", TCP_SERVER);
-    let mut tcp_stream = TcpTelemetryStream::new(TCP_SERVER);
-    let mut tcp_opt = match tcp_stream.connect() {
-        Ok(_) => {
-            info!("TCP connected!");
+            info!("MQTT init failed: {:?}", e);
             for _ in 0..3 {
-                led.cyan().unwrap();
-                FreeRtos::delay_ms(150);
+                led.red().unwrap();
+                FreeRtos::delay_ms(300);
                 led.set_low().unwrap();
-                FreeRtos::delay_ms(150);
+                FreeRtos::delay_ms(300);
             }
-            Some(tcp_stream)
-        }
-        Err(e) => {
-            info!("TCP failed: {:?}", e);
             None
         }
     };
     
+    // Test MQTT publish with timeout
+    if let Some(ref mut mqtt) = mqtt_opt {
+        info!("Testing MQTT publish");
+        led.blue().unwrap();
+        FreeRtos::delay_ms(200);
+        led.set_low().unwrap();
+        FreeRtos::delay_ms(200);
+        
+        let mut publish_ok = false;
+        for attempt in 0..50 {
+            led.set_high().unwrap();
+            FreeRtos::delay_ms(50);
+            led.set_low().unwrap();
+            FreeRtos::delay_ms(50);
+            
+            match mqtt.publish("car/status", "boot_binary_mode", false) {
+                Ok(_) => {
+                    info!("MQTT publish succeeded on attempt {}", attempt);
+                    publish_ok = true;
+                    break;
+                }
+                Err(e) => {
+                    if attempt % 10 == 0 {
+                        info!("Publish attempt {} failed: {:?}", attempt, e);
+                    }
+                    continue;
+                }
+            }
+        }
+        
+        if publish_ok {
+            for _ in 0..5 {
+                led.magenta().unwrap();
+                FreeRtos::delay_ms(100);
+                led.set_low().unwrap();
+                FreeRtos::delay_ms(100);
+            }
+        } else {
+            info!("MQTT publish timed out after 5 seconds");
+            for _ in 0..3 {
+                led.yellow().unwrap();
+                FreeRtos::delay_ms(300);
+                led.set_low().unwrap();
+                FreeRtos::delay_ms(300);
+            }
+            mqtt_opt = None;
+        }
+    }
+    
+    if mqtt_opt.is_none() {
+        info!("Continuing without MQTT");
+        for _ in 0..3 {
+            led.set_color(255, 128, 0).unwrap();
+            FreeRtos::delay_ms(200);
+            led.set_low().unwrap();
+            FreeRtos::delay_ms(200);
+        }
+    }
+    
+    // Initialize UARTs
+    info!("Initializing UART1 for IMU (GPIO18/19)");
     let imu_config = Config::new().baudrate(9600.into());
     let mut imu_uart = UartDriver::new(
         peripherals.uart1,
@@ -130,7 +195,8 @@ fn main() {
         &imu_config,
     ).unwrap();
     
-    info!("Initializing GPS");
+    info!("Initializing UART0 for GPS (GPIO5/4)");
+    info!("NOTE: Serial console will stop after this point");
     let gps_uart = UartDriver::new(
         peripherals.uart0,
         peripherals.pins.gpio5,
@@ -140,6 +206,7 @@ fn main() {
         &Config::new().baudrate(9600.into()),
     ).unwrap();
     
+    // Configure GPS to 5 Hz
     let ubx_rate_5hz: [u8; 14] = [
         0xB5, 0x62, 0x06, 0x08, 0x06, 0x00,
         0xC8, 0x00, 0x01, 0x00, 0x01, 0x00,
@@ -147,6 +214,12 @@ fn main() {
     ];
     gps_uart.write(&ubx_rate_5hz).ok();
     FreeRtos::delay_ms(100);
+    
+    // Calibrate IMU
+    led.yellow().unwrap();
+    FreeRtos::delay_ms(500);
+    led.set_low().unwrap();
+    FreeRtos::delay_ms(500);
     
     if let Some(ref mut mqtt) = mqtt_opt {
         mqtt.publish_status("calib_start", Some(0.0)).ok();
@@ -159,48 +232,70 @@ fn main() {
         mqtt.publish_status("calib_done", Some(1.0)).ok();
     }
     
+    // Initialize parsers and filters
     let mut imu_parser = Wt901Parser::new();
     imu_parser.set_bias(bias);
     let mut gps_parser = NmeaParser::new();
     let mut ekf = Ekf::new();
     let mut mode_classifier = ModeClassifier::new();
     
+    // GPS state tracking
     let mut gps_was_locked = false;
     let mut last_gps_status_ms = 0u32;
+    let mut last_warmup_progress = 0.0f32;
+    
+    // ZUPT state tracking
     let mut stationary_count = 0u32;
     
     if let Some(ref mut mqtt) = mqtt_opt {
         mqtt.publish_status("waiting_gps", None).ok();
     }
     
-    let mut last_telemetry_ms = 0u32;
+    // Main loop timing
+    let mut last_mqtt_ms = 0u32;
     let mut last_imu_us = unsafe { esp_idf_svc::sys::esp_timer_get_time() as u64 };
     let mut last_heap_check_ms = 0u32;
     let mut buf = [0u8; 1];
     
-    let mut telemetry_count = 0u32;
-    let mut telemetry_fail_count = 0u32;
-    let mut loop_count = 0u32;
+    // Publish failure tracking
+    let mut consecutive_publish_failures = 0u32;
+    const MAX_PUBLISH_FAILURES: u32 = 10;
     
-    info!("=== Entering main loop ===");
+    // Publish rate monitoring
+    let mut publish_count = 0u32;
+    let mut last_rate_check_ms = 0u32;
+    let mut publish_attempt_count = 0u32;  // How many times we tried to publish
+    let mut loop_count = 0u32;  // Total loop iterations
+    
+    info!("=== Entering main loop (Binary telemetry @ 20 Hz) ===");
     
     loop {
         let now_ms = unsafe { (esp_idf_svc::sys::esp_timer_get_time() / 1000) as u32 };
         let now_us = unsafe { esp_idf_svc::sys::esp_timer_get_time() as u64 };
+        
         loop_count += 1;
         
+        // Periodic heap monitoring (every 5 seconds)
         if now_ms - last_heap_check_ms >= 5000 {
             let free_heap = unsafe { esp_idf_svc::sys::esp_get_free_heap_size() };
-            let telem_rate = telemetry_count / 5;
+            let publish_rate = publish_count / 5;
+            let attempt_rate = publish_attempt_count / 5;
             let loop_rate = loop_count / 5;
-            info!("Heap: {}B | TCP: {}Hz | Loop: {}Hz | Fails: {}", 
-                  free_heap, telem_rate, loop_rate, telemetry_fail_count);
-            
-            telemetry_count = 0;
+            info!("Heap: {}B | Pub: {}Hz | Attempt: {}Hz | Loop: {}Hz", 
+                  free_heap, publish_rate, attempt_rate, loop_rate);
+            publish_count = 0;
+            publish_attempt_count = 0;
             loop_count = 0;
+            
+            if free_heap < 10000 {
+                info!("WARNING: Low heap memory! Rebooting...");
+                unsafe { esp_idf_svc::sys::esp_restart(); }
+            }
+            
             last_heap_check_ms = now_ms;
         }
         
+        // Read IMU and run EKF prediction
         if imu_uart.read(&mut buf, 0).unwrap_or(0) > 0 {
             if let Some(packet_type) = imu_parser.feed_byte(buf[0], now_us) {
                 if packet_type == 0x51 {
@@ -209,14 +304,17 @@ fn main() {
                     
                     if dt > 5e-4 && dt < 0.05 {
                         let (ax_corr, ay_corr, az_corr) = imu_parser.get_accel_corrected();
+                        
                         let (ax_b, ay_b, az_b) = remove_gravity(
                             ax_corr, ay_corr, az_corr,
                             imu_parser.data.roll, imu_parser.data.pitch,
                         );
+                        
                         let (ax_e, ay_e) = body_to_earth(
                             ax_b, ay_b, az_b,
                             imu_parser.data.roll, imu_parser.data.pitch, ekf.yaw(),
                         );
+                        
                         ekf.predict(ax_e, ay_e, imu_parser.data.wz, dt);
                     }
                 }
@@ -228,6 +326,7 @@ fn main() {
             }
         }
         
+        // Read GPS and update EKF
         if gps_uart.read(&mut buf, 0).unwrap_or(0) > 0 {
             if gps_parser.feed_byte(buf[0]) {
                 if gps_parser.last_fix.valid {
@@ -238,8 +337,10 @@ fn main() {
                         gps_parser.last_fix.speed, gps_parser.position_based_speed
                     ) {
                         stationary_count += 1;
+                        
                         if stationary_count >= 5 {
                             ekf.zupt();
+                            
                             let (ax_b, ay_b, _) = remove_gravity(
                                 ax_corr, ay_corr, imu_parser.data.az,
                                 imu_parser.data.roll, imu_parser.data.pitch,
@@ -257,6 +358,7 @@ fn main() {
                         }
                     } else {
                         stationary_count = 0;
+                        
                         if let Some((x, y)) = gps_parser.to_local_coords() {
                             ekf.update_position(x, y);
                         }
@@ -271,11 +373,18 @@ fn main() {
             }
         }
         
+        // GPS state machine
         let gps_locked_now = gps_parser.is_warmed_up() && gps_parser.last_fix.valid;
         
         if gps_locked_now && !gps_was_locked {
             if let Some(ref mut mqtt) = mqtt_opt {
                 mqtt.publish_status("gps_lock", None).ok();
+            }
+            for _ in 0..3 {
+                led.green().unwrap();
+                FreeRtos::delay_ms(100);
+                led.set_low().unwrap();
+                FreeRtos::delay_ms(100);
             }
         }
         
@@ -286,20 +395,34 @@ fn main() {
         }
         
         if !gps_locked_now && now_ms - last_gps_status_ms >= 5000 {
-            if let Some(ref mut mqtt) = mqtt_opt {
-                if !gps_parser.is_warmed_up() {
+            if !gps_parser.is_warmed_up() {
+                if let Some(ref mut mqtt) = mqtt_opt {
                     mqtt.publish_status("waiting_gps", None).ok();
-                } else {
+                }
+            } else {
+                if let Some(ref mut mqtt) = mqtt_opt {
                     mqtt.publish_status("gps_lost", None).ok();
                 }
             }
             last_gps_status_ms = now_ms;
         }
         
+        if gps_parser.is_warmed_up() && !gps_locked_now {
+            let progress = gps_parser.warmup_progress();
+            if (progress - last_warmup_progress).abs() > 0.1 {
+                if let Some(ref mut mqtt) = mqtt_opt {
+                    mqtt.publish_status("gps_warmup", Some(progress)).ok();
+                }
+                last_warmup_progress = progress;
+            }
+        }
+        
         gps_was_locked = gps_locked_now;
         
-        // TCP TELEMETRY @ 20 Hz
-        if tcp_opt.is_some() && now_ms - last_telemetry_ms >= TELEMETRY_INTERVAL_MS {
+        // *** BINARY TELEMETRY @ 20 Hz (50ms intervals) ***
+        if mqtt_opt.is_some() && now_ms - last_mqtt_ms >= MQTT_PUBLISH_INTERVAL_MS {
+            publish_attempt_count += 1;
+            
             let (vx, vy) = ekf.velocity();
             let (ax_corr, ay_corr, _) = imu_parser.get_accel_corrected();
             let (ax_b, ay_b, _) = remove_gravity(
@@ -312,62 +435,35 @@ fn main() {
             );
             mode_classifier.update(ax_e, ay_e, ekf.yaw(), imu_parser.data.wz, vx, vy);
             
-            let mut packet = binary_telemetry::TelemetryPacket::new();
-            packet.timestamp_ms = now_ms;
-            
-            let (ax, ay, az) = imu_parser.get_accel_corrected();
-            packet.ax = ax;
-            packet.ay = ay;
-            packet.az = az;
-            packet.wz = imu_parser.data.wz;
-            packet.roll = imu_parser.data.roll.to_radians();
-            packet.pitch = imu_parser.data.pitch.to_radians();
-            packet.yaw = ekf.yaw();
-            
-            let (ekf_x, ekf_y) = ekf.position();
-            let (mut ekf_vx, mut ekf_vy) = ekf.velocity();
-            let mut ekf_speed_kmh = mode_classifier.get_speed_kmh();
-            
-            if ekf_speed_kmh < 0.5 {
-                ekf_speed_kmh = 0.0;
-                ekf_vx = 0.0;
-                ekf_vy = 0.0;
-            }
-            
-            packet.x = ekf_x;
-            packet.y = ekf_y;
-            packet.vx = ekf_vx;
-            packet.vy = ekf_vy;
-            packet.speed_kmh = ekf_speed_kmh;
-            packet.mode = binary_telemetry::mode_to_u8(mode_classifier.get_mode().as_str());
-            
-            if gps_parser.last_fix.valid {
-                packet.lat = gps_parser.last_fix.lat as f32;
-                packet.lon = gps_parser.last_fix.lon as f32;
-                packet.gps_valid = 1;
-            } else {
-                packet.gps_valid = 0;
-            }
-            
-            let bytes = packet.to_bytes();
-            
-            match tcp_opt.as_mut().unwrap().send(bytes) {
+            // *** PUBLISH USING BINARY PROTOCOL ***
+            match binary_telemetry::publish_telemetry_binary(
+                mqtt_opt.as_mut().unwrap(), 
+                &imu_parser, 
+                &gps_parser, 
+                &ekf, 
+                &mode_classifier
+            ) {
                 Ok(_) => {
-                    telemetry_count += 1;
-                    last_telemetry_ms = now_ms;
+                    consecutive_publish_failures = 0;
+                    publish_count += 1;
+                    last_mqtt_ms = now_ms;
                 }
-                Err(_) => {
-                    telemetry_fail_count += 1;
-                    if telemetry_fail_count % 100 == 0 {
-                        if tcp_opt.as_mut().unwrap().reconnect().is_ok() {
-                            info!("TCP reconnected");
-                            telemetry_fail_count = 0;
-                        }
+                Err(e) => {
+                    consecutive_publish_failures += 1;
+                    if consecutive_publish_failures % 10 == 1 {
+                        info!("Binary publish failed ({}): {:?}", consecutive_publish_failures, e);
                     }
+                    
+                    if consecutive_publish_failures >= MAX_PUBLISH_FAILURES {
+                        info!("Too many publish failures, disabling MQTT");
+                        mqtt_opt = None;
+                    }
+                    // DON'T update last_mqtt_ms on failure - try again next loop
                 }
             }
         }
         
+        // LED heartbeat
         if gps_locked_now {
             if now_ms % 2000 < 100 {
                 led.cyan().ok();
@@ -381,6 +477,9 @@ fn main() {
                 led.set_low().ok();
             }
         }
+        
+        // NO DELAY - run as fast as possible for 20 Hz telemetry
+        // The UART reads are non-blocking (timeout=0) so this won't burn CPU
     }
 }
 
