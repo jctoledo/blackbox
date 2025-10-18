@@ -1,0 +1,76 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-firmware:
+    name: Build Release Firmware
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install ESP toolchain
+        run: |
+          cargo install ldproxy
+          rustup target add riscv32imc-unknown-none-elf
+
+      - name: Build release firmware
+        run: cargo build --release
+
+      - name: Create firmware archive
+        run: |
+          mkdir -p dist
+          cp target/riscv32imc-unknown-none-elf/release/esp32-telemetry dist/
+          cd dist
+          tar -czf ../active-wing-firmware-${{ github.ref_name }}.tar.gz *
+
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: firmware
+          path: active-wing-firmware-${{ github.ref_name }}.tar.gz
+
+  create-release:
+    name: Create GitHub Release
+    needs: build-firmware
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download firmware
+        uses: actions/download-artifact@v3
+        with:
+          name: firmware
+
+      - name: Extract changelog
+        id: changelog
+        run: |
+          # Extract the latest version's changelog
+          VERSION=${GITHUB_REF#refs/tags/v}
+          awk -v ver="$VERSION" '
+            /^## \[/ {
+              if (found) exit;
+              if ($2 == "["ver"]") found=1;
+              next;
+            }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: active-wing-firmware-${{ github.ref_name }}.tar.gz
+          body_path: release-notes.md
+          draft: false
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

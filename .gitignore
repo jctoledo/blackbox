@@ -1,2 +1,72 @@
-target/*
-.embuild/*
+# Rust / Cargo
+target/
+Cargo.lock
+**/*.rs.bk
+*.pdb
+
+# ESP-IDF build
+.embuild/
+build/
+sdkconfig
+sdkconfig.old
+sdkconfig.defaults.esp32*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+.pytest_cache/
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-*
+.history/
+
+# Logs and databases
+*.log
+*.sqlite
+*.db
+
+# Telemetry data files
+*.csv
+*.dat
+telemetry_*.bin
+
+# Credentials (NEVER commit these!)
+secrets.toml
+config.local.toml
+wifi_credentials.rs
+
+# OS generated
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.old
+
+# Flash download tool
+flash_download_tool_*.zip
+
+# Documentation build
+docs/_build/
+site/

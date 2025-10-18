@@ -1,0 +1,10 @@
+# Python dependencies for Active Wing telemetry tools
+
+# MQTT support
+paho-mqtt>=1.6.1
+
+# Future dependencies (uncomment as needed)
+# numpy>=1.24.0          # For data analysis
+# matplotlib>=3.7.0      # For plotting
+# pandas>=2.0.0          # For data manipulation
+# websockets>=11.0       # For WebSocket bridge
