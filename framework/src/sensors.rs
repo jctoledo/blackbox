@@ -66,8 +66,9 @@ pub trait ImuSensor {
     fn get_accel_corrected(&self) -> (f32, f32, f32);
 }
 
-/// Abstraction for GPS receivers
+/// Core abstraction for GPS receivers (Interface Segregation Principle)
 /// Implementations: NEO-6M (NMEA), u-blox (UBX), etc.
+/// This trait focuses on essential GPS reading operations only
 pub trait GpsSensor {
     /// Poll for new GPS data
     /// Returns true if new fix was processed
@@ -78,14 +79,25 @@ pub trait GpsSensor {
 
     /// Check if GPS is warmed up and ready
     fn is_ready(&self) -> bool;
+}
 
-    /// Get local coordinates (if reference is set)
+/// Optional trait for GPS coordinate transformations
+/// Implement this for GPS sensors that maintain a local reference frame
+pub trait GpsCoordinateTransform: GpsSensor {
+    /// Get local coordinates relative to reference point
+    /// Returns None if reference is not set or GPS not ready
     fn to_local_coords(&self) -> Option<(f32, f32)>;
 
-    /// Get velocity in ENU frame
+    /// Get velocity in ENU (East-North-Up) frame
+    /// Returns None if velocity data not available
     fn get_velocity_enu(&self) -> Option<(f32, f32)>;
+}
 
-    /// Get position-based speed estimate
+/// Optional trait for GPS-derived speed estimation
+/// Implement this for sensors that can estimate speed from position changes
+pub trait GpsSpeedEstimator: GpsSensor {
+    /// Get position-based speed estimate (m/s)
+    /// Calculated from successive position measurements
     fn position_based_speed(&self) -> f32;
 }
 

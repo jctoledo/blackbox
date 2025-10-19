@@ -6,29 +6,53 @@
 //!
 //! ## Features
 //!
-//! - **Plugin Architecture**: Add sensors without modifying existing code
-//! - **Sensor Abstraction**: Hardware-independent sensor interface
+//! - **Plugin Architecture**: Add sensors without modifying existing code (Open/Closed Principle)
+//! - **Sensor Abstraction**: Hardware-independent sensor interface (Dependency Inversion)
 //! - **Extended Kalman Filter**: 7-state sensor fusion (position, velocity, yaw, biases)
 //! - **Coordinate Transforms**: Body ↔ Earth ↔ Vehicle frame conversions
+//! - **SOLID Principles**: Designed following best practices for maintainability
 //! - **Distributed Support**: MQTT-based multi-board sensor networks (optional)
 //! - **No-std Compatible**: Works on embedded systems without operating system
 //!
 //! ## Architecture
 //!
+//! The framework follows **SOLID principles** for maximum extensibility:
+//!
 //! ```text
 //! ┌─────────────────────────────────────────┐
 //! │  Sensor Framework (Traits & Registry)   │
+//! │  - Sensor (core operations)             │
+//! │  - CalibratableSensor (optional)        │
+//! │  - HealthMonitoredSensor (optional)     │
+//! │  - SensorDataType (extensible data)     │
 //! ├─────────────────────────────────────────┤
 //! │  Sensor Fusion (EKF, Transforms)        │
+//! │  - Pure algorithms, no sensor coupling  │
 //! ├─────────────────────────────────────────┤
 //! │  Sensor Implementations (Plugins)       │
+//! │  - IMU, GPS, CAN, Camera, etc.         │
 //! └─────────────────────────────────────────┘
 //! ```
+//!
+//! ## Primary vs Legacy Abstractions
+//!
+//! **PRIMARY (Recommended)**: Use `sensor_framework` module
+//! - Modern trait-based plugin architecture
+//! - Extensible via `SensorDataType` trait
+//! - Supports any sensor type without framework changes
+//! - Interface segregation (optional traits)
+//!
+//! **LEGACY**: `sensors` module (ImuSensor, GpsSensor)
+//! - Provided for backward compatibility
+//! - Simpler for basic IMU/GPS-only applications
+//! - Consider migrating to `sensor_framework` for new code
 //!
 //! ## Example Usage
 //!
 //! ```rust,no_run
-//! use motorsport_telemetry::sensor_framework::{SensorRegistry, Sensor};
+//! use motorsport_telemetry::sensor_framework::{
+//!     SensorRegistry, Sensor, SensorDataType, ImuReading, GpsReading
+//! };
 //! use motorsport_telemetry::ekf::Ekf;
 //!
 //! // Create sensor registry
@@ -47,10 +71,37 @@
 //!     let readings = registry.poll_all();
 //!
 //!     // Process readings and update EKF
-//!     // for reading in readings {
-//!     //     // Update EKF based on sensor type
-//!     // }
+//!     for reading in readings {
+//!         // Downcast to specific sensor type
+//!         if let Some(imu) = reading.downcast_data::<ImuReading>() {
+//!             // Process IMU data
+//!         } else if let Some(gps) = reading.downcast_data::<GpsReading>() {
+//!             // Process GPS data
+//!         }
+//!     }
 //! }
+//! ```
+//!
+//! ## Creating Custom Sensor Types
+//!
+//! The framework is **open for extension** without modification:
+//!
+//! ```rust,no_run
+//! use motorsport_telemetry::sensor_framework::{SensorDataType, SensorReading};
+//!
+//! #[derive(Debug)]
+//! struct RadarReading {
+//!     targets: Vec<(f32, f32, f32)>,  // (distance, angle, velocity)
+//! }
+//!
+//! impl SensorDataType for RadarReading {
+//!     fn type_name(&self) -> &'static str { "RadarReading" }
+//!     fn as_any(&self) -> &dyn core::any::Any { self }
+//!     fn as_any_mut(&mut self) -> &mut dyn core::any::Any { self }
+//! }
+//!
+//! // Now RadarReading can be used with SensorReading!
+//! // No framework changes required (Open/Closed Principle)
 //! ```
 //!
 //! ## Use Cases
@@ -63,8 +114,8 @@
 //!
 //! ## Modules
 //!
-//! - [`sensor_framework`] - Core plugin architecture and sensor traits
-//! - [`sensors`] - Basic sensor trait definitions
+//! - [`sensor_framework`] - **PRIMARY**: Plugin architecture with SOLID design
+//! - [`sensors`] - **LEGACY**: Simplified IMU/GPS abstractions
 //! - [`ekf`] - Extended Kalman Filter for sensor fusion
 //! - [`transforms`] - Coordinate frame transformations
 
@@ -74,8 +125,39 @@ pub mod sensors;
 pub mod ekf;
 pub mod transforms;
 
-// Re-export commonly used types
+// Re-export commonly used types from sensor_framework
 pub use sensor_framework::{
-    Sensor, SensorRegistry, SensorCapabilities, SensorReading, SensorData, SensorId,
+    // Core traits
+    Sensor,
+    CalibratableSensor,
+    HealthMonitoredSensor,
+    SensorDataType,
+    SensorPublisher,
+
+    // Registry and metadata
+    SensorRegistry,
+    SensorCapabilities,
+    SensorReading,
+    SensorId,
+
+    // Sensor data types
+    ImuReading,
+    GpsReading,
+    WheelSpeedReading,
+    CanReading,
+    LidarReading,
+    CameraReading,
+    CustomReading,
+    Detection,
+
+    // Errors
+    SensorError,
+    PublishError,
 };
+
+// Legacy (deprecated) - kept for backward compatibility
+#[allow(deprecated)]
+pub use sensor_framework::SensorData;
+
+// Re-export EKF
 pub use ekf::Ekf;
