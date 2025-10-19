@@ -38,7 +38,7 @@
 use log::warn;
 
 // Import libm for no-std floating point operations
-use libm::{cos, sin, sqrt, floor};
+use libm::{cos, sin, floor};
 
 /// GPS coordinate transformations
 pub mod transforms {

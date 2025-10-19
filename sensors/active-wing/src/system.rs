@@ -60,7 +60,7 @@ impl SensorManager {
     }
 
     /// Calibrate IMU (must be stationary)
-    pub fn calibrate_imu(&mut self, led: &mut RgbLed, mqtt: Option<&mut MqttClient>) -> Result<ImuBias, SystemError> {
+    pub fn calibrate_imu(&mut self, led: &mut RgbLed, mut mqtt: Option<&mut MqttClient>) -> Result<ImuBias, SystemError> {
         let mut calibrator = ImuCalibrator::new(CALIB_SAMPLES);
         let mut buf = [0u8; 1];
         let mut last_progress = 0;
@@ -75,8 +75,8 @@ impl SensorManager {
 
                         let progress = (calibrator.progress() * 100.0) as u32;
                         if progress > last_progress && progress % 10 == 0 {
-                            if let Some(mqtt) = mqtt {
-                                mqtt.publish_status("calib_running", Some(calibrator.progress())).ok();
+                            if let Some(ref mut mqtt_client) = mqtt {
+                                mqtt_client.publish_status("calib_running", Some(calibrator.progress())).ok();
                             }
                             last_progress = progress;
                             led.yellow().ok();
@@ -129,8 +129,8 @@ impl SensorManager {
         const POS_SPEED_THR: f32 = 5.0;
 
         let low_inertial = ax.abs() < ACC_THR && ay.abs() < ACC_THR && wz.abs() < WZ_THR;
-        let low_speed = self.gps_parser.last_fix.speed < GPS_SPEED_THR
-            && self.gps_parser.position_based_speed < POS_SPEED_THR;
+        let low_speed = self.gps_parser.last_fix().speed < GPS_SPEED_THR
+            && self.gps_parser.position_based_speed() < POS_SPEED_THR;
 
         let stationary = low_inertial && low_speed;
 
@@ -222,6 +222,11 @@ impl TelemetryPublisher {
         }
     }
 
+    /// Get mutable reference to MQTT client
+    pub fn mqtt_client_mut(&mut self) -> Option<&mut MqttClient> {
+        self.mqtt_client.as_mut()
+    }
+
     /// Publish binary telemetry packet via TCP
     pub fn publish_telemetry(
         &mut self,
@@ -237,16 +242,16 @@ impl TelemetryPublisher {
         let (ax_b, ay_b, _) = remove_gravity(
             ax_corr,
             ay_corr,
-            sensors.imu_parser.data.az,
-            sensors.imu_parser.data.roll,
-            sensors.imu_parser.data.pitch,
+            sensors.imu_parser.data().az,
+            sensors.imu_parser.data().roll,
+            sensors.imu_parser.data().pitch,
         );
-        let (ax_e, ay_e) = body_to_earth(
+        let (_ax_e, _ay_e) = body_to_earth(
             ax_b,
             ay_b,
             0.0,
-            sensors.imu_parser.data.roll,
-            sensors.imu_parser.data.pitch,
+            sensors.imu_parser.data().roll,
+            sensors.imu_parser.data().pitch,
             estimator.ekf.yaw(),
         );
 
@@ -256,9 +261,9 @@ impl TelemetryPublisher {
         packet.ax = ax_corr;
         packet.ay = ay_corr;
         packet.az = az_corr;
-        packet.wz = sensors.imu_parser.data.wz;
-        packet.roll = sensors.imu_parser.data.roll.to_radians();
-        packet.pitch = sensors.imu_parser.data.pitch.to_radians();
+        packet.wz = sensors.imu_parser.data().wz;
+        packet.roll = sensors.imu_parser.data().roll.to_radians();
+        packet.pitch = sensors.imu_parser.data().pitch.to_radians();
         packet.yaw = estimator.ekf.yaw();
 
         let (ekf_x, ekf_y) = estimator.ekf.position();
@@ -278,9 +283,9 @@ impl TelemetryPublisher {
         packet.speed_kmh = ekf_speed_kmh;
         packet.mode = binary_telemetry::mode_to_u8(estimator.mode_classifier.get_mode().as_str());
 
-        if sensors.gps_parser.last_fix.valid {
-            packet.lat = sensors.gps_parser.last_fix.lat as f32;
-            packet.lon = sensors.gps_parser.last_fix.lon as f32;
+        if sensors.gps_parser.last_fix().valid {
+            packet.lat = sensors.gps_parser.last_fix().lat as f32;
+            packet.lon = sensors.gps_parser.last_fix().lon as f32;
             packet.gps_valid = 1;
         } else {
             packet.gps_valid = 0;
@@ -352,28 +357,28 @@ impl StatusManager {
         gps_locked: bool,
         gps_warmed_up: bool,
         now_ms: u32,
-        mqtt: Option<&mut MqttClient>,
+        mut mqtt: Option<&mut MqttClient>,
     ) {
         // Detect GPS lock changes
         if gps_locked && !self.gps_was_locked {
-            if let Some(mqtt) = mqtt {
-                mqtt.publish_status("gps_lock", None).ok();
+            if let Some(ref mut mqtt_client) = mqtt {
+                mqtt_client.publish_status("gps_lock", None).ok();
             }
         }
 
         if !gps_locked && self.gps_was_locked {
-            if let Some(mqtt) = mqtt {
-                mqtt.publish_status("gps_lost", None).ok();
+            if let Some(ref mut mqtt_client) = mqtt {
+                mqtt_client.publish_status("gps_lost", None).ok();
             }
         }
 
         // Periodic status updates
         if !gps_locked && now_ms - self.last_gps_status_ms >= 5000 {
-            if let Some(mqtt) = mqtt {
+            if let Some(ref mut mqtt_client) = mqtt {
                 if !gps_warmed_up {
-                    mqtt.publish_status("waiting_gps", None).ok();
+                    mqtt_client.publish_status("waiting_gps", None).ok();
                 } else {
-                    mqtt.publish_status("gps_lost", None).ok();
+                    mqtt_client.publish_status("gps_lost", None).ok();
                 }
             }
             self.last_gps_status_ms = now_ms;

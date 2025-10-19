@@ -206,35 +206,35 @@ fn main() {
             let (ax_corr, ay_corr, az_corr) = sensors.imu_parser.get_accel_corrected();
             let (ax_b, ay_b, az_b) = remove_gravity(
                 ax_corr, ay_corr, az_corr,
-                sensors.imu_parser.data.roll, sensors.imu_parser.data.pitch,
+                sensors.imu_parser.data().roll, sensors.imu_parser.data().pitch,
             );
             let (ax_e, ay_e) = body_to_earth(
                 ax_b, ay_b, az_b,
-                sensors.imu_parser.data.roll, sensors.imu_parser.data.pitch,
+                sensors.imu_parser.data().roll, sensors.imu_parser.data().pitch,
                 estimator.ekf.yaw(),
             );
-            estimator.predict(ax_e, ay_e, sensors.imu_parser.data.wz, dt);
+            estimator.predict(ax_e, ay_e, sensors.imu_parser.data().wz, dt);
 
             // Update yaw from magnetometer (packet type 0x53 handled in parser)
-            let yaw_mag = sensors.imu_parser.data.yaw.to_radians();
+            let yaw_mag = sensors.imu_parser.data().yaw.to_radians();
             estimator.update_yaw(yaw_mag);
         }
 
         // Poll GPS and update EKF correction
-        if sensors.poll_gps() && sensors.gps_parser.last_fix.valid {
+        if sensors.poll_gps() && sensors.gps_parser.last_fix().valid {
             let (ax_corr, ay_corr, _) = sensors.imu_parser.get_accel_corrected();
 
-            if sensors.is_stationary(ax_corr, ay_corr, sensors.imu_parser.data.wz) {
+            if sensors.is_stationary(ax_corr, ay_corr, sensors.imu_parser.data().wz) {
                 // Vehicle stopped - perform ZUPT and bias estimation
                 estimator.zupt();
 
                 let (ax_b, ay_b, _) = remove_gravity(
-                    ax_corr, ay_corr, sensors.imu_parser.data.az,
-                    sensors.imu_parser.data.roll, sensors.imu_parser.data.pitch,
+                    ax_corr, ay_corr, sensors.imu_parser.data().az,
+                    sensors.imu_parser.data().roll, sensors.imu_parser.data().pitch,
                 );
                 let (ax_e, ay_e) = body_to_earth(
                     ax_b, ay_b, 0.0,
-                    sensors.imu_parser.data.roll, sensors.imu_parser.data.pitch,
+                    sensors.imu_parser.data().roll, sensors.imu_parser.data().pitch,
                     estimator.ekf.yaw(),
                 );
                 estimator.update_bias(ax_e, ay_e);
@@ -254,12 +254,12 @@ fn main() {
         }
 
         // Update GPS status
-        let gps_locked = sensors.gps_parser.is_warmed_up() && sensors.gps_parser.last_fix.valid;
+        let gps_locked = sensors.gps_parser.is_warmed_up() && sensors.gps_parser.last_fix().valid;
         status_mgr.update_gps_status(
             gps_locked,
             sensors.gps_parser.is_warmed_up(),
             now_ms,
-            publisher.mqtt_client.as_mut(),
+            publisher.mqtt_client_mut(),
         );
 
         // Publish telemetry at configured rate
@@ -268,16 +268,16 @@ fn main() {
             let (vx, vy) = estimator.ekf.velocity();
             let (ax_corr, ay_corr, _) = sensors.imu_parser.get_accel_corrected();
             let (ax_b, ay_b, _) = remove_gravity(
-                ax_corr, ay_corr, sensors.imu_parser.data.az,
-                sensors.imu_parser.data.roll, sensors.imu_parser.data.pitch,
+                ax_corr, ay_corr, sensors.imu_parser.data().az,
+                sensors.imu_parser.data().roll, sensors.imu_parser.data().pitch,
             );
             let (ax_e, ay_e) = body_to_earth(
                 ax_b, ay_b, 0.0,
-                sensors.imu_parser.data.roll, sensors.imu_parser.data.pitch,
+                sensors.imu_parser.data().roll, sensors.imu_parser.data().pitch,
                 estimator.ekf.yaw(),
             );
             estimator.update_mode(ax_e, ay_e, estimator.ekf.yaw(),
-                                sensors.imu_parser.data.wz, vx, vy);
+                                sensors.imu_parser.data().wz, vx, vy);
 
             // Publish telemetry
             publisher.publish_telemetry(&sensors, &estimator, now_ms).ok();

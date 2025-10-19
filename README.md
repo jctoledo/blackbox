@@ -7,33 +7,12 @@
 
 An open-source framework for building custom automotive sensor systems. Built by enthusiasts who wanted professional-grade telemetry without the professional price tag.
 
-## What Is This?
-
-This repository contains a sensor fusion framework and sensor implementations built with it.
-
-### Sensor Fusion Framework
-
-A production-ready framework for building multi-sensor telemetry systems:
-- **Plugin architecture** - add sensors without modifying core code
-- **Extended Kalman Filter** - 7-state sensor fusion (position, velocity, yaw, biases)
-- **Coordinate transformations** - body/earth/vehicle frame math
-- **Hardware abstraction** - works with any sensor via traits
-- **SOLID principles** - maintainable, testable, extensible code
-
 ### Sensor Implementations
 
-#### [Active Wing](sensors/active-wing/) - ESP32 Motorsport Telemetry
+#### [Active Wing](sensors/active-wing/) - Track the "attitude" of your car
 **Hardware:** ESP32-C3 + WT901 9-axis IMU + NEO-6M GPS
-**Sensors:**
-- WT901 9-axis IMU (200Hz via UART)
-  - 3-axis accelerometer
-  - 3-axis gyroscope
-  - 3-axis magnetometer
-- NEO-6M GPS receiver (5Hz via UART)
-  - Position (lat/lon)
-  - Velocity and course
-  - HDOP and satellite count
-- WS2812 RGB LED (status indicator)
+Use Cases:
+
 
 **What it does:**
 - Real-time sensor fusion using Extended Kalman Filter
@@ -47,19 +26,16 @@ A production-ready framework for building multi-sensor telemetry systems:
 - Python visualization tools included
 
 **Use cases:**
-- Track day data logging
-- Autocross/rally telemetry
+
 - Vehicle dynamics analysis
 - Driver training
 - Suspension/brake/aero testing
-
-[See Active Wing documentation →](sensors/active-wing/README.md)
 
 ---
 
 ## What Can You Build With This Framework?
 
-### Motorsport Data Loggers (like Active Wing)
+### Motorsport Data Loggers
 - Track day telemetry systems
 - Autocross/rally data acquisition
 - Drag racing performance monitors
@@ -152,7 +128,7 @@ fn main() {
 **See `sensors/active-wing/` for a complete working example.**
 
 ---
-
+<!-- 
 ## What's Included
 
 ### Reusable Framework Components (in `/framework`)
@@ -181,7 +157,7 @@ A complete working example showing the framework in action:
 - **Python visualization tools** for data display
 - **Full documentation** and build instructions
 
-### Documentation (in `/docs`)
+### Documentation (in `/docs`) -->
 
 Learn the framework and build your own systems:
 - **[Sensor Toolkit Guide](docs/SENSOR_TOOLKIT_GUIDE.md)** - Step-by-step sensor integration
