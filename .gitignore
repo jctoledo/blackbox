@@ -46,7 +46,6 @@ telemetry_*.bin
 
 # Credentials (NEVER commit these!)
 secrets.toml
-config.toml
 config.local.toml
 wifi_credentials.rs
 

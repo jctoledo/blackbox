@@ -51,7 +51,7 @@ jobs:
       - name: Check compilation
         run: |
           . $HOME/export-esp.sh
-          cargo check --target riscv32imc-esp-espidf
+          cargo check
 
   fmt:
     name: Format Check
