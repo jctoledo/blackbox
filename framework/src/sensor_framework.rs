@@ -8,7 +8,7 @@
 /// - No coupling between sensors
 
 #[cfg(feature = "mqtt")]
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 /// Unique sensor identifier
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -20,21 +20,21 @@ pub struct SensorId(pub u16);
 #[cfg_attr(feature = "mqtt", derive(Serialize, Deserialize))]
 pub enum MeasurementType {
     // Position & Velocity
-    Position3D,          // GPS, UWB, SLAM
-    Velocity3D,          // GPS, wheel encoders
-    Acceleration3D,      // IMU
-    AngularVelocity3D,   // Gyro
+    Position3D,        // GPS, UWB, SLAM
+    Velocity3D,        // GPS, wheel encoders
+    Acceleration3D,    // IMU
+    AngularVelocity3D, // Gyro
 
     // Orientation
-    Orientation,         // IMU, magnetometer
-    Heading,             // Magnetometer, GPS course
+    Orientation, // IMU, magnetometer
+    Heading,     // Magnetometer, GPS course
 
     // Vehicle dynamics
-    WheelSpeed,          // ABS sensors
-    SteeringAngle,       // Steering sensor
-    Throttle,            // CAN bus
-    Brake,               // CAN bus
-    Gear,                // CAN bus
+    WheelSpeed,    // ABS sensors
+    SteeringAngle, // Steering sensor
+    Throttle,      // CAN bus
+    Brake,         // CAN bus
+    Gear,          // CAN bus
 
     // Environmental
     Temperature,
@@ -58,12 +58,13 @@ pub struct SensorCapabilities {
     pub measurement_types: &'static [MeasurementType],
     pub update_rate_hz: f32,
     pub latency_ms: f32,
-    pub accuracy: f32,  // Application-specific units
+    pub accuracy: f32, // Application-specific units
     pub mqtt_topic: &'static str,
 }
 
 /// Trait for extensible sensor data types
-/// Implement this trait for any custom sensor data type to integrate with the framework
+/// Implement this trait for any custom sensor data type to integrate with the
+/// framework
 pub trait SensorDataType: core::fmt::Debug {
     /// Get a type name for this sensor data (used for logging and debugging)
     fn type_name(&self) -> &'static str;
@@ -114,8 +115,8 @@ pub enum SensorData {
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "mqtt", derive(Serialize, Deserialize))]
 pub struct ImuReading {
-    pub accel: [f32; 3],      // m/s²
-    pub gyro: [f32; 3],       // rad/s
+    pub accel: [f32; 3], // m/s²
+    pub gyro: [f32; 3],  // rad/s
     pub mag: Option<[f32; 3]>,
     pub temperature: Option<f32>,
 }
@@ -140,8 +141,8 @@ pub struct GpsReading {
     pub lat: f64,
     pub lon: f64,
     pub alt: Option<f32>,
-    pub speed: f32,           // m/s
-    pub course: f32,          // radians
+    pub speed: f32,  // m/s
+    pub course: f32, // radians
     pub hdop: Option<f32>,
     pub satellites: Option<u8>,
 }
@@ -163,7 +164,7 @@ impl SensorDataType for GpsReading {
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "mqtt", derive(Serialize, Deserialize))]
 pub struct WheelSpeedReading {
-    pub fl: f32,  // Front-left (rad/s or m/s)
+    pub fl: f32, // Front-left (rad/s or m/s)
     pub fr: f32,
     pub rl: f32,
     pub rr: f32,
@@ -207,7 +208,7 @@ impl SensorDataType for CanReading {
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "mqtt", derive(Serialize, Deserialize))]
 pub struct LidarReading {
-    pub points: Vec<[f32; 3]>,  // Simplified
+    pub points: Vec<[f32; 3]>, // Simplified
 }
 
 impl SensorDataType for LidarReading {
@@ -250,7 +251,7 @@ impl SensorDataType for CameraReading {
 pub struct Detection {
     pub class: String,
     pub confidence: f32,
-    pub bbox: [f32; 4],  // x, y, w, h
+    pub bbox: [f32; 4], // x, y, w, h
 }
 
 #[derive(Debug, Clone)]
@@ -274,7 +275,8 @@ impl SensorDataType for CustomReading {
 }
 
 /// Core trait that all sensors must implement
-/// This trait focuses on the essential sensor operations (Interface Segregation Principle)
+/// This trait focuses on the essential sensor operations (Interface Segregation
+/// Principle)
 pub trait Sensor {
     /// Get sensor capabilities (called once at registration)
     fn capabilities(&self) -> SensorCapabilities;
@@ -288,7 +290,8 @@ pub trait Sensor {
 }
 
 /// Optional trait for sensors that require calibration
-/// Implement this only for sensors that need calibration (Interface Segregation Principle)
+/// Implement this only for sensors that need calibration (Interface Segregation
+/// Principle)
 pub trait CalibratableSensor: Sensor {
     /// Calibrate sensor (e.g., bias learning for IMU)
     fn calibrate(&mut self) -> Result<(), SensorError>;
@@ -300,7 +303,8 @@ pub trait CalibratableSensor: Sensor {
 }
 
 /// Optional trait for sensors that support health monitoring
-/// Implement this only for sensors with health check capabilities (Interface Segregation Principle)
+/// Implement this only for sensors with health check capabilities (Interface
+/// Segregation Principle)
 pub trait HealthMonitoredSensor: Sensor {
     /// Perform health check on sensor
     /// Returns true if sensor is operating normally
@@ -354,10 +358,7 @@ impl SensorRegistry {
 
     /// Poll all sensors and collect readings
     pub fn poll_all(&mut self) -> Vec<SensorReading> {
-        self.sensors
-            .iter_mut()
-            .filter_map(|s| s.poll())
-            .collect()
+        self.sensors.iter_mut().filter_map(|s| s.poll()).collect()
     }
 
     /// Get capabilities of all registered sensors
@@ -367,9 +368,7 @@ impl SensorRegistry {
 
     /// Get sensor by ID
     pub fn get_sensor(&mut self, id: SensorId) -> Option<&mut Box<dyn Sensor>> {
-        self.sensors
-            .iter_mut()
-            .find(|s| s.capabilities().id == id)
+        self.sensors.iter_mut().find(|s| s.capabilities().id == id)
     }
 
     /// Calibrate all sensors that support calibration
@@ -414,16 +413,20 @@ pub struct LogPublisher;
 
 impl SensorPublisher for LogPublisher {
     fn publish(&mut self, reading: &SensorReading) -> Result<(), PublishError> {
-        println!("[SENSOR {}] {} @ {}us",
-                 reading.sensor_id.0,
-                 reading.data.type_name(),
-                 reading.timestamp_us);
+        println!(
+            "[SENSOR {}] {} @ {}us",
+            reading.sensor_id.0,
+            reading.data.type_name(),
+            reading.timestamp_us
+        );
         Ok(())
     }
 
     fn announce(&mut self, caps: &SensorCapabilities) -> Result<(), PublishError> {
-        println!("[ANNOUNCE] Sensor {} ({}) @ {}Hz on topic '{}'",
-                 caps.id.0, caps.name, caps.update_rate_hz, caps.mqtt_topic);
+        println!(
+            "[ANNOUNCE] Sensor {} ({}) @ {}Hz on topic '{}'",
+            caps.id.0, caps.name, caps.update_rate_hz, caps.mqtt_topic
+        );
         Ok(())
     }
 }
@@ -468,8 +471,14 @@ mod tests {
     fn test_sensor_registry() {
         let mut registry = SensorRegistry::new();
 
-        let sensor1 = Box::new(DummySensor { id: SensorId(1), counter: 0 });
-        let sensor2 = Box::new(DummySensor { id: SensorId(2), counter: 0 });
+        let sensor1 = Box::new(DummySensor {
+            id: SensorId(1),
+            counter: 0,
+        });
+        let sensor2 = Box::new(DummySensor {
+            id: SensorId(2),
+            counter: 0,
+        });
 
         registry.register(sensor1).unwrap();
         registry.register(sensor2).unwrap();

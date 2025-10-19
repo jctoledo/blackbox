@@ -1,7 +1,8 @@
 //! NEO-6M GPS NMEA Parser
 //!
-//! This crate provides a pure Rust parser for NMEA sentences from NEO-6M GPS receivers.
-//! It supports GPRMC and GNRMC sentences and provides position, velocity, and time information.
+//! This crate provides a pure Rust parser for NMEA sentences from NEO-6M GPS
+//! receivers. It supports GPRMC and GNRMC sentences and provides position,
+//! velocity, and time information.
 //!
 //! # Features
 //!
@@ -25,7 +26,11 @@
 //!     if parser.feed_byte(byte) {
 //!         // New sentence parsed
 //!         if parser.last_fix().valid {
-//!             println!("Position: {}, {}", parser.last_fix().lat, parser.last_fix().lon);
+//!             println!(
+//!                 "Position: {}, {}",
+//!                 parser.last_fix().lat,
+//!                 parser.last_fix().lon
+//!             );
 //!             println!("Speed: {:.1} m/s", parser.last_fix().speed);
 //!         }
 //!     }
@@ -34,11 +39,10 @@
 
 #![cfg_attr(not(test), no_std)]
 
+// Import libm for no-std floating point operations
+use libm::{cos, floor, sin};
 #[cfg(feature = "logging")]
 use log::warn;
-
-// Import libm for no-std floating point operations
-use libm::{cos, sin, floor};
 
 /// GPS coordinate transformations
 pub mod transforms {
@@ -258,7 +262,8 @@ impl NmeaParser {
     /// Update position-based speed with new timestamp
     ///
     /// Call this from your application's time source when a new fix arrives.
-    /// This allows position-based speed calculation to work in no_std environments.
+    /// This allows position-based speed calculation to work in no_std
+    /// environments.
     ///
     /// # Arguments
     ///
@@ -372,8 +377,8 @@ impl NmeaParser {
     #[cfg(not(any(test, feature = "std")))]
     fn parse_rmc(&mut self, _line: &str) {
         // no_std: Simplified implementation
-        // For a full no_std implementation, you would need to add libm dependency for floor()
-        // and implement manual field parsing without Vec
+        // For a full no_std implementation, you would need to add libm dependency for
+        // floor() and implement manual field parsing without Vec
         self.last_fix.valid = false;
     }
 }
@@ -426,7 +431,10 @@ mod tests {
         // North latitude
         assert_eq!(parse_coordinate("3723.2475", "N"), Some(37.387458333333336));
         // South latitude
-        assert_eq!(parse_coordinate("3723.2475", "S"), Some(-37.387458333333336));
+        assert_eq!(
+            parse_coordinate("3723.2475", "S"),
+            Some(-37.387458333333336)
+        );
         // East longitude
         assert_eq!(parse_coordinate("12158.3416", "E"), Some(121.97236));
         // West longitude

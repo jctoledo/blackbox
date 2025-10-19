@@ -1,8 +1,9 @@
 /// RGB LED wrapper for WS2812 on ESP32-C3 DevKit using RMT
 use esp_idf_hal::gpio::OutputPin;
-use esp_idf_hal::peripheral::Peripheral;
-use esp_idf_hal::rmt::config::TransmitConfig;
-use esp_idf_hal::rmt::{FixedLengthSignal, PinState, Pulse, RmtChannel, TxRmtDriver};
+use esp_idf_hal::{
+    peripheral::Peripheral,
+    rmt::{config::TransmitConfig, FixedLengthSignal, PinState, Pulse, RmtChannel, TxRmtDriver},
+};
 
 pub struct RgbLed {
     tx: TxRmtDriver<'static>,
@@ -21,16 +22,16 @@ impl RgbLed {
     /// Set LED to a specific color (GRB order for WS2812)
     pub fn set_color(&mut self, r: u8, g: u8, b: u8) -> Result<(), Box<dyn std::error::Error>> {
         let grb = ((g as u32) << 16) | ((r as u32) << 8) | (b as u32);
-        
+
         let ticks_hz = self.tx.counter_clock()?;
         let t0h = Pulse::new_with_duration(ticks_hz, PinState::High, &ns(350))?;
         let t0l = Pulse::new_with_duration(ticks_hz, PinState::Low, &ns(800))?;
         let t1h = Pulse::new_with_duration(ticks_hz, PinState::High, &ns(700))?;
         let t1l = Pulse::new_with_duration(ticks_hz, PinState::Low, &ns(600))?;
-        
+
         // Build signal as fixed-length array
         let mut signal = FixedLengthSignal::<24>::new();
-        
+
         for i in (0..24).rev() {
             let bit = (grb >> i) & 1;
             if bit == 1 {
@@ -39,7 +40,7 @@ impl RgbLed {
                 signal.set(23 - i as usize, &(t0h, t0l))?;
             }
         }
-        
+
         self.tx.start_blocking(&signal)?;
         Ok(())
     }

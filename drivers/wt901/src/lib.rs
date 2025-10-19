@@ -14,7 +14,7 @@
 //! # Example
 //!
 //! ```no_run
-//! use wt901::{Wt901Parser, PacketType};
+//! use wt901::{PacketType, Wt901Parser};
 //!
 //! let mut parser = Wt901Parser::new();
 //!
@@ -181,8 +181,10 @@ impl Wt901Parser {
 
         if checksum != self.buffer[10] {
             #[cfg(feature = "logging")]
-            warn!("WT901 checksum failed: expected 0x{:02X}, got 0x{:02X}",
-                  self.buffer[10], checksum);
+            warn!(
+                "WT901 checksum failed: expected 0x{:02X}, got 0x{:02X}",
+                self.buffer[10], checksum
+            );
             return None;
         }
 

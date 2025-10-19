@@ -1,7 +1,7 @@
 /// Configuration management for Active Wing telemetry system
 /// Provides defaults and structure for future config.toml loading
-
 use motorsport_telemetry::ekf::EkfConfig;
+
 use crate::mode::ModeConfig;
 
 /// Network configuration
@@ -33,7 +33,7 @@ pub struct TelemetryConfig {
 impl Default for TelemetryConfig {
     fn default() -> Self {
         Self {
-            interval_ms: 50,  // 20 Hz
+            interval_ms: 50, // 20 Hz
         }
     }
 }
@@ -46,9 +46,7 @@ pub struct ImuConfig {
 
 impl Default for ImuConfig {
     fn default() -> Self {
-        Self {
-            calib_samples: 500,
-        }
+        Self { calib_samples: 500 }
     }
 }
 
@@ -71,9 +69,9 @@ impl Default for GpsConfig {
 /// Stationary detection configuration
 #[derive(Debug, Clone, Copy)]
 pub struct StationaryConfig {
-    pub acc_threshold: f32,          // g
-    pub wz_threshold: f32,           // deg/s
-    pub gps_speed_threshold: f32,    // km/h
+    pub acc_threshold: f32,            // g
+    pub wz_threshold: f32,             // deg/s
+    pub gps_speed_threshold: f32,      // km/h
     pub position_speed_threshold: f32, // km/h
     pub required_count: u32,
 }

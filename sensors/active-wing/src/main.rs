@@ -1,31 +1,29 @@
-mod imu;
+mod binary_telemetry;
+mod config;
 mod gps;
-mod wifi;
+mod imu;
+mod mode;
 mod mqtt;
 mod rgb_led;
-mod mode;
-mod binary_telemetry;
-mod tcp_stream;
 mod system;
-mod config;
+mod tcp_stream;
+mod wifi;
 
-use esp_idf_hal::delay::FreeRtos;
-use esp_idf_hal::peripherals::Peripherals;
-use esp_idf_hal::uart::{UartDriver, config::Config};
-use esp_idf_svc::eventloop::EspSystemEventLoop;
-use esp_idf_svc::nvs::EspDefaultNvsPartition;
+use config::SystemConfig;
+use esp_idf_hal::{
+    delay::FreeRtos,
+    peripherals::Peripherals,
+    uart::{config::Config, UartDriver},
+};
+use esp_idf_svc::{eventloop::EspSystemEventLoop, nvs::EspDefaultNvsPartition};
 use log::info;
-
-use wifi::WifiManager;
-use mqtt::MqttClient;
-use rgb_led::RgbLed;
-use tcp_stream::TcpTelemetryStream;
-
 // Import from framework crate
 use motorsport_telemetry::transforms::{body_to_earth, remove_gravity};
-
-use system::{SensorManager, StateEstimator, TelemetryPublisher, StatusManager};
-use config::SystemConfig;
+use mqtt::MqttClient;
+use rgb_led::RgbLed;
+use system::{SensorManager, StateEstimator, StatusManager, TelemetryPublisher};
+use tcp_stream::TcpTelemetryStream;
+use wifi::WifiManager;
 
 fn main() {
     esp_idf_svc::sys::link_patches();
@@ -35,11 +33,16 @@ fn main() {
     let config = SystemConfig::from_env();
 
     info!("=== ESP32-C3 Telemetry System ===");
-    info!("Config: SSID={}, Rate={}Hz",
-          config.network.wifi_ssid,
-          1000 / config.telemetry.interval_ms);
+    info!(
+        "Config: SSID={}, Rate={}Hz",
+        config.network.wifi_ssid,
+        1000 / config.telemetry.interval_ms
+    );
     info!("MQTT: Status messages");
-    info!("TCP:  Binary telemetry @ {} Hz", 1000 / config.telemetry.interval_ms);
+    info!(
+        "TCP:  Binary telemetry @ {} Hz",
+        1000 / config.telemetry.interval_ms
+    );
 
     // Initialize hardware
     let peripherals = Peripherals::take().unwrap();
@@ -66,8 +69,8 @@ fn main() {
 
     // Connect WiFi
     info!("Initializing WiFi");
-    let mut wifi = WifiManager::new(peripherals.modem, sysloop.clone(), nvs)
-        .expect("WiFi init failed");
+    let mut wifi =
+        WifiManager::new(peripherals.modem, sysloop.clone(), nvs).expect("WiFi init failed");
 
     info!("Connecting to WiFi: {}", config.network.wifi_ssid);
     match wifi.connect(config.network.wifi_ssid, config.network.wifi_password) {
@@ -133,7 +136,8 @@ fn main() {
         Option::<esp_idf_hal::gpio::Gpio0>::None,
         Option::<esp_idf_hal::gpio::Gpio1>::None,
         &imu_config,
-    ).unwrap();
+    )
+    .unwrap();
 
     // Initialize UART for GPS
     info!("Initializing GPS");
@@ -144,13 +148,12 @@ fn main() {
         Option::<esp_idf_hal::gpio::Gpio2>::None,
         Option::<esp_idf_hal::gpio::Gpio3>::None,
         &Config::new().baudrate(9600.into()),
-    ).unwrap();
+    )
+    .unwrap();
 
     // Configure GPS to 5Hz
     let ubx_rate_5hz: [u8; 14] = [
-        0xB5, 0x62, 0x06, 0x08, 0x06, 0x00,
-        0xC8, 0x00, 0x01, 0x00, 0x01, 0x00,
-        0xDE, 0x6A
+        0xB5, 0x62, 0x06, 0x08, 0x06, 0x00, 0xC8, 0x00, 0x01, 0x00, 0x01, 0x00, 0xDE, 0x6A,
     ];
     gps_uart.write(&ubx_rate_5hz).ok();
     FreeRtos::delay_ms(100);
@@ -163,7 +166,8 @@ fn main() {
         mqtt.publish_status("calib_start", Some(0.0)).ok();
     }
 
-    let bias = sensors.calibrate_imu(status_mgr.led_mut(), mqtt_opt.as_mut())
+    let bias = sensors
+        .calibrate_imu(status_mgr.led_mut(), mqtt_opt.as_mut())
         .expect("Calibration failed");
     sensors.imu_parser.set_bias(bias);
 
@@ -193,8 +197,10 @@ fn main() {
             let (telem_count, fail_count) = publisher.get_stats();
             let telem_rate = telem_count / 5;
             let loop_rate = loop_count / 5;
-            info!("Heap: {}B | TCP: {}Hz | Loop: {}Hz | Fails: {}",
-                  free_heap, telem_rate, loop_rate, fail_count);
+            info!(
+                "Heap: {}B | TCP: {}Hz | Loop: {}Hz | Fails: {}",
+                free_heap, telem_rate, loop_rate, fail_count
+            );
 
             publisher.reset_stats();
             loop_count = 0;
@@ -205,12 +211,18 @@ fn main() {
         if let Some((dt, _)) = sensors.poll_imu() {
             let (ax_corr, ay_corr, az_corr) = sensors.imu_parser.get_accel_corrected();
             let (ax_b, ay_b, az_b) = remove_gravity(
-                ax_corr, ay_corr, az_corr,
-                sensors.imu_parser.data().roll, sensors.imu_parser.data().pitch,
+                ax_corr,
+                ay_corr,
+                az_corr,
+                sensors.imu_parser.data().roll,
+                sensors.imu_parser.data().pitch,
             );
             let (ax_e, ay_e) = body_to_earth(
-                ax_b, ay_b, az_b,
-                sensors.imu_parser.data().roll, sensors.imu_parser.data().pitch,
+                ax_b,
+                ay_b,
+                az_b,
+                sensors.imu_parser.data().roll,
+                sensors.imu_parser.data().pitch,
                 estimator.ekf.yaw(),
             );
             estimator.predict(ax_e, ay_e, sensors.imu_parser.data().wz, dt);
@@ -229,12 +241,18 @@ fn main() {
                 estimator.zupt();
 
                 let (ax_b, ay_b, _) = remove_gravity(
-                    ax_corr, ay_corr, sensors.imu_parser.data().az,
-                    sensors.imu_parser.data().roll, sensors.imu_parser.data().pitch,
+                    ax_corr,
+                    ay_corr,
+                    sensors.imu_parser.data().az,
+                    sensors.imu_parser.data().roll,
+                    sensors.imu_parser.data().pitch,
                 );
                 let (ax_e, ay_e) = body_to_earth(
-                    ax_b, ay_b, 0.0,
-                    sensors.imu_parser.data().roll, sensors.imu_parser.data().pitch,
+                    ax_b,
+                    ay_b,
+                    0.0,
+                    sensors.imu_parser.data().roll,
+                    sensors.imu_parser.data().pitch,
                     estimator.ekf.yaw(),
                 );
                 estimator.update_bias(ax_e, ay_e);
@@ -268,19 +286,33 @@ fn main() {
             let (vx, vy) = estimator.ekf.velocity();
             let (ax_corr, ay_corr, _) = sensors.imu_parser.get_accel_corrected();
             let (ax_b, ay_b, _) = remove_gravity(
-                ax_corr, ay_corr, sensors.imu_parser.data().az,
-                sensors.imu_parser.data().roll, sensors.imu_parser.data().pitch,
+                ax_corr,
+                ay_corr,
+                sensors.imu_parser.data().az,
+                sensors.imu_parser.data().roll,
+                sensors.imu_parser.data().pitch,
             );
             let (ax_e, ay_e) = body_to_earth(
-                ax_b, ay_b, 0.0,
-                sensors.imu_parser.data().roll, sensors.imu_parser.data().pitch,
+                ax_b,
+                ay_b,
+                0.0,
+                sensors.imu_parser.data().roll,
+                sensors.imu_parser.data().pitch,
                 estimator.ekf.yaw(),
             );
-            estimator.update_mode(ax_e, ay_e, estimator.ekf.yaw(),
-                                sensors.imu_parser.data().wz, vx, vy);
+            estimator.update_mode(
+                ax_e,
+                ay_e,
+                estimator.ekf.yaw(),
+                sensors.imu_parser.data().wz,
+                vx,
+                vy,
+            );
 
             // Publish telemetry
-            publisher.publish_telemetry(&sensors, &estimator, now_ms).ok();
+            publisher
+                .publish_telemetry(&sensors, &estimator, now_ms)
+                .ok();
             last_telemetry_ms = now_ms;
         }
 

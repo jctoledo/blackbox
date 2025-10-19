@@ -1,21 +1,21 @@
+use esp_idf_hal::delay::FreeRtos;
 /// System-level architecture for telemetry system
 /// Implements proper separation of concerns and dependency inversion
-
 use esp_idf_hal::uart::UartDriver;
-use esp_idf_hal::delay::FreeRtos;
 use log::info;
-
-use crate::imu::{Wt901Parser, ImuBias, ImuCalibrator, PacketType};
-use crate::gps::NmeaParser;
-use crate::mode::ModeClassifier;
-use crate::binary_telemetry;
-use crate::tcp_stream::TcpTelemetryStream;
-use crate::mqtt::MqttClient;
-use crate::rgb_led::RgbLed;
-
 // Import from framework crate
 use motorsport_telemetry::ekf::Ekf;
 use motorsport_telemetry::transforms::{body_to_earth, remove_gravity};
+
+use crate::{
+    binary_telemetry,
+    gps::NmeaParser,
+    imu::{ImuBias, ImuCalibrator, PacketType, Wt901Parser},
+    mode::ModeClassifier,
+    mqtt::MqttClient,
+    rgb_led::RgbLed,
+    tcp_stream::TcpTelemetryStream,
+};
 
 const CALIB_SAMPLES: usize = 500;
 
@@ -60,7 +60,11 @@ impl SensorManager {
     }
 
     /// Calibrate IMU (must be stationary)
-    pub fn calibrate_imu(&mut self, led: &mut RgbLed, mut mqtt: Option<&mut MqttClient>) -> Result<ImuBias, SystemError> {
+    pub fn calibrate_imu(
+        &mut self,
+        led: &mut RgbLed,
+        mut mqtt: Option<&mut MqttClient>,
+    ) -> Result<ImuBias, SystemError> {
         let mut calibrator = ImuCalibrator::new(CALIB_SAMPLES);
         let mut buf = [0u8; 1];
         let mut last_progress = 0;
@@ -76,7 +80,9 @@ impl SensorManager {
                         let progress = (calibrator.progress() * 100.0) as u32;
                         if progress > last_progress && progress % 10 == 0 {
                             if let Some(ref mut mqtt_client) = mqtt {
-                                mqtt_client.publish_status("calib_running", Some(calibrator.progress())).ok();
+                                mqtt_client
+                                    .publish_status("calib_running", Some(calibrator.progress()))
+                                    .ok();
                             }
                             last_progress = progress;
                             led.yellow().ok();
@@ -88,7 +94,9 @@ impl SensorManager {
             }
         }
 
-        calibrator.compute_bias().ok_or(SystemError::CalibrationFailed)
+        calibrator
+            .compute_bias()
+            .ok_or(SystemError::CalibrationFailed)
     }
 
     /// Poll IMU and return dt if new accel data available
@@ -293,7 +301,9 @@ impl TelemetryPublisher {
 
         let bytes = packet.to_bytes();
 
-        let tcp = self.tcp_stream.as_mut()
+        let tcp = self
+            .tcp_stream
+            .as_mut()
             .ok_or(SystemError::CommunicationError("TCP not connected"))?;
 
         match tcp.send(bytes) {

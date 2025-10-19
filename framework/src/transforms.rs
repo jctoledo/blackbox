@@ -4,7 +4,7 @@ const G: f32 = 9.80665; // m/s²
 const METERS_PER_DEGREE_LAT: f64 = 111320.0; // Approximate meters per degree latitude
 
 /// Transform body-frame acceleration to earth frame (ENU)
-/// 
+///
 /// # Arguments
 /// * `ax_body` - X acceleration in body frame (m/s²)
 /// * `ay_body` - Y acceleration in body frame (m/s²)
@@ -29,16 +29,18 @@ pub fn body_to_earth(
     let sp = (pitch_deg.to_radians()).sin();
     let cy = yaw_rad.cos();
     let sy = yaw_rad.sin();
-    
+
     // Rotation matrix multiplication
-    let ax_earth = cy * cp * ax_body + (cy * sp * sr - sy * cr) * ay_body + (cy * sp * cr + sy * sr) * az_body;
-    let ay_earth = sy * cp * ax_body + (sy * sp * sr + cy * cr) * ay_body + (sy * sp * cr - cy * sr) * az_body;
-    
+    let ax_earth =
+        cy * cp * ax_body + (cy * sp * sr - sy * cr) * ay_body + (cy * sp * cr + sy * sr) * az_body;
+    let ay_earth =
+        sy * cp * ax_body + (sy * sp * sr + cy * cr) * ay_body + (sy * sp * cr - cy * sr) * az_body;
+
     (ax_earth, ay_earth)
 }
 
 /// Remove gravity from body-frame acceleration
-/// 
+///
 /// # Arguments
 /// * `ax_raw` - Raw X acceleration (m/s²)
 /// * `ay_raw` - Raw Y acceleration (m/s²)
@@ -47,7 +49,8 @@ pub fn body_to_earth(
 /// * `pitch_deg` - Pitch angle in degrees
 ///
 /// # Returns
-/// * `(ax_nograv, ay_nograv, az_nograv)` - Acceleration with gravity removed (m/s²)
+/// * `(ax_nograv, ay_nograv, az_nograv)` - Acceleration with gravity removed
+///   (m/s²)
 pub fn remove_gravity(
     ax_raw: f32,
     ay_raw: f32,
@@ -59,22 +62,18 @@ pub fn remove_gravity(
     let sr = (roll_deg.to_radians()).sin();
     let cp = (pitch_deg.to_radians()).cos();
     let sp = (pitch_deg.to_radians()).sin();
-    
+
     // Gravity vector in body frame
     let g_bx = -sp * G;
     let g_by = sr * cp * G;
     let g_bz = cr * cp * G;
-    
+
     // Subtract gravity
-    (
-        ax_raw - g_bx,
-        ay_raw - g_by,
-        az_raw - g_bz,
-    )
+    (ax_raw - g_bx, ay_raw - g_by, az_raw - g_bz)
 }
 
 /// Convert car-frame acceleration to longitudinal/lateral
-/// 
+///
 /// # Arguments
 /// * `ax_earth` - X acceleration in earth frame (m/s²)
 /// * `ay_earth` - Y acceleration in earth frame (m/s²)
@@ -86,10 +85,10 @@ pub fn remove_gravity(
 pub fn earth_to_car(ax_earth: f32, ay_earth: f32, yaw_rad: f32) -> (f32, f32) {
     let cos_yaw = yaw_rad.cos();
     let sin_yaw = yaw_rad.sin();
-    
+
     let a_lon = cos_yaw * ax_earth + sin_yaw * ay_earth;
     let a_lat = -sin_yaw * ax_earth + cos_yaw * ay_earth;
-    
+
     (a_lon, a_lat)
 }
 

@@ -1,16 +1,20 @@
 //! Open Motorsport Telemetry Framework
 //!
-//! A modular, extensible framework for building custom automotive sensor fusion systems.
-//! Build professional-grade telemetry for track days, racing, vehicle dynamics research,
-//! and fleet monitoring without vendor lock-in.
+//! A modular, extensible framework for building custom automotive sensor fusion
+//! systems. Build professional-grade telemetry for track days, racing, vehicle
+//! dynamics research, and fleet monitoring without vendor lock-in.
 //!
 //! ## Features
 //!
-//! - **Plugin Architecture**: Add sensors without modifying existing code (Open/Closed Principle)
-//! - **Sensor Abstraction**: Hardware-independent sensor interface (Dependency Inversion)
-//! - **Extended Kalman Filter**: 7-state sensor fusion (position, velocity, yaw, biases)
+//! - **Plugin Architecture**: Add sensors without modifying existing code
+//!   (Open/Closed Principle)
+//! - **Sensor Abstraction**: Hardware-independent sensor interface (Dependency
+//!   Inversion)
+//! - **Extended Kalman Filter**: 7-state sensor fusion (position, velocity,
+//!   yaw, biases)
 //! - **Coordinate Transforms**: Body ↔ Earth ↔ Vehicle frame conversions
-//! - **SOLID Principles**: Designed following best practices for maintainability
+//! - **SOLID Principles**: Designed following best practices for
+//!   maintainability
 //! - **Distributed Support**: MQTT-based multi-board sensor networks (optional)
 //! - **No-std Compatible**: Works on embedded systems without operating system
 //!
@@ -50,10 +54,10 @@
 //! ## Example Usage
 //!
 //! ```rust,no_run
-//! use motorsport_telemetry::sensor_framework::{
-//!     SensorRegistry, Sensor, SensorDataType, ImuReading, GpsReading
+//! use motorsport_telemetry::{
+//!     ekf::Ekf,
+//!     sensor_framework::{GpsReading, ImuReading, Sensor, SensorDataType, SensorRegistry},
 //! };
-//! use motorsport_telemetry::ekf::Ekf;
 //!
 //! // Create sensor registry
 //! let mut registry = SensorRegistry::new();
@@ -91,13 +95,21 @@
 //!
 //! #[derive(Debug)]
 //! struct RadarReading {
-//!     targets: Vec<(f32, f32, f32)>,  // (distance, angle, velocity)
+//!     targets: Vec<(f32, f32, f32)>, // (distance, angle, velocity)
 //! }
 //!
 //! impl SensorDataType for RadarReading {
-//!     fn type_name(&self) -> &'static str { "RadarReading" }
-//!     fn as_any(&self) -> &dyn core::any::Any { self }
-//!     fn as_any_mut(&mut self) -> &mut dyn core::any::Any { self }
+//!     fn type_name(&self) -> &'static str {
+//!         "RadarReading"
+//!     }
+//!
+//!     fn as_any(&self) -> &dyn core::any::Any {
+//!         self
+//!     }
+//!
+//!     fn as_any_mut(&mut self) -> &mut dyn core::any::Any {
+//!         self
+//!     }
 //! }
 //!
 //! // Now RadarReading can be used with SensorReading!
@@ -107,7 +119,8 @@
 //! ## Use Cases
 //!
 //! - **Track Day Data Logging** - Record lap times, g-forces, and racing lines
-//! - **Vehicle Dynamics Research** - Collect data for suspension, brake, and aero tuning
+//! - **Vehicle Dynamics Research** - Collect data for suspension, brake, and
+//!   aero tuning
 //! - **Fleet Monitoring** - Track driver behavior and vehicle health
 //! - **Autonomous Vehicles** - Sensor fusion for localization and navigation
 //! - **Educational Projects** - Learn sensor fusion and embedded programming
@@ -120,44 +133,42 @@
 //! - [`transforms`] - Coordinate frame transformations
 
 // Core framework modules
+pub mod ekf;
 pub mod sensor_framework;
 pub mod sensors;
-pub mod ekf;
 pub mod transforms;
 
 // Re-export commonly used types from sensor_framework
-pub use sensor_framework::{
-    // Core traits
-    Sensor,
-    CalibratableSensor,
-    HealthMonitoredSensor,
-    SensorDataType,
-    SensorPublisher,
-
-    // Registry and metadata
-    SensorRegistry,
-    SensorCapabilities,
-    SensorReading,
-    SensorId,
-
-    // Sensor data types
-    ImuReading,
-    GpsReading,
-    WheelSpeedReading,
-    CanReading,
-    LidarReading,
-    CameraReading,
-    CustomReading,
-    Detection,
-
-    // Errors
-    SensorError,
-    PublishError,
-};
-
+// Re-export EKF
+pub use ekf::Ekf;
 // Legacy (deprecated) - kept for backward compatibility
 #[allow(deprecated)]
 pub use sensor_framework::SensorData;
+pub use sensor_framework::{
+    CalibratableSensor,
+    CameraReading,
+    CanReading,
+    CustomReading,
+    Detection,
 
-// Re-export EKF
-pub use ekf::Ekf;
+    GpsReading,
+    HealthMonitoredSensor,
+    // Sensor data types
+    ImuReading,
+    LidarReading,
+    PublishError,
+    // Core traits
+    Sensor,
+    SensorCapabilities,
+    SensorDataType,
+    // Errors
+    SensorError,
+    SensorId,
+
+    SensorPublisher,
+
+    SensorReading,
+    // Registry and metadata
+    SensorRegistry,
+    WheelSpeedReading,
+};
