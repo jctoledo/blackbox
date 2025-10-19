@@ -50,6 +50,7 @@ jobs:
       - name: Check compilation
         run: |
           . $HOME/export-esp.sh
+          cd sensors/active-wing
           cargo check --target riscv32imc-esp-espidf
 
   fmt:
@@ -93,6 +94,7 @@ jobs:
       - name: Run clippy
         run: |
           . $HOME/export-esp.sh
+          cd sensors/active-wing
           cargo clippy --target riscv32imc-esp-espidf -- -D warnings
 
   build:
@@ -135,21 +137,37 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check if Python files exist
+        id: check_files
+        run: |
+          if [ -d "tools/python" ] && ls tools/python/*.py 1> /dev/null 2>&1; then
+            echo "files_exist=true" >> $GITHUB_OUTPUT
+          else
+            echo "files_exist=false" >> $GITHUB_OUTPUT
+            echo "⚠️ No Python files found in tools/python/ - skipping lint"
+          fi
+
       - name: Set up Python
+        if: steps.check_files.outputs.files_exist == 'true'
         uses: actions/setup-python@v4
         with:
           python-version: "3.11"
 
       - name: Install dependencies
+        if: steps.check_files.outputs.files_exist == 'true'
         run: |
           python -m pip install --upgrade pip
           pip install flake8 black
-          pip install -r tools/python/requirements.txt
+          if [ -f tools/python/requirements.txt ]; then
+            pip install -r tools/python/requirements.txt
+          fi
 
       - name: Lint with flake8
+        if: steps.check_files.outputs.files_exist == 'true'
         run: |
           flake8 tools/python --count --select=E9,F63,F7,F82 --show-source --statistics
           flake8 tools/python --count --exit-zero --max-complexity=10 --max-line-length=100 --statistics
 
       - name: Check formatting with black
+        if: steps.check_files.outputs.files_exist == 'true'
         run: black --check tools/python/*.py

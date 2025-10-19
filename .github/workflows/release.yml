@@ -35,12 +35,13 @@ jobs:
       - name: Build release firmware
         run: |
           . $HOME/export-esp.sh
+          cd sensors/active-wing
           cargo build --release --target riscv32imc-esp-espidf
 
       - name: Create firmware archive
         run: |
           mkdir -p dist
-          cp target/riscv32imc-esp-espidf/release/esp32-telemetry dist/
+          cp sensors/active-wing/target/riscv32imc-esp-espidf/release/active-wing dist/
           cd dist
           tar -czf ../active-wing-firmware-${{ github.ref_name }}.tar.gz *
 
