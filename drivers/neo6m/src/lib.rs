@@ -294,7 +294,12 @@ impl NmeaParser {
 
     fn parse_line(&mut self) {
         let len = self.line_len;
-        let line = match core::str::from_utf8(&self.line_buffer[..len]) {
+
+        // Make a local copy to avoid borrow checker issues
+        let mut local_buf = [0u8; 120];
+        local_buf[..len].copy_from_slice(&self.line_buffer[..len]);
+
+        let line = match core::str::from_utf8(&local_buf[..len]) {
             Ok(s) => s,
             Err(_) => return,
         };
@@ -304,7 +309,7 @@ impl NmeaParser {
         }
     }
 
-    #[cfg(any(feature = "alloc", test, not(no_std)))]
+    #[cfg(any(test, feature = "std"))]
     fn parse_rmc(&mut self, line: &str) {
         let fields: Vec<&str> = line.split(',').collect();
 
@@ -365,10 +370,12 @@ impl NmeaParser {
         self.last_fix.valid = true;
     }
 
-    #[cfg(not(any(feature = "alloc", test, not(no_std))))]
+    #[cfg(not(any(test, feature = "std")))]
     fn parse_rmc(&mut self, _line: &str) {
-        // no_std without alloc: need manual field parsing
-        // TODO: Implement manual field splitting without Vec
+        // no_std: Simplified implementation
+        // For a full no_std implementation, you would need to add libm dependency for floor()
+        // and implement manual field parsing without Vec
+        self.last_fix.valid = false;
     }
 }
 

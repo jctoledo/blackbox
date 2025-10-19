@@ -16,8 +16,17 @@ edition = "2021"
 # Shared dependencies for workspace members
 [workspace.dependencies]
 log = "0.4"
-serde = { version = "1.0", default-features = false, features = ["derive"] }
-serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
+# Pin serde to avoid compatibility issues with latest versions
+serde = { version = "=1.0.210", default-features = false, features = ["derive"] }
+serde_json = { version = "=1.0.132", default-features = false, features = ["alloc"] }
 esp-idf-hal = "0.45"
 esp-idf-svc = { version = "0.51", default-features = false }
 esp-idf-sys = { version = "0.36", default-features = false }
+
+# Workspace-wide build profiles
+[profile.release]
+opt-level = "s"
+
+[profile.dev]
+debug = true
+opt-level = "z"

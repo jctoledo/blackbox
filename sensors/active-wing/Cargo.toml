@@ -4,13 +4,6 @@ version.workspace = true
 authors.workspace = true
 edition.workspace = true
 
-[profile.release]
-opt-level = "s"
-
-[profile.dev]
-debug = true
-opt-level = "z"
-
 [dependencies]
 # Sensor fusion framework (workspace member)
 active-wing-framework = { path = "../../framework" }
