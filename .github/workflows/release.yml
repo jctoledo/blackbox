@@ -17,27 +17,124 @@ jobs:
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rust-src
 
-      - name: Install ESP toolchain
+      - name: Install build dependencies
         run: |
-          cargo install ldproxy
-          rustup target add riscv32imc-unknown-none-elf
+          sudo apt-get update
+          sudo apt-get install -y git wget flex bison gperf python3 python3-pip python3-venv \
+            cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0 libudev-dev
 
-      - name: Build release firmware
-        run: cargo build -p active-wing --release --target riscv32imc-unknown-none-elf
+      - name: Install ldproxy and cargo-espflash
+        run: cargo install ldproxy cargo-espflash
 
-      - name: Create firmware archive
+      - name: Build all sensor firmware
+        run: |
+          # Build all sensor projects
+          build_count=0
+          failed_count=0
+
+          for sensor_dir in sensors/*/; do
+            if [ -f "${sensor_dir}Cargo.toml" ]; then
+              sensor_name=$(basename "$sensor_dir")
+              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+              echo "Building $sensor_name for release..."
+              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+              # Build from the sensor directory to use its .cargo/config.toml
+              # The embuild system will download ESP-IDF automatically
+              if (cd "$sensor_dir" && cargo build --release); then
+                echo "✅ Successfully built $sensor_name"
+                ((build_count++))
+              else
+                echo "❌ Failed to build $sensor_name"
+                ((failed_count++))
+              fi
+            fi
+          done
+
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Build Summary:"
+          echo "  ✅ Successful: $build_count"
+          echo "  ❌ Failed: $failed_count"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+          # Fail the job if any builds failed
+          if [ $failed_count -gt 0 ]; then
+            exit 1
+          fi
+
+      - name: Create firmware archives
         run: |
           mkdir -p dist
-          cp target/riscv32imc-unknown-none-elf/release/active-wing dist/
-          cd dist
-          tar -czf ../active-wing-firmware-${{ github.ref_name }}.tar.gz *
 
-      - name: Upload firmware artifact
+          # Create individual archives for each sensor project
+          for sensor_dir in sensors/*/; do
+            if [ -f "${sensor_dir}Cargo.toml" ]; then
+              sensor_name=$(basename "$sensor_dir")
+
+              # Binary is in sensors/<name>/target/riscv32imc-esp-espidf/release/<name>
+              binary_path="${sensor_dir}target/riscv32imc-esp-espidf/release/$sensor_name"
+
+              if [ -f "$binary_path" ]; then
+                echo "Packaging $sensor_name..."
+                mkdir -p "dist/$sensor_name"
+                cp "$binary_path" "dist/$sensor_name/"
+
+                # Copy README if exists
+                if [ -f "${sensor_dir}README.md" ]; then
+                  cp "${sensor_dir}README.md" "dist/$sensor_name/"
+                fi
+
+                # Create tarball
+                cd dist
+                tar -czf "../${sensor_name}-firmware-${{ github.ref_name }}.tar.gz" "$sensor_name"
+                cd ..
+
+                echo "✅ Created ${sensor_name}-firmware-${{ github.ref_name }}.tar.gz"
+              else
+                echo "⚠️  Binary not found: $binary_path"
+                # Try alternate location (workspace target dir)
+                alt_path="target/riscv32imc-esp-espidf/release/$sensor_name"
+                if [ -f "$alt_path" ]; then
+                  echo "✅ Found binary at: $alt_path"
+                  mkdir -p "dist/$sensor_name"
+                  cp "$alt_path" "dist/$sensor_name/"
+
+                  # Copy README if exists
+                  if [ -f "${sensor_dir}README.md" ]; then
+                    cp "${sensor_dir}README.md" "dist/$sensor_name/"
+                  fi
+
+                  # Create tarball
+                  cd dist
+                  tar -czf "../${sensor_name}-firmware-${{ github.ref_name }}.tar.gz" "$sensor_name"
+                  cd ..
+
+                  echo "✅ Created ${sensor_name}-firmware-${{ github.ref_name }}.tar.gz"
+                else
+                  echo "❌ Binary not found in either location"
+                fi
+              fi
+            fi
+          done
+
+          # Create combined archive with all sensor projects
+          cd dist
+          tar -czf ../all-sensors-firmware-${{ github.ref_name }}.tar.gz */
+          cd ..
+
+          echo ""
+          echo "Release artifacts created:"
+          ls -lh *-firmware-${{ github.ref_name }}.tar.gz
+
+      - name: Upload firmware artifacts
         uses: actions/upload-artifact@v4
         with:
           name: firmware
-          path: active-wing-firmware-${{ github.ref_name }}.tar.gz
+          path: "*-firmware-${{ github.ref_name }}.tar.gz"
 
   create-release:
     name: Create GitHub Release
@@ -68,7 +165,7 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          files: active-wing-firmware-${{ github.ref_name }}.tar.gz
+          files: "*-firmware-${{ github.ref_name }}.tar.gz"
           body_path: release-notes.md
           draft: false
           prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}

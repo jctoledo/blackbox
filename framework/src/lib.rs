@@ -1,6 +1,8 @@
-//! Active Wing Sensor Fusion Framework
+//! Open Motorsport Telemetry Framework
 //!
-//! A modular, extensible framework for multi-sensor fusion in embedded systems.
+//! A modular, extensible framework for building custom automotive sensor fusion systems.
+//! Build professional-grade telemetry for track days, racing, vehicle dynamics research,
+//! and fleet monitoring without vendor lock-in.
 //!
 //! ## Features
 //!
@@ -9,6 +11,7 @@
 //! - **Extended Kalman Filter**: 7-state sensor fusion (position, velocity, yaw, biases)
 //! - **Coordinate Transforms**: Body ↔ Earth ↔ Vehicle frame conversions
 //! - **Distributed Support**: MQTT-based multi-board sensor networks (optional)
+//! - **No-std Compatible**: Works on embedded systems without operating system
 //!
 //! ## Architecture
 //!
@@ -25,20 +28,20 @@
 //! ## Example Usage
 //!
 //! ```rust,no_run
-//! use active_wing_framework::sensor_framework::{SensorRegistry, Sensor};
-//! use active_wing_framework::ekf::Ekf;
+//! use motorsport_telemetry::sensor_framework::{SensorRegistry, Sensor};
+//! use motorsport_telemetry::ekf::Ekf;
 //!
 //! // Create sensor registry
 //! let mut registry = SensorRegistry::new();
 //!
-//! // Add sensors (implement Sensor trait)
+//! // Add your sensors (implement Sensor trait)
 //! // registry.register(Box::new(MyImuSensor::new()))?;
 //! // registry.register(Box::new(MyGpsSensor::new()))?;
 //!
 //! // Create Extended Kalman Filter
 //! let mut ekf = Ekf::new();
 //!
-//! // Main loop
+//! // Main fusion loop
 //! loop {
 //!     // Poll all sensors
 //!     let readings = registry.poll_all();
@@ -49,6 +52,14 @@
 //!     // }
 //! }
 //! ```
+//!
+//! ## Use Cases
+//!
+//! - **Track Day Data Logging** - Record lap times, g-forces, and racing lines
+//! - **Vehicle Dynamics Research** - Collect data for suspension, brake, and aero tuning
+//! - **Fleet Monitoring** - Track driver behavior and vehicle health
+//! - **Autonomous Vehicles** - Sensor fusion for localization and navigation
+//! - **Educational Projects** - Learn sensor fusion and embedded programming
 //!
 //! ## Modules
 //!

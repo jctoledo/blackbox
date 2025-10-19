@@ -1,7 +1,7 @@
 /// Configuration management for Active Wing telemetry system
 /// Provides defaults and structure for future config.toml loading
 
-use active_wing_framework::ekf::EkfConfig;
+use motorsport_telemetry::ekf::EkfConfig;
 use crate::mode::ModeConfig;
 
 /// Network configuration

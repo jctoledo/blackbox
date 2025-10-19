@@ -1,9 +1,9 @@
 [workspace]
 members = [
-    "framework",
-    "drivers/wt901",
-    "drivers/neo6m",
-    "sensors/active-wing",
+    "framework",           # motorsport-telemetry crate
+    "drivers/wt901",       # WT901 IMU driver
+    "drivers/neo6m",       # NEO-6M GPS driver
+    "sensors/active-wing", # Active Wing ESP32 telemetry application
 ]
 resolver = "2"
 

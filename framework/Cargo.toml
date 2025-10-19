@@ -1,11 +1,16 @@
 [package]
-name = "active-wing-framework"
+name = "motorsport-telemetry"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
+description = "Open-source framework for building custom automotive sensor fusion systems"
+keywords = ["telemetry", "sensor-fusion", "kalman-filter", "automotive", "motorsport"]
+categories = ["embedded", "no-std", "science"]
+license = "MIT"
+repository = "https://github.com/jctoledo/active_wing"
 
 [lib]
-name = "active_wing_framework"
+name = "motorsport_telemetry"
 
 [dependencies]
 # Use workspace dependencies

@@ -12,6 +12,9 @@ categories = ["embedded", "hardware-support", "no-std", "parser-implementations"
 name = "neo6m"
 
 [dependencies]
+# Floating point math for no-std
+libm = "0.2"
+
 # Optional logging for debugging
 log = { workspace = true, optional = true }
 

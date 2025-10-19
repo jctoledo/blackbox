@@ -6,7 +6,7 @@ edition.workspace = true
 
 [dependencies]
 # Sensor fusion framework (workspace member)
-active-wing-framework = { path = "../../framework" }
+motorsport-telemetry = { path = "../../framework" }
 
 # Sensor drivers (workspace members)
 wt901 = { path = "../../drivers/wt901" }

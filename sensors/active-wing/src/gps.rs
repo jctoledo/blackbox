@@ -5,7 +5,7 @@
 // Re-export the driver types
 pub use neo6m::{GpsFix, GpsReference, NmeaParser};
 
-use active_wing_framework::sensors::{GpsSensor, SensorError};
+use motorsport_telemetry::sensors::{GpsSensor, SensorError};
 
 /// UART-based NMEA GPS receiver (application adapter)
 ///

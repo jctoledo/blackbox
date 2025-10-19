@@ -22,7 +22,7 @@ use rgb_led::RgbLed;
 use tcp_stream::TcpTelemetryStream;
 
 // Import from framework crate
-use active_wing_framework::transforms::{body_to_earth, remove_gravity};
+use motorsport_telemetry::transforms::{body_to_earth, remove_gravity};
 
 use system::{SensorManager, StateEstimator, TelemetryPublisher, StatusManager};
 use config::SystemConfig;

@@ -37,14 +37,13 @@
 #[cfg(feature = "logging")]
 use log::warn;
 
-#[cfg(any(feature = "alloc", test, not(no_std)))]
-extern crate alloc;
-
-#[cfg(any(feature = "alloc", test, not(no_std)))]
-use alloc::vec::Vec;
+// Import libm for no-std floating point operations
+use libm::{cos, sin, sqrt, floor};
 
 /// GPS coordinate transformations
 pub mod transforms {
+    use libm::{cos, sqrtf};
+
     const METERS_PER_DEGREE_LAT: f64 = 111320.0;
 
     /// Convert latitude difference to meters
@@ -54,7 +53,7 @@ pub mod transforms {
 
     /// Convert longitude difference to meters
     pub fn lon_to_meters(dlon: f64, ref_lat: f64) -> f32 {
-        (dlon * METERS_PER_DEGREE_LAT * ref_lat.to_radians().cos()) as f32
+        (dlon * METERS_PER_DEGREE_LAT * cos(ref_lat.to_radians())) as f32
     }
 
     /// Convert GPS coordinates to local ENU frame
@@ -76,7 +75,7 @@ pub mod transforms {
         let dy = lat_to_meters(dlat);
         let dx = lon_to_meters(dlon, ref_lat);
 
-        (dx * dx + dy * dy).sqrt()
+        sqrtf(dx * dx + dy * dy)
     }
 }
 
@@ -240,8 +239,8 @@ impl NmeaParser {
             return None;
         }
 
-        let vx = self.last_fix.speed * self.last_fix.course.cos();
-        let vy = self.last_fix.speed * self.last_fix.course.sin();
+        let vx = self.last_fix.speed * cos(self.last_fix.course as f64) as f32;
+        let vy = self.last_fix.speed * sin(self.last_fix.course as f64) as f32;
 
         Some((vx, vy))
     }
@@ -393,7 +392,7 @@ fn parse_coordinate(coord_str: &str, dir_str: &str) -> Option<f64> {
 
     let value = coord_str.parse::<f64>().ok()?;
 
-    let degrees = (value / 100.0).floor();
+    let degrees = floor(value / 100.0);
     let minutes = value - (degrees * 100.0);
 
     let mut decimal = degrees + (minutes / 60.0);

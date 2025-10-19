@@ -14,8 +14,8 @@ use crate::mqtt::MqttClient;
 use crate::rgb_led::RgbLed;
 
 // Import from framework crate
-use active_wing_framework::ekf::Ekf;
-use active_wing_framework::transforms::{body_to_earth, remove_gravity};
+use motorsport_telemetry::ekf::Ekf;
+use motorsport_telemetry::transforms::{body_to_earth, remove_gravity};
 
 const CALIB_SAMPLES: usize = 500;
 

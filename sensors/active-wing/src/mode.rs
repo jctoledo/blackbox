@@ -1,7 +1,7 @@
 /// Driving mode classifier
 /// Detects IDLE, ACCEL, BRAKE, and CORNER modes based on acceleration and yaw rate
 
-use active_wing_framework::transforms::earth_to_car;
+use motorsport_telemetry::transforms::earth_to_car;
 
 const G: f32 = 9.80665; // m/s²
 
