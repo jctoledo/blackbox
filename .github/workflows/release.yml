@@ -17,6 +17,8 @@ jobs:
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rust-src
 
       - name: Install ESP-IDF prerequisites
         run: |
@@ -36,7 +38,7 @@ jobs:
         run: |
           . $HOME/export-esp.sh
           cd sensors/active-wing
-          cargo build --release --target riscv32imc-esp-espidf
+          cargo build --release --target riscv32imc-esp-espidf -Zbuild-std=std,panic_abort
 
       - name: Create firmware archive
         run: |
