@@ -5,484 +5,298 @@
 [![ESP32](https://img.shields.io/badge/platform-ESP32-blue.svg)](https://www.espressif.com/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-An open-source framework for building custom automotive sensor systems. Built by enthusiasts who wanted professional-grade telemetry without the professional price tag.
+**Professional-grade vehicle telemetry on hobbyist hardware.** Real-time sensor fusion using Extended Kalman Filtering, built for racing, research, and DIY vehicle projects.
 
-### Sensor Implementations
+---
 
-#### [Active Wing](sensors/active-wing/) - Track the "attitude" of your car
-**Hardware:** ESP32-C3 + WT901 9-axis IMU + NEO-6M GPS
-Use Cases:
+## Table of Contents
 
+- [What Is This?](#what-is-this)
+- [Quick Start](#quick-start)
+- [Active Wing Reference System](#active-wing-reference-system)
+- [Building From Source](#building-from-source)
+- [Architecture](#architecture)
+- [Documentation](#documentation)
+- [Contributing](#contributing)
+- [License](#license)
 
-**What it does:**
-- Real-time sensor fusion using Extended Kalman Filter
-- GPS-corrected position tracking (eliminates IMU drift)
-- Gravity-compensated acceleration measurements
-- Coordinate frame transformations (body to earth frame)
-- Zero-velocity updates (ZUPT) when stationary
+---
+
+## What Is This?
+
+An open-source framework for building custom automotive sensor systems. Track your vehicle's dynamics with the same algorithms used in autonomous vehicles—for $50 instead of $5,000.
+
+**What you get:**
+- 7-state Extended Kalman Filter with GPS+IMU sensor fusion
+- Real-time position, velocity, and acceleration tracking
 - Driving mode detection (stopped, cruising, braking, cornering)
-- Binary telemetry streaming over TCP (20Hz, 66-byte packets)
-- MQTT status messages
-- Python visualization tools included
+- 20Hz binary telemetry streaming
+- Python visualization tools
 
 **Use cases:**
-
-- Vehicle dynamics analysis
-- Driver training
+- Track day data logging and driver training
+- Vehicle dynamics research and education
+- DIY EV builds and kit cars
 - Suspension/brake/aero testing
+- Autonomous vehicle prototyping
+
+**Why this exists:** Commercial racing telemetry costs $5k-50k. Consumer GPS loggers don't do sensor fusion. This bridges the gap with professional algorithms on accessible hardware.
 
 ---
 
-## What Can You Build With This Framework?
+## Quick Start
 
-### Motorsport Data Loggers
-- Track day telemetry systems
-- Autocross/rally data acquisition
-- Drag racing performance monitors
-- Motorcycle lean angle sensors
+### Hardware You Need
 
-### Vehicle Development Tools
-- Suspension testing rigs (accelerometers + ride height)
-- Brake system analysis (pressure + temperature + deceleration)
-- Drivetrain testing (wheel speed + torque + temperature)
-- Aerodynamics testing (pressure sensors + speed + GPS)
+**Core system (~$50):**
+- ESP32-C3 development board ($5)
+- WT901 9-axis IMU ($25)
+- NEO-6M GPS module ($15)
+- USB cable + basic wiring
 
-### Fleet/Commercial Vehicles
-- Delivery route optimization (GPS + driving behavior)
-- Driver behavior monitoring (acceleration, braking, cornering)
-- Fuel efficiency analysis (speed + throttle + terrain)
-- Predictive maintenance (vibration + temperature monitoring)
+**Optional:**
+- WS2812 RGB LED for status ($2)
+- SD card module for offline logging
 
-### Research & Education
-- Autonomous vehicle sensor fusion
-- Control systems development
-- Machine learning training data collection
-- Embedded systems teaching platform
-
-**The framework handles the hard parts (fusion, transforms, abstractions) so you can focus on your specific application.**
-
----
-
-## Build Your Own Sensor System
-
-The framework is designed to be reusable. Here's how to create your own sensor project:
-
-### 1. Create Your Project
+### Software Setup
 
 ```bash
-mkdir sensors/my-sensor-system
-cd sensors/my-sensor-system
-cargo init
+# 1. Install Rust and ESP toolchain
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+cargo install espup cargo-espflash
+espup install
+
+# 2. Clone and configure
+git clone https://github.com/jctoledo/open-motorsport-telemetry.git
+cd open-motorsport-telemetry/sensors/active-wing
+cp config.toml.example config.toml
+# Edit config.toml with your WiFi credentials
+
+# 3. Build and flash
+source $HOME/export-esp.sh
+cargo espflash flash --release --monitor
 ```
 
-### 2. Add Framework Dependency
+### Receive Telemetry
 
-```toml
-# Cargo.toml
-[dependencies]
-active-wing-framework = { path = "../.." }
-esp-idf-hal = "0.45"  # Or your platform's HAL
+```bash
+# In another terminal
+cd tools/python
+pip install paho-mqtt
+python3 tcp_telemetry_server.py
 ```
 
-### 3. Implement Your Sensors
-
-```rust
-use active_wing_framework::sensor_framework::Sensor;
-
-pub struct MyCustomSensor {
-    // Your hardware interface
-}
-
-impl Sensor for MyCustomSensor {
-    fn poll(&mut self) -> Option<SensorReading> {
-        // Read your sensor
-        Some(SensorReading { /* ... */ })
-    }
-}
-```
-
-### 4. Use the Framework Components
-
-```rust
-use active_wing_framework::{Ekf, transforms};
-
-fn main() {
-    // Create sensor registry
-    let mut registry = SensorRegistry::new();
-    registry.register(Box::new(MyCustomSensor::new()));
-
-    // Use the EKF for fusion
-    let mut ekf = Ekf::new();
-
-    // Main loop
-    loop {
-        for reading in registry.poll_all() {
-            // Use framework transforms
-            let (ax_e, ay_e) = transforms::body_to_earth(/*...*/);
-            ekf.predict(ax_e, ay_e, wz, dt);
-        }
-    }
-}
-```
-
-**See `sensors/active-wing/` for a complete working example.**
+You'll see live telemetry at 20Hz. Drive around and watch the data!
 
 ---
-<!-- 
-## What's Included
 
-### Reusable Framework Components (in `/framework`)
-
-Build any sensor system using these modules:
-- **`sensor_framework.rs`** - Plugin architecture, sensor registry
-- **`ekf.rs`** - Extended Kalman Filter (7-state fusion)
-- **`transforms.rs`** - Coordinate frame transformations
-- **`sensors.rs`** - Sensor trait abstractions
-
-### Standalone Sensor Drivers (in `/drivers`)
-
-Reusable, no-std compatible sensor drivers:
-- **`wt901`** - WT901 9-axis IMU driver (UART protocol parser)
-- **`neo6m`** - NEO-6M GPS driver (NMEA parser + coordinate transforms)
-
-These drivers have zero dependencies and work in any Rust embedded project.
-
-### Active Wing Reference Implementation (in `/sensors/active-wing`)
+## Active Wing Reference System
 
 A complete working example showing the framework in action:
-- **ESP32-C3 firmware** with sensor fusion
-- **WT901 IMU adapter** (wraps driver crate, 200Hz sampling)
-- **NEO-6M GPS adapter** (wraps driver crate, 5Hz with NMEA parsing)
-- **Binary telemetry protocol** (67-byte versioned packets, 20Hz over TCP)
-- **Python visualization tools** for data display
-- **Full documentation** and build instructions
 
-### Documentation (in `/docs`) -->
+**Hardware:** ESP32-C3 + WT901 IMU (200Hz) + NEO-6M GPS (5Hz)
 
-Learn the framework and build your own systems:
-- **[Sensor Toolkit Guide](docs/SENSOR_TOOLKIT_GUIDE.md)** - Step-by-step sensor integration
-- **[Architecture Guide](docs/ARCHITECTURE.md)** - System design patterns
-- **[Sensor Drivers Guide](SENSOR_DRIVERS.md)** - Standalone driver crates architecture
-- **[Workspace Structure](WORKSPACE_STRUCTURE.md)** - Cargo workspace organization
-- **[Active Wing README](sensors/active-wing/README.md)** - Reference implementation details
+**What it does:**
+- Fuses GPS and IMU using Extended Kalman Filter
+- Eliminates IMU drift using GPS corrections
+- Compensates for gravity to measure true acceleration
+- Transforms between body frame and earth frame
+- Detects zero-velocity for bias estimation
+- Streams 66-byte binary packets at 20Hz over TCP
 
----
+**Performance:**
+- Position accuracy: ±1m between GPS updates
+- Update latency: <20ms sensor-to-transmission
+- Memory footprint: ~50KB RAM, ~800KB flash
 
-## Framework Performance
-
-The reusable components are optimized for embedded systems:
-- **EKF update**: <500µs per prediction step (200Hz capable on ESP32)
-- **Memory footprint**: ~10KB framework overhead
-- **Coordinate transforms**: <50µs per transformation
-- **Sensor polling**: 200Hz+ (hardware-limited)
+See [`sensors/active-wing/README.md`](sensors/active-wing/README.md) for complete details.
 
 ---
 
-## Framework Architecture
+## Building From Source
 
-### Conceptual Layers
+### Prerequisites
 
-```
-┌──────────────────────────────────────────────┐
-│  Your Sensor Project (sensors/your-project/) │
-│  • Hardware-specific drivers                 │
-│  • Application logic                         │
-│  • Telemetry output format                   │
-└────────────────┬─────────────────────────────┘
-                 │ uses
-                 ▼
-┌──────────────────────────────────────────────┐
-│  Sensor Fusion Framework (src/)              │
-│  ┌──────────────────────────────────────┐    │
-│  │ Sensor Abstractions (sensor traits)  │    │
-│  ├──────────────────────────────────────┤    │
-│  │ Fusion Algorithms (EKF, transforms)  │    │
-│  ├──────────────────────────────────────┤    │
-│  │ Plugin System (registry, poll)       │    │
-│  └──────────────────────────────────────┘    │
-└──────────────────────────────────────────────┘
+<details>
+<summary><b>Click to expand full prerequisites</b></summary>
+
+**1. Install Rust:**
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source $HOME/.cargo/env
 ```
 
-### Active Wing System Diagram
+**2. Install ESP-IDF dependencies:**
 
-How the reference implementation uses the framework:
+*Ubuntu/Debian:*
+```bash
+sudo apt-get install git wget flex bison gperf python3 python3-pip \
+  python3-venv cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0
+```
 
+*macOS:*
+```bash
+brew install cmake ninja dfu-util
 ```
-┌──────────────────────────────────────┐
-│         ESP32-C3 (on your car)       │
-│                                      │
-│  ┌────────────────────────────────┐  │
-│  │  Sensor Drivers (active-wing)  │  │
-│  │  ├─ WT901 IMU (200Hz)          │  │
-│  │  └─ NEO-6M GPS (5Hz)           │  │
-│  └────────────────────────────────┘  │
-│              ▼                       │
-│  ┌────────────────────────────────┐  │
-│  │  Framework Components          │  │
-│  │  • EKF (7-state)               │  │
-│  │  • Coordinate transforms       │  │
-│  │  • Sensor registry             │  │
-│  └────────────────────────────────┘  │
-│              ▼                       │
-│  ┌────────────────────────────────┐  │
-│  │  Application Layer             │  │
-│  │  ├─ TCP telemetry (20Hz)       │  │
-│  │  └─ MQTT status                │  │
-│  └────────────────────────────────┘  │
-└──────────────────────────────────────┘
-                 │
-                 │ WiFi
-                 ▼
-      ┌───────────────────────┐
-      │  Python Receiver      │
-      │  • Live visualization │
-      │  • CSV logging        │
-      └───────────────────────┘
+
+*Windows:* Install [Visual Studio Build Tools](https://visualstudio.microsoft.com/downloads/), [Python 3](https://www.python.org/downloads/), and [Git](https://git-scm.com/download/win)
+
+**3. Install ESP Rust toolchain:**
+```bash
+cargo install espup cargo-espflash
+espup install
+source $HOME/export-esp.sh  # Load environment (do this in each new terminal)
 ```
+
+</details>
+
+### Build Commands
+
+```bash
+# Load ESP environment (required in each terminal session)
+source $HOME/export-esp.sh
+
+# Check compilation
+cargo check --target riscv32imc-esp-espidf
+
+# Build release binary
+cargo build --release --target riscv32imc-esp-espidf
+
+# Flash to ESP32
+cargo espflash flash --release --monitor
+
+# Format code
+cargo fmt
+
+# Lint
+cargo clippy --target riscv32imc-esp-espidf
+```
+
+### Troubleshooting
+
+<details>
+<summary><b>Common build issues</b></summary>
+
+**"error: linking with `riscv32-esp-elf-gcc` failed"**
+```bash
+source $HOME/export-esp.sh  # Load ESP environment
+```
+
+**"CMake Error: Could not find CMAKE_C_COMPILER"**
+```bash
+sudo apt-get install build-essential cmake
+```
+
+**"error: failed to run custom build command for `esp-idf-sys`"**
+```bash
+cargo clean
+rm -rf ~/.espressif  # Remove cached ESP-IDF
+espup install        # Reinstall
+cargo build
+```
+
+**Permission denied accessing serial port (Linux):**
+```bash
+sudo usermod -a -G dialout $USER
+# Log out and back in
+```
+
+</details>
+
+**Build times:** First build 10-20 min (downloads ESP-IDF), incremental builds 30s-2min.
 
 ---
 
-## Extending with Custom Sensors
+## Architecture
 
-The framework's plugin architecture makes it trivial to add new sensors:
-
-### Example: Add Wheel Speed to Active Wing
-
-```rust
-use active_wing_framework::sensor_framework::Sensor;
-
-pub struct WheelSpeedSensor {
-    gpio_pin: GpioPin,
-    pulse_count: u32,
-}
-
-impl Sensor for WheelSpeedSensor {
-    fn capabilities(&self) -> SensorCapabilities {
-        SensorCapabilities {
-            id: SensorId(3),
-            name: "Wheel Speed",
-            measurement_types: &[MeasurementType::Velocity3D],
-            update_rate_hz: 50.0,
-            // ...
-        }
-    }
-
-    fn poll(&mut self) -> Option<SensorReading> {
-        // Read Hall effect sensor pulses
-        let speed = self.calculate_speed();
-        Some(SensorReading {
-            data: SensorData::WheelSpeed(speed),
-            // ...
-        })
-    }
-}
-
-// In main.rs - just register it:
-registry.register(Box::new(WheelSpeedSensor::new(gpio_pin)))?;
-```
-
-**That's it! No changes to IMU, GPS, EKF, or telemetry code.**
-
-See the [Sensor Toolkit Guide](docs/SENSOR_TOOLKIT_GUIDE.md) for step-by-step instructions.
-
----
-
-## Repository Structure
-
-This is a **Cargo workspace** containing multiple related packages:
+### System Overview
 
 ```
-active_wing/
-│
-├── Cargo.toml                     ← Workspace definition
-├── .rustfmt.toml                  ← Shared formatting config
-├── clippy.toml                    ← Shared linting config
-│
-├── framework/                     ← FRAMEWORK (reusable)
-│   ├── Cargo.toml
-│   └── src/
-│       ├── lib.rs                 ← Framework entry point
-│       ├── sensor_framework.rs    ← Plugin architecture
-│       ├── ekf.rs                 ← Extended Kalman Filter
-│       ├── transforms.rs          ← Coordinate transformations
-│       └── sensors.rs             ← Sensor trait abstractions
-│
-├── drivers/                       ← SENSOR DRIVERS (reusable)
-│   ├── wt901/                     ← WT901 IMU driver crate
-│   │   ├── Cargo.toml             ← No dependencies, no-std
-│   │   ├── README.md              ← Driver documentation
-│   │   └── src/lib.rs             ← Parser, state machine
-│   │
-│   └── neo6m/                     ← NEO-6M GPS driver crate
-│       ├── Cargo.toml             ← No dependencies, no-std
-│       ├── README.md              ← Driver documentation
-│       └── src/lib.rs             ← NMEA parser, transforms
-│
-├── sensors/                       ← SENSOR PROJECTS
-│   └── active-wing/               ← Reference implementation
-│       ├── Cargo.toml             ← Depends on framework + drivers
-│       ├── config.toml.example    ← Runtime configuration
-│       ├── src/
-│       │   ├── main.rs            ← Application entry
-│       │   ├── config.rs          ← Configuration management
-│       │   ├── imu.rs             ← WT901 adapter (wraps driver)
-│       │   ├── gps.rs             ← NEO-6M adapter (wraps driver)
-│       │   ├── system.rs          ← System architecture
-│       │   └── ...
-│       ├── tools/python/          ← Telemetry receivers
-│       ├── docs/                  ← Project-specific docs
-│       └── README.md              ← Build instructions
-│
-└── docs/                          ← Framework documentation
-    ├── SENSOR_TOOLKIT_GUIDE.md    ← How to add sensors
-    ├── ARCHITECTURE.md            ← System design
-    ├── SENSOR_DRIVERS.md          ← Driver crates guide
-    └── WORKSPACE_STRUCTURE.md     ← Workspace organization
+┌─────────────────────────────────┐
+│  Your Sensor Project            │
+│  • Hardware drivers             │
+│  • Application logic            │
+└────────────┬────────────────────┘
+             │ uses
+             ▼
+┌─────────────────────────────────┐
+│  Sensor Fusion Framework        │
+│  ├─ Sensor abstractions         │
+│  ├─ EKF (7-state)               │
+│  ├─ Coordinate transforms       │
+│  └─ Plugin system               │
+└─────────────────────────────────┘
 ```
 
-**Workspace Structure Benefits:**
-- **Shared configuration** - Single .rustfmt.toml and clippy.toml
-- **Unified builds** - `cargo build` builds everything
-- **Local dependencies** - Drivers reference each other via `path = "../.."`
-- **Publishable crates** - Drivers can be published to crates.io independently
+### Repository Structure
 
-See [WORKSPACE_STRUCTURE.md](WORKSPACE_STRUCTURE.md) for detailed explanation.
-
-**Package Roles:**
-- **Framework** (`framework/`) - Reusable sensor fusion components
-- **Drivers** (`drivers/`) - Standalone, reusable sensor parsers (no dependencies)
-- **Active Wing** (`sensors/active-wing/`) - Complete ESP32 application
-- **Your Project** - Add to `sensors/` and reference framework + drivers
-
----
-
-## Data Export & Analysis
-
-### Real-Time Streaming
-- **TCP binary protocol** (67 bytes/packet, 20Hz, versioned)
-- **MQTT status messages** (JSON)
-- **WebSocket** support (coming soon)
-
-### Data Logging
-- Python receiver logs to CSV
-- Import to:
-  - **Excel** / Google Sheets
-  - **RaceChrono** (coming soon)
-  - **Circuit Tools** (coming soon)
-  - **Custom analysis** (Python, MATLAB, etc.)
-
-### Telemetry Format
-
-Binary packet (67 bytes, versioned):
-```c
-struct TelemetryPacket {
-    uint8_t version;       // Protocol version (currently 1)
-    uint16_t header;       // 0xAA55
-    uint32_t timestamp_ms;
-    float ax, ay, az;      // Acceleration (m/s²)
-    float wz;              // Yaw rate (rad/s)
-    float roll, pitch, yaw; // Orientation (rad)
-    float x, y;            // Position (m)
-    float vx, vy;          // Velocity (m/s)
-    float speed_kmh;       // Speed (km/h)
-    float lat, lon;        // GPS (degrees)
-    uint8_t gps_valid;
-    uint8_t mode;          // Driving mode
-    uint16_t checksum;
-}
 ```
+open-motorsport-telemetry/
+├── framework/              # Reusable sensor fusion components
+│   ├── ekf.rs             # Extended Kalman Filter
+│   ├── transforms.rs      # Coordinate frame math
+│   └── sensor_framework.rs # Plugin architecture
+│
+├── drivers/               # Standalone sensor drivers (no-std)
+│   ├── wt901/            # WT901 IMU UART parser
+│   └── neo6m/            # NEO-6M GPS NMEA parser
+│
+├── sensors/              # Complete sensor projects
+│   └── active-wing/      # ESP32-C3 reference implementation
+│       ├── src/          # Application code
+│       ├── tools/python/ # Telemetry receivers
+│       └── docs/         # Project-specific docs
+│
+└── docs/                 # Framework documentation
+```
+
+**Package roles:**
+- `framework/` - Reusable fusion algorithms
+- `drivers/` - Hardware-agnostic sensor parsers
+- `sensors/active-wing/` - Complete working example
+- Your new project - Add to `sensors/` directory
+
+### Key Technologies
+
+- **Extended Kalman Filter:** Fuses GPS and IMU optimally
+- **CTRA Motion Model:** Handles turning dynamics properly  
+- **ZUPT:** Eliminates drift when stationary
+- **Binary Protocol:** Efficient 66-byte packets with checksums
 
 ---
 
 ## Documentation
 
-- **[Active Wing System](sensors/active-wing/README.md)** - Complete example implementation
-- **[Sensor Toolkit Guide](docs/SENSOR_TOOLKIT_GUIDE.md)** - How to add sensors
-- **[Architecture Guide](docs/ARCHITECTURE.md)** - System design
+- **[Active Wing System](sensors/active-wing/README.md)** - Complete reference implementation
+- **[Sensor Toolkit Guide](docs/SENSOR_TOOLKIT_GUIDE.md)** - Add your own sensors
+- **[Architecture Guide](docs/ARCHITECTURE.md)** - System design deep-dive
+- **[FAQ](docs/FAQ.md)** - Common questions and troubleshooting
 - **[Contributing Guide](CONTRIBUTING.md)** - How to contribute
 
 ---
 
-## Roadmap
+## Contributing
 
-### Current (v0.1)
--  ESP32-C3 + WT901 IMU + NEO-6M GPS
--  Extended Kalman Filter fusion
--  TCP telemetry (20Hz, versioned protocol)
--  Python visualization
--  Plugin architecture
--  Cargo workspace structure
--  Standalone driver crates (wt901, neo6m)
--  Configuration management system
+We welcome contributions! Whether it's:
+- New sensor drivers (wheel speed, CAN bus, cameras)
+- Platform support (ESP32-S3, Raspberry Pi, STM32)
+- Documentation improvements
+- Bug reports and feature requests
 
-### Next Release (v0.2)
--  Web-based dashboard (real-time)
--  Data logging to SD card
--  Wheel speed sensor support
--  Lap timing (GPS-based)
--  RaceChrono export format
-
-### Future
--  CAN bus integration (OBD2 data)
--  Camera integration (lane detection)
--  Multi-board distributed sensors
--  Machine learning (corner prediction, optimal line)
--  Mobile app (iOS/Android)
-
----
-
-## Community & Support
-
-- **Issues**: [GitHub Issues](https://github.com/jctoledo/active_wing/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/jctoledo/active_wing/discussions)
-- **Contributing**: See [CONTRIBUTING.md](CONTRIBUTING.md)
-
-### Show Your Build!
-
-Built an Active Wing system? We'd love to see it!
-- Post in [Discussions](https://github.com/jctoledo/active_wing/discussions)
-- Share your racing data
-- Submit improvements via PR
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ---
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
-
-**TL;DR**: Use it, modify it, sell it, race with it. Just keep the license notice.
+MIT License - use it, modify it, sell it, race with it. See [LICENSE](LICENSE) for details.
 
 ---
 
 ## Acknowledgments
 
-- Built with Rust for performance and safety
-- ESP-IDF for ESP32 support
-- Inspired by professional motorsport telemetry systems
-- Designed with SOLID principles for production-grade code
+Built by racing enthusiasts who wanted pro-grade telemetry without the pro price tag. Inspired by projects like RaceCapture, openpilot, and VESC that proved open-source can compete with commercial systems.
 
----
+**Questions?** Open an [issue](https://github.com/jctoledo/open-motorsport-telemetry/issues) or [discussion](https://github.com/jctoledo/open-motorsport-telemetry/discussions).
 
-## FAQ
-
-**Q: Can I use this in competition?**
-A: Yes! Check your racing series rules, but most allow data loggers.
-
-**Q: Will it work on motorcycles?**
-A: Absolutely! May need different mounting strategy.
-
-**Q: Can I add my own sensors?**
-A: Yes! The plugin architecture makes it easy. See the [Sensor Guide](docs/SENSOR_TOOLKIT_GUIDE.md).
-
-**Q: Does it work offline?**
-A: Yes for logging. WiFi only needed for live telemetry.
-
-**Q: How accurate is it?**
-A: GPS: ~2m position, IMU: 0.01g acceleration. Professional-grade for the price.
-
-**Q: Can I sell devices based on this?**
-A: Yes! MIT license allows commercial use.
-
----
-
-**Ready to track your performance? Start with the [Quick Start](#quick-start)** 
+**Ready to track your performance?** [Start building →](#quick-start)

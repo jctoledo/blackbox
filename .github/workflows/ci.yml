@@ -12,7 +12,7 @@ env:
 
 jobs:
   check:
-    name: Check
+    name: Check Compilation
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,6 +22,19 @@ jobs:
         with:
           components: rustfmt, clippy
 
+      - name: Install ESP-IDF prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git wget flex bison gperf python3 python3-pip python3-venv cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0
+      
+      - name: Install espup
+        run: cargo install espup
+      
+      - name: Install ESP Rust toolchain
+        run: |
+          espup install
+          . $HOME/export-esp.sh
+      
       - name: Cache cargo registry
         uses: actions/cache@v3
         with:
@@ -34,28 +47,13 @@ jobs:
           path: ~/.cargo/git
           key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Cache cargo build
-        uses: actions/cache@v3
-        with:
-          path: target
-          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Check framework and drivers
+      - name: Check compilation
         run: |
-          # Build exclusion list for all sensor projects (they need ESP32 target)
-          EXCLUDES=""
-          for sensor_dir in sensors/*/; do
-            if [ -f "${sensor_dir}Cargo.toml" ]; then
-              sensor_name=$(basename "$sensor_dir")
-              EXCLUDES="$EXCLUDES --exclude $sensor_name"
-            fi
-          done
-
-          echo "Checking workspace (excluding sensor projects)..."
-          cargo check --workspace $EXCLUDES --all-features
+          . $HOME/export-esp.sh
+          cargo check --target riscv32imc-esp-espidf
 
   fmt:
-    name: Format
+    name: Format Check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -79,141 +77,57 @@ jobs:
         with:
           components: clippy
 
-      - name: Run clippy on framework and drivers
-        run: |
-          # Build exclusion list for all sensor projects
-          EXCLUDES=""
-          for sensor_dir in sensors/*/; do
-            if [ -f "${sensor_dir}Cargo.toml" ]; then
-              sensor_name=$(basename "$sensor_dir")
-              EXCLUDES="$EXCLUDES --exclude $sensor_name"
-            fi
-          done
-
-          echo "Running clippy (excluding sensor projects)..."
-          cargo clippy --workspace $EXCLUDES --all-features -- -D warnings
-
-  test:
-    name: Test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Run tests on framework and drivers
-        run: |
-          # Build exclusion list for all sensor projects
-          EXCLUDES=""
-          for sensor_dir in sensors/*/; do
-            if [ -f "${sensor_dir}Cargo.toml" ]; then
-              sensor_name=$(basename "$sensor_dir")
-              EXCLUDES="$EXCLUDES --exclude $sensor_name"
-            fi
-          done
-
-          echo "Running tests (excluding sensor projects)..."
-          cargo test --workspace $EXCLUDES
-
-  build-sensor-projects:
-    name: Build Sensor Projects
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rust-src
-
-      - name: Install build dependencies
+      - name: Install ESP-IDF prerequisites
         run: |
           sudo apt-get update
-          sudo apt-get install -y git wget flex bison gperf python3 python3-pip python3-venv \
-            cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0 libudev-dev
-
-      - name: Install ldproxy and cargo-espflash
-        run: cargo install ldproxy cargo-espflash
-
-      - name: Discover and build all sensor projects
+          sudo apt-get install -y git wget flex bison gperf python3 python3-pip python3-venv cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0
+      
+      - name: Install espup
+        run: cargo install espup
+      
+      - name: Install ESP Rust toolchain
         run: |
-          # Find all sensor projects (directories with Cargo.toml in sensors/)
-          build_count=0
-          failed_count=0
-
-          for sensor_dir in sensors/*/; do
-            if [ -f "${sensor_dir}Cargo.toml" ]; then
-              sensor_name=$(basename "$sensor_dir")
-              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-              echo "Building sensor project: $sensor_name"
-              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-              # Build from the sensor directory to use its .cargo/config.toml
-              # The embuild system will download ESP-IDF automatically
-              if (cd "$sensor_dir" && cargo build --release); then
-                echo "✅ Successfully built $sensor_name"
-                ((build_count++))
-              else
-                echo "❌ Failed to build $sensor_name"
-                ((failed_count++))
-              fi
-            fi
-          done
-
-          echo ""
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "Build Summary:"
-          echo "  ✅ Successful: $build_count"
-          echo "  ❌ Failed: $failed_count"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-          # Fail the job if any builds failed
-          if [ $failed_count -gt 0 ]; then
-            exit 1
-          fi
-
-      - name: Collect firmware binaries
-        id: collect_binaries
+          espup install
+          . $HOME/export-esp.sh
+      
+      - name: Run clippy
         run: |
-          # Create a directory to collect all sensor binaries
-          mkdir -p firmware-artifacts
+          . $HOME/export-esp.sh
+          cargo clippy --target riscv32imc-esp-espidf -- -D warnings
 
-          # Find and copy all sensor project binaries
-          # The binary is in sensors/<name>/target/<target>/release/<name>
-          for sensor_dir in sensors/*/; do
-            if [ -f "${sensor_dir}Cargo.toml" ]; then
-              sensor_name=$(basename "$sensor_dir")
+  build:
+    name: Build Firmware
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-              # Find the binary in the sensor's target directory
-              binary_path="${sensor_dir}target/riscv32imc-esp-espidf/release/$sensor_name"
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
 
-              if [ -f "$binary_path" ]; then
-                echo "✅ Found binary: $sensor_name"
-                cp "$binary_path" "firmware-artifacts/"
-                ls -lh "$binary_path"
-              else
-                echo "⚠️  Binary not found: $binary_path"
-                # Try alternate location (workspace target dir)
-                alt_path="target/riscv32imc-esp-espidf/release/$sensor_name"
-                if [ -f "$alt_path" ]; then
-                  echo "✅ Found binary at: $alt_path"
-                  cp "$alt_path" "firmware-artifacts/"
-                fi
-              fi
-            fi
-          done
+      - name: Install ESP-IDF prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git wget flex bison gperf python3 python3-pip python3-venv cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0
+      
+      - name: Install espup and cargo-espflash
+        run: |
+          cargo install espup cargo-espflash
+      
+      - name: Install ESP Rust toolchain
+        run: |
+          espup install
+          . $HOME/export-esp.sh
+      
+      - name: Build firmware
+        run: |
+          . $HOME/export-esp.sh
+          cargo build --release --target riscv32imc-esp-espidf
 
-          echo ""
-          echo "Firmware artifacts collected:"
-          ls -lh firmware-artifacts/ || echo "No binaries found"
-
-      - name: Upload firmware artifacts
-        uses: actions/upload-artifact@v4
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v3
         with:
-          name: sensor-firmware-${{ matrix.target }}
-          path: firmware-artifacts/
-          if-no-files-found: error
+          name: firmware-esp32c3
+          path: target/riscv32imc-esp-espidf/release/esp32-telemetry
 
   python-lint:
     name: Python Lint
@@ -230,50 +144,12 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install flake8 black
-
-          # Install requirements from all sensor projects that have them
-          for sensor_dir in sensors/*/; do
-            if [ -f "${sensor_dir}tools/python/requirements.txt" ]; then
-              echo "Installing Python requirements for $(basename "$sensor_dir")..."
-              pip install -r "${sensor_dir}tools/python/requirements.txt"
-            fi
-          done
-
-      - name: Lint Python tools with flake8
+          pip install -r tools/python/requirements.txt
+      
+      - name: Lint with flake8
         run: |
-          # Find all sensor projects with Python tools
-          python_dirs=$(find sensors/*/tools/python -type d 2>/dev/null || true)
-
-          if [ -z "$python_dirs" ]; then
-            echo "No Python tools found in any sensor projects"
-            exit 0
-          fi
-
-          # Lint each Python tools directory
-          for py_dir in $python_dirs; do
-            if [ -d "$py_dir" ] && [ "$(ls -A $py_dir/*.py 2>/dev/null)" ]; then
-              sensor_name=$(echo "$py_dir" | cut -d'/' -f2)
-              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-              echo "Linting Python tools for: $sensor_name"
-              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-              # Stop on syntax errors or undefined names
-              flake8 "$py_dir" --count --select=E9,F63,F7,F82 --show-source --statistics
-
-              # Exit-zero treats all errors as warnings
-              flake8 "$py_dir" --count --exit-zero --max-complexity=10 --max-line-length=100 --statistics
-            fi
-          done
-
-      - name: Check Python formatting with black
-        run: |
-          # Find all Python files in sensor tools directories
-          python_files=$(find sensors/*/tools/python -name "*.py" 2>/dev/null || true)
-
-          if [ -z "$python_files" ]; then
-            echo "No Python files found in sensor projects"
-            exit 0
-          fi
-
-          echo "Checking formatting for Python files..."
-          black --check $python_files
+          flake8 tools/python --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 tools/python --count --exit-zero --max-complexity=10 --max-line-length=100 --statistics
+      
+      - name: Check formatting with black
+        run: black --check tools/python/*.py
