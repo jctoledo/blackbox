@@ -3,16 +3,10 @@ mod gps;
 mod wifi;
 mod mqtt;
 mod rgb_led;
-mod ekf;
-mod transforms;
 mod mode;
 mod binary_telemetry;
 mod tcp_stream;
-mod sensors;
 mod system;
-mod sensor_framework;
-mod sensor_plugins;
-mod fusion_coordinator;
 mod config;
 
 use esp_idf_hal::delay::FreeRtos;
@@ -26,7 +20,9 @@ use wifi::WifiManager;
 use mqtt::MqttClient;
 use rgb_led::RgbLed;
 use tcp_stream::TcpTelemetryStream;
-use transforms::{body_to_earth, remove_gravity};
+
+// Import from framework crate
+use active_wing_framework::transforms::{body_to_earth, remove_gravity};
 
 use system::{SensorManager, StateEstimator, TelemetryPublisher, StatusManager};
 use config::SystemConfig;

@@ -182,12 +182,12 @@ mod tests {
         let ref_lat = 37.0;
         let ref_lon = -122.0;
         let (east, north) = gps_to_local(
-            ref_lat + 0.00001,  // ~1.1m north
+            ref_lat + 0.00001, // ~1.1m north
             ref_lon,
             ref_lat,
-            ref_lon
+            ref_lon,
         );
-        assert!(east.abs() < 0.1);  // Should be near zero
-        assert!((north - 1.11).abs() < 0.1);  // Should be ~1.11m
+        assert!(east.abs() < 0.1); // Should be near zero
+        assert!((north - 1.11).abs() < 0.1); // Should be ~1.11m
     }
 }

@@ -12,9 +12,9 @@
 /// - Sensor failures don't crash the system
 /// - Can fuse data from heterogeneous sources
 
-use crate::sensor_framework::*;
-use crate::ekf::Ekf;
-use crate::transforms::{body_to_earth, remove_gravity};
+use active_wing_framework::sensor_framework::*;
+use active_wing_framework::ekf::Ekf;
+use active_wing_framework::transforms::{body_to_earth, remove_gravity};
 use std::collections::HashMap;
 
 /// Multi-sensor fusion coordinator

@@ -5,7 +5,7 @@
 // Re-export the driver types
 pub use wt901::{ImuBias, ImuCalibrator, ImuData, Wt901Parser, PacketType};
 
-use crate::sensors::{ImuSensor, SensorError};
+use active_wing_framework::sensors::{ImuSensor, SensorError};
 
 /// UART-based WT901 IMU sensor (application adapter)
 ///

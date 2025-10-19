@@ -7,13 +7,15 @@ use log::info;
 
 use crate::imu::{Wt901Parser, ImuBias, ImuCalibrator, PacketType};
 use crate::gps::NmeaParser;
-use crate::ekf::Ekf;
 use crate::mode::ModeClassifier;
-use crate::transforms::{body_to_earth, remove_gravity};
 use crate::binary_telemetry;
 use crate::tcp_stream::TcpTelemetryStream;
 use crate::mqtt::MqttClient;
 use crate::rgb_led::RgbLed;
+
+// Import from framework crate
+use active_wing_framework::ekf::Ekf;
+use active_wing_framework::transforms::{body_to_earth, remove_gravity};
 
 const CALIB_SAMPLES: usize = 500;
 

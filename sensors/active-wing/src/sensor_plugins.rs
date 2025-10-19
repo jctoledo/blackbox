@@ -1,7 +1,7 @@
 /// Concrete sensor implementations using the plugin framework
 /// Each sensor is self-contained and publishes to its own MQTT topic
 
-use crate::sensor_framework::*;
+use active_wing_framework::sensor_framework::*;
 use crate::imu::Wt901Parser;
 use crate::gps::NmeaParser;
 

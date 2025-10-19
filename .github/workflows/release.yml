@@ -24,17 +24,17 @@ jobs:
           rustup target add riscv32imc-unknown-none-elf
 
       - name: Build release firmware
-        run: cargo build --release
+        run: cargo build -p active-wing --release --target riscv32imc-unknown-none-elf
 
       - name: Create firmware archive
         run: |
           mkdir -p dist
-          cp target/riscv32imc-unknown-none-elf/release/esp32-telemetry dist/
+          cp target/riscv32imc-unknown-none-elf/release/active-wing dist/
           cd dist
           tar -czf ../active-wing-firmware-${{ github.ref_name }}.tar.gz *
 
       - name: Upload firmware artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: firmware
           path: active-wing-firmware-${{ github.ref_name }}.tar.gz
@@ -47,7 +47,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Download firmware
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: firmware
 
