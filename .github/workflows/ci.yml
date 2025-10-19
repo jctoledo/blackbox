@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 env:
   CARGO_TERM_COLOR: always
@@ -26,23 +26,23 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y git wget flex bison gperf python3 python3-pip python3-venv cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0
-      
+
       - name: Install espup
         run: cargo install espup
-      
+
       - name: Install ESP Rust toolchain
         run: |
           espup install
           . $HOME/export-esp.sh
-      
+
       - name: Cache cargo registry
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.cargo/registry
           key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Cache cargo index
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.cargo/git
           key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
@@ -81,15 +81,15 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y git wget flex bison gperf python3 python3-pip python3-venv cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0
-      
+
       - name: Install espup
         run: cargo install espup
-      
+
       - name: Install ESP Rust toolchain
         run: |
           espup install
           . $HOME/export-esp.sh
-      
+
       - name: Run clippy
         run: |
           . $HOME/export-esp.sh
@@ -108,23 +108,23 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y git wget flex bison gperf python3 python3-pip python3-venv cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0
-      
+
       - name: Install espup and cargo-espflash
         run: |
           cargo install espup cargo-espflash
-      
+
       - name: Install ESP Rust toolchain
         run: |
           espup install
           . $HOME/export-esp.sh
-      
+
       - name: Build firmware
         run: |
           . $HOME/export-esp.sh
           cargo build --release --target riscv32imc-esp-espidf
 
       - name: Upload firmware artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: firmware-esp32c3
           path: target/riscv32imc-esp-espidf/release/esp32-telemetry
@@ -138,18 +138,18 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install flake8 black
           pip install -r tools/python/requirements.txt
-      
+
       - name: Lint with flake8
         run: |
           flake8 tools/python --count --select=E9,F63,F7,F82 --show-source --statistics
           flake8 tools/python --count --exit-zero --max-complexity=10 --max-line-length=100 --statistics
-      
+
       - name: Check formatting with black
         run: black --check tools/python/*.py
