@@ -17,10 +17,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust
+      - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt, clippy
+          components: rust-src
 
       - name: Install ESP-IDF prerequisites
         run: |
@@ -34,6 +34,7 @@ jobs:
         run: |
           espup install
           . $HOME/export-esp.sh
+          rustup component add rust-src --toolchain stable
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -50,7 +51,6 @@ jobs:
       - name: Check compilation
         run: |
           . $HOME/export-esp.sh
-          cd sensors/active-wing
           cargo check --target riscv32imc-esp-espidf
 
   fmt:
@@ -73,10 +73,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust
+      - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy
+          components: clippy, rust-src
 
       - name: Install ESP-IDF prerequisites
         run: |
@@ -90,11 +90,12 @@ jobs:
         run: |
           espup install
           . $HOME/export-esp.sh
+          rustup component add rust-src --toolchain stable
+          rustup component add clippy --toolchain stable
 
       - name: Run clippy
         run: |
           . $HOME/export-esp.sh
-          cd sensors/active-wing
           cargo clippy --target riscv32imc-esp-espidf -- -D warnings
 
   build:
@@ -103,8 +104,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust
+      - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rust-src
 
       - name: Install ESP-IDF prerequisites
         run: |
@@ -119,6 +122,7 @@ jobs:
         run: |
           espup install
           . $HOME/export-esp.sh
+          rustup component add rust-src --toolchain stable
 
       - name: Build firmware
         run: |
@@ -140,11 +144,11 @@ jobs:
       - name: Check if Python files exist
         id: check_files
         run: |
-          if [ -d "tools/python" ] && ls tools/python/*.py 1> /dev/null 2>&1; then
+          if ls *.py 1> /dev/null 2>&1; then
             echo "files_exist=true" >> $GITHUB_OUTPUT
           else
             echo "files_exist=false" >> $GITHUB_OUTPUT
-            echo "⚠️ No Python files found in tools/python/ - skipping lint"
+            echo "⚠️ No Python files found in root - skipping lint"
           fi
 
       - name: Set up Python
@@ -157,17 +161,14 @@ jobs:
         if: steps.check_files.outputs.files_exist == 'true'
         run: |
           python -m pip install --upgrade pip
-          pip install flake8 black
-          if [ -f tools/python/requirements.txt ]; then
-            pip install -r tools/python/requirements.txt
-          fi
+          pip install flake8 black paho-mqtt
 
       - name: Lint with flake8
         if: steps.check_files.outputs.files_exist == 'true'
         run: |
-          flake8 tools/python --count --select=E9,F63,F7,F82 --show-source --statistics
-          flake8 tools/python --count --exit-zero --max-complexity=10 --max-line-length=100 --statistics
+          flake8 *.py --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 *.py --count --exit-zero --max-complexity=10 --max-line-length=100 --statistics
 
       - name: Check formatting with black
         if: steps.check_files.outputs.files_exist == 'true'
-        run: black --check tools/python/*.py
+        run: black --check *.py

@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust
+      - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rust-src
@@ -33,17 +33,17 @@ jobs:
         run: |
           espup install
           . $HOME/export-esp.sh
+          rustup component add rust-src --toolchain stable
 
       - name: Build release firmware
         run: |
           . $HOME/export-esp.sh
-          cd sensors/active-wing
-          cargo build --release --target riscv32imc-esp-espidf -Zbuild-std=std,panic_abort
+          cargo build --release --target riscv32imc-esp-espidf
 
       - name: Create firmware archive
         run: |
           mkdir -p dist
-          cp sensors/active-wing/target/riscv32imc-esp-espidf/release/active-wing dist/
+          cp target/riscv32imc-esp-espidf/release/esp32-telemetry dist/
           cd dist
           tar -czf ../active-wing-firmware-${{ github.ref_name }}.tar.gz *
 
@@ -69,14 +69,18 @@ jobs:
         id: changelog
         run: |
           VERSION=${GITHUB_REF#refs/tags/v}
-          awk -v ver="$VERSION" '
-            /^## \[/ {
-              if (found) exit;
-              if ($2 == "["ver"]") found=1;
-              next;
-            }
-            found { print }
-          ' CHANGELOG.md > release-notes.md
+          if [ -f CHANGELOG.md ]; then
+            awk -v ver="$VERSION" '
+              /^## \[/ {
+                if (found) exit;
+                if ($2 == "["ver"]") found=1;
+                next;
+              }
+              found { print }
+            ' CHANGELOG.md > release-notes.md
+          else
+            echo "Release $VERSION" > release-notes.md
+          fi
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
