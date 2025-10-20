@@ -46,9 +46,9 @@ jobs:
           path: |
             ~/.espup/
             ~/export-esp.sh
-          key: ${{ runner.os }}-espup-v1
+          key: ${{ runner.os }}-espup-v2-partition-fix
           restore-keys: |
-            ${{ runner.os }}-espup-
+            ${{ runner.os }}-espup-v2-
 
       - name: Install ESP-IDF prerequisites
         run: |
@@ -160,9 +160,9 @@ jobs:
           path: |
             ~/.espup/
             ~/export-esp.sh
-          key: ${{ runner.os }}-espup-v1
+          key: ${{ runner.os }}-espup-v2-partition-fix
           restore-keys: |
-            ${{ runner.os }}-espup-
+            ${{ runner.os }}-espup-v2-
 
       - name: Install ESP-IDF prerequisites
         run: |
@@ -206,15 +206,19 @@ jobs:
       - name: Clean build to force partition table update
         run: |
           cd sensors/active-wing
-          cargo clean
-          rm -rf ../../target/.embuild
-          echo "✓ Cleaned build directory to pick up new partition table"
+          rm -rf ../../target/riscv32imc-esp-espidf
+          rm -rf ../../.embuild
+          echo "✓ Cleaned ESP-IDF build cache (.embuild and target)"
+          ls -la partitions.csv sdkconfig.defaults
+          echo "✓ Verified partition config files exist"
 
       - name: Build firmware
         run: |
           . $HOME/export-esp.sh
           cd sensors/active-wing
           cargo build --release
+          echo "Built binary size:"
+          ls -lh ../../target/riscv32imc-esp-espidf/release/active-wing
 
       - name: Create merged binary for web flasher
         run: |
