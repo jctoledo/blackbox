@@ -207,7 +207,7 @@ jobs:
         run: |
           cd sensors/active-wing
           cargo clean
-          rm -rf target/.embuild
+          rm -rf ../../target/.embuild
           echo "✓ Cleaned build directory to pick up new partition table"
 
       - name: Build firmware
