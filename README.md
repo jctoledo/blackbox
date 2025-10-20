@@ -101,7 +101,7 @@ rustup component add rust-src --toolchain esp
 
 ```bash
 git clone https://github.com/jctoledo/active_wing.git
-cd active_wing
+cd active_wing/sensors/active-wing
 
 # Edit WiFi credentials
 nano src/main.rs
@@ -117,6 +117,9 @@ nano src/main.rs
 The project includes a `.cargo/config.toml` that configures everything automatically.
 
 ```bash
+# Navigate to the sensor project
+cd sensors/active-wing
+
 # Load ESP environment first (in every new terminal!)
 source $HOME/export-esp.sh
 
@@ -137,7 +140,8 @@ cargo run --release
 **Option A: TCP Stream (recommended for high-rate data)**
 
 ```bash
-# In another terminal
+# In another terminal, from repo root
+cd tools/python
 python3 tcp_telemetry_server.py
 ```
 
@@ -221,9 +225,12 @@ rustup component add rust-src --toolchain esp
 
 ### Build Commands
 
-The `.cargo/config.toml` file in the project root configures the target and build settings automatically:
+The `.cargo/config.toml` file in the sensor project configures the target and build settings automatically:
 
 ```bash
+# Navigate to the sensor project first
+cd sensors/active-wing
+
 # ALWAYS load ESP environment first!
 source $HOME/export-esp.sh
 
@@ -258,13 +265,16 @@ cargo clean
 This means the ESP toolchain isn't loaded or rust-src is missing:
 
 ```bash
-# Solution 1: Load ESP environment
+# Solution 1: Make sure you're in the sensor directory
+cd sensors/active-wing
+
+# Solution 2: Load ESP environment
 source $HOME/export-esp.sh
 
-# Solution 2: Add rust-src component
+# Solution 3: Add rust-src component
 rustup component add rust-src --toolchain esp
 
-# Solution 3: Verify .cargo/config.toml exists
+# Solution 4: Verify .cargo/config.toml exists
 cat .cargo/config.toml
 # Should contain:
 # [unstable]
@@ -364,29 +374,30 @@ GPS (5Hz)           IMU (50Hz)
 
 ```
 active_wing/
-├── .cargo/
-│   └── config.toml          # Cargo build configuration
-│
-├── src/
-│   ├── main.rs              # Main loop and setup
-│   ├── imu.rs               # WT901 UART parser
-│   ├── gps.rs               # NMEA parser with warmup
-│   ├── ekf.rs               # 7-state Extended Kalman Filter
-│   ├── transforms.rs        # Body↔Earth coordinate math
-│   ├── mode.rs              # Driving mode classifier
-│   ├── binary_telemetry.rs  # 66-byte packet format
-│   ├── tcp_stream.rs        # High-speed TCP client
-│   ├── mqtt.rs              # MQTT client for status
-│   ├── wifi.rs              # WiFi connection manager
-│   └── rgb_led.rs           # WS2812 status LED
-│
-├── Cargo.toml               # Rust dependencies
-├── sdkconfig.defaults       # ESP-IDF configuration
-├── build.rs                 # Build script
-│
-├── tcp_telemetry_server.py  # Python receiver (TCP)
-├── mqtt_decoder.py          # Python receiver (MQTT)
-└── README.md                # This file
+├── sensors/
+│   └── active-wing/
+│       ├── .cargo/
+│       │   └── config.toml       # ESP32-C3 build configuration
+│       ├── src/
+│       │   ├── main.rs            # Main loop and setup
+│       │   ├── imu.rs             # WT901 UART parser
+│       │   ├── gps.rs             # NMEA parser with warmup
+│       │   ├── ekf.rs             # 7-state Extended Kalman Filter
+│       │   ├── transforms.rs      # Body↔Earth coordinate math
+│       │   ├── mode.rs            # Driving mode classifier
+│       │   ├── binary_telemetry.rs # 66-byte packet format
+│       │   ├── tcp_stream.rs      # High-speed TCP client
+│       │   ├── mqtt.rs            # MQTT client for status
+│       │   ├── wifi.rs            # WiFi connection manager
+│       │   └── rgb_led.rs         # WS2812 status LED
+│       ├── Cargo.toml             # Rust dependencies
+│       ├── sdkconfig.defaults     # ESP-IDF configuration
+│       └── build.rs               # Build script
+├── tools/
+│   └── python/
+│       ├── tcp_telemetry_server.py  # Python receiver (TCP)
+│       └── mqtt_decoder.py          # Python receiver (MQTT)
+└── README.md                        # This file
 ```
 
 ### Key Algorithms
@@ -450,7 +461,7 @@ struct TelemetryPacket {
 
 ### WiFi and Network
 
-Edit `src/main.rs`:
+Edit `sensors/active-wing/src/main.rs`:
 ```rust
 const WIFI_SSID: &str = "YourNetwork";
 const WIFI_PASSWORD: &str = "YourPassword";
@@ -460,7 +471,7 @@ const TCP_SERVER: &str = "192.168.1.100:9000";
 
 ### EKF Tuning
 
-Edit `src/ekf.rs`:
+Edit `sensors/active-wing/src/ekf.rs`:
 ```rust
 const Q_ACC: f32 = 0.40;    // Process noise: acceleration (m/s²)²
 const Q_GYRO: f32 = 0.005;  // Process noise: gyro (rad/s)²
@@ -473,7 +484,7 @@ const R_YAW: f32 = 0.10;    // Measurement noise: magnetometer (rad)²
 
 ### Mode Detection Thresholds
 
-Edit `src/mode.rs`:
+Edit `sensors/active-wing/src/mode.rs`:
 ```rust
 pub min_speed: f32 = 2.0;      // Minimum speed for maneuvers (m/s)
 pub acc_thr: f32 = 0.21;       // Acceleration threshold (g)

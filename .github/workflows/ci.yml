@@ -51,6 +51,7 @@ jobs:
       - name: Check compilation
         run: |
           . $HOME/export-esp.sh
+          cd sensors/active-wing
           cargo check
 
   fmt:
@@ -90,8 +91,8 @@ jobs:
         run: |
           espup install
           . $HOME/export-esp.sh
-          rustup component add rust-src --toolchain stable
-          rustup component add clippy --toolchain stable
+          rustup component add rust-src --toolchain esp
+          rustup component add clippy --toolchain esp
 
       - name: Run clippy
         run: |
@@ -122,7 +123,7 @@ jobs:
         run: |
           espup install
           . $HOME/export-esp.sh
-          rustup component add rust-src --toolchain stable
+          rustup component add rust-src --toolchain esp
 
       - name: Build firmware
         run: |
