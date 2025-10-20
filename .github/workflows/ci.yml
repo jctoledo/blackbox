@@ -34,7 +34,7 @@ jobs:
         run: |
           espup install
           . $HOME/export-esp.sh
-          rustup component add rust-src --toolchain stable
+          rustup component add rust-src --toolchain esp
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -96,7 +96,7 @@ jobs:
       - name: Run clippy
         run: |
           . $HOME/export-esp.sh
-          cargo clippy --target riscv32imc-esp-espidf -- -D warnings
+          cargo clippy -- -D warnings
 
   build:
     name: Build Firmware
@@ -127,7 +127,7 @@ jobs:
       - name: Build firmware
         run: |
           . $HOME/export-esp.sh
-          cargo build --release --target riscv32imc-esp-espidf
+          cargo build --release
 
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
