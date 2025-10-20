@@ -973,7 +973,17 @@
                     enableTracing: devSettings.enableTracing
                 });
 
-                chipInfo = await espStub.main();
+                // Add timeout to prevent infinite loops on incompatible devices
+                const timeoutPromise = new Promise((_, reject) => {
+                    setTimeout(() => {
+                        reject(new Error('Connection timeout - device not responding. Make sure you selected the correct serial port (not Bluetooth) and try holding the BOOT button.'));
+                    }, 15000); // 15 second timeout
+                });
+
+                chipInfo = await Promise.race([
+                    espStub.main(),
+                    timeoutPromise
+                ]);
 
                 logDebug('Chip: ' + chipInfo, 'info');
                 if (espStub.chip && espStub.chip.macAddr) {
@@ -1031,9 +1041,9 @@
                 }
 
                 // Handle connection timeout or device not responding
-                if (error.message && (error.message.includes('timeout') || error.message.includes('Failed to connect'))) {
+                if (error.message && (error.message.includes('timeout') || error.message.includes('Failed to connect') || error.message.includes('not responding'))) {
                     logDebug('Connection timeout: ' + error.message, 'error');
-                    updateStatus('error', 'Device not responding', 'Try holding BOOT button while connecting, or select a different port');
+                    updateStatus('error', 'Device not responding', 'Wrong port selected or device not in download mode. Hold BOOT button and try again.');
                     return;
                 }
 
