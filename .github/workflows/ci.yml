@@ -117,6 +117,13 @@ jobs:
           cd sensors/active-wing
           cargo build --release
 
+      - name: List build artifacts
+        run: |
+          echo "Listing target directory:"
+          ls -la sensors/active-wing/target/riscv32imc-esp-espidf/release/
+          echo "Looking for binaries:"
+          find sensors/active-wing/target/riscv32imc-esp-espidf/release/ -type f -executable -o -name "*.bin" -o -name "*.elf"
+
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
         with:
