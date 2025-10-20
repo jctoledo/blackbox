@@ -17,8 +17,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust nightly
+        uses: dtolnay/rust-toolchain@nightly
         with:
           components: rust-src
 
@@ -30,7 +30,7 @@ jobs:
       - name: Install espup
         run: cargo install espup
 
-      - name: Install ESP Rust toolchain
+      - name: Install ESP-IDF
         run: |
           espup install
           . $HOME/export-esp.sh
@@ -89,8 +89,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust nightly
+        uses: dtolnay/rust-toolchain@nightly
         with:
           components: rust-src
 
@@ -103,11 +103,10 @@ jobs:
         run: |
           cargo install espup cargo-espflash
 
-      - name: Install ESP Rust toolchain
+      - name: Install ESP-IDF
         run: |
           espup install
           . $HOME/export-esp.sh
-          rustup component add rust-src --toolchain esp
 
       - name: Build firmware
         run: |
@@ -119,7 +118,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: firmware-esp32c3
-          path: sensors/active-wing/target/riscv32imc-esp-espidf/release/esp32-telemetry
+          path: sensors/active-wing/target/riscv32imc-esp-espidf/release/active-wing
 
   python-lint:
     name: Python Lint
