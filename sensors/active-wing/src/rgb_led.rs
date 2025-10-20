@@ -1,3 +1,5 @@
+#![allow(dead_code)] // LED methods for future use
+
 /// RGB LED wrapper for WS2812 on ESP32-C3 DevKit using RMT
 use esp_idf_hal::gpio::OutputPin;
 use esp_idf_hal::{

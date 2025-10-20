@@ -1,5 +1,7 @@
-use esp_idf_hal::delay::FreeRtos;
+#![allow(dead_code)] // MQTT methods for future use
+
 /// MQTT client wrapper with binary support
+use esp_idf_hal::delay::FreeRtos;
 use esp_idf_svc::mqtt::client::{EspMqttClient, MqttClientConfiguration, QoS};
 use log::info;
 use serde_json::json;

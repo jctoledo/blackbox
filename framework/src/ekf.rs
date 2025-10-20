@@ -236,6 +236,12 @@ impl Ekf {
     }
 }
 
+impl Default for Ekf {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Wrap angle to [-π, π]
 fn wrap_angle(angle: f32) -> f32 {
     let mut a = angle;

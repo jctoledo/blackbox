@@ -39,7 +39,7 @@
 //! }
 //! ```
 
-#![cfg_attr(not(test), no_std)]
+#![cfg_attr(not(any(test, feature = "std")), no_std)]
 
 #[cfg(feature = "logging")]
 use log::warn;
@@ -72,6 +72,7 @@ impl PacketType {
         }
     }
 
+    #[allow(dead_code)] // Helper function for future use
     fn to_u8(self) -> u8 {
         match self {
             PacketType::Accel => 0x51,
@@ -283,13 +284,10 @@ impl Default for Wt901Parser {
 /// Calibration helper - collects samples for bias computation
 ///
 /// Requires `alloc` feature (enabled by default in std environments)
-#[cfg(any(feature = "alloc", test, not(no_std)))]
-extern crate alloc;
+#[cfg(any(feature = "std", test))]
+use std::vec::Vec;
 
-#[cfg(any(feature = "alloc", test, not(no_std)))]
-use alloc::vec::Vec;
-
-#[cfg(any(feature = "alloc", test, not(no_std)))]
+#[cfg(any(feature = "std", test))]
 pub struct ImuCalibrator {
     samples_ax: Vec<f32>,
     samples_ay: Vec<f32>,
@@ -297,7 +295,7 @@ pub struct ImuCalibrator {
     target_samples: usize,
 }
 
-#[cfg(any(feature = "alloc", test, not(no_std)))]
+#[cfg(any(feature = "std", test))]
 impl ImuCalibrator {
     /// Create a new calibrator
     ///

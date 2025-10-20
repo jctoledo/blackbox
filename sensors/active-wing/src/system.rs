@@ -1,6 +1,8 @@
-use esp_idf_hal::delay::FreeRtos;
+#![allow(dead_code)] // System API for future use
+
 /// System-level architecture for telemetry system
 /// Implements proper separation of concerns and dependency inversion
+use esp_idf_hal::delay::FreeRtos;
 use esp_idf_hal::uart::UartDriver;
 use log::info;
 // Import from framework crate
@@ -78,7 +80,7 @@ impl SensorManager {
                         calibrator.add_sample(data.ax, data.ay, data.az);
 
                         let progress = (calibrator.progress() * 100.0) as u32;
-                        if progress > last_progress && progress % 10 == 0 {
+                        if progress > last_progress && progress.is_multiple_of(10) {
                             if let Some(ref mut mqtt_client) = mqtt {
                                 mqtt_client
                                     .publish_status("calib_running", Some(calibrator.progress()))
@@ -313,12 +315,11 @@ impl TelemetryPublisher {
             }
             Err(_) => {
                 self.telemetry_fail_count += 1;
-                if self.telemetry_fail_count % 100 == 0 {
-                    if tcp.reconnect().is_ok() {
+                if self.telemetry_fail_count.is_multiple_of(100)
+                    && tcp.reconnect().is_ok() {
                         info!("TCP reconnected");
                         self.telemetry_fail_count = 0;
                     }
-                }
                 Err(SystemError::CommunicationError("TCP send failed"))
             }
         }
@@ -405,12 +406,10 @@ impl StatusManager {
             } else {
                 self.led.set_low().ok();
             }
+        } else if now_ms % 500 < 250 {
+            self.led.yellow().ok();
         } else {
-            if now_ms % 500 < 250 {
-                self.led.yellow().ok();
-            } else {
-                self.led.set_low().ok();
-            }
+            self.led.set_low().ok();
         }
     }
 

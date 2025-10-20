@@ -1,6 +1,8 @@
-use std::io::Write;
+#![allow(dead_code)] // TCP methods for future use
+
 /// High-speed TCP streaming for telemetry
 /// Simple, fast, reliable - perfect for 20+ Hz data streaming
+use std::io::Write;
 use std::net::TcpStream;
 
 use log::{info, warn};

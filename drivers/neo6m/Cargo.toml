@@ -19,7 +19,8 @@ libm = "0.2"
 log = { workspace = true, optional = true }
 
 [features]
-default = []
+default = ["std"]
+std = []
 logging = ["log"]
 
 [dev-dependencies]

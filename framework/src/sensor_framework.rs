@@ -393,6 +393,12 @@ impl SensorRegistry {
     }
 }
 
+impl Default for SensorRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Sensor data publisher (for distributed architecture)
 pub trait SensorPublisher {
     /// Publish sensor reading to MQTT broker

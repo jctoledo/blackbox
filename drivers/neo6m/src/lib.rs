@@ -37,12 +37,17 @@
 //! }
 //! ```
 
-#![cfg_attr(not(test), no_std)]
+#![cfg_attr(not(any(test, feature = "std")), no_std)]
 
 // Import libm for no-std floating point operations
 use libm::{cos, floor, sin};
 #[cfg(feature = "logging")]
 use log::warn;
+
+#[cfg(any(test, feature = "std"))]
+extern crate std;
+#[cfg(any(test, feature = "std"))]
+use std::vec::Vec;
 
 /// GPS coordinate transformations
 pub mod transforms {
@@ -123,7 +128,9 @@ pub struct NmeaParser {
     reference: GpsReference,
     warmup_count: u8,
     warmup_fixes: u8,
+    #[allow(dead_code)] // Used in warmup calculation
     warmup_lat_sum: f64,
+    #[allow(dead_code)] // Used in warmup calculation
     warmup_lon_sum: f64,
     last_valid_lat: f64,
     last_valid_lon: f64,
@@ -347,7 +354,7 @@ impl NmeaParser {
         }
 
         if let Ok(course_deg) = fields[8].parse::<f32>() {
-            self.last_fix.course = course_deg.to_radians();
+            self.last_fix.course = course_deg * (core::f32::consts::PI / 180.0);
         }
 
         // Warmup: average first N fixes for reference point
@@ -390,6 +397,7 @@ impl Default for NmeaParser {
 }
 
 /// Parse NMEA coordinate field (ddmm.mmmm format)
+#[allow(dead_code)] // Helper function for future use
 fn parse_coordinate(coord_str: &str, dir_str: &str) -> Option<f64> {
     if coord_str.is_empty() || dir_str.is_empty() {
         return None;
@@ -410,6 +418,7 @@ fn parse_coordinate(coord_str: &str, dir_str: &str) -> Option<f64> {
 }
 
 /// Parse NMEA time field (hhmmss.ss format)
+#[allow(dead_code)] // Helper function for future use
 fn parse_time(time_str: &str) -> Option<(u8, u8, u8)> {
     if time_str.len() < 6 {
         return None;

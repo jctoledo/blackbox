@@ -1,6 +1,5 @@
 /// Sensor abstraction layer for hardware independence
 /// Enables testing, simulation, and support for multiple sensor types
-
 /// IMU sensor data (accelerometer + gyroscope + magnetometer)
 #[derive(Debug, Clone, Copy, Default)]
 pub struct ImuData {

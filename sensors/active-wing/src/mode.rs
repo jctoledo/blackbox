@@ -1,3 +1,5 @@
+#![allow(dead_code)] // API methods for future use
+
 /// Driving mode classifier
 /// Detects IDLE, ACCEL, BRAKE, and CORNER modes based on acceleration and yaw
 /// rate

@@ -1,5 +1,4 @@
 /// Coordinate frame transformations
-
 const G: f32 = 9.80665; // m/s²
 const METERS_PER_DEGREE_LAT: f64 = 111320.0; // Approximate meters per degree latitude
 

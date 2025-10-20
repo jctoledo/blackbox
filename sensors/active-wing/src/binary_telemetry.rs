@@ -82,6 +82,7 @@ impl TelemetryPacket {
     }
 
     /// Serialize to bytes with checksum
+    #[allow(clippy::wrong_self_convention)] // Needs &mut to update checksum
     pub fn to_bytes(&mut self) -> &[u8] {
         self.checksum = self.compute_checksum();
 

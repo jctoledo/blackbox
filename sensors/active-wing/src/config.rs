@@ -1,3 +1,5 @@
+#![allow(dead_code)] // Configuration structs for future use
+
 /// Configuration management for Active Wing telemetry system
 /// Provides defaults and structure for future config.toml loading
 use motorsport_telemetry::ekf::EkfConfig;
@@ -90,6 +92,7 @@ impl Default for StationaryConfig {
 
 /// Master system configuration
 #[derive(Debug, Clone)]
+#[derive(Default)]
 pub struct SystemConfig {
     pub network: NetworkConfig,
     pub telemetry: TelemetryConfig,
@@ -100,19 +103,6 @@ pub struct SystemConfig {
     pub stationary: StationaryConfig,
 }
 
-impl Default for SystemConfig {
-    fn default() -> Self {
-        Self {
-            network: NetworkConfig::default(),
-            telemetry: TelemetryConfig::default(),
-            ekf: EkfConfig::default(),
-            mode: ModeConfig::default(),
-            imu: ImuConfig::default(),
-            gps: GpsConfig::default(),
-            stationary: StationaryConfig::default(),
-        }
-    }
-}
 
 impl SystemConfig {
     /// Create configuration from environment variables (compile-time)
