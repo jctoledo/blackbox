@@ -210,8 +210,6 @@ jobs:
           rm -rf ../../target/riscv32imc-esp-espidf
           rm -rf ../../.embuild
           echo "✓ Cleaned ESP-IDF build cache (.embuild and target)"
-          ls -la partitions.csv sdkconfig.defaults
-          echo "✓ Verified partition config files exist"
 
       - name: Build firmware
         run: |
