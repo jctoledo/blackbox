@@ -141,6 +141,7 @@ jobs:
         with:
           workspaces: sensors/active-wing
           cache-on-failure: true
+          shared-key: partition-fix-v2
 
       - name: Cache cargo tools
         uses: actions/cache@v4
