@@ -220,6 +220,11 @@ jobs:
           cargo build --release
           echo "Built binary size:"
           ls -lh ../../target/riscv32imc-esp-espidf/release/active-wing
+          echo "Checking generated partition configuration:"
+          grep "CONFIG_PARTITION_TABLE" ../../target/riscv32imc-esp-espidf/release/build/esp-idf-sys-*/out/sdkconfig | head -10
+          echo "Partition table binary:"
+          ls -lh ../../target/riscv32imc-esp-espidf/release/partition-table.bin
+          python3 -c "import sys; data = open('../../target/riscv32imc-esp-espidf/release/partition-table.bin', 'rb').read(); print(f'Partition table size: {len(data)} bytes')"
 
       - name: Create merged binary for web flasher
         run: |
