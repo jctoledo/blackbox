@@ -76,7 +76,7 @@ jobs:
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy, rust-src
+          components: rust-src
 
       - name: Install ESP-IDF prerequisites
         run: |
@@ -90,8 +90,6 @@ jobs:
         run: |
           espup install
           . $HOME/export-esp.sh
-          rustup component add rust-src --toolchain esp
-          rustup component add clippy --toolchain esp
 
       - name: Run clippy
         run: |
