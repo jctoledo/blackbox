@@ -209,20 +209,30 @@ jobs:
           cd sensors/active-wing
           cargo build --release
 
-      - name: List build artifacts
+      - name: Create merged binary for web flasher
         run: |
-          echo "Current directory:"
-          pwd
-          echo "Searching for target directories:"
-          find . -type d -name "target" -o -name "riscv32imc-esp-espidf"
-          echo "Searching for all build artifacts:"
-          find . -name "active-wing" -o -name "*.bin" -o -name "*.elf" | head -20
+          cd sensors/active-wing
+          cargo espflash save-image \
+            --chip esp32c3 \
+            --merge \
+            --release \
+            ../../target/active-wing.bin
+          ls -lh ../../target/active-wing.bin
 
-      - name: Upload firmware artifact
+      - name: Upload merged firmware
         uses: actions/upload-artifact@v4
         with:
           name: firmware-esp32c3
-          path: sensors/active-wing/target/riscv32imc-esp-espidf/release/active-wing
+          path: target/active-wing.bin
+
+      - name: Upload individual components (debug)
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-components
+          path: |
+            target/riscv32imc-esp-espidf/release/active-wing
+            target/riscv32imc-esp-espidf/release/bootloader.bin
+            target/riscv32imc-esp-espidf/release/partition-table.bin
 
   python-lint:
     name: Python Lint
