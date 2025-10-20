@@ -1,0 +1,1203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Open Motorsport Telemetry Flasher</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f5f5;
+            min-height: 100vh;
+            padding: 0;
+            margin: 0;
+        }
+
+        .navbar {
+            background: #2c3e50;
+            color: white;
+            padding: 0;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .nav-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+        }
+
+        .nav-brand {
+            font-size: 18px;
+            font-weight: 600;
+            color: white;
+            text-decoration: none;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 30px;
+            align-items: center;
+        }
+
+        .nav-links a {
+            color: white;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: opacity 0.2s;
+        }
+
+        .nav-links a:hover {
+            opacity: 0.8;
+        }
+
+        .nav-links a.active {
+            border-bottom: 2px solid white;
+            padding-bottom: 2px;
+        }
+
+        .nav-toggle {
+            display: none;
+            background: none;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 4px;
+        }
+
+        @media (max-width: 768px) {
+            .nav-toggle {
+                display: block;
+            }
+
+            .nav-links {
+                position: fixed;
+                top: 0;
+                right: -100%;
+                width: 250px;
+                height: 100vh;
+                background: #2c3e50;
+                flex-direction: column;
+                gap: 0;
+                padding: 80px 0 20px 0;
+                transition: right 0.3s ease;
+                box-shadow: -2px 0 10px rgba(0, 0, 0, 0.2);
+                z-index: 1000;
+            }
+
+            .nav-links.active {
+                right: 0;
+            }
+
+            .nav-links a {
+                padding: 16px 30px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+                width: 100%;
+                opacity: 0.6;
+            }
+
+            .nav-links a.active {
+                opacity: 1;
+            }
+
+            .nav-container {
+                position: relative;
+            }
+
+            .nav-overlay {
+                display: none;
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.5);
+                z-index: 999;
+            }
+
+            .nav-overlay.active {
+                display: block;
+            }
+        }
+
+        .main-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            align-items: start;
+        }
+
+        .left-panel {
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+            padding: 30px;
+        }
+
+        .right-panel {
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+            padding: 30px;
+            position: sticky;
+            top: 40px;
+        }
+
+        h1 {
+            font-size: 28px;
+            color: #2c3e50;
+            margin-bottom: 12px;
+        }
+
+        .subtitle {
+            font-size: 15px;
+            color: #666;
+            margin-bottom: 30px;
+        }
+
+        h2 {
+            font-size: 18px;
+            color: #2c3e50;
+            margin-top: 30px;
+            margin-bottom: 16px;
+            font-weight: 600;
+        }
+
+        h2:first-of-type {
+            margin-top: 0;
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+        }
+
+        label {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+        }
+
+        select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+            background: white;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+
+        select:hover {
+            border-color: #2c3e50;
+        }
+
+        select:focus {
+            outline: none;
+            border-color: #2c3e50;
+        }
+
+        .project-details {
+            display: none;
+        }
+
+        .project-details.active {
+            display: block;
+        }
+
+        .project-details p {
+            font-size: 14px;
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+
+        .section {
+            margin-bottom: 16px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            padding: 16px;
+        }
+
+        .section h3 {
+            font-size: 15px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 12px;
+        }
+
+        .requirement-list, .instruction-list {
+            list-style: none;
+        }
+
+        .requirement-list li, .instruction-list li {
+            font-size: 14px;
+            color: #666;
+            line-height: 1.6;
+            padding: 8px 0;
+            padding-left: 28px;
+            position: relative;
+        }
+
+        .requirement-list li::before {
+            content: '✓';
+            position: absolute;
+            left: 0;
+            width: 20px;
+            height: 20px;
+            background: #4caf50;
+            color: white;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 20px;
+            font-size: 12px;
+        }
+
+        .instruction-list li::before {
+            content: attr(data-step);
+            position: absolute;
+            left: 0;
+            width: 20px;
+            height: 20px;
+            background: #2196f3;
+            color: white;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 20px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .instructions-box {
+            background: #f8f9fa;
+            border-radius: 6px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .troubleshooting-section {
+            margin-top: 20px;
+            border-top: 1px solid #e0e0e0;
+            padding-top: 20px;
+        }
+
+        .troubleshooting-toggle {
+            background: none;
+            border: none;
+            color: #2c3e50;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .troubleshooting-toggle:hover {
+            color: #34495e;
+        }
+
+        .troubleshooting-toggle::after {
+            content: '▼';
+            font-size: 10px;
+            transition: transform 0.2s;
+        }
+
+        .troubleshooting-toggle.collapsed::after {
+            transform: rotate(-90deg);
+        }
+
+        .troubleshooting {
+            background: #f8f9fa;
+            border-radius: 6px;
+            padding: 16px;
+            margin-top: 12px;
+            display: none;
+        }
+
+        .troubleshooting.active {
+            display: block;
+        }
+
+        .troubleshooting h3 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 12px;
+        }
+
+        .troubleshooting p {
+            font-size: 13px;
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 8px;
+        }
+
+        .troubleshooting p:last-child {
+            margin-bottom: 0;
+        }
+
+        .status-panel h2 {
+            margin-top: 0;
+            margin-bottom: 20px;
+        }
+
+        .status-box {
+            background: #f8f9fa;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 20px;
+            margin-bottom: 20px;
+            min-height: 120px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        .status-box.waiting {
+            border-color: #2196f3;
+            background: #e3f2fd;
+        }
+
+        .status-box.connected {
+            border-color: #4caf50;
+            background: #e8f5e9;
+        }
+
+        .status-box.flashing {
+            border-color: #ff9800;
+            background: #fff3e0;
+        }
+
+        .status-box.error {
+            border-color: #f44336;
+            background: #ffebee;
+        }
+
+        .status-box.success {
+            border-color: #4caf50;
+            background: #e8f5e9;
+        }
+
+        .status-text {
+            font-size: 15px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 4px;
+        }
+
+        .status-subtext {
+            font-size: 13px;
+            color: #666;
+        }
+
+        .flash-button {
+            width: 100%;
+            padding: 16px;
+            background: #2c3e50;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-bottom: 16px;
+        }
+
+        .flash-button:hover:not(:disabled) {
+            background: #34495e;
+        }
+
+        .flash-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .debug-section {
+            margin-top: 20px;
+            border-top: 1px solid #e0e0e0;
+            padding-top: 20px;
+        }
+
+        .debug-toggle {
+            background: none;
+            border: none;
+            color: #2c3e50;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .debug-toggle:hover {
+            color: #34495e;
+        }
+
+        .debug-toggle::after {
+            content: '▼';
+            font-size: 10px;
+            transition: transform 0.2s;
+        }
+
+        .debug-toggle.collapsed::after {
+            transform: rotate(-90deg);
+        }
+
+        .debug-window {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            border-radius: 6px;
+            padding: 16px;
+            margin-top: 12px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            line-height: 1.5;
+            display: none;
+        }
+
+        .debug-window.active {
+            display: block;
+        }
+
+        .debug-line {
+            margin-bottom: 4px;
+        }
+
+        .debug-line.info {
+            color: #4fc3f7;
+        }
+
+        .debug-line.success {
+            color: #81c784;
+        }
+
+        .debug-line.error {
+            color: #e57373;
+        }
+
+        .debug-line.warning {
+            color: #ffb74d;
+        }
+
+        @media (max-width: 968px) {
+            .main-content {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+
+            .right-panel {
+                position: static;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="nav-overlay" id="nav-overlay"></div>
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="/" class="nav-brand">Open Motorsport Telemetry</a>
+            <button class="nav-toggle" id="nav-toggle">☰</button>
+            <div class="nav-links" id="nav-links">
+                <a href="/" class="active">Flash</a>
+                <a href="https://github.com/jctoledo/active_wing" target="_blank">GitHub</a>
+                <a href="https://github.com/jctoledo/active_wing/blob/main/README.md" target="_blank">Docs</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="main-content">
+        <div class="left-panel">
+            <h1>Flash Firmware</h1>
+            <p class="subtitle">Flash firmware for projects built with the Open Motorsport Telemetry framework.</p>
+
+            <div class="form-group">
+                <label for="project-select">Select Project</label>
+                <select id="project-select">
+                    <option value="">Choose a project to flash...</option>
+                    <!-- Options populated dynamically from projects-config.js -->
+                </select>
+            </div>
+
+            <div class="project-details" id="project-details">
+                <!-- Dynamic content populated by JavaScript -->
+            </div>
+        </div>
+
+        <div class="right-panel">
+            <h2>Status</h2>
+
+            <div class="status-box waiting" id="status-box">
+                <div class="status-text">Ready to connect</div>
+                <div class="status-subtext">Select a project and click connect</div>
+            </div>
+
+            <button class="flash-button" id="flash-button" disabled>
+                Select a Project
+            </button>
+
+            <div class="debug-section">
+                <button class="debug-toggle collapsed" id="dev-mode-toggle">
+                    Developer Options
+                </button>
+                <div id="dev-mode-window" style="display: none; background: #f8f9fa; color: #333; border-radius: 6px; padding: 0; margin-top: 12px;">
+                    <div style="padding: 12px; border-bottom: 1px solid #e0e0e0;">
+                        <label style="display: block; margin-bottom: 6px;">
+                            <span style="font-size: 13px; color: #333; font-weight: 500;">Firmware Source:</span>
+                        </label>
+                        <div style="margin-bottom: 12px;">
+                            <label style="display: flex; align-items: center; margin-bottom: 8px; cursor: pointer;">
+                                <input type="radio" name="firmware-source" value="release" checked id="dev-source-release" style="margin-right: 8px;">
+                                <span style="font-size: 13px; color: #333;">Download from release</span>
+                            </label>
+                            <label style="display: flex; align-items: center; cursor: pointer;">
+                                <input type="radio" name="firmware-source" value="custom" id="dev-source-custom" style="margin-right: 8px;">
+                                <span style="font-size: 13px; color: #333;">Upload custom .bin file</span>
+                            </label>
+                        </div>
+
+                        <div id="release-options">
+                            <label style="display: block; margin-bottom: 6px;">
+                                <span style="font-size: 13px; color: #333; font-weight: 500;">Version:</span>
+                            </label>
+                            <select id="dev-version" style="width: 100%; padding: 8px; font-size: 13px; background: white; color: #333; border: 2px solid #e0e0e0; border-radius: 4px; margin-bottom: 12px;">
+                                <option value="latest" selected>Latest (recommended)</option>
+                            </select>
+                        </div>
+
+                        <div id="custom-options" style="display: none;">
+                            <label style="display: block; margin-bottom: 6px;">
+                                <span style="font-size: 13px; color: #333; font-weight: 500;">Select firmware file:</span>
+                            </label>
+                            <input type="file" id="dev-custom-file" accept=".bin" style="width: 100%; padding: 8px; font-size: 13px; background: white; color: #333; border: 2px solid #e0e0e0; border-radius: 4px; margin-bottom: 2px; cursor: pointer;">
+                            <div id="custom-file-info" style="font-size: 11px; color: #666; margin-bottom: 8px; min-height: 14px;"></div>
+                        </div>
+
+                        <label style="display: block; margin-bottom: 6px;">
+                            <span style="font-size: 13px; color: #333; font-weight: 500;">Baudrate:</span>
+                        </label>
+                        <select id="dev-baudrate" style="width: 100%; padding: 8px; font-size: 13px; background: white; color: #333; border: 2px solid #e0e0e0; border-radius: 4px; margin-bottom: 12px;">
+                            <option value="115200" selected>115200 (Auto-detect)</option>
+                            <option value="230400">230400</option>
+                            <option value="460800">460800</option>
+                            <option value="921600">921600</option>
+                        </select>
+
+                        <label style="display: flex; align-items: center; margin-bottom: 10px; cursor: pointer;">
+                            <input type="checkbox" id="dev-enable-tracing" style="margin-right: 8px;">
+                            <span style="font-size: 13px; color: #333;">Enable verbose tracing</span>
+                        </label>
+                        <label style="display: flex; align-items: center; margin-bottom: 10px; cursor: pointer;">
+                            <input type="checkbox" id="dev-skip-chip-check" style="margin-right: 8px;">
+                            <span style="font-size: 13px; color: #333;">Skip chip type validation</span>
+                        </label>
+                    </div>
+                    <div style="padding: 12px; padding-top: 8px;">
+                        <div style="font-size: 13px; color: #333; font-weight: 500; margin-bottom: 8px;">Console Output:</div>
+                        <div id="debug-window" style="background: #1e1e1e; color: #d4d4d4; border-radius: 6px; padding: 16px; font-family: 'Consolas', 'Monaco', monospace; font-size: 12px; max-height: 250px; overflow-y: auto; line-height: 1.5; margin: 0;">
+                            <div class="debug-line info">Ready to flash. Select a project and connect your device.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Auto-generated project configuration -->
+    <script src="projects-config.js"></script>
+
+    <script type="module">
+        import { Transport, ESPLoader } from 'https://unpkg.com/esptool-js@0.4.5/bundle.js';
+
+        const navToggle = document.getElementById('nav-toggle');
+        const navLinks = document.getElementById('nav-links');
+        const navOverlay = document.getElementById('nav-overlay');
+        const projectSelect = document.getElementById('project-select');
+        const projectDetails = document.getElementById('project-details');
+        const flashButton = document.getElementById('flash-button');
+        const debugToggle = document.getElementById('debug-toggle');
+        const debugWindow = document.getElementById('debug-window');
+        const statusBox = document.getElementById('status-box');
+
+        let espStub = null;
+        let transport = null;
+        let isConnected = false;
+        let espToolLoaded = true;
+        let chipInfo = null;
+
+        // Developer mode settings
+        let devMode = false;
+        let devSettings = {
+            enableTracing: false,
+            customBaudrate: 115200,
+            skipChipCheck: false,
+            selectedVersion: 'latest',
+            customFirmware: null  // For uploaded .bin file
+        };
+        let availableVersions = [];
+
+        // Use projects from auto-generated config
+        const projects = typeof PROJECTS !== 'undefined' ? PROJECTS : {};
+
+        // Mobile navigation toggle
+        navToggle.addEventListener('click', () => {
+            navLinks.classList.toggle('active');
+            navOverlay.classList.toggle('active');
+        });
+
+        // Close menu when clicking overlay
+        navOverlay.addEventListener('click', () => {
+            navLinks.classList.remove('active');
+            navOverlay.classList.remove('active');
+        });
+
+        // Close menu when clicking a link
+        navLinks.querySelectorAll('a').forEach(link => {
+            link.addEventListener('click', () => {
+                navLinks.classList.remove('active');
+                navOverlay.classList.remove('active');
+            });
+        });
+
+        // Populate project dropdown from auto-generated config
+        function populateProjectDropdown() {
+            // Clear existing options except the first one
+            while (projectSelect.options.length > 1) {
+                projectSelect.remove(1);
+            }
+
+            // Add project options
+            Object.entries(projects).forEach(([id, project]) => {
+                const option = document.createElement('option');
+                option.value = id;
+                option.textContent = project.name;
+                projectSelect.appendChild(option);
+            });
+
+            logDebug(`Loaded ${Object.keys(projects).length} project(s)`, 'info');
+        }
+
+        // Populate dropdown on page load
+        if (Object.keys(projects).length > 0) {
+            populateProjectDropdown();
+        } else {
+            logDebug('No projects found in configuration', 'error');
+            updateStatus('error', 'Configuration error', 'No projects available to flash');
+        }
+
+        projectSelect.addEventListener('change', (e) => {
+            if (e.target.value) {
+                const project = projects[e.target.value];
+
+                // Build hardware requirements list
+                const hardwareList = project.hardware.map(item => `<li>${item}</li>`).join('');
+
+                // Build software requirements list
+                const softwareList = project.software.map(item => `<li>${item}</li>`).join('');
+
+                // Populate project details
+                projectDetails.innerHTML = `
+                    <p>${project.description}</p>
+
+                    <h2>Requirements</h2>
+                    <div class="section">
+                        <h3>Hardware</h3>
+                        <ul class="requirement-list">
+                            ${hardwareList}
+                        </ul>
+                    </div>
+
+                    <div class="section">
+                        <h3>Software</h3>
+                        <ul class="requirement-list">
+                            ${softwareList}
+                        </ul>
+                    </div>
+
+                    <h2>Flashing</h2>
+                    <div class="instructions-box">
+                        <p>Follow these steps to flash your device:</p>
+                        <ol class="instruction-list">
+                            <li data-step="1">Connect your device to the computer using a USB cable</li>
+                            <li data-step="2">Click the "Connect Device" button on the right</li>
+                            <li data-step="3">When prompted, select the serial port for your device</li>
+                            <li data-step="4">Grant permission to access the serial port</li>
+                            <li data-step="5">Click "Flash Firmware" to begin the flashing process</li>
+                        </ol>
+                    </div>
+
+                    <div class="troubleshooting-section">
+                        <button class="troubleshooting-toggle collapsed" id="troubleshooting-toggle-btn">
+                            Troubleshooting
+                        </button>
+                        <div class="troubleshooting" id="troubleshooting-content">
+                            <p><strong>Device not detected:</strong> Try holding the BOOT button while connecting the USB cable, then release after connection.</p>
+                            <p><strong>Connection lost during flash:</strong> Try using a different USB cable or port. USB 3.0 ports are recommended for stability.</p>
+                            <p><strong>Permission denied:</strong> Ensure no other program is using the serial port (Arduino IDE, PlatformIO, serial monitors, etc.).</p>
+                        </div>
+                    </div>
+                `;
+
+                // Re-attach troubleshooting toggle event listener
+                const troubleshootingToggleBtn = document.getElementById('troubleshooting-toggle-btn');
+                const troubleshootingContent = document.getElementById('troubleshooting-content');
+                troubleshootingToggleBtn.addEventListener('click', () => {
+                    troubleshootingToggleBtn.classList.toggle('collapsed');
+                    troubleshootingContent.classList.toggle('active');
+                });
+
+                projectDetails.classList.add('active');
+                flashButton.disabled = false;
+                flashButton.textContent = 'Connect Device';
+                logDebug('Project selected: ' + project.name, 'info');
+                updateStatus('waiting', 'Ready to connect', 'Click the button below to connect your device');
+            } else {
+                projectDetails.classList.remove('active');
+                flashButton.disabled = true;
+                flashButton.textContent = 'Select a Project';
+                updateStatus('waiting', 'Ready to connect', 'Select a project and click connect');
+            }
+        });
+
+        // Developer mode toggle
+        const devModeToggle = document.getElementById('dev-mode-toggle');
+        const devModeWindow = document.getElementById('dev-mode-window');
+        const devEnableTracing = document.getElementById('dev-enable-tracing');
+        const devSkipChipCheck = document.getElementById('dev-skip-chip-check');
+        const devBaudrate = document.getElementById('dev-baudrate');
+        const devVersion = document.getElementById('dev-version');
+        const devSourceRelease = document.getElementById('dev-source-release');
+        const devSourceCustom = document.getElementById('dev-source-custom');
+        const devCustomFile = document.getElementById('dev-custom-file');
+        const customFileInfo = document.getElementById('custom-file-info');
+        const releaseOptions = document.getElementById('release-options');
+        const customOptions = document.getElementById('custom-options');
+
+        devModeToggle.addEventListener('click', async () => {
+            devModeToggle.classList.toggle('collapsed');
+            if (devModeWindow.style.display === 'none') {
+                devModeWindow.style.display = 'block';
+                // Fetch versions when first opened
+                if (availableVersions.length === 0) {
+                    await fetchAvailableVersions();
+                }
+            } else {
+                devModeWindow.style.display = 'none';
+            }
+        });
+
+        // Fetch available firmware versions from GitHub releases
+        async function fetchAvailableVersions() {
+            const selectedProject = projectSelect.value;
+            if (!selectedProject) return;
+
+            const project = projects[selectedProject];
+            const urlMatch = project.firmwareUrl.match(/github\.com\/([^\/]+\/[^\/]+)/);
+            if (!urlMatch) return;
+
+            const repoPath = urlMatch[1];
+
+            try {
+                logDebug('Fetching available versions...', 'info');
+                const response = await fetch(`https://api.github.com/repos/${repoPath}/releases`);
+                if (!response.ok) {
+                    logDebug('Could not fetch releases', 'warning');
+                    return;
+                }
+
+                const releases = await response.json();
+                availableVersions = releases.map(r => ({
+                    tag: r.tag_name,
+                    name: r.name || r.tag_name,
+                    published: new Date(r.published_at)
+                }));
+
+                // Populate version dropdown
+                devVersion.innerHTML = '<option value="latest" selected>Latest (recommended)</option>';
+                availableVersions.forEach(version => {
+                    const option = document.createElement('option');
+                    option.value = version.tag;
+                    option.textContent = `${version.name} (${version.published.toLocaleDateString()})`;
+                    devVersion.appendChild(option);
+                });
+
+                logDebug(`Found ${availableVersions.length} release(s)`, 'success');
+            } catch (error) {
+                logDebug('Error fetching versions: ' + error.message, 'error');
+            }
+        }
+
+        // Update dev settings when changed
+        devEnableTracing.addEventListener('change', (e) => {
+            devSettings.enableTracing = e.target.checked;
+            logDebug(`Tracing ${e.target.checked ? 'enabled' : 'disabled'}`, 'info');
+        });
+
+        devSkipChipCheck.addEventListener('change', (e) => {
+            devSettings.skipChipCheck = e.target.checked;
+            logDebug(`Chip check ${e.target.checked ? 'disabled' : 'enabled'}`, 'info');
+        });
+
+        devBaudrate.addEventListener('change', (e) => {
+            devSettings.customBaudrate = parseInt(e.target.value);
+            logDebug(`Baudrate set to ${e.target.value}`, 'info');
+        });
+
+        devVersion.addEventListener('change', (e) => {
+            devSettings.selectedVersion = e.target.value;
+            logDebug(`Version set to ${e.target.value}`, 'info');
+        });
+
+        // Toggle between release and custom firmware
+        devSourceRelease.addEventListener('change', () => {
+            releaseOptions.style.display = 'block';
+            customOptions.style.display = 'none';
+            devSettings.customFirmware = null;
+            logDebug('Switched to release firmware', 'info');
+        });
+
+        devSourceCustom.addEventListener('change', () => {
+            releaseOptions.style.display = 'none';
+            customOptions.style.display = 'block';
+            logDebug('Switched to custom firmware upload', 'info');
+        });
+
+        // Handle custom firmware file upload
+        devCustomFile.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) {
+                devSettings.customFirmware = null;
+                customFileInfo.textContent = '';
+                return;
+            }
+
+            if (!file.name.endsWith('.bin')) {
+                customFileInfo.innerHTML = '<span style="color: #f44336;">⚠ File must be a .bin file</span>';
+                devSettings.customFirmware = null;
+                return;
+            }
+
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                devSettings.customFirmware = new Uint8Array(arrayBuffer);
+                const sizeKB = (arrayBuffer.byteLength / 1024).toFixed(2);
+                customFileInfo.innerHTML = `<span style="color: #4caf50;">✓ ${file.name} (${sizeKB} KB)</span>`;
+                logDebug(`Custom firmware loaded: ${file.name} (${sizeKB} KB)`, 'success');
+            } catch (error) {
+                customFileInfo.innerHTML = '<span style="color: #f44336;">⚠ Error reading file</span>';
+                devSettings.customFirmware = null;
+                logDebug('Error reading custom firmware: ' + error.message, 'error');
+            }
+        });
+
+        flashButton.addEventListener('click', async () => {
+            if (!isConnected) {
+                await connectDevice();
+            } else {
+                await flashFirmware();
+            }
+        });
+
+        async function disconnectDevice() {
+            if (transport) {
+                try {
+                    await transport.disconnect();
+                    logDebug('Disconnected from device', 'info');
+                } catch (e) {
+                    // Ignore disconnect errors
+                }
+            }
+            transport = null;
+            espStub = null;
+            isConnected = false;
+            flashButton.textContent = 'Connect Device';
+        }
+
+        async function connectDevice() {
+            const selectedProject = projectSelect.value;
+            if (!selectedProject) return;
+
+            // Clean up any existing connection first
+            if (transport || isConnected) {
+                logDebug('Cleaning up previous connection...', 'warning');
+                await disconnectDevice();
+            }
+
+            try {
+                logDebug('Initiating connection to ESP32...', 'info');
+                updateStatus('waiting', 'Connecting...', 'Please select your device from the prompt');
+
+                const port = await navigator.serial.requestPort();
+
+                logDebug('Opening serial port...', 'info');
+                updateStatus('waiting', 'Opening port...', 'Establishing connection');
+
+                // Create transport (but don't connect yet - ESPLoader will do that)
+                transport = new Transport(port, true);
+
+                logDebug('Initializing esptool...', 'success');
+                updateStatus('waiting', 'Initializing...', 'Detecting chip type');
+
+                // Create ESPLoader and connect to chip
+                espStub = new ESPLoader({
+                    transport: transport,
+                    baudrate: devSettings.customBaudrate,
+                    terminal: {
+                        clean: () => {},
+                        writeLine: (data) => { logDebug(data, 'info'); },
+                        write: (data) => { logDebug(data, 'info'); }
+                    },
+                    enableTracing: devSettings.enableTracing
+                });
+
+                chipInfo = await espStub.main();
+
+                logDebug('Chip: ' + chipInfo, 'info');
+                if (espStub.chip && espStub.chip.macAddr) {
+                    logDebug('MAC Address: ' + espStub.chip.macAddr(), 'info');
+                }
+
+                // Validate chip type matches project (unless dev mode skips this)
+                const project = projects[selectedProject];
+                if (!devSettings.skipChipCheck && project.chip && chipInfo) {
+                    const expectedChip = project.chip.toUpperCase();
+                    const detectedChip = chipInfo.toUpperCase();
+
+                    if (!detectedChip.includes(expectedChip.replace('ESP32-', ''))) {
+                        logDebug(`Warning: Expected ${expectedChip}, but detected ${chipInfo}`, 'warning');
+                        updateStatus('error', 'Chip mismatch', `Expected ${expectedChip} but found ${chipInfo}. Enable "Skip chip check" in Developer Options to proceed anyway.`);
+                        await disconnectDevice();
+                        return;
+                    }
+                }
+
+                isConnected = true;
+                updateStatus('connected', 'Device connected', 'Ready to flash firmware');
+                flashButton.textContent = 'Flash Firmware';
+
+            } catch (error) {
+                // Clean up on error
+                await disconnectDevice();
+
+                // Handle port already open
+                if (error.message && error.message.includes('port is already open')) {
+                    logDebug('Port is already open - please refresh the page', 'error');
+                    updateStatus('error', 'Port already open', 'Refresh the page (Ctrl+R or Cmd+R) and try again');
+                    return;
+                }
+
+                // Handle esptool library not loaded
+                if (error.message && (error.message.includes('Transport is not defined') || error.message.includes('ESPLoader is not defined'))) {
+                    logDebug('ESPTool library failed to load', 'error');
+                    updateStatus('error', 'Library loading error', 'Please refresh the page and ensure you have internet connection');
+                    return;
+                }
+
+                // Handle user cancellation
+                if (error.message && error.message.includes('No port selected')) {
+                    logDebug('Port selection cancelled by user', 'warning');
+                    updateStatus('waiting', 'Connection cancelled', 'Click "Connect Device" to try again');
+                    return;
+                }
+
+                // Handle permission denied
+                if (error.message && (error.message.includes('permission') || error.message.includes('access denied'))) {
+                    logDebug('Permission denied: ' + error.message, 'error');
+                    updateStatus('error', 'Permission denied', 'Close other programs using the serial port and try again');
+                    return;
+                }
+
+                // Handle connection timeout or device not responding
+                if (error.message && (error.message.includes('timeout') || error.message.includes('Failed to connect'))) {
+                    logDebug('Connection timeout: ' + error.message, 'error');
+                    updateStatus('error', 'Device not responding', 'Try holding BOOT button while connecting, or select a different port');
+                    return;
+                }
+
+                // Handle wrong chip type
+                if (error.message && error.message.includes('chip')) {
+                    logDebug('Wrong device type: ' + error.message, 'error');
+                    updateStatus('error', 'Wrong device detected', 'Make sure you selected an ESP32-C3 device');
+                    return;
+                }
+
+                // Handle esptool API errors
+                if (error.message && (error.message.includes('getInfo') || error.message.includes('main') || error.message.includes('Cannot read properties'))) {
+                    logDebug('ESPTool communication error: ' + error.message, 'error');
+                    updateStatus('error', 'Device communication failed', 'Try holding BOOT button while connecting, or refresh the page');
+                    return;
+                }
+
+                // Generic error
+                logDebug('Connection error: ' + error.message, 'error');
+                updateStatus('error', 'Connection failed', 'Check cable connection and try again');
+            }
+        }
+
+        async function flashFirmware() {
+            const selectedProject = projectSelect.value;
+            if (!selectedProject || !espStub) return;
+
+            const project = projects[selectedProject];
+
+            try {
+                flashButton.disabled = true;
+
+                logDebug('Starting flash process...', 'info');
+
+                let firmwareData;
+
+                // Use custom firmware if uploaded, otherwise download from release
+                if (devSettings.customFirmware) {
+                    logDebug('Using custom uploaded firmware', 'info');
+                    firmwareData = devSettings.customFirmware.buffer;
+                    logDebug(`Firmware size: ${firmwareData.byteLength} bytes`, 'success');
+                    updateStatus('flashing', 'Preparing firmware...', 'Using custom .bin file');
+                } else {
+                    // Determine firmware URL based on selected version
+                    let firmwareUrl = project.firmwareUrl;
+                    if (devSettings.selectedVersion !== 'latest') {
+                        // Replace "latest" with specific version tag
+                        firmwareUrl = firmwareUrl.replace('/latest/', `/${devSettings.selectedVersion}/`);
+                    }
+
+                    logDebug('Firmware URL: ' + firmwareUrl, 'info');
+                    if (devSettings.selectedVersion !== 'latest') {
+                        logDebug('Using version: ' + devSettings.selectedVersion, 'info');
+                    }
+                    updateStatus('flashing', 'Downloading firmware...', 'Please wait');
+
+                    // Download firmware
+                    const response = await fetch(firmwareUrl);
+                    if (!response.ok) {
+                        throw new Error(`Failed to download firmware: ${response.status} ${response.statusText}`);
+                    }
+
+                    firmwareData = await response.arrayBuffer();
+                    logDebug(`Downloaded ${firmwareData.byteLength} bytes`, 'success');
+                }
+
+                updateStatus('flashing', 'Flashing firmware...', 'Do not disconnect the device');
+
+                // Convert binary data to string format expected by esptool.js
+                const uint8Array = new Uint8Array(firmwareData);
+                let binaryString = '';
+                for (let i = 0; i < uint8Array.length; i++) {
+                    binaryString += String.fromCharCode(uint8Array[i]);
+                }
+
+                // Flash the firmware using esptool.js
+                const fileArray = [{
+                    data: binaryString,
+                    address: 0x10000  // Standard app partition address for ESP32
+                }];
+
+                await espStub.writeFlash({
+                    fileArray: fileArray,
+                    flashSize: 'keep',
+                    eraseAll: false,
+                    compress: true,
+                    reportProgress: (fileIndex, written, total) => {
+                        const percent = Math.round((written / total) * 100);
+                        updateStatus('flashing', `Flashing firmware... ${percent}%`, `${written} / ${total} bytes`);
+                        if (percent % 10 === 0) {
+                            logDebug(`Progress: ${percent}%`, 'info');
+                        }
+                    }
+                });
+
+                logDebug('Flash complete!', 'success');
+                updateStatus('success', 'Flash complete!', 'You can disconnect your device and reset it');
+
+                flashButton.textContent = 'Flash Complete';
+                flashButton.disabled = true;
+
+            } catch (error) {
+                logDebug('Flash error: ' + error.message, 'error');
+
+                // Provide detailed, user-friendly error messages
+                let errorTitle = 'Flash failed';
+                let errorDetails = '';
+
+                // Extract GitHub repo from firmware URL for links
+                const urlMatch = project.firmwareUrl.match(/github\.com\/([^\/]+\/[^\/]+)/);
+                const repoPath = urlMatch ? urlMatch[1] : 'repository';
+                const releasesUrl = urlMatch ? `https://github.com/${repoPath}/releases` : '#';
+
+                if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+                    errorTitle = 'Cannot download firmware';
+                    errorDetails = `No release found. <a href="${releasesUrl}" target="_blank" style="color: #2196f3; text-decoration: underline;">Check releases</a> or verify internet connection.`;
+                } else if (error.message.includes('404') || error.message.includes('Not Found')) {
+                    errorTitle = 'Firmware not found';
+                    errorDetails = `File not available at <a href="${project.firmwareUrl}" target="_blank" style="color: #2196f3; text-decoration: underline;">this URL</a>. <a href="${releasesUrl}" target="_blank" style="color: #2196f3; text-decoration: underline;">View releases</a>.`;
+                } else if (error.message.includes('CORS')) {
+                    errorTitle = 'Download blocked';
+                    errorDetails = 'Browser blocked download due to CORS policy. Firmware must be on GitHub releases.';
+                } else if (error.message.includes('writeFlash') || error.message.includes('flash')) {
+                    errorTitle = 'Flashing failed';
+                    errorDetails = `${error.message}. Try reconnecting, holding BOOT button, or different USB cable.`;
+                } else if (error.message.includes('disconnect')) {
+                    errorTitle = 'Device disconnected';
+                    errorDetails = 'Device unplugged during flash. Check USB cable and try again.';
+                } else {
+                    errorTitle = 'Flash failed';
+                    errorDetails = `${error.message}. Try reconnecting and flashing again.`;
+                }
+
+                updateStatus('error', errorTitle, errorDetails);
+
+                flashButton.disabled = false;
+                flashButton.textContent = 'Retry Flash';
+            }
+        }
+
+        function updateStatus(state, text, subtext) {
+            statusBox.className = 'status-box ' + state;
+
+            statusBox.innerHTML = `
+                <div class="status-text">${text}</div>
+                <div class="status-subtext">${subtext}</div>
+            `;
+        }
+
+        function logDebug(message, type = 'info') {
+            const debugLine = document.createElement('div');
+            debugLine.className = `debug-line ${type}`;
+            const timestamp = new Date().toLocaleTimeString();
+            debugLine.textContent = `[${timestamp}] ${message}`;
+            debugWindow.appendChild(debugLine);
+            debugWindow.scrollTop = debugWindow.scrollHeight;
+        }
+
+        // Check for Web Serial API support
+        if (!('serial' in navigator)) {
+            updateStatus('error', 'Browser not supported', 'Please use Chrome, Edge, or Opera');
+            flashButton.disabled = true;
+            logDebug('Web Serial API not available', 'error');
+        }
+    </script>
+</body>
+</html>
