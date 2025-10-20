@@ -1,5 +1,3 @@
-//! Open Motorsport Telemetry Framework
-//!
 //! A modular, extensible framework for building custom automotive sensor fusion
 //! systems. Build professional-grade telemetry for track days, racing, vehicle
 //! dynamics research, and fleet monitoring without vendor lock-in.
