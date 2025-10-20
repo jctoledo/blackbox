@@ -91,8 +91,7 @@ impl Default for StationaryConfig {
 }
 
 /// Master system configuration
-#[derive(Debug, Clone)]
-#[derive(Default)]
+#[derive(Debug, Clone, Default)]
 pub struct SystemConfig {
     pub network: NetworkConfig,
     pub telemetry: TelemetryConfig,
@@ -102,7 +101,6 @@ pub struct SystemConfig {
     pub gps: GpsConfig,
     pub stationary: StationaryConfig,
 }
-
 
 impl SystemConfig {
     /// Create configuration from environment variables (compile-time)

@@ -315,11 +315,10 @@ impl TelemetryPublisher {
             }
             Err(_) => {
                 self.telemetry_fail_count += 1;
-                if self.telemetry_fail_count.is_multiple_of(100)
-                    && tcp.reconnect().is_ok() {
-                        info!("TCP reconnected");
-                        self.telemetry_fail_count = 0;
-                    }
+                if self.telemetry_fail_count.is_multiple_of(100) && tcp.reconnect().is_ok() {
+                    info!("TCP reconnected");
+                    self.telemetry_fail_count = 0;
+                }
                 Err(SystemError::CommunicationError("TCP send failed"))
             }
         }
