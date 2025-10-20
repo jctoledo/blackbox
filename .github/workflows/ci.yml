@@ -27,8 +27,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y git wget flex bison gperf python3 python3-pip python3-venv cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0
 
-      - name: Install espup
-        run: cargo install espup
+      - name: Install espup and ldproxy
+        run: |
+          cargo install espup
+          cargo install ldproxy
 
       - name: Install ESP-IDF
         run: |
@@ -101,7 +103,8 @@ jobs:
 
       - name: Install espup and cargo-espflash
         run: |
-          cargo install espup cargo-espflash
+          cargo install espup
+          cargo install cargo-espflash espflash ldproxy
 
       - name: Install ESP-IDF
         run: |
