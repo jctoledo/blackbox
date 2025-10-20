@@ -14,6 +14,8 @@ jobs:
   check:
     name: Check Compilation
     runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -22,32 +24,62 @@ jobs:
         with:
           components: rust-src
 
+      - name: Cache cargo (using Swatinem/rust-cache)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: sensors/active-wing
+          cache-on-failure: true
+
+      - name: Cache cargo tools
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/espup
+            ~/.cargo/bin/ldproxy
+          key: ${{ runner.os }}-cargo-tools-v1
+          restore-keys: |
+            ${{ runner.os }}-cargo-tools-
+
+      - name: Cache ESP-IDF
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.espup/
+            ~/export-esp.sh
+          key: ${{ runner.os }}-espup-v1
+          restore-keys: |
+            ${{ runner.os }}-espup-
+
       - name: Install ESP-IDF prerequisites
         run: |
           sudo apt-get update
           sudo apt-get install -y git wget flex bison gperf python3 python3-pip python3-venv cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0
 
-      - name: Install espup and ldproxy
+      - name: Install tools from cache or compile
         run: |
-          cargo install espup
-          cargo install ldproxy
+          if ! command -v espup &> /dev/null; then
+            echo "Installing espup..."
+            cargo install espup
+          else
+            echo "✓ espup found in cache"
+          fi
+
+          if ! command -v ldproxy &> /dev/null; then
+            echo "Installing ldproxy..."
+            cargo install ldproxy
+          else
+            echo "✓ ldproxy found in cache"
+          fi
 
       - name: Install ESP-IDF
         run: |
-          espup install
+          if [ ! -f ~/export-esp.sh ]; then
+            echo "Installing ESP-IDF..."
+            espup install
+          else
+            echo "✓ ESP-IDF found in cache"
+          fi
           . $HOME/export-esp.sh
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Cache cargo index
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/git
-          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Check compilation
         run: |
@@ -80,6 +112,12 @@ jobs:
         with:
           components: rust-src, clippy
 
+      - name: Cache cargo (using Swatinem/rust-cache)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: sensors/active-wing
+          cache-on-failure: true
+
       - name: Run clippy
         run: |
           cd sensors/active-wing
@@ -88,6 +126,8 @@ jobs:
   build:
     name: Build Firmware
     runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -96,19 +136,71 @@ jobs:
         with:
           components: rust-src
 
+      - name: Cache cargo (using Swatinem/rust-cache)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: sensors/active-wing
+          cache-on-failure: true
+
+      - name: Cache cargo tools
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/espup
+            ~/.cargo/bin/ldproxy
+            ~/.cargo/bin/cargo-espflash
+            ~/.cargo/bin/espflash
+          key: ${{ runner.os }}-cargo-tools-v1
+          restore-keys: |
+            ${{ runner.os }}-cargo-tools-
+
+      - name: Cache ESP-IDF
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.espup/
+            ~/export-esp.sh
+          key: ${{ runner.os }}-espup-v1
+          restore-keys: |
+            ${{ runner.os }}-espup-
+
       - name: Install ESP-IDF prerequisites
         run: |
           sudo apt-get update
           sudo apt-get install -y git wget flex bison gperf python3 python3-pip python3-venv cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0
 
-      - name: Install espup and cargo-espflash
+      - name: Install tools from cache or compile
         run: |
-          cargo install espup
-          cargo install cargo-espflash espflash ldproxy
+          # Check if tools are already in cache
+          if ! command -v espup &> /dev/null; then
+            echo "Installing espup..."
+            cargo install espup
+          else
+            echo "✓ espup found in cache"
+          fi
+
+          if ! command -v ldproxy &> /dev/null; then
+            echo "Installing ldproxy..."
+            cargo install ldproxy
+          else
+            echo "✓ ldproxy found in cache"
+          fi
+
+          if ! command -v cargo-espflash &> /dev/null; then
+            echo "Installing cargo-espflash and espflash..."
+            cargo install cargo-espflash espflash
+          else
+            echo "✓ cargo-espflash found in cache"
+          fi
 
       - name: Install ESP-IDF
         run: |
-          espup install
+          if [ ! -f ~/export-esp.sh ]; then
+            echo "Installing ESP-IDF..."
+            espup install
+          else
+            echo "✓ ESP-IDF found in cache"
+          fi
           . $HOME/export-esp.sh
 
       - name: Build firmware
