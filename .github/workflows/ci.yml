@@ -34,7 +34,6 @@ jobs:
         run: |
           espup install
           . $HOME/export-esp.sh
-          rustup component add rust-src --toolchain esp
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -97,6 +96,7 @@ jobs:
       - name: Run clippy
         run: |
           . $HOME/export-esp.sh
+          cd sensors/active-wing
           cargo clippy -- -D warnings
 
   build:
@@ -128,13 +128,14 @@ jobs:
       - name: Build firmware
         run: |
           . $HOME/export-esp.sh
+          cd sensors/active-wing
           cargo build --release
 
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
         with:
           name: firmware-esp32c3
-          path: target/riscv32imc-esp-espidf/release/esp32-telemetry
+          path: sensors/active-wing/target/riscv32imc-esp-espidf/release/esp32-telemetry
 
   python-lint:
     name: Python Lint
