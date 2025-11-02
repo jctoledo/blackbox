@@ -91,7 +91,7 @@ jobs:
             target/riscv32imc-esp-espidf/release/${{ matrix.project }}
 
       - name: Upload firmware artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: firmware-${{ matrix.project }}
           path: firmware-output/${{ matrix.project }}.bin
