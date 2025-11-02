@@ -1,0 +1,179 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:  # Allow manual trigger
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  discover-projects:
+    name: Discover Sensor Projects
+    runs-on: ubuntu-latest
+    outputs:
+      projects: ${{ steps.find-projects.outputs.projects }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Find all sensor projects
+        id: find-projects
+        run: |
+          # Find all directories in sensors/ that have a project.json file
+          projects=$(find sensors -maxdepth 2 -name "project.json" -exec dirname {} \; | xargs -I {} basename {} | jq -R -s -c 'split("\n")[:-1]')
+          echo "projects=$projects" >> $GITHUB_OUTPUT
+          echo "Found projects: $projects"
+
+  build-firmware:
+    name: Build Firmware
+    needs: discover-projects
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        project: ${{ fromJson(needs.discover-projects.outputs.projects) }}
+    outputs:
+      version: ${{ steps.get_version.outputs.VERSION }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version
+        id: get_version
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          else
+            echo "VERSION=dev-$(date +%Y%m%d-%H%M%S)" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rust-src
+
+      - name: Install ESP-IDF prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git wget flex bison gperf python3 python3-pip python3-venv cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0
+
+      - name: Install espup, cargo-espflash, and espflash
+        run: |
+          cargo install espup cargo-espflash espflash
+
+      - name: Install ESP Rust toolchain
+        run: |
+          espup install
+          . $HOME/export-esp.sh
+          rustup component add rust-src --toolchain stable
+
+      - name: Build firmware
+        run: |
+          . $HOME/export-esp.sh
+          cd sensors/${{ matrix.project }}
+          cargo build --release --target riscv32imc-esp-espidf
+
+      - name: Generate flashable binary
+        run: |
+          . $HOME/export-esp.sh
+          cd sensors/${{ matrix.project }}
+
+          # Create output directory
+          mkdir -p ../../firmware-output
+
+          # Generate merged binary that can be flashed directly
+          cargo espflash save-image \
+            --chip esp32c3 \
+            --merge \
+            ../../firmware-output/${{ matrix.project }}.bin \
+            target/riscv32imc-esp-espidf/release/${{ matrix.project }}
+
+      - name: Upload firmware artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ matrix.project }}
+          path: firmware-output/${{ matrix.project }}.bin
+
+  create-release:
+    name: Create GitHub Release
+    needs: build-firmware
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      version: ${{ needs.build-firmware.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all firmware artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: firmware-artifacts
+
+      - name: Extract changelog
+        id: changelog
+        run: |
+          VERSION=${{ needs.build-firmware.outputs.version }}
+          VERSION_NUM=${VERSION#v}
+          awk -v ver="$VERSION_NUM" '
+            /^## \[/ {
+              if (found) exit;
+              if ($2 == "["ver"]") found=1;
+              next;
+            }
+            found { print }
+          ' CHANGELOG.md > release-notes.md || echo "Release $VERSION" > release-notes.md
+
+      - name: Prepare release files
+        run: |
+          # Find all firmware binaries and create a list
+          find firmware-artifacts -name "*.bin" -type f
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ needs.build-firmware.outputs.version }}
+          name: Release ${{ needs.build-firmware.outputs.version }}
+          body_path: release-notes.md
+          files: |
+            firmware-artifacts/firmware-*/*.bin
+          draft: false
+          prerelease: ${{ contains(needs.build-firmware.outputs.version, 'alpha') || contains(needs.build-firmware.outputs.version, 'beta') || contains(needs.build-firmware.outputs.version, 'rc') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-flasher:
+    name: Update Web Flasher
+    needs: [build-firmware, create-release]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Generate flasher configuration
+        env:
+          VERSION: ${{ needs.build-firmware.outputs.version }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          CI: true
+        run: |
+          python3 scripts/generate_flasher_config.py > docs/projects-config.js
+          echo "Generated docs/projects-config.js:"
+          cat docs/projects-config.js
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'docs'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

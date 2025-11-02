@@ -1,0 +1,27 @@
+[package]
+name = "neo6m"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "NEO-6M GPS NMEA parser for embedded systems"
+license = "MIT OR Apache-2.0"
+keywords = ["gps", "nmea", "neo6m", "parser", "embedded"]
+categories = ["embedded", "hardware-support", "no-std", "parser-implementations"]
+
+[lib]
+name = "neo6m"
+
+[dependencies]
+# Floating point math for no-std
+libm = "0.2"
+
+# Optional logging for debugging
+log = { workspace = true, optional = true }
+
+[features]
+default = ["std"]
+std = []
+logging = ["log"]
+
+[dev-dependencies]
+# For testing

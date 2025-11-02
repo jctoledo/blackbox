@@ -1,0 +1,288 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  check:
+    name: Check Compilation
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust nightly
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src
+
+      - name: Cache cargo (using Swatinem/rust-cache)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: sensors/active-wing
+          cache-on-failure: true
+
+      - name: Cache cargo tools
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/espup
+            ~/.cargo/bin/ldproxy
+          key: ${{ runner.os }}-cargo-tools-v1
+          restore-keys: |
+            ${{ runner.os }}-cargo-tools-
+
+      - name: Cache ESP-IDF
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.espup/
+            ~/export-esp.sh
+          key: ${{ runner.os }}-espup-v2-partition-fix
+          restore-keys: |
+            ${{ runner.os }}-espup-v2-
+
+      - name: Install ESP-IDF prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git wget flex bison gperf python3 python3-pip python3-venv cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0
+
+      - name: Install tools from cache or compile
+        run: |
+          if ! command -v espup &> /dev/null; then
+            echo "Installing espup..."
+            cargo install espup
+          else
+            echo "✓ espup found in cache"
+          fi
+
+          if ! command -v ldproxy &> /dev/null; then
+            echo "Installing ldproxy..."
+            cargo install ldproxy
+          else
+            echo "✓ ldproxy found in cache"
+          fi
+
+      - name: Install ESP-IDF
+        run: |
+          if [ ! -f ~/export-esp.sh ]; then
+            echo "Installing ESP-IDF..."
+            espup install
+          else
+            echo "✓ ESP-IDF found in cache"
+          fi
+          . $HOME/export-esp.sh
+
+      - name: Check compilation
+        run: |
+          . $HOME/export-esp.sh
+          cd sensors/active-wing
+          cargo check
+
+  fmt:
+    name: Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust nightly
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src, clippy
+
+      - name: Cache cargo (using Swatinem/rust-cache)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: sensors/active-wing
+          cache-on-failure: true
+
+      - name: Run clippy
+        run: |
+          cd sensors/active-wing
+          cargo clippy -- -D warnings
+
+  build:
+    name: Build Firmware
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust nightly
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src
+
+      - name: Cache cargo (using Swatinem/rust-cache)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: sensors/active-wing
+          cache-on-failure: true
+          shared-key: partition-fix-v2
+
+      - name: Cache cargo tools
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/espup
+            ~/.cargo/bin/ldproxy
+            ~/.cargo/bin/cargo-espflash
+            ~/.cargo/bin/espflash
+          key: ${{ runner.os }}-cargo-tools-v1
+          restore-keys: |
+            ${{ runner.os }}-cargo-tools-
+
+      - name: Cache ESP-IDF
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.espup/
+            ~/export-esp.sh
+          key: ${{ runner.os }}-espup-v2-partition-fix
+          restore-keys: |
+            ${{ runner.os }}-espup-v2-
+
+      - name: Install ESP-IDF prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git wget flex bison gperf python3 python3-pip python3-venv cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0
+
+      - name: Install tools from cache or compile
+        run: |
+          # Check if tools are already in cache
+          if ! command -v espup &> /dev/null; then
+            echo "Installing espup..."
+            cargo install espup
+          else
+            echo "✓ espup found in cache"
+          fi
+
+          if ! command -v ldproxy &> /dev/null; then
+            echo "Installing ldproxy..."
+            cargo install ldproxy
+          else
+            echo "✓ ldproxy found in cache"
+          fi
+
+          if ! command -v cargo-espflash &> /dev/null; then
+            echo "Installing cargo-espflash and espflash..."
+            cargo install cargo-espflash espflash
+          else
+            echo "✓ cargo-espflash found in cache"
+          fi
+
+      - name: Install ESP-IDF
+        run: |
+          if [ ! -f ~/export-esp.sh ]; then
+            echo "Installing ESP-IDF..."
+            espup install
+          else
+            echo "✓ ESP-IDF found in cache"
+          fi
+          . $HOME/export-esp.sh
+
+      - name: Clean build to force partition table update
+        run: |
+          cd sensors/active-wing
+          rm -rf ../../target/riscv32imc-esp-espidf
+          rm -rf ../../.embuild
+          echo "✓ Cleaned ESP-IDF build cache (.embuild and target)"
+
+      - name: Build firmware
+        run: |
+          . $HOME/export-esp.sh
+          cd sensors/active-wing
+          cargo build --release
+          echo "Built binary size:"
+          ls -lh ../../target/riscv32imc-esp-espidf/release/active-wing
+          echo "Checking generated partition configuration:"
+          grep "CONFIG_PARTITION_TABLE" ../../target/riscv32imc-esp-espidf/release/build/esp-idf-sys-*/out/sdkconfig | head -10
+          echo "Partition table binary:"
+          ls -lh ../../target/riscv32imc-esp-espidf/release/partition-table.bin
+          python3 -c "import sys; data = open('../../target/riscv32imc-esp-espidf/release/partition-table.bin', 'rb').read(); print(f'Partition table size: {len(data)} bytes')"
+
+      - name: Create merged binary for web flasher
+        run: |
+          cd sensors/active-wing
+          cargo espflash save-image \
+            --chip esp32c3 \
+            --merge \
+            --release \
+            ../../target/active-wing.bin
+          ls -lh ../../target/active-wing.bin
+
+      - name: Upload merged firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-esp32c3
+          path: target/active-wing.bin
+
+      - name: Upload individual components (debug)
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-components
+          path: |
+            target/riscv32imc-esp-espidf/release/active-wing
+            target/riscv32imc-esp-espidf/release/bootloader.bin
+            target/riscv32imc-esp-espidf/release/partition-table.bin
+
+  python-lint:
+    name: Python Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check if Python files exist
+        id: check_files
+        run: |
+          if ls *.py 1> /dev/null 2>&1; then
+            echo "files_exist=true" >> $GITHUB_OUTPUT
+          else
+            echo "files_exist=false" >> $GITHUB_OUTPUT
+            echo "⚠️ No Python files found in root - skipping lint"
+          fi
+
+      - name: Set up Python
+        if: steps.check_files.outputs.files_exist == 'true'
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        if: steps.check_files.outputs.files_exist == 'true'
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8 black paho-mqtt
+
+      - name: Lint with flake8
+        if: steps.check_files.outputs.files_exist == 'true'
+        run: |
+          flake8 *.py --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 *.py --count --exit-zero --max-complexity=10 --max-line-length=100 --statistics
+
+      - name: Check formatting with black
+        if: steps.check_files.outputs.files_exist == 'true'
+        run: black --check *.py

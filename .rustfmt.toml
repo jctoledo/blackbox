@@ -1,0 +1,36 @@
+# Rust formatting configuration
+# See https://rust-lang.github.io/rustfmt/ for all options
+
+edition = "2021"
+max_width = 100
+hard_tabs = false
+tab_spaces = 4
+newline_style = "Unix"
+
+# Imports
+imports_granularity = "Crate"
+group_imports = "StdExternalCrate"
+
+# Function formatting
+fn_params_layout = "Tall"
+fn_single_line = false
+
+# Control flow
+control_brace_style = "AlwaysSameLine"
+
+# Comments and documentation
+format_code_in_doc_comments = true
+wrap_comments = true
+comment_width = 80
+normalize_comments = true
+normalize_doc_attributes = true
+
+# Macros
+format_macro_matchers = true
+format_macro_bodies = true
+
+# Misc
+use_try_shorthand = true
+use_field_init_shorthand = true
+force_explicit_abi = true
+reorder_impl_items = true

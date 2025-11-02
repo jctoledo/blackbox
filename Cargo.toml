@@ -1,36 +1,32 @@
-[package]
-name = "esp32-telemetry"
+[workspace]
+members = [
+    "framework",           # motorsport-telemetry crate
+    "drivers/wt901",       # WT901 IMU driver
+    "drivers/neo6m",       # NEO-6M GPS driver
+    "sensors/active-wing", # Active Wing ESP32 telemetry application
+]
+resolver = "2"
+
+# Workspace-wide settings
+[workspace.package]
 version = "0.1.0"
 authors = ["Jose Cruz Toledo <you@example.com>"]
 edition = "2021"
-resolver = "2"
 
+# Shared dependencies for workspace members
+[workspace.dependencies]
+log = "0.4"
+# Pin serde to avoid compatibility issues with latest versions
+serde = { version = "=1.0.210", default-features = false, features = ["derive"] }
+serde_json = { version = "=1.0.132", default-features = false, features = ["alloc"] }
+esp-idf-hal = "0.45"
+esp-idf-svc = { version = "0.51", default-features = false }
+esp-idf-sys = { version = "0.36", default-features = false }
+
+# Workspace-wide build profiles
 [profile.release]
 opt-level = "s"
 
 [profile.dev]
 debug = true
 opt-level = "z"
-
-[dependencies]
-esp-idf-hal = "0.45"
-esp-idf-svc = { version = "0.51", default-features = false, features = [
-    "binstart", 
-    "alloc",
-    "std",  
-] }
-esp-idf-sys = { version = "0.36", default-features = false }
-log = "0.4"
-embedded-svc = "0.28"
-serde = { version = "1.0", default-features = false, features = ["derive"] } 
-serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
-
-# RGB LED support - use git version for compatibility with esp-idf-sys 0.36
-ws2812-esp32-rmt-driver = { git = "https://github.com/cat-in-136/ws2812-esp32-rmt-driver", branch = "main" }
-smart-leds = "0.4"
-
-[build-dependencies]
-embuild = "0.33"
-
-[package.metadata.esp-idf-sys]
-esp_idf_version = "v5.1.4"

@@ -1,0 +1,15 @@
+# Clippy configuration
+# See https://doc.rust-lang.org/clippy/lint_configuration.html
+
+# Warn on missing documentation for public items
+# (can be strict, but encourages good docs)
+# missing-docs-in-crate-items = "warn"
+
+# Cognitive complexity threshold
+cognitive-complexity-threshold = 30
+
+# Allow short variable names common in math/physics
+allowed-idents-below-min-chars = ["x", "y", "z", "ax", "ay", "az", "vx", "vy", "wz", "dt", "dx", "dy", "s", "k", "h", "q", "r", "p"]
+
+# Don't warn on TODO comments (we use them for roadmap)
+# allow-dbg-in-tests = true
