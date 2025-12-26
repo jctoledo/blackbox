@@ -1,6 +1,6 @@
 {
-  "name": "Active Wing",
-  "id": "active-wing",
+  "name": "Blackbox",
+  "id": "blackbox",
   "description": "The reference implementation demonstrating real-time sensor fusion using Extended Kalman Filtering. This system fuses GPS and IMU data to provide accurate position and motion tracking, eliminating IMU drift through GPS corrections while maintaining high-frequency updates.",
   "hardware": [
     "ESP32-C3 Development Board",
