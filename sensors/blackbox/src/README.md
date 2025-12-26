@@ -6,7 +6,7 @@ Each subdirectory is a complete, independent sensor application that uses the fr
 
 ## Current Projects
 
-### [blackbox](./blackbox/)
+### [active-wing](./active-wing/)
 ESP32-C3 based vehicle telemetry system with WT901 IMU and NEO-6M GPS.
 
 **Hardware:**
@@ -24,7 +24,7 @@ ESP32-C3 based vehicle telemetry system with WT901 IMU and NEO-6M GPS.
 
 **Use case:** Track day data logging, autocross, rally, vehicle dynamics research
 
-[See full documentation →](./blackbox/README.md)
+[See full documentation →](./active-wing/README.md)
 
 ---
 
@@ -188,7 +188,7 @@ Create your own driver crates in `drivers/` for reuse across projects!
 
 ## Questions?
 
-- Check the [Blackbox implementation](./blackbox/) for a complete example
+- Check the [Active Wing implementation](./active-wing/) for a complete example
 - See [SENSOR_DRIVERS.md](../SENSOR_DRIVERS.md) for driver architecture
 - Read [WORKSPACE_STRUCTURE.md](../WORKSPACE_STRUCTURE.md) for workspace organization
 - Open an issue on GitHub for help

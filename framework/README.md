@@ -193,7 +193,7 @@ motorsport-telemetry = { version = "0.1", features = ["esp32", "mqtt"] }
 
 ## Examples
 
-See the `sensors/active-wing/` directory for a complete working example:
+See the `sensors/blackbox/` directory for a complete working example:
 - ESP32-C3 firmware
 - WT901 IMU + NEO-6M GPS
 - TCP telemetry streaming (20 Hz)
@@ -225,7 +225,7 @@ MIT License - Use it, modify it, sell it, race with it. See `LICENSE` for detail
 
 ## Related Projects
 
-- **Active Wing** - ESP32-based telemetry system using this framework
+- **Blackbox** - ESP32-based telemetry system using this framework
 - **wt901 driver** - Standalone WT901 IMU driver crate
 - **neo6m driver** - Standalone NEO-6M GPS driver crate
 

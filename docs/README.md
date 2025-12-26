@@ -1,6 +1,6 @@
 # Documentation
 
-Additional documentation and resources for Active Wing.
+Additional documentation and resources for Blackbox.
 
 ## Available Documentation
 

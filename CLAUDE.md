@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Active Wing is an ESP32-C3 vehicle telemetry system that performs real-time sensor fusion of IMU and GPS data using an Extended Kalman Filter (EKF). It streams binary telemetry at 20 Hz over TCP for live data acquisition during track days, autocross, rally, and vehicle dynamics research.
+Blackbox is an ESP32-C3 vehicle telemetry system that performs real-time sensor fusion of IMU and GPS data using an Extended Kalman Filter (EKF). It streams binary telemetry at 20 Hz over TCP for live data acquisition during track days, autocross, rally, and vehicle dynamics research.
 
 **Target Hardware:** ESP32-C3 microcontroller
 **Sensors:** WT901 9-axis IMU (UART), NEO-6M GPS (UART)
@@ -57,7 +57,7 @@ python3 -m py_compile tools/python/*.py
 
 ### Project Structure
 ```
-active_wing/
+blackbox/
 ├── src/                # Rust firmware
 ├── tools/python/       # Telemetry receivers
 ├── docs/              # Additional documentation

@@ -1,6 +1,6 @@
-# Active Wing - ESP32 Telemetry System
+# Blackbox - ESP32 Telemetry System
 
-High-performance sensor fusion telemetry system for ESP32-C3 using the Active Wing Framework.
+High-performance sensor fusion telemetry system for ESP32-C3 using the Blackbox Framework.
 
 ## Hardware
 
@@ -122,7 +122,7 @@ This will display:
 ## Project Structure
 
 ```
-active-wing/
+blackbox/
 ├── src/
 │   ├── main.rs              - Application entry point
 │   ├── system.rs            - System components (SensorManager, etc.)
@@ -155,11 +155,11 @@ active-wing/
 
 ## Adding More Sensors
 
-This project uses the Active Wing Framework, making it easy to add new sensors to the same ESP32:
+This project uses the Blackbox Framework, making it easy to add new sensors to the same ESP32:
 
 ```rust
 // Example: Add wheel speed sensors
-use active_wing_framework::sensor_framework::Sensor;
+use blackbox_framework::sensor_framework::Sensor;
 
 pub struct WheelSpeedSensor {
     gpio_pin: GpioPin,

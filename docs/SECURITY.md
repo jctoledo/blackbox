@@ -2,7 +2,7 @@
 
 ## Overview
 
-Active Wing is a data acquisition system for vehicles. While it's designed to be safe and reliable, it's important to understand the security considerations when using embedded systems in automotive applications.
+Blackbox is a data acquisition system for vehicles. While it's designed to be safe and reliable, it's important to understand the security considerations when using embedded systems in automotive applications.
 
 ## Supported Versions
 
@@ -16,12 +16,12 @@ We release security updates for the following versions:
 
 ## Security Considerations
 
-### What Active Wing Does
+### What Blackbox Does
 - **Observes** vehicle dynamics (acceleration, position, velocity)
 - **Streams** telemetry data over WiFi
 - **Does NOT** control vehicle systems or safety-critical functions
 
-### What Active Wing Does NOT Do
+### What Blackbox Does NOT Do
 - Does not interface with vehicle control systems (brakes, steering, throttle)
 - Does not store or transmit personal/sensitive information
 - Does not require internet connectivity (local network only)
@@ -168,12 +168,12 @@ We're considering:
 
 ### Automotive Safety
 
-**Important**: Active Wing is NOT:
+**Important**: Blackbox is NOT:
 - A safety system
 - Certified for use in safety-critical applications
 - Compliant with ISO 26262 or automotive safety standards
 
-**Use Active Wing**:
+**Use Blackbox**:
 - For data logging and analysis only
 - In conjunction with proper safety equipment
 - With understanding that it's an observational tool
@@ -188,7 +188,7 @@ The ESP32-C3 contains WiFi radio:
 
 ### Data Privacy
 
-Active Wing may collect:
+Blackbox may collect:
 - GPS coordinates (your vehicle's location)
 - Driving patterns (acceleration, braking, cornering)
 
@@ -208,4 +208,4 @@ For sensitive security concerns, always use private disclosure.
 
 ---
 
-**Remember**: Active Wing is a hobby project. While we strive for security, it's not designed for adversarial environments. Use appropriate operational security based on your threat model. 🔒
+**Remember**: Blackbox is a hobby project. While we strive for security, it's not designed for adversarial environments. Use appropriate operational security based on your threat model. 🔒

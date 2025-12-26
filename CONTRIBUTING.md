@@ -1,8 +1,8 @@
-# Contributing to Active Wing
+# Contributing to Blackbox
 
 First off, thanks for taking the time to contribute! 🎉
 
-Active Wing is a community-driven project, and we welcome contributions from everyone—whether you're a seasoned embedded developer, a car enthusiast learning to code, or somewhere in between.
+Blackbox is a community-driven project, and we welcome contributions from everyone—whether you're a seasoned embedded developer, a car enthusiast learning to code, or somewhere in between.
 
 ---
 
@@ -10,7 +10,7 @@ Active Wing is a community-driven project, and we welcome contributions from eve
 
 ### Our Pledge
 
-We pledge to make participation in the Active Wing community a harassment-free experience for everyone, regardless of age, body size, visible or invisible disability, ethnicity, sex characteristics, gender identity and expression, level of experience, education, socio-economic status, nationality, personal appearance, race, religion, or sexual identity and orientation.
+We pledge to make participation in the Blackbox community a harassment-free experience for everyone, regardless of age, body size, visible or invisible disability, ethnicity, sex characteristics, gender identity and expression, level of experience, education, socio-economic status, nationality, personal appearance, race, religion, or sexual identity and orientation.
 
 ### Our Standards
 
@@ -85,12 +85,12 @@ If you experience or witness unacceptable behavior, please report it by opening 
 1. **Fork the repository** on GitHub
 2. **Clone your fork** locally:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/active_wing.git
-   cd active_wing
+   git clone https://github.com/YOUR_USERNAME/blackbox.git
+   cd blackbox
    ```
 3. **Add upstream remote**:
    ```bash
-   git remote add upstream https://github.com/jctoledo/active_wing.git
+   git remote add upstream https://github.com/jctoledo/blackbox.git
    ```
 4. **Create a branch** for your work:
    ```bash
@@ -102,7 +102,7 @@ If you experience or witness unacceptable behavior, please report it by opening 
 ### Reporting Bugs
 
 Before submitting a bug report:
-- Check the [existing issues](https://github.com/jctoledo/active_wing/issues) to avoid duplicates
+- Check the [existing issues](https://github.com/jctoledo/blackbox/issues) to avoid duplicates
 - Try the latest version from `main` branch
 - Collect information about your setup
 
@@ -124,7 +124,7 @@ Before submitting a bug report:
 
 We love new ideas! Before suggesting a feature:
 
-- Check if it's already been proposed in [issues](https://github.com/jctoledo/active_wing/issues)
+- Check if it's already been proposed in [issues](https://github.com/jctoledo/blackbox/issues)
 - Consider if it fits the project's scope (vehicle telemetry/data acquisition)
 - Think about how it benefits the community
 
@@ -195,7 +195,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 cargo install cargo-espflash espflash ldproxy
 
 # Install Python dependencies (for telemetry receivers)
-pip3 install -r sensors/active-wing/tools/python/requirements.txt
+pip3 install -r sensors/blackbox/tools/python/requirements.txt
 ```
 
 ### Building the Project
@@ -206,16 +206,16 @@ This is a Cargo workspace. Build commands from the repository root:
 # Check all workspace members compile
 cargo check
 
-# Build entire workspace (framework + drivers + active-wing)
+# Build entire workspace (framework + drivers + blackbox)
 cargo build
 
 # Build specific package
-cargo build -p active-wing
+cargo build -p blackbox
 cargo build -p wt901
 cargo build -p neo6m
 
 # Build release binary for ESP32
-cd sensors/active-wing
+cd sensors/blackbox
 cargo build --release
 
 # Flash to ESP32 (will auto-detect port)
@@ -235,10 +235,10 @@ cargo fmt
 cargo clippy -- -D warnings
 
 # Test Python syntax
-python3 -m py_compile sensors/active-wing/tools/python/*.py
+python3 -m py_compile sensors/blackbox/tools/python/*.py
 
 # Test telemetry receiver
-python3 sensors/active-wing/tools/python/tcp_telemetry_receiver.py
+python3 sensors/blackbox/tools/python/tcp_telemetry_receiver.py
 ```
 
 ## Pull Request Process
@@ -406,4 +406,4 @@ Stuck on something? Here are resources:
 
 ---
 
-**Thank you for contributing to Active Wing!** Every contribution, no matter how small, makes this project better for everyone. 🏁
+**Thank you for contributing to Blackbox!** Every contribution, no matter how small, makes this project better for everyone. 🏁

@@ -2,9 +2,9 @@
 
 ## General Questions
 
-### What is Active Wing?
+### What is Blackbox?
 
-Active Wing is an open-source vehicle telemetry system that runs on an ESP32 microcontroller. It combines data from an IMU (accelerometer/gyroscope) and GPS using an Extended Kalman Filter to provide accurate position, velocity, acceleration, and driving dynamics in real-time.
+Blackbox is an open-source vehicle telemetry system that runs on an ESP32 microcontroller. It combines data from an IMU (accelerometer/gyroscope) and GPS using an Extended Kalman Filter to provide accurate position, velocity, acceleration, and driving dynamics in real-time.
 
 Think of it as a professional-grade data logger that costs $30 instead of $500+.
 
@@ -32,7 +32,7 @@ Phone apps typically:
 - Inaccurate IMU data (phone not rigidly mounted)
 - Can't run other apps while logging
 
-Active Wing:
+Blackbox:
 - Fuses GPS + IMU with Kalman filter
 - 20 Hz output (200 Hz IMU internal sampling)
 - Rigidly mounted = accurate measurements
@@ -40,7 +40,7 @@ Active Wing:
 
 ### How is this different from commercial data loggers?
 
-**Active Wing ($30):**
+**Blackbox ($30):**
 - Open source (hack it, modify it, learn from it)
 - 20 Hz telemetry
 - IMU + GPS sensor fusion
@@ -56,7 +56,7 @@ Active Wing:
 - Sometimes subscription required
 - Professional support
 
-Active Wing is 90% of the functionality at 5% of the price.
+Blackbox is 90% of the functionality at 5% of the price.
 
 ## Hardware Questions
 

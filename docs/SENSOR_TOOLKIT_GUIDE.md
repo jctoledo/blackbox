@@ -1,8 +1,8 @@
 ## Sensor Toolkit Guide
 
-# Adding New Sensors to Active Wing
+# Adding New Sensors to Blackbox
 
-Active Wing is designed as a **modular sensor fusion platform**. Adding a new sensor is as simple as implementing a trait and registering it. This guide shows you how.
+Blackbox is designed as a **modular sensor fusion platform**. Adding a new sensor is as simple as implementing a trait and registering it. This guide shows you how.
 
 ---
 

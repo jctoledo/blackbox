@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Binary telemetry decoder for ESP32-C3 car telemetry system
+Binary telemetry decoder for ESP32-C3 Blackbox telemetry system
 Decodes 64-byte binary packets published to car/telemetry_bin
 """
 

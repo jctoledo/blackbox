@@ -27,7 +27,7 @@ jobs:
       - name: Cache cargo (using Swatinem/rust-cache)
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: sensors/active-wing
+          workspaces: sensors/blackbox
           cache-on-failure: true
 
       - name: Cache cargo tools
@@ -84,7 +84,7 @@ jobs:
       - name: Check compilation
         run: |
           . $HOME/export-esp.sh
-          cd sensors/active-wing
+          cd sensors/blackbox
           cargo check
 
   fmt:
@@ -115,12 +115,12 @@ jobs:
       - name: Cache cargo (using Swatinem/rust-cache)
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: sensors/active-wing
+          workspaces: sensors/blackbox
           cache-on-failure: true
 
       - name: Run clippy
         run: |
-          cd sensors/active-wing
+          cd sensors/blackbox
           cargo clippy -- -D warnings
 
   build:
@@ -139,7 +139,7 @@ jobs:
       - name: Cache cargo (using Swatinem/rust-cache)
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: sensors/active-wing
+          workspaces: sensors/blackbox
           cache-on-failure: true
           shared-key: partition-fix-v2
 
@@ -206,7 +206,7 @@ jobs:
 
       - name: Clean build to force partition table update
         run: |
-          cd sensors/active-wing
+          cd sensors/blackbox
           rm -rf ../../target/riscv32imc-esp-espidf
           rm -rf ../../.embuild
           echo "✓ Cleaned ESP-IDF build cache (.embuild and target)"
@@ -214,10 +214,10 @@ jobs:
       - name: Build firmware
         run: |
           . $HOME/export-esp.sh
-          cd sensors/active-wing
+          cd sensors/blackbox
           cargo build --release
           echo "Built binary size:"
-          ls -lh ../../target/riscv32imc-esp-espidf/release/active-wing
+          ls -lh ../../target/riscv32imc-esp-espidf/release/blackbox
           echo "Checking generated partition configuration:"
           grep "CONFIG_PARTITION_TABLE" ../../target/riscv32imc-esp-espidf/release/build/esp-idf-sys-*/out/sdkconfig | head -10
           echo "Partition table binary:"
@@ -226,26 +226,26 @@ jobs:
 
       - name: Create merged binary for web flasher
         run: |
-          cd sensors/active-wing
+          cd sensors/blackbox
           cargo espflash save-image \
             --chip esp32c3 \
             --merge \
             --release \
-            ../../target/active-wing.bin
-          ls -lh ../../target/active-wing.bin
+            ../../target/blackbox.bin
+          ls -lh ../../target/blackbox.bin
 
       - name: Upload merged firmware
         uses: actions/upload-artifact@v4
         with:
           name: firmware-esp32c3
-          path: target/active-wing.bin
+          path: target/blackbox.bin
 
       - name: Upload individual components (debug)
         uses: actions/upload-artifact@v4
         with:
           name: firmware-components
           path: |
-            target/riscv32imc-esp-espidf/release/active-wing
+            target/riscv32imc-esp-espidf/release/blackbox
             target/riscv32imc-esp-espidf/release/bootloader.bin
             target/riscv32imc-esp-espidf/release/partition-table.bin
 

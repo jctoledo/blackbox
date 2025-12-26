@@ -2,7 +2,7 @@
 
 ## What Was Accomplished
 
-Your Active Wing telemetry system has been transformed from a monolithic application into a **production-ready, modular sensor fusion platform** following SOLID principles.
+Your Blackbox telemetry system has been transformed from a monolithic application into a **production-ready, modular sensor fusion platform** following SOLID principles.
 
 ---
 

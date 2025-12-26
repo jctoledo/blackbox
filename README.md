@@ -1,4 +1,4 @@
-# Active Wing - ESP32 Vehicle Telemetry System
+# Blackbox - ESP32 Vehicle Telemetry System
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Rust](https://img.shields.io/badge/rust-1.75%2B-orange.svg)](https://www.rust-lang.org/)
@@ -100,8 +100,8 @@ rustup component add rust-src --toolchain esp
 ### 2. Clone and Configure
 
 ```bash
-git clone https://github.com/jctoledo/active_wing.git
-cd active_wing/sensors/active-wing
+git clone https://github.com/jctoledo/blackbox.git
+cd blackbox/sensors/blackbox
 
 # Edit WiFi credentials
 nano src/main.rs
@@ -118,7 +118,7 @@ The project includes a `.cargo/config.toml` that configures everything automatic
 
 ```bash
 # Navigate to the sensor project
-cd sensors/active-wing
+cd sensors/blackbox
 
 # Load ESP environment first (in every new terminal!)
 source $HOME/export-esp.sh
@@ -229,7 +229,7 @@ The `.cargo/config.toml` file in the sensor project configures the target and bu
 
 ```bash
 # Navigate to the sensor project first
-cd sensors/active-wing
+cd sensors/blackbox
 
 # ALWAYS load ESP environment first!
 source $HOME/export-esp.sh
@@ -266,7 +266,7 @@ This means the ESP toolchain isn't loaded or rust-src is missing:
 
 ```bash
 # Solution 1: Make sure you're in the sensor directory
-cd sensors/active-wing
+cd sensors/blackbox
 
 # Solution 2: Load ESP environment
 source $HOME/export-esp.sh
@@ -373,9 +373,9 @@ GPS (5Hz)           IMU (50Hz)
 ### File Structure
 
 ```
-active_wing/
+blackbox/
 ├── sensors/
-│   └── active-wing/
+│   └── blackbox/
 │       ├── .cargo/
 │       │   └── config.toml       # ESP32-C3 build configuration
 │       ├── src/
@@ -461,7 +461,7 @@ struct TelemetryPacket {
 
 ### WiFi and Network
 
-Edit `sensors/active-wing/src/main.rs`:
+Edit `sensors/blackbox/src/main.rs`:
 ```rust
 const WIFI_SSID: &str = "YourNetwork";
 const WIFI_PASSWORD: &str = "YourPassword";
@@ -471,7 +471,7 @@ const TCP_SERVER: &str = "192.168.1.100:9000";
 
 ### EKF Tuning
 
-Edit `sensors/active-wing/src/ekf.rs`:
+Edit `sensors/blackbox/src/ekf.rs`:
 ```rust
 const Q_ACC: f32 = 0.40;    // Process noise: acceleration (m/s²)²
 const Q_GYRO: f32 = 0.005;  // Process noise: gyro (rad/s)²
@@ -484,7 +484,7 @@ const R_YAW: f32 = 0.10;    // Measurement noise: magnetometer (rad)²
 
 ### Mode Detection Thresholds
 
-Edit `sensors/active-wing/src/mode.rs`:
+Edit `sensors/blackbox/src/mode.rs`:
 ```rust
 pub min_speed: f32 = 2.0;      // Minimum speed for maneuvers (m/s)
 pub acc_thr: f32 = 0.21;       // Acceleration threshold (g)
@@ -562,6 +562,6 @@ Inspired by open-source motorsport and robotics projects that prove pro-grade sy
 
 ---
 
-**Questions?** Open an [issue](https://github.com/jctoledo/active_wing/issues).
+**Questions?** Open an [issue](https://github.com/jctoledo/blackbox/issues).
 
 **Ready to track?** [Start with Quick Start ↑](#quick-start)

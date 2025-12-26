@@ -1,4 +1,4 @@
-# SOLID Refactoring Summary - Active Wing
+# SOLID Refactoring Summary - Blackbox
 
 ## Overview
 
@@ -35,7 +35,7 @@ main.rs (433 lines)
 ### After: Modular Toolkit Architecture ✅
 
 ```
-Active Wing Sensor Toolkit
+Blackbox Sensor Toolkit
 ├── Sensor Framework (sensor_framework.rs)
 │   ├── Sensor trait (plugin interface)
 │   ├── SensorRegistry (manages sensors)

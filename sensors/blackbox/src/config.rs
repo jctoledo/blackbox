@@ -1,6 +1,6 @@
 #![allow(dead_code)] // Configuration structs for future use
 
-/// Configuration management for Active Wing telemetry system
+/// Configuration management for Blackbox telemetry system
 /// Provides defaults and structure for future config.toml loading
 use motorsport_telemetry::ekf::EkfConfig;
 
