@@ -6,7 +6,7 @@ linker = "ldproxy"
 runner = "espflash flash --monitor"
 
 [env]
-ESP_IDF_SYS_ROOT_CRATE = "active-wing"
+ESP_IDF_SYS_ROOT_CRATE = "blackbox"
 MCU = "esp32c3"
 
 [unstable]
