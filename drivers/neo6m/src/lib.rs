@@ -382,11 +382,95 @@ impl NmeaParser {
     }
 
     #[cfg(not(any(test, feature = "std")))]
-    fn parse_rmc(&mut self, _line: &str) {
-        // no_std: Simplified implementation
-        // For a full no_std implementation, you would need to add libm dependency for
-        // floor() and implement manual field parsing without Vec
-        self.last_fix.valid = false;
+    fn parse_rmc(&mut self, line: &str) {
+        // Manual field parsing without Vec allocation
+        let mut field_idx = 0;
+        let mut field_start = 0;
+        let mut fields: [&str; 12] = [""; 12];
+
+        for (i, &byte) in line.as_bytes().iter().enumerate() {
+            if byte == b',' || i == line.len() - 1 {
+                if field_idx < 12 {
+                    let end = if byte == b',' { i } else { i + 1 };
+                    fields[field_idx] = &line[field_start..end];
+                    field_idx += 1;
+                }
+                field_start = i + 1;
+            }
+        }
+
+        if field_idx < 10 {
+            return;
+        }
+
+        // Field 2: Status (A = valid, V = invalid)
+        if fields[2] != "A" {
+            self.last_fix.valid = false;
+            return;
+        }
+
+        // Parse time (field 1)
+        if let Some((h, m, s)) = parse_time(fields[1]) {
+            self.last_fix.hour = h;
+            self.last_fix.minute = m;
+            self.last_fix.second = s;
+        }
+
+        // Parse latitude (fields 3, 4)
+        let lat = match parse_coordinate(fields[3], fields[4]) {
+            Some(lat) => lat,
+            None => {
+                self.last_fix.valid = false;
+                return;
+            }
+        };
+
+        // Parse longitude (fields 5, 6)
+        let lon = match parse_coordinate(fields[5], fields[6]) {
+            Some(lon) => lon,
+            None => {
+                self.last_fix.valid = false;
+                return;
+            }
+        };
+
+        // Parse speed (field 7) - knots to m/s
+        if let Ok(speed_knots) = parse_f32(fields[7]) {
+            self.last_fix.speed = speed_knots * 0.514444;
+        }
+
+        // Parse course (field 8) - degrees to radians
+        if let Ok(course_deg) = parse_f32(fields[8]) {
+            self.last_fix.course = course_deg * (core::f32::consts::PI / 180.0);
+        }
+
+        // Warmup: average first N fixes for reference
+        if !self.reference.set {
+            self.warmup_count += 1;
+            self.warmup_lat_sum += lat;
+            self.warmup_lon_sum += lon;
+
+            if self.warmup_count >= self.warmup_fixes {
+                self.reference.lat = self.warmup_lat_sum / self.warmup_count as f64;
+                self.reference.lon = self.warmup_lon_sum / self.warmup_count as f64;
+                self.reference.set = true;
+
+                self.last_valid_lat = lat;
+                self.last_valid_lon = lon;
+
+                // Don't return - process this fix normally
+                // Fall through to set lat/lon/valid below
+            } else {
+                // Still warming up - discard this fix
+                self.last_fix.valid = false;
+                return;
+            }
+        }
+
+        // Fix is valid!
+        self.last_fix.lat = lat;
+        self.last_fix.lon = lon;
+        self.last_fix.valid = true;
     }
 }
 
@@ -396,18 +480,47 @@ impl Default for NmeaParser {
     }
 }
 
-/// Parse NMEA coordinate field (ddmm.mmmm format)
-#[allow(dead_code)] // Helper function for future use
+#[cfg(not(any(test, feature = "std")))]
+fn parse_f32(s: &str) -> Result<f32, ()> {
+    if s.is_empty() {
+        return Err(());
+    }
+
+    let mut result = 0.0f32;
+    let mut after_decimal = false;
+    let mut decimal_divisor = 1.0f32;
+    let mut negative = false;
+
+    for &byte in s.as_bytes() {
+        match byte {
+            b'-' => negative = true,
+            b'0'..=b'9' => {
+                let digit = (byte - b'0') as f32;
+                if after_decimal {
+                    decimal_divisor *= 10.0;
+                    result += digit / decimal_divisor;
+                } else {
+                    result = result * 10.0 + digit;
+                }
+            }
+            b'.' => after_decimal = true,
+            _ => return Err(()),
+        }
+    }
+
+    Ok(if negative { -result } else { result })
+}
+
 fn parse_coordinate(coord_str: &str, dir_str: &str) -> Option<f64> {
     if coord_str.is_empty() || dir_str.is_empty() {
         return None;
     }
 
-    let value = coord_str.parse::<f64>().ok()?;
+    // Parse f64 manually (no std::parse available in no_std)
+    let value = parse_f64(coord_str)?;
 
     let degrees = floor(value / 100.0);
     let minutes = value - (degrees * 100.0);
-
     let mut decimal = degrees + (minutes / 60.0);
 
     if dir_str == "S" || dir_str == "W" {
@@ -415,6 +528,43 @@ fn parse_coordinate(coord_str: &str, dir_str: &str) -> Option<f64> {
     }
 
     Some(decimal)
+}
+
+// Add f64 parser
+#[cfg(not(any(test, feature = "std")))]
+fn parse_f64(s: &str) -> Option<f64> {
+    if s.is_empty() {
+        return None;
+    }
+
+    let mut result = 0.0f64;
+    let mut after_decimal = false;
+    let mut decimal_divisor = 1.0f64;
+    let mut negative = false;
+
+    for &byte in s.as_bytes() {
+        match byte {
+            b'-' => negative = true,
+            b'0'..=b'9' => {
+                let digit = (byte - b'0') as f64;
+                if after_decimal {
+                    decimal_divisor *= 10.0;
+                    result += digit / decimal_divisor;
+                } else {
+                    result = result * 10.0 + digit;
+                }
+            }
+            b'.' => after_decimal = true,
+            _ => return None,
+        }
+    }
+
+    Some(if negative { -result } else { result })
+}
+
+#[cfg(any(test, feature = "std"))]
+fn parse_f64(s: &str) -> Option<f64> {
+    s.parse::<f64>().ok()
 }
 
 /// Parse NMEA time field (hhmmss.ss format)

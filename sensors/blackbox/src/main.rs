@@ -17,7 +17,6 @@ use esp_idf_hal::{
 };
 use esp_idf_svc::{eventloop::EspSystemEventLoop, nvs::EspDefaultNvsPartition};
 use log::info;
-// Import from framework crate
 use motorsport_telemetry::transforms::{body_to_earth, remove_gravity};
 use mqtt::MqttClient;
 use rgb_led::RgbLed;
@@ -29,7 +28,6 @@ fn main() {
     esp_idf_svc::sys::link_patches();
     esp_idf_svc::log::EspLogger::initialize_default();
 
-    // Load configuration (from environment variables or defaults)
     let config = SystemConfig::from_env();
 
     info!("=== ESP32-C3 Telemetry System ===");
@@ -151,13 +149,6 @@ fn main() {
     )
     .unwrap();
 
-    // Configure GPS to 5Hz
-    let ubx_rate_5hz: [u8; 14] = [
-        0xB5, 0x62, 0x06, 0x08, 0x06, 0x00, 0xC8, 0x00, 0x01, 0x00, 0x01, 0x00, 0xDE, 0x6A,
-    ];
-    gps_uart.write(&ubx_rate_5hz).ok();
-    FreeRtos::delay_ms(100);
-
     // Create sensor manager
     let mut sensors = SensorManager::new(imu_uart, gps_uart);
 
@@ -227,49 +218,50 @@ fn main() {
             );
             estimator.predict(ax_e, ay_e, sensors.imu_parser.data().wz, dt);
 
-            // Update yaw from magnetometer (packet type 0x53 handled in parser)
+            // Update yaw from magnetometer
             let yaw_mag = sensors.imu_parser.data().yaw.to_radians();
             estimator.update_yaw(yaw_mag);
         }
 
         // Poll GPS and update EKF correction
-        if sensors.poll_gps() && sensors.gps_parser.last_fix().valid {
-            let (ax_corr, ay_corr, _) = sensors.imu_parser.get_accel_corrected();
+        // if sensors.poll_gps() && sensors.gps_parser.last_fix().valid {
+        //     let (ax_corr, ay_corr, _) = sensors.imu_parser.get_accel_corrected();
 
-            if sensors.is_stationary(ax_corr, ay_corr, sensors.imu_parser.data().wz) {
-                // Vehicle stopped - perform ZUPT and bias estimation
-                estimator.zupt();
+        //     if sensors.is_stationary(ax_corr, ay_corr, sensors.imu_parser.data().wz)
+        // {         // Vehicle stopped - perform ZUPT and bias estimation
+        //         estimator.zupt();
 
-                let (ax_b, ay_b, _) = remove_gravity(
-                    ax_corr,
-                    ay_corr,
-                    sensors.imu_parser.data().az,
-                    sensors.imu_parser.data().roll,
-                    sensors.imu_parser.data().pitch,
-                );
-                let (ax_e, ay_e) = body_to_earth(
-                    ax_b,
-                    ay_b,
-                    0.0,
-                    sensors.imu_parser.data().roll,
-                    sensors.imu_parser.data().pitch,
-                    estimator.ekf.yaw(),
-                );
-                estimator.update_bias(ax_e, ay_e);
-                estimator.reset_speed();
-            } else {
-                // Vehicle moving - normal GPS updates
-                if let Some((x, y)) = sensors.gps_parser.to_local_coords() {
-                    estimator.update_position(x, y);
-                }
-            }
+        //         let (ax_b, ay_b, _) = remove_gravity(
+        //             ax_corr,
+        //             ay_corr,
+        //             sensors.imu_parser.data().az,
+        //             sensors.imu_parser.data().roll,
+        //             sensors.imu_parser.data().pitch,
+        //         );
+        //         let (ax_e, ay_e) = body_to_earth(
+        //             ax_b,
+        //             ay_b,
+        //             0.0,
+        //             sensors.imu_parser.data().roll,
+        //             sensors.imu_parser.data().pitch,
+        //             estimator.ekf.yaw(),
+        //         );
+        //         estimator.update_bias(ax_e, ay_e);
+        //         estimator.reset_speed();
+        //     } else {
+        //         // Vehicle moving - normal GPS updates
+        //         if let Some((x, y)) = sensors.gps_parser.to_local_coords() {
+        //             estimator.update_position(x, y);
+        //         }
+        //     }
 
-            if let Some((vx, vy)) = sensors.gps_parser.get_velocity_enu() {
-                let speed = (vx * vx + vy * vy).sqrt();
-                estimator.update_velocity(vx, vy);
-                estimator.update_speed(speed);
-            }
-        }
+        //     if let Some((vx, vy)) = sensors.gps_parser.get_velocity_enu() {
+        //         let speed = (vx * vx + vy * vy).sqrt();
+        //         estimator.update_velocity(vx, vy);
+        //         estimator.update_speed(speed);
+        //     }
+        // }
+        sensors.poll_gps();
 
         // Update GPS status
         let gps_locked = sensors.gps_parser.is_warmed_up() && sensors.gps_parser.last_fix().valid;

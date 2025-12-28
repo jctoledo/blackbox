@@ -6,14 +6,17 @@ Receives binary packets from ESP32 at 20+ Hz
 
 import socket
 import struct
+import threading
 import time
 from datetime import datetime
-import threading
 
 
 class TelemetryDecoder:
-    FORMAT = "=HIffffffffffffBffBH"
-    SIZE = 66
+    # Updated format with version byte at start
+    # B = version, H = header, I = timestamp, then floats, bytes, checksum
+    FORMAT = "=BHIffffffffffffBffBH"
+    SIZE = 67  # Changed from 66
+
     MODE_NAMES = ["IDLE", "ACCEL", "BRAKE", "CORNER"]
 
     def __init__(self):
@@ -21,22 +24,42 @@ class TelemetryDecoder:
         self.error_count = 0
         self.last_time = time.time()
         self.packets_per_second = 0
+        print(f"📦 Packet size: {self.SIZE} bytes")
 
     def decode(self, payload):
         if len(payload) != self.SIZE:
             self.error_count += 1
+            print(f"❌ Invalid packet size: {len(payload)} (expected {self.SIZE})")
             return None
 
         try:
             data = struct.unpack(self.FORMAT, payload)
-        except struct.error:
+        except struct.error as e:
             self.error_count += 1
+            print(f"❌ Unpack error: {e}")
             return None
 
-        if data[0] != 0xAA55:
+        # Verify version
+        if data[0] != 1:
             self.error_count += 1
+            print(f"⚠️  Unknown version: {data[0]} (expected 1)")
+
+        # Verify header
+        if data[1] != 0xAA55:
+            self.error_count += 1
+            print(f"❌ Invalid header: 0x{data[1]:04X} (expected 0xAA55)")
             return None
 
+        # Verify checksum
+        checksum_calc = sum(payload[:-2]) & 0xFFFF
+        checksum_recv = data[-1]
+        if checksum_calc != checksum_recv:
+            self.error_count += 1
+            print(
+                f"⚠️  Checksum mismatch: calc=0x{checksum_calc:04X} recv=0x{checksum_recv:04X}"
+            )
+
+        # Update rate
         self.packet_count += 1
         now = time.time()
         if now - self.last_time >= 1.0:
@@ -45,23 +68,24 @@ class TelemetryDecoder:
             self.last_time = now
 
         return {
-            "timestamp_ms": data[1],
-            "ax": data[2],
-            "ay": data[3],
-            "az": data[4],
-            "wz": data[5],
-            "roll": data[6],
-            "pitch": data[7],
-            "yaw": data[8],
-            "x": data[9],
-            "y": data[10],
-            "vx": data[11],
-            "vy": data[12],
-            "speed_kmh": data[13],
-            "mode": self.MODE_NAMES[data[14]] if data[14] < 4 else "UNKNOWN",
-            "lat": data[15],
-            "lon": data[16],
-            "gps_valid": bool(data[17]),
+            "version": data[0],
+            "timestamp_ms": data[2],
+            "ax": data[3],
+            "ay": data[4],
+            "az": data[5],
+            "wz": data[6],
+            "roll": data[7],
+            "pitch": data[8],
+            "yaw": data[9],
+            "x": data[10],
+            "y": data[11],
+            "vx": data[12],
+            "vy": data[13],
+            "speed_kmh": data[14],
+            "mode": self.MODE_NAMES[data[15]] if data[15] < 4 else "UNKNOWN",
+            "lat": data[16],
+            "lon": data[17],
+            "gps_valid": bool(data[18]),
         }
 
 
@@ -84,11 +108,11 @@ class TelemetryDisplay:
         print(f"               Vel:   vx={data['vx']:+6.2f}  vy={data['vy']:+6.2f} m/s")
 
         print(
-            f"📐 Orientation: Roll:  {data['roll']*57.3:+6.1f}°  Pitch: {data['pitch']*57.3:+6.1f}°  Yaw: {data['yaw']*57.3:+6.1f}°"
+            f"📐 Orientation: Roll:  {data['roll'] * 57.3:+6.1f}°  Pitch: {data['pitch'] * 57.3:+6.1f}°  Yaw: {data['yaw'] * 57.3:+6.1f}°"
         )
 
         print(
-            f"⚡ Accel:       ax={data['ax']:+6.2f}  ay={data['ay']:+6.2f}  az={data['az']:+6.2f} m/s²  |  wz={data['wz']*57.3:+5.1f}°/s"
+            f"⚡ Accel:       ax={data['ax']:+6.2f}  ay={data['ay']:+6.2f}  az={data['az']:+6.2f} m/s²  |  wz={data['wz'] * 57.3:+5.1f}°/s"
         )
 
         print(f"📍 Position:    x={data['x']:8.2f}  y={data['y']:8.2f} m")
@@ -119,8 +143,8 @@ class TelemetryDisplay:
             f"Pos:({data['x']:7.1f},{data['y']:7.1f})m "
             f"Vel:({data['vx']:+5.2f},{data['vy']:+5.2f})m/s "
             f"Acc:({data['ax']:+5.2f},{data['ay']:+5.2f},{data['az']:+5.2f})m/s² "
-            f"Yaw:{data['yaw']*57.3:+5.0f}° "
-            f"wz:{data['wz']*57.3:+4.0f}°/s "
+            f"Yaw:{data['yaw'] * 57.3:+5.0f}° "
+            f"wz:{data['wz'] * 57.3:+4.0f}°/s "
             f"{data['mode']:6s}"
         )
 
@@ -128,6 +152,7 @@ class TelemetryDisplay:
 def handle_client(conn, addr, decoder, display):
     print(f"✅ Client connected from {addr}")
     buffer = b""
+    first_packet_shown = False
 
     try:
         while True:
@@ -135,6 +160,11 @@ def handle_client(conn, addr, decoder, display):
             if not chunk:
                 print(f"❌ Client {addr} disconnected")
                 break
+
+            # Debug: show first packet
+            if not first_packet_shown:
+                print(f"First packet (hex): {chunk[:66].hex()}")
+                first_packet_shown = True
 
             buffer += chunk
 
