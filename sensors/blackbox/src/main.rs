@@ -106,7 +106,10 @@ fn main() {
     };
 
     // Initialize UDP for telemetry (connectionless - no handshake needed)
-    info!("Initializing UDP telemetry to {}", config.network.tcp_server);
+    info!(
+        "Initializing UDP telemetry to {}",
+        config.network.tcp_server
+    );
     let mut udp_stream = UdpTelemetryStream::new(config.network.tcp_server);
     match udp_stream.init() {
         Ok(_) => {
@@ -220,7 +223,8 @@ fn main() {
             last_mqtt_diag_ms = now_ms;
         }
 
-        // Reset EKF position once when GPS warmup completes (check every loop, not just on GPS poll)
+        // Reset EKF position once when GPS warmup completes (check every loop, not just
+        // on GPS poll)
         static mut EKF_RESET_DONE: bool = false;
         if sensors.gps_parser.is_warmed_up() && unsafe { !EKF_RESET_DONE } {
             // Reset position to origin now that we have a valid reference
