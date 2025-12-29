@@ -6,7 +6,7 @@ mod mode;
 mod mqtt;
 mod rgb_led;
 mod system;
-mod tcp_stream;
+mod udp_stream;
 mod wifi;
 
 use config::SystemConfig;
@@ -21,7 +21,7 @@ use motorsport_telemetry::transforms::{body_to_earth, remove_gravity};
 use mqtt::MqttClient;
 use rgb_led::RgbLed;
 use system::{SensorManager, StateEstimator, StatusManager, TelemetryPublisher};
-use tcp_stream::TcpTelemetryStream;
+use udp_stream::UdpTelemetryStream;
 use wifi::WifiManager;
 
 fn main() {
@@ -38,7 +38,7 @@ fn main() {
     );
     info!("MQTT: Status messages");
     info!(
-        "TCP:  Binary telemetry @ {} Hz",
+        "UDP:  Binary telemetry @ {} Hz",
         1000 / config.telemetry.interval_ms
     );
 
@@ -105,25 +105,23 @@ fn main() {
         }
     };
 
-    // Connect TCP for telemetry
-    info!("Connecting TCP stream to {}", config.network.tcp_server);
-    let mut tcp_stream = TcpTelemetryStream::new(config.network.tcp_server);
-    let tcp_opt = match tcp_stream.connect() {
+    // Initialize UDP for telemetry (connectionless - no handshake needed)
+    info!("Initializing UDP telemetry to {}", config.network.tcp_server);
+    let mut udp_stream = UdpTelemetryStream::new(config.network.tcp_server);
+    match udp_stream.init() {
         Ok(_) => {
-            info!("TCP connected!");
+            info!("UDP ready!");
             for _ in 0..3 {
                 status_mgr.led_mut().cyan().unwrap();
                 FreeRtos::delay_ms(150);
                 status_mgr.led_mut().set_low().unwrap();
                 FreeRtos::delay_ms(150);
             }
-            Some(tcp_stream)
         }
         Err(e) => {
-            info!("TCP failed: {:?}", e);
-            None
+            info!("UDP init failed: {:?}", e);
         }
-    };
+    }
 
     // Initialize UART for IMU
     let imu_config = Config::new().baudrate(9600.into());
@@ -169,7 +167,7 @@ fn main() {
 
     // Create state estimator and telemetry publisher
     let mut estimator = StateEstimator::new();
-    let mut publisher = TelemetryPublisher::new(tcp_opt, mqtt_opt);
+    let mut publisher = TelemetryPublisher::new(udp_stream, mqtt_opt);
 
     // Main loop timing
     let mut last_telemetry_ms = 0u32;
@@ -189,7 +187,7 @@ fn main() {
             let telem_rate = telem_count / 5;
             let loop_rate = loop_count / 5;
             info!(
-                "Heap: {}B | TCP: {}Hz | Loop: {}Hz | Fails: {}",
+                "Heap: {}B | UDP: {}Hz | Loop: {}Hz | Fails: {}",
                 free_heap, telem_rate, loop_rate, fail_count
             );
 
@@ -224,47 +222,60 @@ fn main() {
         }
 
         // Poll GPS and update EKF correction
-        // if sensors.poll_gps() && sensors.gps_parser.last_fix().valid {
-        //     let (ax_corr, ay_corr, _) = sensors.imu_parser.get_accel_corrected();
+        if sensors.poll_gps() {
+            // Log warmup status once
+            static mut WARMUP_LOGGED: bool = false;
+            if sensors.gps_parser.is_warmed_up() && unsafe { !WARMUP_LOGGED } {
+                let ref_pt = sensors.gps_parser.reference();
+                info!(
+                    "GPS warmup complete! Reference: ({:.6}, {:.6})",
+                    ref_pt.lat, ref_pt.lon
+                );
+                unsafe { WARMUP_LOGGED = true };
+            }
 
-        //     if sensors.is_stationary(ax_corr, ay_corr, sensors.imu_parser.data().wz)
-        // {         // Vehicle stopped - perform ZUPT and bias estimation
-        //         estimator.zupt();
+            // Check if warmup complete (has reference point)
+            if sensors.gps_parser.is_warmed_up() {
+                let (ax_corr, ay_corr, _) = sensors.imu_parser.get_accel_corrected();
 
-        //         let (ax_b, ay_b, _) = remove_gravity(
-        //             ax_corr,
-        //             ay_corr,
-        //             sensors.imu_parser.data().az,
-        //             sensors.imu_parser.data().roll,
-        //             sensors.imu_parser.data().pitch,
-        //         );
-        //         let (ax_e, ay_e) = body_to_earth(
-        //             ax_b,
-        //             ay_b,
-        //             0.0,
-        //             sensors.imu_parser.data().roll,
-        //             sensors.imu_parser.data().pitch,
-        //             estimator.ekf.yaw(),
-        //         );
-        //         estimator.update_bias(ax_e, ay_e);
-        //         estimator.reset_speed();
-        //     } else {
-        //         // Vehicle moving - normal GPS updates
-        //         if let Some((x, y)) = sensors.gps_parser.to_local_coords() {
-        //             estimator.update_position(x, y);
-        //         }
-        //     }
+                if sensors.is_stationary(ax_corr, ay_corr, sensors.imu_parser.data().wz) {
+                    // Vehicle stopped - perform ZUPT and bias estimation
+                    estimator.zupt();
 
-        //     if let Some((vx, vy)) = sensors.gps_parser.get_velocity_enu() {
-        //         let speed = (vx * vx + vy * vy).sqrt();
-        //         estimator.update_velocity(vx, vy);
-        //         estimator.update_speed(speed);
-        //     }
-        // }
-        sensors.poll_gps();
+                    let (ax_b, ay_b, _) = remove_gravity(
+                        ax_corr,
+                        ay_corr,
+                        sensors.imu_parser.data().az,
+                        sensors.imu_parser.data().roll,
+                        sensors.imu_parser.data().pitch,
+                    );
+                    let (ax_e, ay_e) = body_to_earth(
+                        ax_b,
+                        ay_b,
+                        0.0,
+                        sensors.imu_parser.data().roll,
+                        sensors.imu_parser.data().pitch,
+                        estimator.ekf.yaw(),
+                    );
+                    estimator.update_bias(ax_e, ay_e);
+                    estimator.reset_speed();
+                } else {
+                    // Vehicle moving - normal GPS updates
+                    if let Some((x, y)) = sensors.gps_parser.to_local_coords() {
+                        estimator.update_position(x, y);
+                    }
+                }
+
+                if let Some((vx, vy)) = sensors.gps_parser.get_velocity_enu() {
+                    let speed = (vx * vx + vy * vy).sqrt();
+                    estimator.update_velocity(vx, vy);
+                    estimator.update_speed(speed);
+                }
+            }
+        }
 
         // Update GPS status
-        let gps_locked = sensors.gps_parser.is_warmed_up() && sensors.gps_parser.last_fix().valid;
+        let gps_locked = sensors.gps_parser.is_warmed_up(); // Remove the .valid check
         status_mgr.update_gps_status(
             gps_locked,
             sensors.gps_parser.is_warmed_up(),

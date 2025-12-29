@@ -2,12 +2,14 @@
 
 /// MQTT client wrapper with binary support
 use esp_idf_hal::delay::FreeRtos;
-use esp_idf_svc::mqtt::client::{EspMqttClient, MqttClientConfiguration, QoS};
+use esp_idf_svc::mqtt::client::{EspMqttClient, EspMqttConnection, MqttClientConfiguration, QoS};
 use log::info;
 use serde_json::json;
 
 pub struct MqttClient {
     client: EspMqttClient<'static>,
+    // Must keep connection alive for MQTT to work
+    _connection: EspMqttConnection,
 }
 
 impl MqttClient {
@@ -25,13 +27,16 @@ impl MqttClient {
         };
 
         info!("Creating MQTT client (non-blocking)");
-        let (client, _connection) = EspMqttClient::new(broker_url, &mqtt_config)?;
+        let (client, connection) = EspMqttClient::new(broker_url, &mqtt_config)?;
 
         info!("MQTT client created, waiting for async connection");
         FreeRtos::delay_ms(3000); // Reduced wait time
 
         info!("Returning MQTT client");
-        Ok(Self { client })
+        Ok(Self {
+            client,
+            _connection: connection,
+        })
     }
 
     pub fn publish(

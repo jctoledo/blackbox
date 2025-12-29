@@ -228,9 +228,9 @@ impl NmeaParser {
 
     /// Convert current GPS position to local coordinates
     ///
-    /// Returns `None` if warmup not complete or fix invalid.
+    /// Returns `None` if warmup not complete.
     pub fn to_local_coords(&self) -> Option<(f32, f32)> {
-        if !self.reference.set || !self.last_fix.valid {
+        if !self.reference.set {
             return None;
         }
 
@@ -244,9 +244,9 @@ impl NmeaParser {
 
     /// Get velocity in ENU frame (East, North)
     ///
-    /// Returns `None` if fix is invalid.
+    /// Returns `None` if warmup not complete.
     pub fn get_velocity_enu(&self) -> Option<(f32, f32)> {
-        if !self.last_fix.valid {
+        if !self.reference.set {
             return None;
         }
 
@@ -403,12 +403,6 @@ impl NmeaParser {
             return;
         }
 
-        // Field 2: Status (A = valid, V = invalid)
-        if fields[2] != "A" {
-            self.last_fix.valid = false;
-            return;
-        }
-
         // Parse time (field 1)
         if let Some((h, m, s)) = parse_time(fields[1]) {
             self.last_fix.hour = h;
@@ -434,6 +428,13 @@ impl NmeaParser {
             }
         };
 
+        // SANITY CHECK: Reject obviously invalid coordinates
+        if lat.abs() < 0.0001 && lon.abs() < 0.0001 {
+            // GPS hasn't locked yet, coords are ~(0,0)
+            self.last_fix.valid = false;
+            return;
+        }
+
         // Parse speed (field 7) - knots to m/s
         if let Ok(speed_knots) = parse_f32(fields[7]) {
             self.last_fix.speed = speed_knots * 0.514444;
@@ -444,8 +445,13 @@ impl NmeaParser {
             self.last_fix.course = course_deg * (core::f32::consts::PI / 180.0);
         }
 
+        // Store lat/lon even if fix is invalid (for telemetry)
+        self.last_fix.lat = lat;
+        self.last_fix.lon = lon;
+
         // Warmup: average first N fixes for reference
-        if !self.reference.set {
+        // ONLY accumulate if we have reasonable coordinates
+        if !self.reference.set && lat.abs() > 0.01 && lon.abs() > 0.01 {
             self.warmup_count += 1;
             self.warmup_lat_sum += lat;
             self.warmup_lon_sum += lon;
@@ -454,23 +460,17 @@ impl NmeaParser {
                 self.reference.lat = self.warmup_lat_sum / self.warmup_count as f64;
                 self.reference.lon = self.warmup_lon_sum / self.warmup_count as f64;
                 self.reference.set = true;
-
                 self.last_valid_lat = lat;
                 self.last_valid_lon = lon;
-
-                // Don't return - process this fix normally
-                // Fall through to set lat/lon/valid below
-            } else {
-                // Still warming up - discard this fix
-                self.last_fix.valid = false;
-                return;
             }
         }
 
-        // Fix is valid!
-        self.last_fix.lat = lat;
-        self.last_fix.lon = lon;
-        self.last_fix.valid = true;
+        // Field 2: Status (A = valid, V = invalid)
+        if fields[2] == "A" {
+            self.last_fix.valid = true;
+        } else {
+            self.last_fix.valid = false;
+        }
     }
 }
 

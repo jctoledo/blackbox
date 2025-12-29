@@ -4,7 +4,6 @@
 /// Implements proper separation of concerns and dependency inversion
 use esp_idf_hal::delay::FreeRtos;
 use esp_idf_hal::uart::UartDriver;
-use log::info;
 // Import from framework crate
 use motorsport_telemetry::ekf::Ekf;
 use motorsport_telemetry::transforms::{body_to_earth, remove_gravity};
@@ -16,10 +15,10 @@ use crate::{
     mode::ModeClassifier,
     mqtt::MqttClient,
     rgb_led::RgbLed,
-    tcp_stream::TcpTelemetryStream,
+    udp_stream::UdpTelemetryStream,
 };
 
-const CALIB_SAMPLES: usize = 500;
+const CALIB_SAMPLES: usize = 150;
 
 /// System-level errors
 #[derive(Debug)]
@@ -216,16 +215,16 @@ impl StateEstimator {
 
 /// Manages telemetry publishing
 pub struct TelemetryPublisher {
-    tcp_stream: Option<TcpTelemetryStream>,
+    udp_stream: UdpTelemetryStream,
     mqtt_client: Option<MqttClient>,
     telemetry_count: u32,
     telemetry_fail_count: u32,
 }
 
 impl TelemetryPublisher {
-    pub fn new(tcp_stream: Option<TcpTelemetryStream>, mqtt_client: Option<MqttClient>) -> Self {
+    pub fn new(udp_stream: UdpTelemetryStream, mqtt_client: Option<MqttClient>) -> Self {
         Self {
-            tcp_stream,
+            udp_stream,
             mqtt_client,
             telemetry_count: 0,
             telemetry_fail_count: 0,
@@ -237,15 +236,16 @@ impl TelemetryPublisher {
         self.mqtt_client.as_mut()
     }
 
-    /// Publish binary telemetry packet via TCP
+    /// Publish binary telemetry packet via UDP
     pub fn publish_telemetry(
         &mut self,
         sensors: &SensorManager,
         estimator: &StateEstimator,
         now_ms: u32,
     ) -> Result<(), SystemError> {
-        if self.tcp_stream.is_none() {
-            return Err(SystemError::CommunicationError("TCP not connected"));
+        // UDP is connectionless - just check if socket is ready
+        if !self.udp_stream.is_ready() {
+            return Err(SystemError::CommunicationError("UDP not ready"));
         }
 
         let (ax_corr, ay_corr, az_corr) = sensors.imu_parser.get_accel_corrected();
@@ -303,23 +303,14 @@ impl TelemetryPublisher {
 
         let bytes = packet.to_bytes();
 
-        let tcp = self
-            .tcp_stream
-            .as_mut()
-            .ok_or(SystemError::CommunicationError("TCP not connected"))?;
-
-        match tcp.send(bytes) {
+        match self.udp_stream.send(bytes) {
             Ok(_) => {
                 self.telemetry_count += 1;
                 Ok(())
             }
             Err(_) => {
                 self.telemetry_fail_count += 1;
-                if self.telemetry_fail_count.is_multiple_of(100) && tcp.reconnect().is_ok() {
-                    info!("TCP reconnected");
-                    self.telemetry_fail_count = 0;
-                }
-                Err(SystemError::CommunicationError("TCP send failed"))
+                Err(SystemError::CommunicationError("UDP send failed"))
             }
         }
     }
