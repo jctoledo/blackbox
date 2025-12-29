@@ -182,6 +182,18 @@
             -webkit-text-fill-color: transparent;
             background-clip: text;
         }
+	.hero h3{
+	    font-size: clamp(20px, 8vw, 34px);
+            font-weight: 500;
+            letter-spacing: -0.03em;
+            line-height: 1.1;
+            margin-bottom: 20px;
+            background: linear-gradient(180deg, var(--text-primary) 0%, var(--text-secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+
+	}
 
         .hero .tagline {
             font-size: 18px;
@@ -714,6 +726,7 @@
                 Open Source Vehicle Telemetry
             </div>
             <h1>Track-ready data logging<br>for ~$50</h1>
+	    <h3>Build it, drive it, track your data</h3>
             <p class="tagline">Real-time GPS + IMU sensor fusion on ESP32. Professional-grade algorithms, fraction of the cost. Built for track days, autocross, and vehicle dynamics research.</p>
             <div class="hero-stats">
                 <div class="stat">
