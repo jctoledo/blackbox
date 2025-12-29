@@ -190,7 +190,12 @@ fn main() {
     let mut last_telemetry_ms = 0u32;
     let mut last_heap_check_ms = 0u32;
     let mut last_mqtt_diag_ms = 0u32;
+    let mut last_connectivity_check_ms = 0u32;
     let mut loop_count = 0u32;
+
+    // Track previous connectivity state to detect changes
+    let mut was_wifi_connected = true;
+    let mut was_mqtt_connected = true;
 
     info!("=== Entering main loop ===");
 
@@ -214,8 +219,56 @@ fn main() {
             last_heap_check_ms = now_ms;
         }
 
-        // MQTT diagnostics (every 2s for wireless debugging)
-        if now_ms - last_mqtt_diag_ms >= 2000 {
+        // Connectivity check every 5 seconds
+        if now_ms - last_connectivity_check_ms >= 5000 {
+            let wifi_connected = wifi.is_connected();
+            let mqtt_connected = publisher
+                .mqtt_client_mut()
+                .map(|m| m.is_connected())
+                .unwrap_or(false);
+
+            // Blink while WiFi is disconnected (more critical - check first)
+            if !wifi_connected {
+                if was_wifi_connected {
+                    info!("WiFi connection lost!");
+                }
+                // 3 orange blinks for WiFi down
+                for _ in 0..3 {
+                    status_mgr.led_mut().orange().unwrap();
+                    FreeRtos::delay_ms(150);
+                    status_mgr.led_mut().set_low().unwrap();
+                    FreeRtos::delay_ms(150);
+                }
+            }
+            // Blink while MQTT is disconnected (only if WiFi is up)
+            else if !mqtt_connected {
+                if was_mqtt_connected {
+                    info!("MQTT connection lost!");
+                }
+                // 2 red blinks for MQTT down
+                for _ in 0..2 {
+                    status_mgr.led_mut().red().unwrap();
+                    FreeRtos::delay_ms(150);
+                    status_mgr.led_mut().set_low().unwrap();
+                    FreeRtos::delay_ms(150);
+                }
+            }
+
+            // Log connectivity status changes
+            if was_wifi_connected != wifi_connected || was_mqtt_connected != mqtt_connected {
+                info!(
+                    "Connectivity changed: WiFi={}, MQTT={}",
+                    wifi_connected, mqtt_connected
+                );
+            }
+
+            was_wifi_connected = wifi_connected;
+            was_mqtt_connected = mqtt_connected;
+            last_connectivity_check_ms = now_ms;
+        }
+
+        // MQTT diagnostics (every 30s - low priority, LED handles connectivity feedback)
+        if now_ms - last_mqtt_diag_ms >= 30000 {
             if let Some(mqtt) = publisher.mqtt_client_mut() {
                 let (ekf_x, ekf_y) = estimator.ekf.position();
                 let gps_warmed = sensors.gps_parser.is_warmed_up();

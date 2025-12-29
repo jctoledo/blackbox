@@ -5,9 +5,12 @@ use esp_idf_hal::delay::FreeRtos;
 use esp_idf_svc::mqtt::client::{EspMqttClient, MqttClientConfiguration, QoS};
 use log::info;
 use serde_json::json;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 pub struct MqttClient {
     client: EspMqttClient<'static>,
+    connected: Arc<AtomicBool>,
 }
 
 impl MqttClient {
@@ -24,14 +27,45 @@ impl MqttClient {
             ..Default::default()
         };
 
-        info!("Creating MQTT client (non-blocking)");
-        let (client, _connection) = EspMqttClient::new(broker_url, &mqtt_config)?;
+        // Track connection state via callback
+        let connected = Arc::new(AtomicBool::new(false));
+        let connected_clone = connected.clone();
 
-        info!("MQTT client created, waiting for async connection");
-        FreeRtos::delay_ms(3000); // Reduced wait time
+        info!("Creating MQTT client with connection tracking");
+        let client = EspMqttClient::new_cb(broker_url, &mqtt_config, move |event| {
+            match event.payload() {
+                esp_idf_svc::mqtt::client::EventPayload::Connected(_) => {
+                    info!("MQTT: Connected event received");
+                    connected_clone.store(true, Ordering::SeqCst);
+                }
+                esp_idf_svc::mqtt::client::EventPayload::Disconnected => {
+                    info!("MQTT: Disconnected event received");
+                    connected_clone.store(false, Ordering::SeqCst);
+                }
+                esp_idf_svc::mqtt::client::EventPayload::Error(e) => {
+                    info!("MQTT: Error event: {:?}", e);
+                }
+                _ => {}
+            }
+        })?;
 
-        info!("Returning MQTT client");
-        Ok(Self { client })
+        info!("MQTT client created, waiting for connection (up to 5s)");
+
+        // Wait for connection with timeout
+        let start = unsafe { esp_idf_svc::sys::esp_timer_get_time() };
+        let timeout_us = 5_000_000i64; // 5 seconds
+
+        while !connected.load(Ordering::SeqCst) {
+            let elapsed = unsafe { esp_idf_svc::sys::esp_timer_get_time() } - start;
+            if elapsed > timeout_us {
+                info!("MQTT connection timed out after 5s");
+                return Err("MQTT connection timeout - broker unreachable".into());
+            }
+            FreeRtos::delay_ms(100);
+        }
+
+        info!("MQTT connected successfully");
+        Ok(Self { client, connected })
     }
 
     pub fn publish(
@@ -94,5 +128,10 @@ impl MqttClient {
     pub fn subscribe(&mut self, topic: &str) -> Result<(), Box<dyn std::error::Error>> {
         self.client.subscribe(topic, QoS::AtLeastOnce)?;
         Ok(())
+    }
+
+    /// Check if MQTT is currently connected
+    pub fn is_connected(&self) -> bool {
+        self.connected.load(Ordering::SeqCst)
     }
 }

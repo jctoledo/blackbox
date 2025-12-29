@@ -426,13 +426,21 @@ Counts failures, attempts reconnect periodically. MQTT also available as backup 
 ### rgb_led.rs - WS2812 LED Control
 
 **LED Status Codes:**
-- Blue (3 blinks): Boot sequence
+
+Boot sequence:
+- Blue (3 blinks): Boot sequence started
 - Green (5 blinks): WiFi connected
-- Red (slow blink): WiFi failed
-- Cyan (3 blinks): TCP connected
+- Magenta (3 blinks): MQTT connected
+- Red (5 fast blinks): MQTT connection failed
+- Cyan (3 blinks): UDP socket ready
 - Yellow (pulsing): IMU calibrating
+- Red (continuous slow blink): WiFi failed at boot (critical error)
+
+Main loop (operational):
 - Cyan (2s pulse): GPS locked, operational
 - Yellow (fast blink): Waiting for GPS lock
+- Orange (3 blinks, repeating): WiFi disconnected (repeats every 5s while down)
+- Red (2 blinks, repeating): MQTT disconnected (repeats every 5s while down)
 
 Useful for debugging without serial monitor.
 

@@ -115,17 +115,26 @@ This will display:
 
 ## LED Status Codes
 
+### Boot Sequence
 | Sequence | Pattern | Meaning |
 |----------|---------|---------|
 | 1 | 3 blue blinks | Boot sequence started |
 | 2 | 5 green blinks | WiFi connected |
 | 3a | 3 magenta blinks | MQTT connected successfully |
-| 3b | 5 fast red blinks | MQTT connection failed |
+| 3b | 5 fast red blinks | MQTT connection failed (continuing without MQTT) |
 | 4 | 3 cyan blinks | UDP socket ready |
 | 5 | Yellow pulses | IMU calibration in progress |
-| 6a | Yellow fast blink | Main loop: waiting for GPS fix |
-| 6b | Cyan pulse (2s) | Main loop: GPS locked, operational |
-| Error | Continuous red blink | Critical error (WiFi failed) |
+| Error | Continuous red blink | Critical error (WiFi failed at boot) |
+
+### Main Loop (operational)
+| Pattern | Meaning |
+|---------|---------|
+| Yellow fast blink | Waiting for GPS fix |
+| Cyan pulse (2s on/off) | GPS locked, system operational |
+| 3 orange blinks (repeating) | WiFi disconnected |
+| 2 red blinks (repeating) | MQTT disconnected |
+
+Connectivity is checked every 5 seconds. Orange/red blinks repeat every 5 seconds while the connection remains down.
 
 ## Project Structure
 

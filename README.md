@@ -529,17 +529,26 @@ pub yaw_thr: f32 = 0.07;       // Yaw rate threshold (rad/s)
 
 ## LED Status Codes
 
+### Boot Sequence
 | Pattern | Meaning |
 |---------|---------|
-| 3 blue blinks | Boot sequence |
+| 3 blue blinks | Boot sequence started |
 | 5 green blinks | WiFi connected |
 | 3 magenta blinks | MQTT connected |
-| 5 fast red blinks | MQTT connection failed |
+| 5 fast red blinks | MQTT connection failed (continuing without MQTT) |
 | 3 cyan blinks | UDP socket ready |
 | Yellow pulses | IMU calibration in progress |
+| Continuous red blink | Critical error (WiFi failed at boot) |
+
+### Main Loop (operational)
+| Pattern | Meaning |
+|---------|---------|
 | Yellow fast blink | Waiting for GPS fix |
 | Cyan pulse (2s on/off) | GPS locked, system operational |
-| Continuous red blink | Critical error (WiFi failed) |
+| 3 orange blinks (repeating) | WiFi disconnected |
+| 2 red blinks (repeating) | MQTT disconnected |
+
+Connectivity is checked every 5 seconds. Orange/red blinks repeat every 5 seconds while the connection remains down.
 
 ---
 
