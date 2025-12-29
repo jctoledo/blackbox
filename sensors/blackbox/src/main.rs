@@ -97,10 +97,24 @@ fn main() {
     let mut mqtt_opt = match MqttClient::new(config.network.mqtt_broker) {
         Ok(m) => {
             info!("MQTT connected");
+            // Magenta blinks = MQTT success
+            for _ in 0..3 {
+                status_mgr.led_mut().magenta().unwrap();
+                FreeRtos::delay_ms(200);
+                status_mgr.led_mut().set_low().unwrap();
+                FreeRtos::delay_ms(200);
+            }
             Some(m)
         }
         Err(e) => {
             info!("MQTT failed: {:?}", e);
+            // Red blinks = MQTT failed
+            for _ in 0..5 {
+                status_mgr.led_mut().red().unwrap();
+                FreeRtos::delay_ms(100);
+                status_mgr.led_mut().set_low().unwrap();
+                FreeRtos::delay_ms(100);
+            }
             None
         }
     };

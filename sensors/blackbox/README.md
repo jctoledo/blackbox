@@ -26,7 +26,7 @@ High-performance sensor fusion telemetry system for ESP32-C3 using the Blackbox 
 ESP32-C3 Firmware
 ├─ SensorManager (polls IMU + GPS via UART)
 ├─ StateEstimator (EKF fuses IMU + GPS locally)
-├─ TelemetryPublisher (TCP 20Hz + MQTT status)
+├─ TelemetryPublisher (UDP 20Hz + MQTT status)
 └─ StatusManager (LED control)
 ```
 
@@ -115,10 +115,17 @@ This will display:
 
 ## LED Status Codes
 
-- **Yellow Blinking (fast)** - Waiting for GPS lock
-- **Cyan Pulse (slow)** - GPS locked, system operational
-- **Red** - Critical error
-- **Green** - Calibration complete
+| Sequence | Pattern | Meaning |
+|----------|---------|---------|
+| 1 | 3 blue blinks | Boot sequence started |
+| 2 | 5 green blinks | WiFi connected |
+| 3a | 3 magenta blinks | MQTT connected successfully |
+| 3b | 5 fast red blinks | MQTT connection failed |
+| 4 | 3 cyan blinks | UDP socket ready |
+| 5 | Yellow pulses | IMU calibration in progress |
+| 6a | Yellow fast blink | Main loop: waiting for GPS fix |
+| 6b | Cyan pulse (2s) | Main loop: GPS locked, operational |
+| Error | Continuous red blink | Critical error (WiFi failed) |
 
 ## Project Structure
 

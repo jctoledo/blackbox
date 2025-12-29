@@ -27,7 +27,7 @@ A complete ESP32-C3 firmware that fuses GPS and IMU data to track your vehicle's
 - Constant Turn Rate and Acceleration (CTRA) model for cornering
 
 **Why it's useful:**
-- Track day data logging without $5k commercial systems
+- Track day data logging without $500+ commercial systems
 - Vehicle dynamics research and education
 - DIY EV/kit car development
 - Test suspension, brakes, and aerodynamics
@@ -533,9 +533,13 @@ pub yaw_thr: f32 = 0.07;       // Yaw rate threshold (rad/s)
 |---------|---------|
 | 3 blue blinks | Boot sequence |
 | 5 green blinks | WiFi connected |
-| Solid cyan 2s on, 2s off | GPS locked |
-| Yellow flashing | Waiting for GPS fix |
-| Rapid red flashing | Error (WiFi/MQTT failed) |
+| 3 magenta blinks | MQTT connected |
+| 5 fast red blinks | MQTT connection failed |
+| 3 cyan blinks | UDP socket ready |
+| Yellow pulses | IMU calibration in progress |
+| Yellow fast blink | Waiting for GPS fix |
+| Cyan pulse (2s on/off) | GPS locked, system operational |
+| Continuous red blink | Critical error (WiFi failed) |
 
 ---
 
