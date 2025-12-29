@@ -172,6 +172,7 @@ fn main() {
     // Main loop timing
     let mut last_telemetry_ms = 0u32;
     let mut last_heap_check_ms = 0u32;
+    let mut last_mqtt_diag_ms = 0u32;
     let mut loop_count = 0u32;
 
     info!("=== Entering main loop ===");
@@ -180,7 +181,7 @@ fn main() {
         let now_ms = unsafe { (esp_idf_svc::sys::esp_timer_get_time() / 1000) as u32 };
         loop_count += 1;
 
-        // Periodic diagnostics
+        // Periodic diagnostics (serial log every 5s)
         if now_ms - last_heap_check_ms >= 5000 {
             let free_heap = unsafe { esp_idf_svc::sys::esp_get_free_heap_size() };
             let (telem_count, fail_count) = publisher.get_stats();
@@ -196,47 +197,91 @@ fn main() {
             last_heap_check_ms = now_ms;
         }
 
-        // Poll IMU and update EKF prediction
-        if let Some((dt, _)) = sensors.poll_imu() {
-            let (ax_corr, ay_corr, az_corr) = sensors.imu_parser.get_accel_corrected();
-            let (ax_b, ay_b, az_b) = remove_gravity(
-                ax_corr,
-                ay_corr,
-                az_corr,
-                sensors.imu_parser.data().roll,
-                sensors.imu_parser.data().pitch,
-            );
-            let (ax_e, ay_e) = body_to_earth(
-                ax_b,
-                ay_b,
-                az_b,
-                sensors.imu_parser.data().roll,
-                sensors.imu_parser.data().pitch,
-                estimator.ekf.yaw(),
-            );
-            estimator.predict(ax_e, ay_e, sensors.imu_parser.data().wz, dt);
+        // MQTT diagnostics (every 2s for wireless debugging)
+        if now_ms - last_mqtt_diag_ms >= 2000 {
+            if let Some(mqtt) = publisher.mqtt_client_mut() {
+                let (ekf_x, ekf_y) = estimator.ekf.position();
+                let gps_warmed = sensors.gps_parser.is_warmed_up();
+                let gps_valid = sensors.gps_parser.last_fix().valid;
+                let ref_pt = sensors.gps_parser.reference();
 
-            // Update yaw from magnetometer
-            let yaw_mag = sensors.imu_parser.data().yaw.to_radians();
-            estimator.update_yaw(yaw_mag);
+                let diag = if gps_warmed {
+                    format!(
+                        "{{\"gps\":\"ok\",\"ref\":[{:.4},{:.4}],\"pos\":[{:.1},{:.1}],\"valid\":{}}}",
+                        ref_pt.lat, ref_pt.lon, ekf_x, ekf_y, gps_valid
+                    )
+                } else {
+                    let progress = sensors.gps_parser.warmup_progress() * 100.0;
+                    format!("{{\"gps\":\"warmup\",\"prog\":{:.0}}}", progress)
+                };
+
+                mqtt.publish("car/diag", &diag, false).ok();
+            }
+            last_mqtt_diag_ms = now_ms;
+        }
+
+        // Reset EKF position once when GPS warmup completes (check every loop, not just on GPS poll)
+        static mut EKF_RESET_DONE: bool = false;
+        if sensors.gps_parser.is_warmed_up() && unsafe { !EKF_RESET_DONE } {
+            // Reset position to origin now that we have a valid reference
+            estimator.ekf.x[0] = 0.0;
+            estimator.ekf.x[1] = 0.0;
+            estimator.ekf.x[3] = 0.0; // vx
+            estimator.ekf.x[4] = 0.0; // vy
+            estimator.ekf.p[0] = 100.0;
+            estimator.ekf.p[1] = 100.0;
+            unsafe { EKF_RESET_DONE = true };
+        }
+
+        // Poll IMU and update EKF prediction (only after GPS warmup AND reset)
+        if let Some((dt, _)) = sensors.poll_imu() {
+            // Only run EKF prediction after reset is done
+            if unsafe { EKF_RESET_DONE } {
+                let (ax_corr, ay_corr, az_corr) = sensors.imu_parser.get_accel_corrected();
+                let (ax_b, ay_b, az_b) = remove_gravity(
+                    ax_corr,
+                    ay_corr,
+                    az_corr,
+                    sensors.imu_parser.data().roll,
+                    sensors.imu_parser.data().pitch,
+                );
+                let (ax_e, ay_e) = body_to_earth(
+                    ax_b,
+                    ay_b,
+                    az_b,
+                    sensors.imu_parser.data().roll,
+                    sensors.imu_parser.data().pitch,
+                    estimator.ekf.yaw(),
+                );
+                estimator.predict(ax_e, ay_e, sensors.imu_parser.data().wz, dt);
+
+                // Update yaw from magnetometer
+                let yaw_mag = sensors.imu_parser.data().yaw.to_radians();
+                estimator.update_yaw(yaw_mag);
+            }
         }
 
         // Poll GPS and update EKF correction
         if sensors.poll_gps() {
-            // Log warmup status once
-            static mut WARMUP_LOGGED: bool = false;
-            if sensors.gps_parser.is_warmed_up() && unsafe { !WARMUP_LOGGED } {
-                let ref_pt = sensors.gps_parser.reference();
-                info!(
-                    "GPS warmup complete! Reference: ({:.6}, {:.6})",
-                    ref_pt.lat, ref_pt.lon
-                );
-                unsafe { WARMUP_LOGGED = true };
+            // Reset EKF position once when GPS warmup completes
+            static mut EKF_RESET_DONE: bool = false;
+            if sensors.gps_parser.is_warmed_up() && unsafe { !EKF_RESET_DONE } {
+                // Reset position to origin now that we have a valid reference
+                estimator.ekf.x[0] = 0.0;
+                estimator.ekf.x[1] = 0.0;
+                estimator.ekf.p[0] = 100.0; // Reset covariance too
+                estimator.ekf.p[1] = 100.0;
+                unsafe { EKF_RESET_DONE = true };
             }
 
             // Check if warmup complete (has reference point)
             if sensors.gps_parser.is_warmed_up() {
                 let (ax_corr, ay_corr, _) = sensors.imu_parser.get_accel_corrected();
+
+                // Always update position from GPS when available
+                if let Some((x, y)) = sensors.gps_parser.to_local_coords() {
+                    estimator.update_position(x, y);
+                }
 
                 if sensors.is_stationary(ax_corr, ay_corr, sensors.imu_parser.data().wz) {
                     // Vehicle stopped - perform ZUPT and bias estimation
@@ -259,11 +304,6 @@ fn main() {
                     );
                     estimator.update_bias(ax_e, ay_e);
                     estimator.reset_speed();
-                } else {
-                    // Vehicle moving - normal GPS updates
-                    if let Some((x, y)) = sensors.gps_parser.to_local_coords() {
-                        estimator.update_position(x, y);
-                    }
                 }
 
                 if let Some((vx, vy)) = sensors.gps_parser.get_velocity_enu() {
