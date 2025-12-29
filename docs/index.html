@@ -4,29 +4,29 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Blackbox - Open Source Vehicle Telemetry</title>
-    <meta name="description" content="Professional-grade vehicle telemetry for $50. Real-time GPS + IMU sensor fusion on ESP32. Built for track days, autocross, and vehicle dynamics research.">
+    <meta name="description" content="Open-source GPS + IMU sensor fusion for vehicle dynamics. Track position, velocity, and g-forces in real-time. Built for track days and automotive research.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
         :root {
             --bg-primary: #030712;
-            --bg-secondary: #0a0f1a;
-            --bg-card: #111827;
-            --bg-card-hover: #1f2937;
-            --border: #1f2937;
-            --border-light: #374151;
-            --text-primary: #f9fafb;
-            --text-secondary: #9ca3af;
-            --text-muted: #6b7280;
+            --bg-secondary: #070b14;
+            --bg-card: #0f1629;
+            --bg-card-hover: #161d2f;
+            --border: #1e293b;
+            --border-light: #334155;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
             --accent: #3b82f6;
             --accent-light: #60a5fa;
-            --accent-glow: rgba(59, 130, 246, 0.2);
+            --accent-glow: rgba(59, 130, 246, 0.15);
             --green: #10b981;
-            --green-glow: rgba(16, 185, 129, 0.2);
+            --green-light: #34d399;
+            --green-glow: rgba(16, 185, 129, 0.15);
             --orange: #f59e0b;
             --red: #ef4444;
-            --purple: #8b5cf6;
         }
 
         * {
@@ -45,19 +45,17 @@
             color: var(--text-primary);
             line-height: 1.6;
             -webkit-font-smoothing: antialiased;
-            overflow-x: hidden;
         }
 
-        /* Background effects */
-        .bg-gradient {
+        /* Background */
+        .bg-pattern {
             position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 100vh;
-            background:
-                radial-gradient(ellipse 80% 50% at 50% -20%, rgba(59, 130, 246, 0.15), transparent),
-                radial-gradient(ellipse 60% 40% at 80% 60%, rgba(139, 92, 246, 0.08), transparent);
+            inset: 0;
+            background-image:
+                radial-gradient(ellipse 80% 60% at 50% -20%, rgba(59, 130, 246, 0.12), transparent 70%),
+                linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+            background-size: 100% 100%, 48px 48px, 48px 48px;
             pointer-events: none;
             z-index: 0;
         }
@@ -75,17 +73,17 @@
             right: 0;
             z-index: 100;
             padding: 16px 24px;
-            transition: background 0.3s, backdrop-filter 0.3s;
+            transition: all 0.3s;
         }
 
         .nav.scrolled {
-            background: rgba(3, 7, 18, 0.8);
+            background: rgba(3, 7, 18, 0.85);
             backdrop-filter: blur(12px);
             border-bottom: 1px solid var(--border);
         }
 
         .nav-inner {
-            max-width: 1200px;
+            max-width: 1100px;
             margin: 0 auto;
             display: flex;
             justify-content: space-between;
@@ -95,38 +93,37 @@
         .nav-brand {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 10px;
             text-decoration: none;
             color: var(--text-primary);
-            font-weight: 700;
-            font-size: 20px;
-            letter-spacing: -0.02em;
+            font-weight: 600;
+            font-size: 18px;
         }
 
         .nav-logo {
-            width: 32px;
-            height: 32px;
-            background: linear-gradient(135deg, var(--accent), var(--purple));
-            border-radius: 8px;
+            width: 28px;
+            height: 28px;
+            background: var(--accent);
+            border-radius: 6px;
             display: flex;
             align-items: center;
             justify-content: center;
         }
 
         .nav-logo svg {
-            width: 18px;
-            height: 18px;
+            width: 16px;
+            height: 16px;
             color: white;
         }
 
         .nav-links {
             display: flex;
             align-items: center;
-            gap: 32px;
+            gap: 28px;
         }
 
         .nav-links a {
-            color: var(--text-secondary);
+            color: var(--text-muted);
             text-decoration: none;
             font-size: 14px;
             font-weight: 500;
@@ -141,17 +138,15 @@
             background: var(--accent);
             color: white !important;
             padding: 8px 16px;
-            border-radius: 8px;
-            font-weight: 600;
-            transition: background 0.2s, transform 0.2s;
+            border-radius: 6px;
+            transition: background 0.2s;
         }
 
         .nav-cta:hover {
             background: var(--accent-light);
-            transform: translateY(-1px);
         }
 
-        /* Hero Section */
+        /* Hero */
         .hero {
             min-height: 100vh;
             display: flex;
@@ -159,57 +154,50 @@
             justify-content: center;
             align-items: center;
             text-align: center;
-            padding: 120px 24px 80px;
-            position: relative;
+            padding: 100px 24px 80px;
         }
 
         .hero-badge {
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            padding: 6px 14px;
-            background: rgba(16, 185, 129, 0.1);
-            border: 1px solid rgba(16, 185, 129, 0.3);
+            padding: 6px 12px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
             border-radius: 100px;
             font-size: 13px;
-            font-weight: 500;
-            color: var(--green);
-            margin-bottom: 32px;
+            color: var(--text-secondary);
+            margin-bottom: 28px;
         }
 
         .hero-badge svg {
             width: 14px;
             height: 14px;
+            color: var(--green);
         }
 
         .hero h1 {
-            font-size: clamp(48px, 10vw, 80px);
-            font-weight: 800;
-            letter-spacing: -0.04em;
-            line-height: 1.05;
-            margin-bottom: 24px;
-            max-width: 900px;
-        }
-
-        .hero h1 .gradient {
-            background: linear-gradient(135deg, var(--accent-light) 0%, var(--purple) 50%, var(--accent) 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            font-size: clamp(36px, 7vw, 56px);
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            line-height: 1.15;
+            margin-bottom: 20px;
+            max-width: 700px;
+            color: var(--text-primary);
         }
 
         .hero-subtitle {
-            font-size: 20px;
+            font-size: 17px;
             color: var(--text-secondary);
-            max-width: 600px;
-            margin: 0 auto 40px;
+            max-width: 520px;
+            margin: 0 auto 36px;
             line-height: 1.7;
         }
 
         .hero-ctas {
             display: flex;
-            gap: 16px;
-            margin-bottom: 64px;
+            gap: 12px;
+            margin-bottom: 56px;
             flex-wrap: wrap;
             justify-content: center;
         }
@@ -218,9 +206,9 @@
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            padding: 14px 28px;
-            border-radius: 12px;
-            font-size: 15px;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
             font-weight: 600;
             text-decoration: none;
             transition: all 0.2s;
@@ -232,13 +220,10 @@
         .btn-primary {
             background: var(--accent);
             color: white;
-            box-shadow: 0 4px 24px var(--accent-glow);
         }
 
         .btn-primary:hover {
             background: var(--accent-light);
-            transform: translateY(-2px);
-            box-shadow: 0 8px 32px var(--accent-glow);
         }
 
         .btn-secondary {
@@ -253,18 +238,18 @@
         }
 
         .btn svg {
-            width: 18px;
-            height: 18px;
+            width: 16px;
+            height: 16px;
         }
 
-        /* Stats row */
+        /* Stats */
         .hero-stats {
             display: flex;
-            gap: 48px;
-            padding: 32px 48px;
+            gap: 40px;
+            padding: 24px 40px;
             background: var(--bg-card);
             border: 1px solid var(--border);
-            border-radius: 20px;
+            border-radius: 12px;
             flex-wrap: wrap;
             justify-content: center;
         }
@@ -274,11 +259,10 @@
         }
 
         .stat-value {
-            font-size: 32px;
-            font-weight: 700;
+            font-size: 24px;
+            font-weight: 600;
             font-family: 'JetBrains Mono', monospace;
             color: var(--text-primary);
-            letter-spacing: -0.02em;
         }
 
         .stat-value.highlight {
@@ -286,111 +270,131 @@
         }
 
         .stat-label {
-            font-size: 13px;
+            font-size: 12px;
             color: var(--text-muted);
-            margin-top: 4px;
+            margin-top: 2px;
             text-transform: uppercase;
-            letter-spacing: 0.08em;
+            letter-spacing: 0.05em;
         }
 
-        /* Comparison Section */
-        .comparison {
-            padding: 120px 24px;
+        /* Sections */
+        .section {
+            padding: 100px 24px;
+        }
+
+        .section-alt {
             background: var(--bg-secondary);
         }
 
         .section-inner {
-            max-width: 1100px;
+            max-width: 1000px;
             margin: 0 auto;
         }
 
         .section-header {
             text-align: center;
-            margin-bottom: 64px;
+            margin-bottom: 56px;
         }
 
         .section-header h2 {
-            font-size: 40px;
+            font-size: 32px;
             font-weight: 700;
-            letter-spacing: -0.03em;
-            margin-bottom: 16px;
+            letter-spacing: -0.02em;
+            margin-bottom: 12px;
         }
 
         .section-header p {
-            font-size: 18px;
+            font-size: 16px;
             color: var(--text-secondary);
-            max-width: 600px;
+            max-width: 500px;
             margin: 0 auto;
         }
 
-        .comparison-grid {
+        /* Audience Section */
+        .audience-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 24px;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
         }
 
         @media (max-width: 768px) {
-            .comparison-grid {
+            .audience-grid {
                 grid-template-columns: 1fr;
             }
             .hero-stats {
                 gap: 24px;
-                padding: 24px;
+                padding: 20px;
             }
             .nav-links a:not(.nav-cta) {
                 display: none;
             }
         }
 
-        .comparison-card {
-            padding: 40px;
-            border-radius: 20px;
-            position: relative;
-        }
-
-        .comparison-card.blackbox {
-            background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(59, 130, 246, 0.05));
-            border: 2px solid var(--green);
-        }
-
-        .comparison-card.commercial {
+        .audience-card {
             background: var(--bg-card);
             border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            transition: border-color 0.2s;
         }
 
-        .comparison-card .badge {
-            position: absolute;
-            top: -12px;
-            left: 24px;
-            background: var(--green);
-            color: var(--bg-primary);
-            padding: 6px 14px;
-            border-radius: 100px;
-            font-size: 12px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
+        .audience-card:hover {
+            border-color: var(--border-light);
+        }
+
+        .audience-card h3 {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+
+        .audience-card p {
+            font-size: 14px;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+
+        /* Comparison */
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .comparison-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .comparison-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 32px;
+        }
+
+        .comparison-card.highlight {
+            border-color: var(--green);
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(16, 185, 129, 0.02));
         }
 
         .comparison-card h3 {
-            font-size: 24px;
-            font-weight: 700;
-            margin-bottom: 8px;
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 4px;
         }
 
         .comparison-card .price {
-            font-size: 48px;
-            font-weight: 800;
+            font-size: 32px;
+            font-weight: 700;
             font-family: 'JetBrains Mono', monospace;
-            margin-bottom: 24px;
+            margin-bottom: 20px;
         }
 
-        .comparison-card.blackbox .price {
+        .comparison-card.highlight .price {
             color: var(--green);
-        }
-
-        .comparison-card.commercial .price {
-            color: var(--text-muted);
         }
 
         .comparison-card ul {
@@ -400,10 +404,10 @@
         .comparison-card li {
             display: flex;
             align-items: flex-start;
-            gap: 12px;
-            padding: 12px 0;
+            gap: 10px;
+            padding: 10px 0;
             border-bottom: 1px solid var(--border);
-            font-size: 15px;
+            font-size: 14px;
             color: var(--text-secondary);
         }
 
@@ -412,29 +416,31 @@
         }
 
         .comparison-card li svg {
-            width: 20px;
-            height: 20px;
+            width: 18px;
+            height: 18px;
             flex-shrink: 0;
-            margin-top: 2px;
+            margin-top: 1px;
         }
 
-        .comparison-card.blackbox li svg {
+        .comparison-card.highlight li svg {
             color: var(--green);
         }
 
-        .comparison-card.commercial li svg {
+        .icon-check { color: var(--green); }
+        .icon-x { color: var(--text-muted); }
+
+        .comparison-note {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 13px;
             color: var(--text-muted);
         }
 
-        /* Features Section */
-        .features {
-            padding: 120px 24px;
-        }
-
+        /* Features */
         .features-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 24px;
+            gap: 16px;
         }
 
         @media (max-width: 900px) {
@@ -452,57 +458,50 @@
         .feature-card {
             background: var(--bg-card);
             border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 32px;
-            transition: all 0.3s;
+            border-radius: 12px;
+            padding: 24px;
+            transition: border-color 0.2s;
         }
 
         .feature-card:hover {
             border-color: var(--border-light);
-            transform: translateY(-4px);
         }
 
         .feature-icon {
-            width: 48px;
-            height: 48px;
+            width: 40px;
+            height: 40px;
             background: var(--accent-glow);
-            border-radius: 12px;
+            border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin-bottom: 20px;
+            margin-bottom: 16px;
         }
 
         .feature-icon svg {
-            width: 24px;
-            height: 24px;
+            width: 20px;
+            height: 20px;
             color: var(--accent);
         }
 
         .feature-card h3 {
-            font-size: 18px;
+            font-size: 15px;
             font-weight: 600;
-            margin-bottom: 8px;
-            letter-spacing: -0.01em;
+            margin-bottom: 6px;
         }
 
         .feature-card p {
-            font-size: 14px;
+            font-size: 13px;
             color: var(--text-muted);
-            line-height: 1.6;
+            line-height: 1.5;
         }
 
-        /* Hardware Section */
-        .hardware {
-            padding: 120px 24px;
-            background: var(--bg-secondary);
-        }
-
+        /* Hardware */
         .hardware-grid {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
-            gap: 20px;
-            margin-bottom: 40px;
+            gap: 16px;
+            margin-bottom: 32px;
         }
 
         @media (max-width: 768px) {
@@ -514,31 +513,26 @@
         .hardware-card {
             background: var(--bg-card);
             border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 28px 20px;
+            border-radius: 12px;
+            padding: 24px 16px;
             text-align: center;
-            transition: all 0.2s;
-        }
-
-        .hardware-card:hover {
-            border-color: var(--border-light);
         }
 
         .hardware-card svg {
-            width: 40px;
-            height: 40px;
+            width: 32px;
+            height: 32px;
             color: var(--accent);
-            margin-bottom: 16px;
+            margin-bottom: 12px;
         }
 
         .hardware-card h4 {
-            font-size: 15px;
+            font-size: 14px;
             font-weight: 600;
-            margin-bottom: 4px;
+            margin-bottom: 2px;
         }
 
         .hardware-card p {
-            font-size: 13px;
+            font-size: 12px;
             color: var(--text-muted);
         }
 
@@ -546,39 +540,37 @@
             text-align: center;
         }
 
-        .hardware-total .price-tag {
+        .price-tag {
             display: inline-flex;
             align-items: center;
-            gap: 12px;
-            padding: 16px 32px;
+            gap: 10px;
+            padding: 12px 24px;
             background: var(--green-glow);
-            border: 1px solid rgba(16, 185, 129, 0.3);
+            border: 1px solid rgba(16, 185, 129, 0.25);
             border-radius: 100px;
-        }
-
-        .hardware-total .price-tag span {
-            font-size: 20px;
-            font-weight: 700;
+            font-size: 16px;
+            font-weight: 600;
             color: var(--green);
         }
 
-        /* Flasher Section */
-        .flasher {
-            padding: 120px 24px;
+        .price-tag svg {
+            width: 18px;
+            height: 18px;
         }
 
+        /* Flasher */
         .flasher-container {
-            max-width: 900px;
+            max-width: 800px;
             margin: 0 auto;
         }
 
         .flasher-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 24px;
+            gap: 20px;
         }
 
-        @media (max-width: 768px) {
+        @media (max-width: 700px) {
             .flasher-grid {
                 grid-template-columns: 1fr;
             }
@@ -587,49 +579,48 @@
         .flasher-panel {
             background: var(--bg-card);
             border: 1px solid var(--border);
-            border-radius: 20px;
-            padding: 32px;
+            border-radius: 12px;
+            padding: 28px;
         }
 
         .flasher-panel h3 {
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 600;
             color: var(--text-muted);
             text-transform: uppercase;
-            letter-spacing: 0.1em;
-            margin-bottom: 24px;
+            letter-spacing: 0.08em;
+            margin-bottom: 20px;
         }
 
         .form-group {
-            margin-bottom: 24px;
+            margin-bottom: 20px;
         }
 
         .form-group label {
             display: block;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 500;
             color: var(--text-secondary);
-            margin-bottom: 8px;
+            margin-bottom: 6px;
         }
 
         select {
             width: 100%;
-            padding: 14px 16px;
+            padding: 12px 14px;
             background: var(--bg-primary);
             border: 1px solid var(--border);
-            border-radius: 12px;
+            border-radius: 8px;
             color: var(--text-primary);
             font-size: 14px;
             font-family: inherit;
             cursor: pointer;
-            transition: border-color 0.2s;
             appearance: none;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
             background-repeat: no-repeat;
-            background-position: right 16px center;
+            background-position: right 12px center;
         }
 
-        select:hover, select:focus {
+        select:focus {
             border-color: var(--accent);
             outline: none;
         }
@@ -643,9 +634,9 @@
             counter-increment: steps;
             display: flex;
             align-items: flex-start;
-            gap: 16px;
-            padding: 14px 0;
-            font-size: 14px;
+            gap: 12px;
+            padding: 12px 0;
+            font-size: 13px;
             color: var(--text-secondary);
             border-bottom: 1px solid var(--border);
         }
@@ -656,15 +647,15 @@
 
         .steps-list li::before {
             content: counter(steps);
-            width: 28px;
-            height: 28px;
+            width: 24px;
+            height: 24px;
             background: var(--bg-primary);
             border: 1px solid var(--border);
-            border-radius: 8px;
+            border-radius: 6px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 600;
             color: var(--text-muted);
             flex-shrink: 0;
@@ -674,11 +665,11 @@
         .status-box {
             background: var(--bg-primary);
             border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 32px;
+            border-radius: 10px;
+            padding: 28px;
             text-align: center;
-            margin-bottom: 20px;
-            transition: all 0.3s;
+            margin-bottom: 16px;
+            transition: all 0.2s;
         }
 
         .status-box.connected {
@@ -702,9 +693,9 @@
         }
 
         .status-text {
-            font-size: 18px;
+            font-size: 16px;
             font-weight: 600;
-            margin-bottom: 4px;
+            margin-bottom: 2px;
         }
 
         .status-subtext {
@@ -714,21 +705,20 @@
 
         .flash-button {
             width: 100%;
-            padding: 16px 24px;
+            padding: 14px 20px;
             background: var(--accent);
             color: white;
             border: none;
-            border-radius: 12px;
-            font-size: 15px;
+            border-radius: 8px;
+            font-size: 14px;
             font-weight: 600;
             font-family: inherit;
             cursor: pointer;
-            transition: all 0.2s;
+            transition: background 0.2s;
         }
 
         .flash-button:hover:not(:disabled) {
             background: var(--accent-light);
-            transform: translateY(-2px);
         }
 
         .flash-button:disabled {
@@ -740,15 +730,14 @@
             background: none;
             border: none;
             color: var(--text-muted);
-            font-size: 13px;
+            font-size: 12px;
             font-family: inherit;
             cursor: pointer;
-            padding: 12px 0;
+            padding: 10px 0;
             display: flex;
             align-items: center;
-            gap: 8px;
-            margin-top: 16px;
-            transition: color 0.2s;
+            gap: 6px;
+            margin-top: 12px;
         }
 
         .dev-toggle:hover {
@@ -758,9 +747,9 @@
         .dev-panel {
             display: none;
             background: var(--bg-primary);
-            border-radius: 12px;
-            padding: 20px;
-            margin-top: 16px;
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 12px;
         }
 
         .dev-panel.active {
@@ -770,28 +759,27 @@
         .debug-window {
             background: var(--bg-secondary);
             border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 12px;
+            border-radius: 6px;
+            padding: 10px;
             font-family: 'JetBrains Mono', monospace;
             font-size: 11px;
-            max-height: 160px;
+            max-height: 140px;
             overflow-y: auto;
-            margin-top: 16px;
+            margin-top: 12px;
         }
 
         .debug-line {
-            padding: 3px 0;
+            padding: 2px 0;
             color: var(--text-muted);
         }
 
         .debug-line.info { color: var(--accent); }
         .debug-line.success { color: var(--green); }
         .debug-line.error { color: var(--red); }
-        .debug-line.warning { color: var(--orange); }
 
         /* Footer */
         .footer {
-            padding: 64px 24px;
+            padding: 48px 24px;
             border-top: 1px solid var(--border);
             text-align: center;
         }
@@ -799,29 +787,24 @@
         .footer-links {
             display: flex;
             justify-content: center;
-            gap: 32px;
-            margin-bottom: 24px;
+            gap: 24px;
+            margin-bottom: 16px;
             flex-wrap: wrap;
         }
 
         .footer-links a {
             color: var(--text-muted);
             text-decoration: none;
-            font-size: 14px;
-            transition: color 0.2s;
+            font-size: 13px;
         }
 
         .footer-links a:hover {
-            color: var(--text-primary);
+            color: var(--text-secondary);
         }
 
         .footer p {
             color: var(--text-muted);
-            font-size: 14px;
-        }
-
-        .footer a {
-            color: var(--text-secondary);
+            font-size: 13px;
         }
 
         /* Scrollbar */
@@ -837,22 +820,12 @@
             background: var(--border);
             border-radius: 4px;
         }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: var(--border-light);
-        }
-
-        /* Icons as inline SVG */
-        .icon {
-            display: inline-flex;
-        }
     </style>
 </head>
 <body>
-    <div class="bg-gradient"></div>
+    <div class="bg-pattern"></div>
 
     <div class="content">
-        <!-- Navigation -->
         <nav class="nav" id="nav">
             <div class="nav-inner">
                 <a href="/" class="nav-brand">
@@ -865,32 +838,29 @@
                     Blackbox
                 </a>
                 <div class="nav-links">
+                    <a href="#about">About</a>
                     <a href="#features">Features</a>
                     <a href="#hardware">Hardware</a>
-                    <a href="#flash">Flash</a>
                     <a href="https://github.com/jctoledo/blackbox" target="_blank">GitHub</a>
-                    <a href="#flash" class="nav-cta">Get Started</a>
+                    <a href="#flash" class="nav-cta">Flash Firmware</a>
                 </div>
             </div>
         </nav>
 
-        <!-- Hero Section -->
         <section class="hero">
             <div class="hero-badge">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 16v-4M12 8h.01"/>
                 </svg>
                 Open Source &middot; MIT License
             </div>
 
-            <h1>
-                Vehicle telemetry<br>
-                <span class="gradient">for the rest of us</span>
-            </h1>
+            <h1>GPS + IMU sensor fusion for vehicle dynamics</h1>
 
             <p class="hero-subtitle">
-                Professional-grade GPS + IMU sensor fusion running on a $50 ESP32.
-                Track your car's position, velocity, and g-forces in real-time.
+                Real-time position, velocity, and acceleration tracking on ESP32.
+                For track days, autocross, vehicle research, and learning sensor fusion.
             </p>
 
             <div class="hero-ctas">
@@ -904,14 +874,14 @@
                     <svg viewBox="0 0 24 24" fill="currentColor">
                         <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
                     </svg>
-                    View on GitHub
+                    View Source
                 </a>
             </div>
 
             <div class="hero-stats">
                 <div class="stat">
                     <div class="stat-value">20Hz</div>
-                    <div class="stat-label">Telemetry Rate</div>
+                    <div class="stat-label">Telemetry</div>
                 </div>
                 <div class="stat">
                     <div class="stat-value">200Hz</div>
@@ -923,92 +893,106 @@
                 </div>
                 <div class="stat">
                     <div class="stat-value highlight">~$50</div>
-                    <div class="stat-label">Total Cost</div>
+                    <div class="stat-label">Hardware Cost</div>
                 </div>
             </div>
         </section>
 
-        <!-- Comparison Section -->
-        <section class="comparison" id="compare">
+        <section class="section section-alt" id="about">
             <div class="section-inner">
                 <div class="section-header">
-                    <h2>Why pay more?</h2>
-                    <p>Professional results without the professional price tag</p>
+                    <h2>Who is this for?</h2>
+                    <p>Blackbox is designed for enthusiasts, researchers, and learners</p>
+                </div>
+
+                <div class="audience-grid">
+                    <div class="audience-card">
+                        <h3>Track Day Enthusiasts</h3>
+                        <p>Log your position, speed, and g-forces during sessions. Analyze braking points, cornering speeds, and racing lines.</p>
+                    </div>
+                    <div class="audience-card">
+                        <h3>Engineering Students</h3>
+                        <p>Learn sensor fusion hands-on. The codebase demonstrates Extended Kalman Filtering, coordinate transforms, and real-time embedded systems.</p>
+                    </div>
+                    <div class="audience-card">
+                        <h3>Vehicle Researchers</h3>
+                        <p>Affordable platform for dynamics studies. Open source means you can modify the algorithms for your specific research needs.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="section" id="comparison">
+            <div class="section-inner">
+                <div class="section-header">
+                    <h2>How it compares</h2>
+                    <p>Similar capabilities to commercial data loggers at a fraction of the cost</p>
                 </div>
 
                 <div class="comparison-grid">
-                    <div class="comparison-card blackbox">
-                        <div class="badge">Best Value</div>
+                    <div class="comparison-card highlight">
                         <h3>Blackbox</h3>
                         <div class="price">~$50</div>
                         <ul>
                             <li>
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
-                                Extended Kalman Filter sensor fusion
+                                <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+                                7-state Extended Kalman Filter
                             </li>
                             <li>
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
-                                20Hz real-time telemetry over WiFi
+                                <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+                                20Hz telemetry over WiFi
                             </li>
                             <li>
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+                                <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
                                 Position, velocity, acceleration, yaw
                             </li>
                             <li>
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
-                                Driving mode detection (corner, brake, accel)
+                                <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+                                Driving mode detection
                             </li>
                             <li>
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
-                                Open source &mdash; modify and extend freely
-                            </li>
-                            <li>
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
-                                No subscriptions, no cloud, no lock-in
+                                <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+                                Fully open source (MIT)
                             </li>
                         </ul>
                     </div>
 
-                    <div class="comparison-card commercial">
-                        <h3>Commercial Loggers</h3>
-                        <div class="price">$500+</div>
+                    <div class="comparison-card">
+                        <h3>Commercial Systems</h3>
+                        <div class="price">$1,000-5,000+</div>
                         <ul>
                             <li>
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+                                <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
                                 Professional sensor fusion
                             </li>
                             <li>
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
-                                10-20Hz logging to SD card
+                                <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+                                10-25Hz logging to SD card
                             </li>
                             <li>
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
-                                Built-in display (some models)
+                                <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+                                Integrated display (some models)
                             </li>
                             <li>
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                                Proprietary software required
+                                <svg class="icon-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                Proprietary software
                             </li>
                             <li>
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                                Often requires subscription for analysis
-                            </li>
-                            <li>
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                                Closed ecosystem, no customization
+                                <svg class="icon-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                Closed source, no modifications
                             </li>
                         </ul>
                     </div>
                 </div>
+                <p class="comparison-note">Examples: AiM Solo 2 DL (~$1,200), Racelogic VBOX Sport (~$1,800), Motec systems ($3,000+)</p>
             </div>
         </section>
 
-        <!-- Features Section -->
-        <section class="features" id="features">
+        <section class="section section-alt" id="features">
             <div class="section-inner">
                 <div class="section-header">
-                    <h2>Everything you need</h2>
-                    <p>Professional algorithms running on affordable hardware</p>
+                    <h2>Technical Features</h2>
+                    <p>What the firmware provides</p>
                 </div>
 
                 <div class="features-grid">
@@ -1019,8 +1003,8 @@
                                 <path d="M12 6v6l4 2"/>
                             </svg>
                         </div>
-                        <h3>Real-Time Sensor Fusion</h3>
-                        <p>7-state Extended Kalman Filter fuses 200Hz IMU with 5Hz GPS for smooth, drift-free position estimates.</p>
+                        <h3>Sensor Fusion</h3>
+                        <p>7-state EKF fuses 200Hz IMU with 5Hz GPS for drift-free position estimates.</p>
                     </div>
 
                     <div class="feature-card">
@@ -1031,7 +1015,7 @@
                             </svg>
                         </div>
                         <h3>Position Tracking</h3>
-                        <p>Tracks position in local coordinates with automatic GPS warmup and reference point averaging.</p>
+                        <p>Local coordinate system with automatic GPS warmup and reference point averaging.</p>
                     </div>
 
                     <div class="feature-card">
@@ -1041,7 +1025,7 @@
                             </svg>
                         </div>
                         <h3>Mode Detection</h3>
-                        <p>Automatically classifies driving state: idle, acceleration, braking, or cornering based on sensor data.</p>
+                        <p>Classifies driving state: idle, acceleration, braking, or cornering.</p>
                     </div>
 
                     <div class="feature-card">
@@ -1049,12 +1033,11 @@
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M5 12.55a11 11 0 0114.08 0"/>
                                 <path d="M1.42 9a16 16 0 0121.16 0"/>
-                                <path d="M8.53 16.11a6 6 0 016.95 0"/>
                                 <circle cx="12" cy="20" r="1"/>
                             </svg>
                         </div>
-                        <h3>Wireless Streaming</h3>
-                        <p>Binary telemetry over UDP at 20Hz. Compact 67-byte packets optimized for real-time analysis.</p>
+                        <h3>WiFi Streaming</h3>
+                        <p>Binary UDP at 20Hz. Compact 67-byte packets for real-time display.</p>
                     </div>
 
                     <div class="feature-card">
@@ -1064,8 +1047,8 @@
                                 <path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/>
                             </svg>
                         </div>
-                        <h3>Zero-Velocity Updates</h3>
-                        <p>ZUPT prevents drift when stationary. Accelerometer bias is continuously estimated and corrected.</p>
+                        <h3>ZUPT</h3>
+                        <p>Zero-velocity updates prevent drift. Bias continuously estimated when stationary.</p>
                     </div>
 
                     <div class="feature-card">
@@ -1077,18 +1060,17 @@
                             </svg>
                         </div>
                         <h3>Open Source</h3>
-                        <p>MIT licensed. Full Rust firmware, Python receivers, and documentation. Build, modify, extend.</p>
+                        <p>MIT licensed Rust firmware. Python receivers included. Modify freely.</p>
                     </div>
                 </div>
             </div>
         </section>
 
-        <!-- Hardware Section -->
-        <section class="hardware" id="hardware">
+        <section class="section" id="hardware">
             <div class="section-inner">
                 <div class="section-header">
-                    <h2>Simple hardware</h2>
-                    <p>Four components, all available on Amazon or AliExpress</p>
+                    <h2>Hardware</h2>
+                    <p>Four components, all available online</p>
                 </div>
 
                 <div class="hardware-grid">
@@ -1099,7 +1081,7 @@
                             <path d="M9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3"/>
                         </svg>
                         <h4>ESP32-C3</h4>
-                        <p>RISC-V with WiFi</p>
+                        <p>RISC-V microcontroller</p>
                     </div>
 
                     <div class="hardware-card">
@@ -1118,7 +1100,7 @@
                             <path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/>
                         </svg>
                         <h4>NEO-6M GPS</h4>
-                        <p>5Hz position updates</p>
+                        <p>5Hz updates</p>
                     </div>
 
                     <div class="hardware-card">
@@ -1133,22 +1115,21 @@
 
                 <div class="hardware-total">
                     <div class="price-tag">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/>
                             <circle cx="7" cy="7" r="1"/>
                         </svg>
-                        <span>Total: ~$50 in parts</span>
+                        Total: ~$50 in parts
                     </div>
                 </div>
             </div>
         </section>
 
-        <!-- Flasher Section -->
-        <section class="flasher" id="flash">
+        <section class="section section-alt" id="flash">
             <div class="flasher-container">
                 <div class="section-header">
-                    <h2>Flash from your browser</h2>
-                    <p>No toolchain required. Just connect and click.</p>
+                    <h2>Flash Firmware</h2>
+                    <p>Flash directly from your browser. No toolchain required.</p>
                 </div>
 
                 <div class="flasher-grid">
@@ -1157,17 +1138,17 @@
                         <div class="form-group">
                             <label>Select Firmware</label>
                             <select id="project-select">
-                                <option value="">Choose firmware...</option>
+                                <option value="">Choose...</option>
                             </select>
                         </div>
 
                         <div id="project-info" style="display: none;">
-                            <h3 style="margin-top: 24px;">Steps</h3>
+                            <h3 style="margin-top: 20px;">Steps</h3>
                             <ol class="steps-list">
                                 <li>Connect ESP32-C3 via USB</li>
                                 <li>Hold BOOT button if needed</li>
-                                <li>Click "Connect" and select port</li>
-                                <li>Click "Flash" and wait</li>
+                                <li>Click Connect and select port</li>
+                                <li>Click Flash and wait</li>
                             </ol>
                         </div>
                     </div>
@@ -1184,9 +1165,9 @@
                         </button>
 
                         <button class="dev-toggle" id="dev-toggle">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <circle cx="12" cy="12" r="3"/>
-                                <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
+                                <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
                             </svg>
                             Developer Options
                         </button>
@@ -1197,12 +1178,10 @@
                                 <select id="baudrate">
                                     <option value="115200" selected>115200</option>
                                     <option value="460800">460800</option>
-                                    <option value="921600">921600</option>
                                 </select>
                             </div>
-
                             <div class="debug-window" id="debug-window">
-                                <div class="debug-line info">Ready to flash.</div>
+                                <div class="debug-line info">Ready.</div>
                             </div>
                         </div>
                     </div>
@@ -1210,14 +1189,13 @@
             </div>
         </section>
 
-        <!-- Footer -->
         <footer class="footer">
             <div class="footer-links">
-                <a href="https://github.com/jctoledo/blackbox" target="_blank">GitHub</a>
-                <a href="https://github.com/jctoledo/blackbox/blob/main/README.md" target="_blank">Documentation</a>
-                <a href="https://github.com/jctoledo/blackbox/issues" target="_blank">Issues</a>
+                <a href="https://github.com/jctoledo/blackbox">GitHub</a>
+                <a href="https://github.com/jctoledo/blackbox/blob/main/README.md">Documentation</a>
+                <a href="https://github.com/jctoledo/blackbox/issues">Issues</a>
             </div>
-            <p>Blackbox is open source under the MIT License</p>
+            <p>Open source under MIT License</p>
         </footer>
     </div>
 
@@ -1225,7 +1203,6 @@
     <script type="module">
         import { Transport, ESPLoader } from 'https://unpkg.com/esptool-js@0.4.5/bundle.js';
 
-        // Navigation scroll effect
         const nav = document.getElementById('nav');
         window.addEventListener('scroll', () => {
             nav.classList.toggle('scrolled', window.scrollY > 50);
@@ -1240,9 +1217,7 @@
         const debugWindow = document.getElementById('debug-window');
         const baudrateSelect = document.getElementById('baudrate');
 
-        let transport = null;
-        let espStub = null;
-        let isConnected = false;
+        let transport = null, espStub = null, isConnected = false;
 
         const projects = typeof PROJECTS !== 'undefined' ? PROJECTS : {};
 
@@ -1259,7 +1234,7 @@
                 flashButton.disabled = false;
                 flashButton.textContent = 'Connect Device';
                 updateStatus('', 'Ready', 'Click Connect to begin');
-                logDebug('Selected: ' + projects[e.target.value].name, 'info');
+                log('Selected: ' + projects[e.target.value].name, 'info');
             } else {
                 projectInfo.style.display = 'none';
                 flashButton.disabled = true;
@@ -1270,120 +1245,89 @@
         devToggle.addEventListener('click', () => devPanel.classList.toggle('active'));
 
         flashButton.addEventListener('click', async () => {
-            if (!isConnected) await connectDevice();
-            else await flashFirmware();
+            if (!isConnected) await connect();
+            else await flash();
         });
 
-        async function connectDevice() {
+        async function connect() {
             if (!projectSelect.value) return;
-
-            if (transport) {
-                try { await transport.disconnect(); } catch {}
-                transport = null;
-                espStub = null;
-                isConnected = false;
-            }
+            if (transport) { try { await transport.disconnect(); } catch {} }
+            transport = null; espStub = null; isConnected = false;
 
             try {
-                logDebug('Requesting port...', 'info');
-                updateStatus('', 'Connecting...', 'Select your device');
-
+                log('Requesting port...', 'info');
+                updateStatus('', 'Connecting...', 'Select device');
                 const port = await navigator.serial.requestPort();
                 transport = new Transport(port, true);
-
-                const baudrate = parseInt(baudrateSelect.value);
                 espStub = new ESPLoader({
                     transport,
-                    baudrate,
+                    baudrate: parseInt(baudrateSelect.value),
                     terminal: { clean: () => {}, writeLine: () => {}, write: () => {} }
                 });
-
-                const chipInfo = await Promise.race([
+                const chip = await Promise.race([
                     espStub.main(),
-                    new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 15000))
+                    new Promise((_, r) => setTimeout(() => r(new Error('Timeout')), 15000))
                 ]);
-
-                logDebug('Connected: ' + chipInfo, 'success');
+                log('Connected: ' + chip, 'success');
                 isConnected = true;
-                updateStatus('connected', 'Connected', chipInfo);
+                updateStatus('connected', 'Connected', chip);
                 flashButton.textContent = 'Flash Firmware';
-
-            } catch (error) {
-                transport = null;
-                espStub = null;
-                isConnected = false;
-
-                if (error.message.includes('timeout') || error.message.includes('Timeout')) {
-                    updateStatus('error', 'Timeout', 'Hold BOOT and try again');
-                } else {
-                    updateStatus('error', 'Error', error.message);
-                }
-                logDebug('Error: ' + error.message, 'error');
+            } catch (e) {
+                transport = null; espStub = null; isConnected = false;
+                updateStatus('error', 'Error', e.message.includes('imeout') ? 'Hold BOOT and retry' : e.message);
+                log('Error: ' + e.message, 'error');
             }
         }
 
-        async function flashFirmware() {
+        async function flash() {
             if (!projectSelect.value || !espStub) return;
-
             const project = projects[projectSelect.value];
             flashButton.disabled = true;
-
             try {
-                logDebug('Downloading firmware...', 'info');
+                log('Downloading...', 'info');
                 updateStatus('flashing', 'Downloading...', 'Please wait');
-
-                const response = await fetch(project.firmwareUrl);
-                if (!response.ok) throw new Error('Download failed');
-                const firmwareData = await response.arrayBuffer();
-                logDebug(`Downloaded ${firmwareData.byteLength} bytes`, 'success');
-
+                const res = await fetch(project.firmwareUrl);
+                if (!res.ok) throw new Error('Download failed');
+                const fw = await res.arrayBuffer();
+                log('Downloaded ' + fw.byteLength + ' bytes', 'success');
                 updateStatus('flashing', 'Flashing...', 'Do not disconnect');
-
-                const data = new Uint8Array(firmwareData);
-                let binaryString = '';
-                for (let i = 0; i < data.length; i++) {
-                    binaryString += String.fromCharCode(data[i]);
-                }
-
+                const data = new Uint8Array(fw);
+                let bin = '';
+                for (let i = 0; i < data.length; i++) bin += String.fromCharCode(data[i]);
                 await espStub.writeFlash({
-                    fileArray: [{ data: binaryString, address: 0x10000 }],
+                    fileArray: [{ data: bin, address: 0x10000 }],
                     flashSize: 'keep',
                     compress: true,
-                    reportProgress: (_, written, total) => {
-                        const pct = Math.round((written / total) * 100);
-                        updateStatus('flashing', `Flashing... ${pct}%`, `${written} / ${total}`);
-                    }
+                    reportProgress: (_, w, t) => updateStatus('flashing', 'Flashing ' + Math.round(w/t*100) + '%', w + '/' + t)
                 });
-
-                logDebug('Complete!', 'success');
-                updateStatus('success', 'Success!', 'Reset your device');
+                log('Complete!', 'success');
+                updateStatus('success', 'Success', 'Reset device');
                 flashButton.textContent = 'Done';
-
-            } catch (error) {
-                logDebug('Error: ' + error.message, 'error');
-                updateStatus('error', 'Failed', error.message);
+            } catch (e) {
+                log('Error: ' + e.message, 'error');
+                updateStatus('error', 'Failed', e.message);
                 flashButton.disabled = false;
                 flashButton.textContent = 'Retry';
             }
         }
 
-        function updateStatus(state, text, subtext) {
-            statusBox.className = 'status-box ' + state;
-            statusBox.innerHTML = `<div class="status-text">${text}</div><div class="status-subtext">${subtext}</div>`;
+        function updateStatus(s, t, st) {
+            statusBox.className = 'status-box ' + s;
+            statusBox.innerHTML = '<div class="status-text">' + t + '</div><div class="status-subtext">' + st + '</div>';
         }
 
-        function logDebug(msg, type = 'info') {
-            const line = document.createElement('div');
-            line.className = 'debug-line ' + type;
-            line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
-            debugWindow.appendChild(line);
+        function log(m, type) {
+            const d = document.createElement('div');
+            d.className = 'debug-line ' + type;
+            d.textContent = '[' + new Date().toLocaleTimeString() + '] ' + m;
+            debugWindow.appendChild(d);
             debugWindow.scrollTop = debugWindow.scrollHeight;
         }
 
         if (!('serial' in navigator)) {
-            updateStatus('error', 'Not Supported', 'Use Chrome, Edge, or Opera');
+            updateStatus('error', 'Not Supported', 'Use Chrome/Edge');
             flashButton.disabled = true;
-            logDebug('Web Serial API not available', 'error');
+            log('Web Serial not available', 'error');
         }
     </script>
 </body>
