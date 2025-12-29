@@ -263,22 +263,11 @@ fn main() {
 
         // Poll GPS and update EKF correction
         if sensors.poll_gps() {
-            // Reset EKF position once when GPS warmup completes
-            static mut EKF_RESET_DONE: bool = false;
-            if sensors.gps_parser.is_warmed_up() && unsafe { !EKF_RESET_DONE } {
-                // Reset position to origin now that we have a valid reference
-                estimator.ekf.x[0] = 0.0;
-                estimator.ekf.x[1] = 0.0;
-                estimator.ekf.p[0] = 100.0; // Reset covariance too
-                estimator.ekf.p[1] = 100.0;
-                unsafe { EKF_RESET_DONE = true };
-            }
-
-            // Check if warmup complete (has reference point)
-            if sensors.gps_parser.is_warmed_up() {
+            // Check if warmup complete (has reference point) AND fix is valid
+            if sensors.gps_parser.is_warmed_up() && sensors.gps_parser.last_fix().valid {
                 let (ax_corr, ay_corr, _) = sensors.imu_parser.get_accel_corrected();
 
-                // Always update position from GPS when available
+                // Update position from GPS (only when fix is valid)
                 if let Some((x, y)) = sensors.gps_parser.to_local_coords() {
                     estimator.update_position(x, y);
                 }
