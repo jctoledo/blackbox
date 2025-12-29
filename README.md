@@ -17,7 +17,7 @@ A complete ESP32-C3 firmware that fuses GPS and IMU data to track your vehicle's
 - Measures velocity in 2D (earth frame)
 - Calculates true acceleration (gravity compensated)
 - Detects driving modes (idle, accelerating, braking, cornering)
-- Streams telemetry at 20Hz over TCP or MQTT
+- Streams telemetry at 20Hz over UDP
 
 **How it works:**
 - 7-state Extended Kalman Filter fuses GPS (5Hz) and IMU (50Hz)
@@ -79,6 +79,24 @@ ESP32-C3 DevKitC-02          WT901 IMU               NEO-6M GPS
 
 ## Quick Start
 
+### Option A: Web Flasher (Easiest)
+
+Flash directly from your browser - no toolchain required:
+
+1. Go to **https://jctoledo.github.io/blackbox/**
+2. Connect your ESP32-C3 via USB
+3. Select "Blackbox" from the dropdown
+4. Click "Connect Device" and select your serial port
+5. Click "Flash Firmware"
+
+**Requirements:** Chrome, Edge, or Opera (Web Serial API)
+
+**Note:** You may need to hold the BOOT button when connecting to enter flash mode.
+
+---
+
+### Option B: Build from Source
+
 ### 1. Install Rust Toolchain
 
 ```bash
@@ -137,12 +155,12 @@ cargo run --release
 
 ### 4. Receive Telemetry
 
-**Option A: TCP Stream (recommended for high-rate data)**
+**UDP Telemetry (recommended)**
 
 ```bash
 # In another terminal, from repo root
 cd tools/python
-python3 tcp_telemetry_server.py
+python3 udp_telemetry_server.py
 ```
 
 Receives 20Hz binary telemetry and displays:
@@ -150,7 +168,7 @@ Receives 20Hz binary telemetry and displays:
 [20Hz] Spd: 45.3km/h Pos:(123.4,456.7)m Vel:(+12.58,+0.32)m/s Acc:(+1.23,-0.15,+9.81)m/s² Yaw:+45° wz:+12°/s CORNER
 ```
 
-**Option B: MQTT (for status messages and debugging)**
+**MQTT (for status messages and debugging)**
 
 ```bash
 # Requires mosquitto or another MQTT broker
@@ -364,9 +382,9 @@ GPS (5Hz)           IMU (50Hz)
              │                            
              ▼                            
 ┌─────────────────────────────────┐       
-│   Binary Telemetry (20Hz)       │       
-│   • 66 bytes with checksum      │       
-│   • TCP stream or MQTT          │       
+│   Binary Telemetry (20Hz)       │
+│   • 67 bytes with checksum      │
+│   • UDP stream                  │       
 └─────────────────────────────────┘       
 ```
 
@@ -385,8 +403,8 @@ blackbox/
 │       │   ├── ekf.rs             # 7-state Extended Kalman Filter
 │       │   ├── transforms.rs      # Body↔Earth coordinate math
 │       │   ├── mode.rs            # Driving mode classifier
-│       │   ├── binary_telemetry.rs # 66-byte packet format
-│       │   ├── tcp_stream.rs      # High-speed TCP client
+│       │   ├── binary_telemetry.rs # 67-byte packet format
+│       │   ├── udp_stream.rs      # High-speed UDP client
 │       │   ├── mqtt.rs            # MQTT client for status
 │       │   ├── wifi.rs            # WiFi connection manager
 │       │   └── rgb_led.rs         # WS2812 status LED
@@ -395,8 +413,8 @@ blackbox/
 │       └── build.rs               # Build script
 ├── tools/
 │   └── python/
-│       ├── tcp_telemetry_server.py  # Python receiver (TCP)
-│       └── mqtt_decoder.py          # Python receiver (MQTT)
+│       ├── udp_telemetry_server.py  # Python receiver (UDP)
+│       └── mqtt_binary_decoder.py   # Python receiver (MQTT)
 └── README.md                        # This file
 ```
 
@@ -424,7 +442,7 @@ blackbox/
 
 ## Telemetry Format
 
-### Binary Packet (66 bytes)
+### Binary Packet (67 bytes)
 
 ```rust
 struct TelemetryPacket {
@@ -500,7 +518,7 @@ pub yaw_thr: f32 = 0.07;       // Yaw rate threshold (rad/s)
 | Metric | Value |
 |--------|-------|
 | Update rate | 50 Hz (IMU predict) / 5 Hz (GPS update) |
-| Telemetry rate | 20 Hz (TCP stream) |
+| Telemetry rate | 20 Hz (UDP stream) |
 | Position accuracy | ±1-2m (GPS dependent) |
 | Velocity accuracy | ±0.2 m/s |
 | Latency | <20ms sensor-to-transmission |

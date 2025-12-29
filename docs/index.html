@@ -4,7 +4,28 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Blackbox - Vehicle Telemetry System</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --bg-primary: #09090b;
+            --bg-secondary: #0c0c0f;
+            --bg-tertiary: #111114;
+            --bg-card: #16161a;
+            --border: #27272a;
+            --border-subtle: #1f1f23;
+            --text-primary: #fafafa;
+            --text-secondary: #a1a1aa;
+            --text-muted: #71717a;
+            --accent: #3b82f6;
+            --accent-glow: rgba(59, 130, 246, 0.15);
+            --accent-secondary: #8b5cf6;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --error: #ef4444;
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -12,19 +33,51 @@
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: #0a0a0a;
-            color: #e0e0e0;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
             min-height: 100vh;
             line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Subtle grid background */
+        .bg-grid {
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+            background-size: 64px 64px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .bg-glow {
+            position: fixed;
+            top: -50%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100%;
+            max-width: 1000px;
+            height: 600px;
+            background: radial-gradient(ellipse, var(--accent-glow) 0%, transparent 70%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .content {
+            position: relative;
+            z-index: 1;
         }
 
         .navbar {
-            background: #111;
-            border-bottom: 1px solid #222;
             position: sticky;
             top: 0;
             z-index: 100;
+            backdrop-filter: blur(12px);
+            background: rgba(9, 9, 11, 0.8);
+            border-bottom: 1px solid var(--border-subtle);
         }
 
         .nav-container {
@@ -37,20 +90,23 @@
         }
 
         .nav-brand {
-            font-size: 20px;
+            font-size: 18px;
             font-weight: 700;
-            color: #fff;
+            color: var(--text-primary);
             text-decoration: none;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
+            letter-spacing: -0.02em;
         }
 
-        .nav-brand span {
-            background: linear-gradient(135deg, #00d4ff, #0099ff);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+        .nav-brand::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            background: var(--accent);
+            border-radius: 2px;
+            box-shadow: 0 0 12px var(--accent);
         }
 
         .nav-links {
@@ -60,7 +116,7 @@
         }
 
         .nav-links a {
-            color: #888;
+            color: var(--text-muted);
             text-decoration: none;
             font-size: 14px;
             font-weight: 500;
@@ -68,38 +124,78 @@
         }
 
         .nav-links a:hover {
-            color: #fff;
+            color: var(--text-primary);
         }
 
         .hero {
-            padding: 80px 24px;
+            padding: 120px 24px 100px;
             text-align: center;
-            background: linear-gradient(180deg, #111 0%, #0a0a0a 100%);
-            border-bottom: 1px solid #1a1a1a;
+            position: relative;
+        }
+
+        .hero::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80%;
+            max-width: 600px;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--border), transparent);
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 100px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 32px;
+        }
+
+        .badge-dot {
+            width: 6px;
+            height: 6px;
+            background: var(--success);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
         }
 
         .hero h1 {
-            font-size: 48px;
+            font-size: clamp(40px, 8vw, 64px);
             font-weight: 700;
-            margin-bottom: 16px;
-            background: linear-gradient(135deg, #fff 0%, #888 100%);
+            letter-spacing: -0.03em;
+            line-height: 1.1;
+            margin-bottom: 24px;
+            background: linear-gradient(180deg, var(--text-primary) 0%, var(--text-secondary) 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
         }
 
         .hero .tagline {
-            font-size: 20px;
-            color: #666;
-            max-width: 600px;
-            margin: 0 auto 32px;
+            font-size: 18px;
+            color: var(--text-muted);
+            max-width: 560px;
+            margin: 0 auto 48px;
+            line-height: 1.7;
         }
 
         .hero-stats {
             display: flex;
             justify-content: center;
-            gap: 48px;
-            margin-top: 40px;
+            gap: 64px;
+            flex-wrap: wrap;
         }
 
         .stat {
@@ -107,78 +203,193 @@
         }
 
         .stat-value {
-            font-size: 32px;
+            font-size: 28px;
             font-weight: 700;
-            color: #00d4ff;
+            color: var(--text-primary);
+            font-family: 'JetBrains Mono', monospace;
+            letter-spacing: -0.02em;
+        }
+
+        .stat-value.accent {
+            color: var(--accent);
         }
 
         .stat-label {
             font-size: 13px;
-            color: #666;
+            color: var(--text-muted);
             margin-top: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
         }
 
         .features {
-            padding: 80px 24px;
+            padding: 100px 24px;
             max-width: 1200px;
             margin: 0 auto;
         }
 
-        .features h2 {
+        .section-header {
             text-align: center;
+            margin-bottom: 64px;
+        }
+
+        .section-header h2 {
             font-size: 32px;
-            margin-bottom: 48px;
-            color: #fff;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            margin-bottom: 12px;
+        }
+
+        .section-header p {
+            color: var(--text-muted);
+            font-size: 16px;
         }
 
         .feature-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 24px;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 16px;
         }
 
         .feature-card {
-            background: #111;
-            border: 1px solid #222;
-            border-radius: 12px;
-            padding: 24px;
-            transition: border-color 0.2s, transform 0.2s;
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 16px;
+            padding: 28px;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .feature-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--border), transparent);
+            opacity: 0;
+            transition: opacity 0.3s;
         }
 
         .feature-card:hover {
-            border-color: #333;
+            border-color: var(--border);
             transform: translateY(-2px);
         }
 
+        .feature-card:hover::before {
+            opacity: 1;
+        }
+
         .feature-icon {
-            width: 40px;
-            height: 40px;
-            background: linear-gradient(135deg, #00d4ff20, #0099ff20);
-            border-radius: 8px;
+            width: 44px;
+            height: 44px;
+            background: linear-gradient(135deg, var(--accent-glow), transparent);
+            border: 1px solid var(--border);
+            border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin-bottom: 16px;
+            margin-bottom: 20px;
             font-size: 20px;
         }
 
         .feature-card h3 {
             font-size: 16px;
             font-weight: 600;
-            color: #fff;
+            color: var(--text-primary);
             margin-bottom: 8px;
+            letter-spacing: -0.01em;
         }
 
         .feature-card p {
             font-size: 14px;
-            color: #888;
+            color: var(--text-muted);
+            line-height: 1.6;
+        }
+
+        .hardware-section {
+            padding: 100px 24px;
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border-subtle);
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .hardware-container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .hardware-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+
+        @media (max-width: 768px) {
+            .hardware-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .hero-stats {
+                gap: 32px;
+            }
+            .nav-links {
+                gap: 20px;
+            }
+        }
+
+        .hardware-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: 24px 16px;
+            text-align: center;
+            transition: border-color 0.2s;
+        }
+
+        .hardware-card:hover {
+            border-color: var(--border);
+        }
+
+        .hardware-card .icon {
+            font-size: 28px;
+            margin-bottom: 12px;
+            filter: grayscale(0.3);
+        }
+
+        .hardware-card h4 {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .hardware-card p {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .cost-display {
+            text-align: center;
+        }
+
+        .cost-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 24px;
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.1), rgba(34, 197, 94, 0.05));
+            border: 1px solid rgba(34, 197, 94, 0.2);
+            border-radius: 100px;
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--success);
         }
 
         .flasher-section {
-            padding: 80px 24px;
-            background: #111;
-            border-top: 1px solid #1a1a1a;
-            border-bottom: 1px solid #1a1a1a;
+            padding: 100px 24px;
         }
 
         .flasher-container {
@@ -186,83 +397,70 @@
             margin: 0 auto;
         }
 
-        .flasher-header {
-            text-align: center;
-            margin-bottom: 48px;
-        }
-
-        .flasher-header h2 {
-            font-size: 32px;
-            color: #fff;
-            margin-bottom: 12px;
-        }
-
-        .flasher-header p {
-            color: #666;
-            font-size: 16px;
-        }
-
         .flasher-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 32px;
+            gap: 24px;
         }
 
         @media (max-width: 768px) {
             .flasher-grid {
                 grid-template-columns: 1fr;
             }
-            .hero h1 {
-                font-size: 32px;
-            }
-            .hero-stats {
-                flex-direction: column;
-                gap: 24px;
-            }
         }
 
         .flasher-panel {
-            background: #0a0a0a;
-            border: 1px solid #222;
-            border-radius: 12px;
-            padding: 24px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 16px;
+            padding: 28px;
         }
 
         .flasher-panel h3 {
-            font-size: 14px;
+            font-size: 11px;
             font-weight: 600;
-            color: #888;
+            color: var(--text-muted);
             text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 16px;
+            letter-spacing: 0.1em;
+            margin-bottom: 20px;
         }
 
         .form-group {
-            margin-bottom: 20px;
+            margin-bottom: 24px;
         }
 
         .form-group label {
             display: block;
             font-size: 14px;
             font-weight: 500;
-            color: #ccc;
+            color: var(--text-secondary);
             margin-bottom: 8px;
         }
 
         select {
             width: 100%;
             padding: 12px 16px;
-            background: #1a1a1a;
-            border: 1px solid #333;
-            border-radius: 8px;
-            color: #fff;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            color: var(--text-primary);
             font-size: 14px;
+            font-family: inherit;
             cursor: pointer;
-            transition: border-color 0.2s;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2371717a' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 16px center;
         }
 
-        select:hover, select:focus {
-            border-color: #00d4ff;
+        select:hover {
+            border-color: var(--text-muted);
+        }
+
+        select:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
             outline: none;
         }
 
@@ -272,12 +470,12 @@
 
         .requirements-list li {
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             gap: 12px;
-            padding: 12px 0;
-            border-bottom: 1px solid #1a1a1a;
-            font-size: 14px;
-            color: #888;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border-subtle);
+            font-size: 13px;
+            color: var(--text-muted);
         }
 
         .requirements-list li:last-child {
@@ -285,79 +483,82 @@
         }
 
         .check-icon {
-            width: 20px;
-            height: 20px;
-            background: #00d4ff20;
+            width: 18px;
+            height: 18px;
+            background: rgba(34, 197, 94, 0.1);
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            color: #00d4ff;
-            font-size: 12px;
+            color: var(--success);
+            font-size: 10px;
             flex-shrink: 0;
+            margin-top: 2px;
         }
 
         .status-box {
-            background: #1a1a1a;
-            border: 1px solid #333;
-            border-radius: 8px;
-            padding: 24px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 28px;
             text-align: center;
             margin-bottom: 20px;
-        }
-
-        .status-box.waiting {
-            border-color: #333;
+            transition: all 0.3s;
         }
 
         .status-box.connected {
-            border-color: #00d4ff;
-            background: #00d4ff10;
+            border-color: var(--accent);
+            background: var(--accent-glow);
         }
 
         .status-box.flashing {
-            border-color: #ffa500;
-            background: #ffa50010;
+            border-color: var(--warning);
+            background: rgba(245, 158, 11, 0.1);
         }
 
         .status-box.success {
-            border-color: #00ff88;
-            background: #00ff8810;
+            border-color: var(--success);
+            background: rgba(34, 197, 94, 0.1);
         }
 
         .status-box.error {
-            border-color: #ff4444;
-            background: #ff444410;
+            border-color: var(--error);
+            background: rgba(239, 68, 68, 0.1);
         }
 
         .status-text {
             font-size: 16px;
             font-weight: 600;
-            color: #fff;
+            color: var(--text-primary);
             margin-bottom: 4px;
         }
 
         .status-subtext {
             font-size: 13px;
-            color: #666;
+            color: var(--text-muted);
         }
 
         .flash-button {
             width: 100%;
             padding: 14px 24px;
-            background: linear-gradient(135deg, #00d4ff, #0099ff);
-            color: #000;
+            background: var(--accent);
+            color: white;
             border: none;
-            border-radius: 8px;
-            font-size: 15px;
+            border-radius: 10px;
+            font-size: 14px;
             font-weight: 600;
+            font-family: inherit;
             cursor: pointer;
-            transition: opacity 0.2s, transform 0.2s;
+            transition: all 0.2s;
         }
 
         .flash-button:hover:not(:disabled) {
-            opacity: 0.9;
+            background: #2563eb;
             transform: translateY(-1px);
+        }
+
+        .flash-button:active:not(:disabled) {
+            transform: translateY(0);
         }
 
         .flash-button:disabled {
@@ -374,50 +575,53 @@
             counter-increment: steps;
             display: flex;
             gap: 12px;
-            padding: 12px 0;
-            font-size: 14px;
-            color: #888;
+            padding: 10px 0;
+            font-size: 13px;
+            color: var(--text-muted);
         }
 
         .steps-list li::before {
             content: counter(steps);
-            width: 24px;
-            height: 24px;
-            background: #1a1a1a;
-            border: 1px solid #333;
-            border-radius: 50%;
+            width: 22px;
+            height: 22px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 600;
-            color: #00d4ff;
+            color: var(--text-secondary);
             flex-shrink: 0;
+            font-family: 'JetBrains Mono', monospace;
         }
 
         .dev-toggle {
             background: none;
             border: none;
-            color: #666;
-            font-size: 13px;
+            color: var(--text-muted);
+            font-size: 12px;
+            font-family: inherit;
             cursor: pointer;
             padding: 8px 0;
             display: flex;
             align-items: center;
             gap: 6px;
             margin-top: 16px;
+            transition: color 0.2s;
         }
 
         .dev-toggle:hover {
-            color: #888;
+            color: var(--text-secondary);
         }
 
         .dev-panel {
             display: none;
-            background: #1a1a1a;
-            border-radius: 8px;
-            padding: 16px;
-            margin-top: 12px;
+            background: var(--bg-tertiary);
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 16px;
         }
 
         .dev-panel.active {
@@ -425,297 +629,279 @@
         }
 
         .debug-window {
-            background: #0a0a0a;
-            border-radius: 6px;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
             padding: 12px;
-            font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
-            font-size: 12px;
-            max-height: 200px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            max-height: 180px;
             overflow-y: auto;
-            margin-top: 12px;
+            margin-top: 16px;
         }
 
         .debug-line {
-            padding: 2px 0;
-            color: #666;
+            padding: 3px 0;
+            color: var(--text-muted);
         }
 
-        .debug-line.info { color: #00d4ff; }
-        .debug-line.success { color: #00ff88; }
-        .debug-line.error { color: #ff4444; }
-        .debug-line.warning { color: #ffa500; }
+        .debug-line.info { color: var(--accent); }
+        .debug-line.success { color: var(--success); }
+        .debug-line.error { color: var(--error); }
+        .debug-line.warning { color: var(--warning); }
 
         .footer {
             padding: 48px 24px;
             text-align: center;
-            color: #666;
+            border-top: 1px solid var(--border-subtle);
+        }
+
+        .footer p {
+            color: var(--text-muted);
             font-size: 14px;
         }
 
         .footer a {
-            color: #888;
+            color: var(--text-secondary);
             text-decoration: none;
+            transition: color 0.2s;
         }
 
         .footer a:hover {
-            color: #fff;
+            color: var(--text-primary);
         }
 
-        .hardware-section {
-            padding: 80px 24px;
-            max-width: 1200px;
-            margin: 0 auto;
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
         }
 
-        .hardware-section h2 {
-            text-align: center;
-            font-size: 32px;
-            margin-bottom: 16px;
-            color: #fff;
+        ::-webkit-scrollbar-track {
+            background: var(--bg-tertiary);
         }
 
-        .hardware-section .subtitle {
-            text-align: center;
-            color: #666;
-            margin-bottom: 48px;
+        ::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 4px;
         }
 
-        .hardware-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 20px;
-        }
-
-        .hardware-card {
-            background: #111;
-            border: 1px solid #222;
-            border-radius: 12px;
-            padding: 20px;
-            text-align: center;
-        }
-
-        .hardware-card .icon {
-            font-size: 32px;
-            margin-bottom: 12px;
-        }
-
-        .hardware-card h4 {
-            font-size: 15px;
-            color: #fff;
-            margin-bottom: 4px;
-        }
-
-        .hardware-card p {
-            font-size: 13px;
-            color: #666;
-        }
-
-        .cost-badge {
-            display: inline-block;
-            background: #00ff8820;
-            color: #00ff88;
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 13px;
-            font-weight: 600;
-            margin-top: 24px;
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-muted);
         }
     </style>
 </head>
 <body>
-    <nav class="navbar">
-        <div class="nav-container">
-            <a href="/" class="nav-brand"><span>Blackbox</span></a>
-            <div class="nav-links">
-                <a href="#features">Features</a>
-                <a href="#flash">Flash</a>
-                <a href="https://github.com/jctoledo/blackbox" target="_blank">GitHub</a>
-            </div>
-        </div>
-    </nav>
+    <div class="bg-grid"></div>
+    <div class="bg-glow"></div>
 
-    <section class="hero">
-        <h1>Vehicle Telemetry System</h1>
-        <p class="tagline">Open-source sensor fusion for track days, autocross, and vehicle dynamics research. Real-time GPS + IMU data streaming at 20Hz.</p>
-        <div class="hero-stats">
-            <div class="stat">
-                <div class="stat-value">20 Hz</div>
-                <div class="stat-label">Telemetry Rate</div>
+    <div class="content">
+        <nav class="navbar">
+            <div class="nav-container">
+                <a href="/" class="nav-brand">Blackbox</a>
+                <div class="nav-links">
+                    <a href="#features">Features</a>
+                    <a href="#hardware">Hardware</a>
+                    <a href="#flash">Flash</a>
+                    <a href="https://github.com/jctoledo/blackbox" target="_blank">GitHub</a>
+                </div>
             </div>
-            <div class="stat">
-                <div class="stat-value">200 Hz</div>
-                <div class="stat-label">IMU Sampling</div>
-            </div>
-            <div class="stat">
-                <div class="stat-value">7-State</div>
-                <div class="stat-label">Kalman Filter</div>
-            </div>
-            <div class="stat">
-                <div class="stat-value">~$30</div>
-                <div class="stat-label">Hardware Cost</div>
-            </div>
-        </div>
-    </section>
+        </nav>
 
-    <section class="features" id="features">
-        <h2>What Blackbox Does</h2>
-        <div class="feature-grid">
-            <div class="feature-card">
-                <div class="feature-icon">&#x1F4E1;</div>
-                <h3>Real-Time Sensor Fusion</h3>
-                <p>Extended Kalman Filter fuses 200Hz IMU data with 5Hz GPS for smooth, accurate position and velocity estimates.</p>
+        <section class="hero">
+            <div class="badge">
+                <span class="badge-dot"></span>
+                Open Source Vehicle Telemetry
             </div>
-            <div class="feature-card">
-                <div class="feature-icon">&#x1F4CD;</div>
-                <h3>Position Tracking</h3>
-                <p>Track your vehicle's position on a local coordinate system with automatic GPS warmup and reference point averaging.</p>
+            <h1>Track-ready data logging<br>for ~$50</h1>
+            <p class="tagline">Real-time GPS + IMU sensor fusion on ESP32. Professional-grade algorithms, fraction of the cost. Built for track days, autocross, and vehicle dynamics research.</p>
+            <div class="hero-stats">
+                <div class="stat">
+                    <div class="stat-value">20Hz</div>
+                    <div class="stat-label">Telemetry</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">200Hz</div>
+                    <div class="stat-label">IMU Sampling</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">7-State</div>
+                    <div class="stat-label">Kalman Filter</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value accent">~$50</div>
+                    <div class="stat-label">Total Cost</div>
+                </div>
             </div>
-            <div class="feature-card">
-                <div class="feature-icon">&#x1F3CE;</div>
-                <h3>Mode Detection</h3>
-                <p>Automatically classifies driving state: idle, acceleration, braking, or cornering based on sensor data.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon">&#x1F4F6;</div>
-                <h3>Wireless Streaming</h3>
-                <p>Binary telemetry over UDP at 20Hz. Compact 67-byte packets optimized for real-time analysis.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon">&#x26A1;</div>
-                <h3>Zero-Velocity Updates</h3>
-                <p>ZUPT prevents drift when stationary. Accelerometer bias is continuously estimated and corrected.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon">&#x1F6E0;</div>
-                <h3>Open Source</h3>
-                <p>MIT licensed. Full Rust firmware, Python receivers, and documentation. Build, modify, extend.</p>
-            </div>
-        </div>
-    </section>
+        </section>
 
-    <section class="hardware-section">
-        <h2>Hardware</h2>
-        <p class="subtitle">Commercial alternatives cost $500+. Build Blackbox for around $30.</p>
-        <div class="hardware-grid">
-            <div class="hardware-card">
-                <div class="icon">&#x1F4BB;</div>
-                <h4>ESP32-C3</h4>
-                <p>RISC-V microcontroller with WiFi</p>
+        <section class="features" id="features">
+            <div class="section-header">
+                <h2>What Blackbox Does</h2>
+                <p>Everything you need for vehicle data acquisition</p>
             </div>
-            <div class="hardware-card">
-                <div class="icon">&#x1F9ED;</div>
-                <h4>WT901 IMU</h4>
-                <p>9-axis sensor at 200Hz</p>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">&#x1F4E1;</div>
+                    <h3>Real-Time Sensor Fusion</h3>
+                    <p>Extended Kalman Filter fuses 200Hz IMU data with 5Hz GPS for smooth, accurate position and velocity estimates.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">&#x1F4CD;</div>
+                    <h3>Position Tracking</h3>
+                    <p>Track your vehicle's position on a local coordinate system with automatic GPS warmup and reference point averaging.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">&#x1F3CE;</div>
+                    <h3>Mode Detection</h3>
+                    <p>Automatically classifies driving state: idle, acceleration, braking, or cornering based on sensor data.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">&#x1F4F6;</div>
+                    <h3>Wireless Streaming</h3>
+                    <p>Binary telemetry over UDP at 20Hz. Compact 67-byte packets optimized for real-time analysis.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">&#x26A1;</div>
+                    <h3>Zero-Velocity Updates</h3>
+                    <p>ZUPT prevents drift when stationary. Accelerometer bias is continuously estimated and corrected.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">&#x1F6E0;</div>
+                    <h3>Open Source</h3>
+                    <p>MIT licensed. Full Rust firmware, Python receivers, and documentation. Build, modify, extend.</p>
+                </div>
             </div>
-            <div class="hardware-card">
-                <div class="icon">&#x1F6F0;</div>
-                <h4>NEO-6M GPS</h4>
-                <p>5Hz position updates</p>
-            </div>
-            <div class="hardware-card">
-                <div class="icon">&#x1F4A1;</div>
-                <h4>WS2812 LED</h4>
-                <p>Status indication</p>
-            </div>
-        </div>
-        <div style="text-align: center;">
-            <span class="cost-badge">Total: ~$30 in parts</span>
-        </div>
-    </section>
+        </section>
 
-    <section class="flasher-section" id="flash">
-        <div class="flasher-container">
-            <div class="flasher-header">
-                <h2>Flash Firmware</h2>
-                <p>Flash Blackbox directly from your browser using Web Serial. No toolchain required.</p>
-            </div>
-
-            <div class="flasher-grid">
-                <div class="flasher-panel">
-                    <h3>Setup</h3>
-                    <div class="form-group">
-                        <label>Select Project</label>
-                        <select id="project-select">
-                            <option value="">Choose firmware...</option>
-                        </select>
+        <section class="hardware-section" id="hardware">
+            <div class="hardware-container">
+                <div class="section-header">
+                    <h2>Hardware</h2>
+                    <p>Commercial alternatives cost $500+. Build yours for a fraction.</p>
+                </div>
+                <div class="hardware-grid">
+                    <div class="hardware-card">
+                        <div class="icon">&#x1F4BB;</div>
+                        <h4>ESP32-C3</h4>
+                        <p>RISC-V with WiFi</p>
                     </div>
-
-                    <div id="project-info" style="display: none;">
-                        <h3 style="margin-top: 24px;">Requirements</h3>
-                        <ul class="requirements-list" id="requirements-list">
-                        </ul>
-
-                        <h3 style="margin-top: 24px;">Steps</h3>
-                        <ol class="steps-list">
-                            <li>Connect ESP32-C3 via USB</li>
-                            <li>Click "Connect Device" and select the serial port</li>
-                            <li>Click "Flash Firmware" to begin</li>
-                            <li>Wait for completion, then reset device</li>
-                        </ol>
+                    <div class="hardware-card">
+                        <div class="icon">&#x1F9ED;</div>
+                        <h4>WT901 IMU</h4>
+                        <p>9-axis @ 200Hz</p>
+                    </div>
+                    <div class="hardware-card">
+                        <div class="icon">&#x1F6F0;</div>
+                        <h4>NEO-6M GPS</h4>
+                        <p>5Hz updates</p>
+                    </div>
+                    <div class="hardware-card">
+                        <div class="icon">&#x1F4A1;</div>
+                        <h4>WS2812 LED</h4>
+                        <p>Status indicator</p>
                     </div>
                 </div>
+                <div class="cost-display">
+                    <span class="cost-badge">Total: ~$50 in parts</span>
+                </div>
+            </div>
+        </section>
 
-                <div class="flasher-panel">
-                    <h3>Status</h3>
-                    <div class="status-box waiting" id="status-box">
-                        <div class="status-text">Ready</div>
-                        <div class="status-subtext">Select a project to begin</div>
-                    </div>
+        <section class="flasher-section" id="flash">
+            <div class="flasher-container">
+                <div class="section-header">
+                    <h2>Flash Firmware</h2>
+                    <p>Flash directly from your browser using Web Serial. No toolchain required.</p>
+                </div>
 
-                    <button class="flash-button" id="flash-button" disabled>
-                        Select a Project
-                    </button>
-
-                    <button class="dev-toggle" id="dev-toggle">
-                        <span>&#x2699;</span> Developer Options
-                    </button>
-
-                    <div class="dev-panel" id="dev-panel">
+                <div class="flasher-grid">
+                    <div class="flasher-panel">
+                        <h3>Setup</h3>
                         <div class="form-group">
-                            <label>Firmware Source</label>
-                            <div style="margin-top: 8px;">
-                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 8px;">
-                                    <input type="radio" name="source" value="release" checked id="source-release">
-                                    <span style="font-size: 13px; color: #888;">Download from release</span>
-                                </label>
-                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                    <input type="radio" name="source" value="custom" id="source-custom">
-                                    <span style="font-size: 13px; color: #888;">Upload custom .bin</span>
-                                </label>
-                            </div>
-                        </div>
-
-                        <div id="custom-upload" style="display: none;">
-                            <input type="file" id="custom-file" accept=".bin" style="width: 100%; padding: 8px; background: #0a0a0a; border: 1px solid #333; border-radius: 6px; color: #888; font-size: 13px;">
-                            <div id="file-info" style="font-size: 12px; color: #666; margin-top: 4px;"></div>
-                        </div>
-
-                        <div class="form-group">
-                            <label>Baud Rate</label>
-                            <select id="baudrate">
-                                <option value="115200" selected>115200 (Auto)</option>
-                                <option value="460800">460800</option>
-                                <option value="921600">921600</option>
+                            <label>Select Project</label>
+                            <select id="project-select">
+                                <option value="">Choose firmware...</option>
                             </select>
                         </div>
 
-                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; color: #888;">
-                            <input type="checkbox" id="verbose">
-                            Enable verbose logging
-                        </label>
+                        <div id="project-info" style="display: none;">
+                            <h3 style="margin-top: 24px;">Requirements</h3>
+                            <ul class="requirements-list" id="requirements-list">
+                            </ul>
 
-                        <div class="debug-window" id="debug-window">
-                            <div class="debug-line info">Ready to flash.</div>
+                            <h3 style="margin-top: 24px;">Steps</h3>
+                            <ol class="steps-list">
+                                <li>Connect ESP32-C3 via USB</li>
+                                <li>Click "Connect Device" and select port</li>
+                                <li>Click "Flash Firmware" to begin</li>
+                                <li>Wait for completion, then reset</li>
+                            </ol>
+                        </div>
+                    </div>
+
+                    <div class="flasher-panel">
+                        <h3>Status</h3>
+                        <div class="status-box waiting" id="status-box">
+                            <div class="status-text">Ready</div>
+                            <div class="status-subtext">Select a project to begin</div>
+                        </div>
+
+                        <button class="flash-button" id="flash-button" disabled>
+                            Select a Project
+                        </button>
+
+                        <button class="dev-toggle" id="dev-toggle">
+                            <span>&#x2699;</span> Developer Options
+                        </button>
+
+                        <div class="dev-panel" id="dev-panel">
+                            <div class="form-group">
+                                <label>Firmware Source</label>
+                                <div style="margin-top: 8px;">
+                                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 8px;">
+                                        <input type="radio" name="source" value="release" checked id="source-release">
+                                        <span style="font-size: 13px; color: var(--text-muted);">Download from release</span>
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                        <input type="radio" name="source" value="custom" id="source-custom">
+                                        <span style="font-size: 13px; color: var(--text-muted);">Upload custom .bin</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div id="custom-upload" style="display: none;">
+                                <input type="file" id="custom-file" accept=".bin" style="width: 100%; padding: 8px; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 6px; color: var(--text-muted); font-size: 13px;">
+                                <div id="file-info" style="font-size: 12px; color: var(--text-muted); margin-top: 4px;"></div>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Baud Rate</label>
+                                <select id="baudrate">
+                                    <option value="115200" selected>115200 (Auto)</option>
+                                    <option value="460800">460800</option>
+                                    <option value="921600">921600</option>
+                                </select>
+                            </div>
+
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; color: var(--text-muted);">
+                                <input type="checkbox" id="verbose">
+                                Enable verbose logging
+                            </label>
+
+                            <div class="debug-window" id="debug-window">
+                                <div class="debug-line info">Ready to flash.</div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
-    </section>
+        </section>
 
-    <footer class="footer">
-        <p>Blackbox is open source. <a href="https://github.com/jctoledo/blackbox" target="_blank">View on GitHub</a></p>
-    </footer>
+        <footer class="footer">
+            <p>Blackbox is open source. <a href="https://github.com/jctoledo/blackbox" target="_blank">View on GitHub</a></p>
+        </footer>
+    </div>
 
     <script src="projects-config.js"></script>
     <script type="module">
@@ -792,7 +978,7 @@
             if (!file) return;
 
             if (!file.name.endsWith('.bin')) {
-                fileInfo.innerHTML = '<span style="color: #ff4444;">Must be a .bin file</span>';
+                fileInfo.innerHTML = '<span style="color: var(--error);">Must be a .bin file</span>';
                 customFirmware = null;
                 return;
             }
@@ -800,7 +986,7 @@
             const buffer = await file.arrayBuffer();
             customFirmware = new Uint8Array(buffer);
             const size = (buffer.byteLength / 1024).toFixed(1);
-            fileInfo.innerHTML = `<span style="color: #00ff88;">${file.name} (${size} KB)</span>`;
+            fileInfo.innerHTML = `<span style="color: var(--success);">${file.name} (${size} KB)</span>`;
             logDebug(`Loaded: ${file.name} (${size} KB)`, 'success');
         });
 

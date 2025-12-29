@@ -6,7 +6,7 @@
 
 Blackbox is an open-source vehicle telemetry system that runs on an ESP32 microcontroller. It combines data from an IMU (accelerometer/gyroscope) and GPS using an Extended Kalman Filter to provide accurate position, velocity, acceleration, and driving dynamics in real-time.
 
-Think of it as a professional-grade data logger that costs $30 instead of $500+.
+Think of it as a professional-grade data logger that costs ~$50 instead of $500+.
 
 ### Who is this for?
 
@@ -40,7 +40,7 @@ Blackbox:
 
 ### How is this different from commercial data loggers?
 
-**Blackbox ($30):**
+**Blackbox (~$50):**
 - Open source (hack it, modify it, learn from it)
 - 20 Hz telemetry
 - IMU + GPS sensor fusion

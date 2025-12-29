@@ -9,7 +9,7 @@ Blackbox is an ESP32-C3 vehicle telemetry system that performs real-time sensor 
 **Target Hardware:** ESP32-C3 microcontroller
 **Sensors:** WT901 9-axis IMU (UART), NEO-6M GPS (UART)
 **Output:** TCP streaming (20 Hz binary telemetry), MQTT (status messages)
-**Cost:** ~$30 in parts vs. $500+ commercial alternatives
+**Cost:** ~$50 in parts vs. $500+ commercial alternatives
 
 ## Build and Development Commands
 
