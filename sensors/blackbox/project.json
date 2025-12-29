@@ -77,27 +77,18 @@
       ]
     },
     {
-      "id": "tcp",
-      "title": "TCP Telemetry",
+      "id": "udp",
+      "title": "UDP Telemetry",
       "description": "Stream real-time data to your computer (20 Hz)",
       "fields": [
         {
           "id": "server",
-          "label": "Server IP",
+          "label": "Server IP:Port",
           "type": "text",
-          "placeholder": "192.168.1.100",
+          "placeholder": "192.168.1.100:9000",
           "required": true,
-          "help": "IP address of computer running tcp_telemetry_server.py",
-          "nvsKey": "tcp_server"
-        },
-        {
-          "id": "port",
-          "label": "Port",
-          "type": "number",
-          "placeholder": "9000",
-          "default": 9000,
-          "required": true,
-          "nvsKey": "tcp_port"
+          "help": "IP:Port of computer running udp_telemetry_server.py",
+          "nvsKey": "udp_server"
         }
       ]
     }

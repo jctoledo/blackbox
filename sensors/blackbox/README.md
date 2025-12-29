@@ -14,7 +14,7 @@ High-performance sensor fusion telemetry system for ESP32-C3 using the Blackbox 
 - ✅ **Real-time sensor fusion** using Extended Kalman Filter (EKF)
 - ✅ **200Hz IMU processing** with gravity compensation and bias correction
 - ✅ **GPS integration** with position and velocity updates
-- ✅ **Binary telemetry** over TCP at 20Hz (66-byte packets)
+- ✅ **Binary telemetry** over UDP at 20Hz (67-byte packets)
 - ✅ **MQTT status messages** for monitoring
 - ✅ **Visual status feedback** via RGB LED
 - ✅ **Zero-velocity updates (ZUPT)** for drift prevention
@@ -84,7 +84,7 @@ Run the Python telemetry receiver on your laptop:
 ```bash
 cd tools/python
 pip install -r requirements.txt
-python tcp_telemetry_server.py
+python udp_telemetry_server.py
 ```
 
 This will display:
@@ -96,20 +96,21 @@ This will display:
 
 ## Binary Telemetry Protocol
 
-66-byte binary packet structure sent at 20Hz over TCP:
+67-byte binary packet structure sent at 20Hz over UDP:
 
 ```
-[Header: 2 bytes] 0xAA 0x55
+[Version: 1 byte] Protocol version (0x01)
+[Header: 2 bytes] 0xAA55
 [Timestamp: 4 bytes] milliseconds
-[Accel: 12 bytes] ax, ay, az (m/s²)
-[Gyro: 4 bytes] wz (rad/s)
-[Orientation: 12 bytes] roll, pitch, yaw (rad)
-[Position: 8 bytes] x, y (m)
-[Velocity: 8 bytes] vx, vy (m/s)
-[Speed: 4 bytes] speed (km/h)
-[GPS: 9 bytes] lat, lon (deg), valid flag
-[Mode: 1 byte] driving mode
-[Checksum: 2 bytes] CRC16
+[Accel: 12 bytes] ax, ay, az (f32, m/s²)
+[Gyro: 4 bytes] wz (f32, rad/s)
+[Orientation: 12 bytes] roll, pitch, yaw (f32, rad)
+[Position: 8 bytes] x, y (f32, m)
+[Velocity: 8 bytes] vx, vy (f32, m/s)
+[Speed: 4 bytes] speed (f32, km/h)
+[Mode: 1 byte] driving mode (0=IDLE, 1=ACCEL, 2=BRAKE, 3=CORNER)
+[GPS: 9 bytes] lat, lon (f32, deg), valid flag (u8)
+[Checksum: 2 bytes] sum of first 65 bytes
 ```
 
 ## LED Status Codes
@@ -126,60 +127,25 @@ blackbox/
 ├── src/
 │   ├── main.rs              - Application entry point
 │   ├── system.rs            - System components (SensorManager, etc.)
-│   ├── sensor_plugins.rs    - WT901 + NEO-6M plugin implementations
-│   ├── fusion_coordinator.rs- Multi-sensor fusion coordinator
+│   ├── config.rs            - Configuration management
 │   ├── imu.rs               - WT901 9-axis IMU driver
 │   ├── gps.rs               - NEO-6M GPS NMEA parser
 │   ├── binary_telemetry.rs  - Binary protocol encoding
 │   ├── mode.rs              - Driving mode classifier
 │   ├── mqtt.rs              - MQTT client
-│   ├── tcp_stream.rs        - TCP telemetry stream
+│   ├── udp_stream.rs        - UDP telemetry stream
 │   ├── wifi.rs              - WiFi connection management
-│   ├── rgb_led.rs           - WS2812 LED driver
-│   └── web_sockets.rs       - WebSocket support
+│   └── rgb_led.rs           - WS2812 LED driver
 │
 ├── tools/python/
-│   ├── tcp_telemetry_server.py     - Telemetry receiver + visualizer
+│   ├── udp_telemetry_server.py     - Telemetry receiver + visualizer
 │   ├── mqtt_binary_decoder.py      - MQTT telemetry decoder
 │   └── requirements.txt
-│
-├── docs/
-│   ├── FINAL_SUMMARY.md            - Complete project summary
-│   ├── REFACTORING_SUMMARY.md      - SOLID refactoring details
-│   └── CODE_REVIEW_REFACTORED.md   - Code quality analysis
 │
 ├── Cargo.toml               - Project dependencies
 ├── build.rs                 - ESP-IDF build script
 └── config.toml.example      - Configuration template
 ```
-
-## Adding More Sensors
-
-This project uses the Blackbox Framework, making it easy to add new sensors to the same ESP32:
-
-```rust
-// Example: Add wheel speed sensors
-use blackbox_framework::sensor_framework::Sensor;
-
-pub struct WheelSpeedSensor {
-    gpio_pin: GpioPin,
-}
-
-impl Sensor for WheelSpeedSensor {
-    fn poll(&mut self) -> Option<SensorReading> {
-        // Read GPIO pulses
-        Some(SensorReading { /* ... */ })
-    }
-}
-
-// In main.rs - just add one line:
-let wheels = Box::new(WheelSpeedSensor::new(gpio_pin));
-registry.register(wheels).unwrap();
-```
-
-No changes to existing IMU/GPS code required!
-
-See the [Sensor Toolkit Guide](../../docs/SENSOR_TOOLKIT_GUIDE.md) for detailed instructions.
 
 ## Performance Metrics
 
@@ -203,10 +169,11 @@ See the [Sensor Toolkit Guide](../../docs/SENSOR_TOOLKIT_GUIDE.md) for detailed 
 - Check accelerometer bias in telemetry
 - Verify mounting is secure (no vibrations)
 
-### TCP Connection Drops
+### UDP Connection Issues
 - Check firewall settings on receiver
 - Verify IP address in config.toml
 - Monitor WiFi signal strength
+- UDP is connectionless - packets may be dropped on poor networks
 
 ### Compilation Errors
 ```bash
@@ -219,14 +186,6 @@ cargo update
 # Re-flash bootloader if needed
 espflash flash --erase-parts nvs
 ```
-
-## Documentation
-
-- [Final Summary](docs/FINAL_SUMMARY.md) - Complete project overview
-- [Refactoring Summary](docs/REFACTORING_SUMMARY.md) - SOLID improvements
-- [Code Review](docs/CODE_REVIEW_REFACTORED.md) - Code quality analysis
-- [Framework Guide](../../docs/SENSOR_TOOLKIT_GUIDE.md) - Adding sensors
-- [Architecture](../../docs/ARCHITECTURE.md) - System design
 
 ## License
 
