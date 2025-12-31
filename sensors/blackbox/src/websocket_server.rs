@@ -24,15 +24,15 @@ pub struct ModeSettings {
 
 impl Default for ModeSettings {
     fn default() -> Self {
-        // Matches city preset - reasonable defaults for street driving
+        // Matches city preset - sensitive defaults for street driving
         Self {
-            acc_thr: 0.15,     // 0.15g - intentional acceleration
-            acc_exit: 0.07,    // Exit threshold
-            brake_thr: -0.25,  // -0.25g - normal braking
-            brake_exit: -0.12, // Exit threshold
-            lat_thr: 0.18,     // 0.18g - noticeable turn
-            lat_exit: 0.09,    // Exit threshold
-            yaw_thr: 0.06,     // ~3.4°/s yaw rate
+            acc_thr: 0.10,     // 0.10g - city driving (gentle acceleration)
+            acc_exit: 0.05,    // Exit threshold
+            brake_thr: -0.18,  // -0.18g - city driving (normal braking)
+            brake_exit: -0.09, // Exit threshold
+            lat_thr: 0.12,     // 0.12g - city turns
+            lat_exit: 0.06,    // Exit threshold
+            yaw_thr: 0.05,     // ~2.9°/s yaw rate
             min_speed: 2.0,    // ~7 km/h
         }
     }
@@ -276,20 +276,20 @@ body{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0f;color:#f0
 <button class="preset-btn custom" data-preset="custom">Custom</button>
 </div>
 <div class="preset-summary" id="preset-summary">
-<div class="ps-row"><span class="ps-label">Accel</span><span class="ps-value" id="ps-acc">0.15<span>/0.07g</span></span></div>
-<div class="ps-row"><span class="ps-label">Brake</span><span class="ps-value" id="ps-brake">0.25<span>/0.12g</span></span></div>
-<div class="ps-row"><span class="ps-label">Lateral</span><span class="ps-value" id="ps-lat">0.18<span>/0.09g</span></span></div>
-<div class="ps-row"><span class="ps-label">Yaw</span><span class="ps-value" id="ps-yaw">0.06<span> r/s</span></span></div>
+<div class="ps-row"><span class="ps-label">Accel</span><span class="ps-value" id="ps-acc">0.10<span>/0.05g</span></span></div>
+<div class="ps-row"><span class="ps-label">Brake</span><span class="ps-value" id="ps-brake">0.18<span>/0.09g</span></span></div>
+<div class="ps-row"><span class="ps-label">Lateral</span><span class="ps-value" id="ps-lat">0.12<span>/0.06g</span></span></div>
+<div class="ps-row"><span class="ps-label">Yaw</span><span class="ps-value" id="ps-yaw">0.05<span> r/s</span></span></div>
 <div class="ps-row" style="grid-column:span 2;justify-content:center;margin-top:4px;padding-top:8px;border-top:1px solid #1a1a24"><span class="ps-label">Min Speed</span><span class="ps-value" id="ps-minspd" style="margin-left:8px">2.0<span> m/s</span></span></div>
 </div>
 <div class="cfg-sliders" id="cfg-sliders">
-<div class="cfg-row"><span class="cfg-lbl">Accel</span><input type="range" min="0.05" max="0.80" step="0.01" class="cfg-slider" id="s-acc" value="0.15" oninput="updS('acc')"><span class="cfg-val" id="v-acc">0.15</span><span class="cfg-unit">g</span></div>
-<div class="cfg-row"><span class="cfg-lbl">Acc Exit</span><input type="range" min="0.02" max="0.50" step="0.01" class="cfg-slider" id="s-accexit" value="0.07" oninput="updS('accexit')"><span class="cfg-val" id="v-accexit">0.07</span><span class="cfg-unit">g</span></div>
-<div class="cfg-row"><span class="cfg-lbl">Brake</span><input type="range" min="0.10" max="1.20" step="0.01" class="cfg-slider" id="s-brake" value="0.25" oninput="updS('brake')"><span class="cfg-val" id="v-brake">0.25</span><span class="cfg-unit">g</span></div>
-<div class="cfg-row"><span class="cfg-lbl">Brk Exit</span><input type="range" min="0.05" max="0.60" step="0.01" class="cfg-slider" id="s-brakeexit" value="0.12" oninput="updS('brakeexit')"><span class="cfg-val" id="v-brakeexit">0.12</span><span class="cfg-unit">g</span></div>
-<div class="cfg-row"><span class="cfg-lbl">Lateral</span><input type="range" min="0.05" max="1.20" step="0.01" class="cfg-slider" id="s-lat" value="0.18" oninput="updS('lat')"><span class="cfg-val" id="v-lat">0.18</span><span class="cfg-unit">g</span></div>
-<div class="cfg-row"><span class="cfg-lbl">Lat Exit</span><input type="range" min="0.02" max="0.60" step="0.01" class="cfg-slider" id="s-latexit" value="0.09" oninput="updS('latexit')"><span class="cfg-val" id="v-latexit">0.09</span><span class="cfg-unit">g</span></div>
-<div class="cfg-row"><span class="cfg-lbl">Yaw</span><input type="range" min="0.02" max="0.35" step="0.005" class="cfg-slider" id="s-yaw" value="0.06" oninput="updS('yaw')"><span class="cfg-val" id="v-yaw">0.060</span><span class="cfg-unit">r/s</span></div>
+<div class="cfg-row"><span class="cfg-lbl">Accel</span><input type="range" min="0.05" max="0.80" step="0.01" class="cfg-slider" id="s-acc" value="0.10" oninput="updS('acc')"><span class="cfg-val" id="v-acc">0.10</span><span class="cfg-unit">g</span></div>
+<div class="cfg-row"><span class="cfg-lbl">Acc Exit</span><input type="range" min="0.02" max="0.50" step="0.01" class="cfg-slider" id="s-accexit" value="0.05" oninput="updS('accexit')"><span class="cfg-val" id="v-accexit">0.05</span><span class="cfg-unit">g</span></div>
+<div class="cfg-row"><span class="cfg-lbl">Brake</span><input type="range" min="0.10" max="1.20" step="0.01" class="cfg-slider" id="s-brake" value="0.18" oninput="updS('brake')"><span class="cfg-val" id="v-brake">0.18</span><span class="cfg-unit">g</span></div>
+<div class="cfg-row"><span class="cfg-lbl">Brk Exit</span><input type="range" min="0.05" max="0.60" step="0.01" class="cfg-slider" id="s-brakeexit" value="0.09" oninput="updS('brakeexit')"><span class="cfg-val" id="v-brakeexit">0.09</span><span class="cfg-unit">g</span></div>
+<div class="cfg-row"><span class="cfg-lbl">Lateral</span><input type="range" min="0.05" max="1.20" step="0.01" class="cfg-slider" id="s-lat" value="0.12" oninput="updS('lat')"><span class="cfg-val" id="v-lat">0.12</span><span class="cfg-unit">g</span></div>
+<div class="cfg-row"><span class="cfg-lbl">Lat Exit</span><input type="range" min="0.02" max="0.60" step="0.01" class="cfg-slider" id="s-latexit" value="0.06" oninput="updS('latexit')"><span class="cfg-val" id="v-latexit">0.06</span><span class="cfg-unit">g</span></div>
+<div class="cfg-row"><span class="cfg-lbl">Yaw</span><input type="range" min="0.02" max="0.35" step="0.005" class="cfg-slider" id="s-yaw" value="0.05" oninput="updS('yaw')"><span class="cfg-val" id="v-yaw">0.050</span><span class="cfg-unit">r/s</span></div>
 <div class="cfg-row"><span class="cfg-lbl">Min Spd</span><input type="range" min="1.0" max="10.0" step="0.5" class="cfg-slider" id="s-minspd" value="2.0" oninput="updS('minspd')"><span class="cfg-val" id="v-minspd">2.0</span><span class="cfg-unit">m/s</span></div>
 <div class="cfg-btns"><button class="cfg-btn" onclick="resetToPreset()">Reset</button><button class="cfg-btn cfg-save" onclick="saveCfg()">Apply</button></div>
 </div>
@@ -310,16 +310,16 @@ const $=id=>document.getElementById(id);
 const cv=$('gfc'),ctx=cv.getContext('2d');
 const CX=70,CY=70,R=55,SCL=R/2;
 
-// Preset definitions based on real-world G-forces:
-// City: normal driving 0.15-0.25g accel, 0.25-0.40g brake, 0.15-0.25g lateral
-// Highway: gentle inputs, mostly cruising
-// Canyon: spirited 0.25-0.40g accel, 0.35-0.60g brake, 0.30-0.50g lateral
-// Track: racing 0.40-0.80g accel, 0.70-1.20g brake, 0.60-1.20g lateral
+// Preset definitions based on real-world G-forces (tested values):
+// City: gentle-normal inputs (0.10-0.20g accel, 0.15-0.30g brake, 0.10-0.25g lateral)
+// Highway: mostly cruising, higher speed threshold to filter parking maneuvers
+// Canyon: spirited driving (0.20-0.40g range)
+// Track: racing (0.35-0.80g+ range)
 const PRESETS={
-track:{acc:0.45,acc_exit:0.22,brake:0.70,brake_exit:0.35,lat:0.65,lat_exit:0.32,yaw:0.20,min_speed:4.0,desc:'Racing/track days'},
-canyon:{acc:0.25,acc_exit:0.12,brake:0.40,brake_exit:0.20,lat:0.35,lat_exit:0.17,yaw:0.12,min_speed:3.0,desc:'Spirited mountain roads'},
-city:{acc:0.15,acc_exit:0.07,brake:0.25,brake_exit:0.12,lat:0.18,lat_exit:0.09,yaw:0.06,min_speed:2.0,desc:'Daily street driving'},
-highway:{acc:0.10,acc_exit:0.05,brake:0.20,brake_exit:0.10,lat:0.12,lat_exit:0.06,yaw:0.04,min_speed:5.0,desc:'Highway cruising'}
+track:{acc:0.35,acc_exit:0.17,brake:0.55,brake_exit:0.27,lat:0.50,lat_exit:0.25,yaw:0.15,min_speed:4.0,desc:'Racing/track days'},
+canyon:{acc:0.22,acc_exit:0.11,brake:0.35,brake_exit:0.17,lat:0.28,lat_exit:0.14,yaw:0.10,min_speed:3.0,desc:'Spirited mountain roads'},
+city:{acc:0.10,acc_exit:0.05,brake:0.18,brake_exit:0.09,lat:0.12,lat_exit:0.06,yaw:0.05,min_speed:2.0,desc:'Daily street driving'},
+highway:{acc:0.12,acc_exit:0.06,brake:0.22,brake_exit:0.11,lat:0.14,lat_exit:0.07,yaw:0.04,min_speed:5.0,desc:'Highway cruising'}
 };
 
 function fmtTime(ms){const s=Math.floor(ms/1000),m=Math.floor(s/60);return String(m).padStart(2,'0')+':'+String(s%60).padStart(2,'0')}

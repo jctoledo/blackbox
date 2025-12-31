@@ -112,13 +112,13 @@ impl Default for ModeConfig {
     fn default() -> Self {
         Self {
             min_speed: 2.0,    // ~7 km/h - must be moving for accel/brake/corner
-            acc_thr: 0.15,     // 0.15g - city driving threshold
-            acc_exit: 0.07,    // exit when below 0.07g
-            brake_thr: -0.25,  // -0.25g - normal braking threshold
-            brake_exit: -0.12, // exit when above -0.12g
-            lat_thr: 0.18,     // 0.18g lateral - reasonable turn
-            lat_exit: 0.09,    // exit when below 0.09g
-            yaw_thr: 0.06,     // ~3.4°/s yaw rate
+            acc_thr: 0.10,     // 0.10g - city driving (gentle acceleration)
+            acc_exit: 0.05,    // exit when below 0.05g
+            brake_thr: -0.18,  // -0.18g - city driving (normal braking)
+            brake_exit: -0.09, // exit when above -0.09g
+            lat_thr: 0.12,     // 0.12g lateral - city turns
+            lat_exit: 0.06,    // exit when below 0.06g
+            yaw_thr: 0.05,     // ~2.9°/s yaw rate
             alpha: 0.35,       // EMA smoothing - balanced responsiveness vs bump rejection
         }
     }

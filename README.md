@@ -512,10 +512,10 @@ Mode detection thresholds can be configured **live from the mobile dashboard** u
 
 | Preset | Accel | Brake | Lateral | Yaw | Min Speed | Best For |
 |--------|-------|-------|---------|-----|-----------|----------|
-| **Track** | 0.45g | 0.70g | 0.65g | 0.20 rad/s | 4.0 m/s | Racing, track days |
-| **Canyon** | 0.25g | 0.40g | 0.35g | 0.12 rad/s | 3.0 m/s | Spirited mountain roads |
-| **City** | 0.15g | 0.25g | 0.18g | 0.06 rad/s | 2.0 m/s | Daily driving (default) |
-| **Highway** | 0.10g | 0.20g | 0.12g | 0.04 rad/s | 5.0 m/s | Highway cruising |
+| **Track** | 0.35g | 0.55g | 0.50g | 0.15 rad/s | 4.0 m/s | Racing, track days |
+| **Canyon** | 0.22g | 0.35g | 0.28g | 0.10 rad/s | 3.0 m/s | Spirited mountain roads |
+| **City** | 0.10g | 0.18g | 0.12g | 0.05 rad/s | 2.0 m/s | Daily driving (default) |
+| **Highway** | 0.12g | 0.22g | 0.14g | 0.04 rad/s | 5.0 m/s | Highway cruising |
 | **Custom** | User-defined via sliders | | | | | Fine-tuning |
 
 Each threshold has an **entry** and **exit** value (hysteresis) to prevent oscillation. Exit thresholds are typically 50% of entry values.
