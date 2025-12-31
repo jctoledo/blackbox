@@ -217,16 +217,31 @@ body{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0f;color:#f0
 .gps-box{background:#111;border-radius:8px;padding:8px 12px;text-align:center;font-size:11px;color:#555;border:1px solid #1a1a24}
 .gps-box.ok{color:#22c55e}
 .cfg-section{background:#111;border-radius:10px;padding:12px;margin-top:10px;border:1px solid #1a1a24}
-.cfg-title{font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;text-align:center}
+.cfg-title{font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;text-align:center}
+.preset-row{display:flex;gap:6px;margin-bottom:12px}
+.preset-btn{flex:1;padding:10px 4px;border:1px solid #252530;border-radius:8px;background:#0a0a0f;color:#666;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;cursor:pointer;transition:all .2s}
+.preset-btn:active{transform:scale(0.97)}
+.preset-btn.active{background:linear-gradient(135deg,#1e3a5f,#1a2d4a);border-color:#3b82f6;color:#60a5fa;box-shadow:0 0 12px rgba(59,130,246,0.2)}
+.preset-btn.custom{border-style:dashed}
+.preset-btn.custom.active{border-style:solid}
+.preset-summary{background:#0a0a0f;border-radius:8px;padding:12px;border:1px solid #1a1a24;display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;font-size:11px}
+.preset-summary.hidden{display:none}
+.ps-row{display:flex;justify-content:space-between;align-items:center}
+.ps-label{color:#555;text-transform:uppercase;font-size:9px;letter-spacing:0.5px}
+.ps-value{color:#60a5fa;font-weight:600;font-variant-numeric:tabular-nums}
+.ps-value span{color:#444;font-weight:400}
+.cfg-sliders{display:none}
+.cfg-sliders.show{display:block}
 .cfg-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
-.cfg-lbl{font-size:10px;color:#666;width:45px}
+.cfg-lbl{font-size:10px;color:#666;width:50px}
 .cfg-slider{flex:1;-webkit-appearance:none;background:#1a1a24;height:6px;border-radius:3px}
 .cfg-slider::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;background:#3b82f6;border-radius:50%}
-.cfg-val{font-size:12px;color:#60a5fa;width:35px;text-align:right}
+.cfg-val{font-size:12px;color:#60a5fa;width:35px;text-align:right;font-variant-numeric:tabular-nums}
 .cfg-unit{font-size:9px;color:#444;width:22px}
-.cfg-btns{display:flex;gap:8px;margin-top:10px}
-.cfg-btn{flex:1;padding:8px;border:none;border-radius:6px;font-size:11px;background:#1a1a24;color:#666;cursor:pointer}
-.cfg-btn.cfg-save{background:#1e3a5f;color:#60a5fa}
+.cfg-btns{display:flex;gap:8px;margin-top:12px}
+.cfg-btn{flex:1;padding:10px;border:none;border-radius:6px;font-size:11px;font-weight:600;background:#1a1a24;color:#666;cursor:pointer;transition:all .2s}
+.cfg-btn:active{transform:scale(0.97)}
+.cfg-btn.cfg-save{background:linear-gradient(135deg,#1e3a5f,#1a2d4a);color:#60a5fa}
 </style></head>
 <body>
 <div class="hdr"><div class="logo">BLACKBOX <span style="font-size:9px;color:#333">v4</span></div><div class="hdr-r"><span class="timer" id="timer">00:00</span><div class="st"><span class="dot" id="dot"></span><span id="stxt">--</span></div></div></div>
@@ -251,16 +266,32 @@ body{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0f;color:#f0
 </div>
 <div class="gps-box" id="gpsbox"><span id="gps">GPS: --</span></div>
 <div class="cfg-section">
-<div class="cfg-title">Mode Detection Settings</div>
-<div class="cfg-row"><span class="cfg-lbl">Accel</span><input type="range" min="0.05" max="0.50" step="0.01" class="cfg-slider" id="s-acc" value="0.10" oninput="updS('acc')"><span class="cfg-val" id="v-acc">0.10</span><span class="cfg-unit">g</span></div>
+<div class="cfg-title">Driving Preset</div>
+<div class="preset-row">
+<button class="preset-btn" data-preset="track">Track</button>
+<button class="preset-btn" data-preset="canyon">Canyon</button>
+<button class="preset-btn active" data-preset="city">City</button>
+<button class="preset-btn" data-preset="highway">Hwy</button>
+<button class="preset-btn custom" data-preset="custom">Custom</button>
+</div>
+<div class="preset-summary" id="preset-summary">
+<div class="ps-row"><span class="ps-label">Accel</span><span class="ps-value" id="ps-acc">0.10<span>/0.05g</span></span></div>
+<div class="ps-row"><span class="ps-label">Brake</span><span class="ps-value" id="ps-brake">0.18<span>/0.09g</span></span></div>
+<div class="ps-row"><span class="ps-label">Lateral</span><span class="ps-value" id="ps-lat">0.12<span>/0.06g</span></span></div>
+<div class="ps-row"><span class="ps-label">Yaw</span><span class="ps-value" id="ps-yaw">0.05<span> r/s</span></span></div>
+<div class="ps-row" style="grid-column:span 2;justify-content:center;margin-top:4px;padding-top:8px;border-top:1px solid #1a1a24"><span class="ps-label">Min Speed</span><span class="ps-value" id="ps-minspd" style="margin-left:8px">2.0<span> m/s</span></span></div>
+</div>
+<div class="cfg-sliders" id="cfg-sliders">
+<div class="cfg-row"><span class="cfg-lbl">Accel</span><input type="range" min="0.05" max="0.80" step="0.01" class="cfg-slider" id="s-acc" value="0.10" oninput="updS('acc')"><span class="cfg-val" id="v-acc">0.10</span><span class="cfg-unit">g</span></div>
 <div class="cfg-row"><span class="cfg-lbl">Acc Exit</span><input type="range" min="0.02" max="0.50" step="0.01" class="cfg-slider" id="s-accexit" value="0.05" oninput="updS('accexit')"><span class="cfg-val" id="v-accexit">0.05</span><span class="cfg-unit">g</span></div>
-<div class="cfg-row"><span class="cfg-lbl">Brake</span><input type="range" min="0.05" max="0.50" step="0.01" class="cfg-slider" id="s-brake" value="0.18" oninput="updS('brake')"><span class="cfg-val" id="v-brake">0.18</span><span class="cfg-unit">g</span></div>
+<div class="cfg-row"><span class="cfg-lbl">Brake</span><input type="range" min="0.05" max="0.80" step="0.01" class="cfg-slider" id="s-brake" value="0.18" oninput="updS('brake')"><span class="cfg-val" id="v-brake">0.18</span><span class="cfg-unit">g</span></div>
 <div class="cfg-row"><span class="cfg-lbl">Brk Exit</span><input type="range" min="0.02" max="0.50" step="0.01" class="cfg-slider" id="s-brakeexit" value="0.09" oninput="updS('brakeexit')"><span class="cfg-val" id="v-brakeexit">0.09</span><span class="cfg-unit">g</span></div>
-<div class="cfg-row"><span class="cfg-lbl">Lateral</span><input type="range" min="0.05" max="0.50" step="0.01" class="cfg-slider" id="s-lat" value="0.12" oninput="updS('lat')"><span class="cfg-val" id="v-lat">0.12</span><span class="cfg-unit">g</span></div>
-<div class="cfg-row"><span class="cfg-lbl">Lat Exit</span><input type="range" min="0.02" max="0.50" step="0.01" class="cfg-slider" id="s-latexit" value="0.06" oninput="updS('latexit')"><span class="cfg-val" id="v-latexit">0.06</span><span class="cfg-unit">g</span></div>
-<div class="cfg-row"><span class="cfg-lbl">Yaw</span><input type="range" min="0.01" max="0.20" step="0.005" class="cfg-slider" id="s-yaw" value="0.05" oninput="updS('yaw')"><span class="cfg-val" id="v-yaw">0.050</span><span class="cfg-unit">r/s</span></div>
-<div class="cfg-row"><span class="cfg-lbl">Min Spd</span><input type="range" min="0.5" max="5.0" step="0.1" class="cfg-slider" id="s-minspd" value="2.0" oninput="updS('minspd')"><span class="cfg-val" id="v-minspd">2.0</span><span class="cfg-unit">m/s</span></div>
-<div class="cfg-btns"><button class="cfg-btn" onclick="resetDef()">Defaults</button><button class="cfg-btn cfg-save" onclick="saveCfg()">Save</button></div>
+<div class="cfg-row"><span class="cfg-lbl">Lateral</span><input type="range" min="0.05" max="1.00" step="0.01" class="cfg-slider" id="s-lat" value="0.12" oninput="updS('lat')"><span class="cfg-val" id="v-lat">0.12</span><span class="cfg-unit">g</span></div>
+<div class="cfg-row"><span class="cfg-lbl">Lat Exit</span><input type="range" min="0.02" max="0.60" step="0.01" class="cfg-slider" id="s-latexit" value="0.06" oninput="updS('latexit')"><span class="cfg-val" id="v-latexit">0.06</span><span class="cfg-unit">g</span></div>
+<div class="cfg-row"><span class="cfg-lbl">Yaw</span><input type="range" min="0.01" max="0.30" step="0.005" class="cfg-slider" id="s-yaw" value="0.05" oninput="updS('yaw')"><span class="cfg-val" id="v-yaw">0.050</span><span class="cfg-unit">r/s</span></div>
+<div class="cfg-row"><span class="cfg-lbl">Min Spd</span><input type="range" min="0.5" max="8.0" step="0.1" class="cfg-slider" id="s-minspd" value="2.0" oninput="updS('minspd')"><span class="cfg-val" id="v-minspd">2.0</span><span class="cfg-unit">m/s</span></div>
+<div class="cfg-btns"><button class="cfg-btn" onclick="resetToPreset()">Reset</button><button class="cfg-btn cfg-save" onclick="saveCfg()">Apply</button></div>
+</div>
 </div>
 </div>
 <div class="ctrl">
@@ -273,9 +304,18 @@ let rec=0,data=[],cnt=0,lastSeq=0;
 let trail=[],maxL=0,maxR=0,maxA=0,maxB=0,maxSpd=0;
 let speed_ema=0;
 let sessionStart=Date.now();
+let currentPreset='city';
 const $=id=>document.getElementById(id);
 const cv=$('gfc'),ctx=cv.getContext('2d');
 const CX=70,CY=70,R=55,SCL=R/2;
+
+// Preset definitions: [acc, acc_exit, brake, brake_exit, lat, lat_exit, yaw, min_speed]
+const PRESETS={
+track:{acc:0.30,acc_exit:0.15,brake:0.50,brake_exit:0.25,lat:0.50,lat_exit:0.25,yaw:0.15,min_speed:3.0,desc:'High thresholds for racing'},
+canyon:{acc:0.20,acc_exit:0.10,brake:0.35,brake_exit:0.17,lat:0.30,lat_exit:0.15,yaw:0.10,min_speed:2.5,desc:'Spirited twisty roads'},
+city:{acc:0.10,acc_exit:0.05,brake:0.18,brake_exit:0.09,lat:0.12,lat_exit:0.06,yaw:0.05,min_speed:2.0,desc:'Daily driving default'},
+highway:{acc:0.08,acc_exit:0.04,brake:0.15,brake_exit:0.07,lat:0.10,lat_exit:0.05,yaw:0.04,min_speed:4.0,desc:'Cruise, subtle inputs'}
+};
 
 function fmtTime(ms){const s=Math.floor(ms/1000),m=Math.floor(s/60);return String(m).padStart(2,'0')+':'+String(s%60).padStart(2,'0')}
 
@@ -416,51 +456,120 @@ const b=new Blob([c],{type:'text/csv'}),u=URL.createObjectURL(b),a=document.crea
 
 // Settings functions
 function updS(id){var s=$('s-'+id),v=$('v-'+id);if(s&&v)v.textContent=parseFloat(s.value).toFixed(id==='minspd'?1:(id==='yaw'?3:2))}
-function resetDef(){
-$('s-acc').value=0.10;$('v-acc').textContent='0.10';
-$('s-accexit').value=0.05;$('v-accexit').textContent='0.05';
-$('s-brake').value=0.18;$('v-brake').textContent='0.18';
-$('s-brakeexit').value=0.09;$('v-brakeexit').textContent='0.09';
-$('s-lat').value=0.12;$('v-lat').textContent='0.12';
-$('s-latexit').value=0.06;$('v-latexit').textContent='0.06';
-$('s-yaw').value=0.05;$('v-yaw').textContent='0.050';
-$('s-minspd').value=2.0;$('v-minspd').textContent='2.0';
+
+// Update preset summary display
+function updateSummary(p){
+$('ps-acc').innerHTML=p.acc.toFixed(2)+'<span>/'+p.acc_exit.toFixed(2)+'g</span>';
+$('ps-brake').innerHTML=p.brake.toFixed(2)+'<span>/'+p.brake_exit.toFixed(2)+'g</span>';
+$('ps-lat').innerHTML=p.lat.toFixed(2)+'<span>/'+p.lat_exit.toFixed(2)+'g</span>';
+$('ps-yaw').innerHTML=p.yaw.toFixed(2)+'<span> r/s</span>';
+$('ps-minspd').innerHTML=p.min_speed.toFixed(1)+'<span> m/s</span>';
 }
+
+// Apply preset values to sliders
+function applyPresetToSliders(p){
+$('s-acc').value=p.acc;$('v-acc').textContent=p.acc.toFixed(2);
+$('s-accexit').value=p.acc_exit;$('v-accexit').textContent=p.acc_exit.toFixed(2);
+$('s-brake').value=p.brake;$('v-brake').textContent=p.brake.toFixed(2);
+$('s-brakeexit').value=p.brake_exit;$('v-brakeexit').textContent=p.brake_exit.toFixed(2);
+$('s-lat').value=p.lat;$('v-lat').textContent=p.lat.toFixed(2);
+$('s-latexit').value=p.lat_exit;$('v-latexit').textContent=p.lat_exit.toFixed(2);
+$('s-yaw').value=p.yaw;$('v-yaw').textContent=p.yaw.toFixed(3);
+$('s-minspd').value=p.min_speed;$('v-minspd').textContent=p.min_speed.toFixed(1);
+}
+
+// Select preset and apply
+function selectPreset(name){
+currentPreset=name;
+// Update button states
+document.querySelectorAll('.preset-btn').forEach(b=>{
+b.classList.toggle('active',b.dataset.preset===name);
+});
+// Show/hide sliders vs summary
+const isCustom=name==='custom';
+$('preset-summary').classList.toggle('hidden',isCustom);
+$('cfg-sliders').classList.toggle('show',isCustom);
+// If not custom, apply preset and send to ESP32
+if(!isCustom&&PRESETS[name]){
+const p=PRESETS[name];
+updateSummary(p);
+applyPresetToSliders(p);
+sendSettings(p);
+}
+}
+
+// Reset to current preset (for custom mode)
+function resetToPreset(){
+if(currentPreset!=='custom'&&PRESETS[currentPreset]){
+applyPresetToSliders(PRESETS[currentPreset]);
+}else{
+// Default to city if in custom
+applyPresetToSliders(PRESETS.city);
+}
+}
+
+// Send settings to ESP32
+async function sendSettings(p){
+const brake=-Math.abs(p.brake),brake_exit=-Math.abs(p.brake_exit);
+try{
+const url='/api/settings/set?acc='+p.acc+'&acc_exit='+p.acc_exit+'&brake='+brake+'&brake_exit='+brake_exit+'&lat='+p.lat+'&lat_exit='+p.lat_exit+'&yaw='+p.yaw+'&min_speed='+p.min_speed;
+await fetch(url);
+}catch(e){console.log('Settings send failed:',e)}
+}
+
 async function saveCfg(){
 var acc=parseFloat($('s-acc').value),accexit=parseFloat($('s-accexit').value),brake=parseFloat($('s-brake').value),brakeexit=parseFloat($('s-brakeexit').value),lat=parseFloat($('s-lat').value),latexit=parseFloat($('s-latexit').value),yaw=parseFloat($('s-yaw').value),minspd=parseFloat($('s-minspd').value);
 // Validation
-if(accexit>=acc){alert('⚠️ Accel Exit must be < Accel Entry!');return}
-if(brakeexit>=brake){alert('⚠️ Brake Exit must be > Brake Entry!\n(Less negative)');return}
-if(latexit>=lat){alert('⚠️ Lateral Exit must be < Lateral Entry!');return}
-// Negate for transmission
-brake=-Math.abs(brake);brakeexit=-Math.abs(brakeexit);
-// Send via HTTP
+if(accexit>=acc){alert('Accel Exit must be < Accel Entry');return}
+if(brakeexit>=brake){alert('Brake Exit must be < Brake Entry');return}
+if(latexit>=lat){alert('Lateral Exit must be < Lateral Entry');return}
+// Send
+const p={acc,acc_exit:accexit,brake,brake_exit:brakeexit,lat,lat_exit:latexit,yaw,min_speed:minspd};
 try{
-const url='/api/settings/set?acc='+acc+'&acc_exit='+accexit+'&brake='+brake+'&brake_exit='+brakeexit+'&lat='+lat+'&lat_exit='+latexit+'&yaw='+yaw+'&min_speed='+minspd;
-await fetch(url);
-// Visual feedback
+await sendSettings(p);
 var btn=document.querySelector('.cfg-save');
-btn.textContent='✓ Saved!';btn.style.background='#10b981';
-setTimeout(()=>{btn.textContent='Save';btn.style.background=''},2000);
-}catch(e){alert('❌ Save failed: '+e.message)}
+btn.textContent='Applied';btn.style.background='#10b981';
+setTimeout(()=>{btn.textContent='Apply';btn.style.background=''},1500);
+}catch(e){alert('Save failed: '+e.message)}
 }
-// Load current settings from ESP32 on page load
+
+// Initialize preset buttons
+document.querySelectorAll('.preset-btn').forEach(btn=>{
+btn.onclick=()=>selectPreset(btn.dataset.preset);
+});
+
+// Load current settings from ESP32 and detect matching preset
 async function loadCfg(){
 try{
 const r=await fetch('/api/settings');
 const s=await r.json();
 if(s.acc!==undefined){
-$('s-acc').value=s.acc;$('v-acc').textContent=s.acc.toFixed(2);
-$('s-accexit').value=s.acc_exit;$('v-accexit').textContent=s.acc_exit.toFixed(2);
-$('s-brake').value=Math.abs(s.brake);$('v-brake').textContent=Math.abs(s.brake).toFixed(2);
-$('s-brakeexit').value=Math.abs(s.brake_exit);$('v-brakeexit').textContent=Math.abs(s.brake_exit).toFixed(2);
-$('s-lat').value=s.lat;$('v-lat').textContent=s.lat.toFixed(2);
-$('s-latexit').value=s.lat_exit;$('v-latexit').textContent=s.lat_exit.toFixed(2);
-$('s-yaw').value=s.yaw;$('v-yaw').textContent=s.yaw.toFixed(3);
-$('s-minspd').value=s.min_speed;$('v-minspd').textContent=s.min_speed.toFixed(1);
+// Check if current settings match a preset
+let matched='custom';
+for(const[name,p]of Object.entries(PRESETS)){
+if(Math.abs(s.acc-p.acc)<0.01&&Math.abs(s.lat-p.lat)<0.01&&Math.abs(s.min_speed-p.min_speed)<0.1){
+matched=name;break;
 }
-}catch(e){console.log('Settings load failed:',e)}
 }
+currentPreset=matched;
+// Update UI
+document.querySelectorAll('.preset-btn').forEach(b=>{
+b.classList.toggle('active',b.dataset.preset===matched);
+});
+const isCustom=matched==='custom';
+$('preset-summary').classList.toggle('hidden',isCustom);
+$('cfg-sliders').classList.toggle('show',isCustom);
+// Load values
+const current={acc:s.acc,acc_exit:s.acc_exit,brake:Math.abs(s.brake),brake_exit:Math.abs(s.brake_exit),lat:s.lat,lat_exit:s.lat_exit,yaw:s.yaw,min_speed:s.min_speed};
+updateSummary(current);
+applyPresetToSliders(current);
+}
+}catch(e){
+// Default to city preset on error
+selectPreset('city');
+}
+}
+
 // Load settings, then start polling (40ms interval accounts for WiFi/HTTP overhead)
 loadCfg().then(()=>setInterval(poll,40));
 </script></body></html>"#;

@@ -236,12 +236,17 @@ After 5 consecutive stationary detections:
 3. EMA filter both lateral accel and yaw rate
 4. Independent state detection with hysteresis for each component
 
-**Default Thresholds (Tuned for Street Driving):**
-- Acceleration: 0.10g entry, 0.05g exit (lowered from 0.15g)
-- Braking: -0.18g entry, -0.09g exit (raised from -0.15g to reduce false positives)
-- Lateral: 0.12g entry, 0.06g exit
-- Yaw rate: 0.05 rad/s (~2.9°/s)
-- Min speed: 2.0 m/s (7.2 km/h)
+**Driving Presets (configurable via dashboard):**
+
+| Preset | Accel | Brake | Lateral | Yaw | Min Speed | Use Case |
+|--------|-------|-------|---------|-----|-----------|----------|
+| Track | 0.30g | 0.50g | 0.50g | 0.15 rad/s | 3.0 m/s | Racing, autocross |
+| Canyon | 0.20g | 0.35g | 0.30g | 0.10 rad/s | 2.5 m/s | Spirited twisty roads |
+| City (default) | 0.10g | 0.18g | 0.12g | 0.05 rad/s | 2.0 m/s | Daily driving |
+| Highway | 0.08g | 0.15g | 0.10g | 0.04 rad/s | 4.0 m/s | Cruise, subtle inputs |
+| Custom | User-defined | | | | | Fine-tuning via sliders |
+
+Exit thresholds are 50% of entry values for hysteresis (prevents oscillation).
 
 **Corner Detection:**
 Requires ALL:
@@ -464,7 +469,8 @@ Built-in web dashboard for mobile viewing of live telemetry. Runs directly on ES
 - HTTP polling at ~20 Hz (40ms interval with WiFi overhead compensation)
 - G-meter with trail visualization and max values
 - Real-time mode detection display
-- Live settings configuration with validation
+- **Driving presets**: One-tap selection of Track, Canyon, City, Highway, or Custom
+- Live settings configuration with validation (Custom mode shows sliders)
 - CSV data export for recorded sessions
 
 **Architecture:**
@@ -492,10 +498,17 @@ setInterval(async () => {
 - HTTP polling eliminates blocking, allows concurrent API calls
 - 40ms interval compensates for WiFi latency to achieve ~20 Hz effective rate
 
-**Settings Validation:**
+**Preset System:**
+- 4 built-in presets (Track, Canyon, City, Highway) with physics-based thresholds
+- City preset is the default on boot
+- Selecting a preset immediately applies settings to ESP32
+- Custom mode reveals all sliders for fine-tuning
+- Settings are not persisted across power cycles (no NVS storage yet)
+
+**Settings Validation (Custom mode):**
 Dashboard validates threshold ranges before sending to ESP32:
 - Accel exit < accel entry
-- Brake exit > brake entry (both negative, exit less negative)
+- Brake exit < brake entry
 - Lateral exit < lateral entry
 
 **Changed from WebSocket (ap_enabled branch):**
@@ -541,22 +554,36 @@ cargo build --release
 
 ### rgb_led.rs - WS2812 LED Control
 
-**LED Status Codes:**
+**Available Colors:** red, green, blue, yellow, cyan, magenta, orange, white
+
+**LED Status Codes (Access Point Mode):**
 
 Boot sequence:
-- Blue (3 blinks): Boot sequence started
-- Green (5 blinks): WiFi connected
+- Magenta (3 blinks): Boot sequence started (AP mode)
+- Green (5 blinks): WiFi AP started
+- Cyan (3 blinks): HTTP server ready
+- Yellow (pulsing): IMU calibrating
+- Red (continuous slow blink): WiFi AP failed (critical error)
+
+**LED Status Codes (Station Mode):**
+
+Boot sequence:
+- Blue (3 blinks): Boot sequence started (Station mode)
+- Green (5 blinks): WiFi connected to network
 - Magenta (3 blinks): MQTT connected
 - Red (5 fast blinks): MQTT connection failed
 - Cyan (3 blinks): UDP socket ready
 - Yellow (pulsing): IMU calibrating
 - Red (continuous slow blink): WiFi failed at boot (critical error)
 
-Main loop (operational):
+**Main Loop (operational, both modes):**
 - Cyan (2s pulse): GPS locked, operational
 - Yellow (fast blink): Waiting for GPS lock
-- Orange (3 blinks, repeating): WiFi disconnected (repeats every 5s while down)
-- Red (2 blinks, repeating): MQTT disconnected (repeats every 5s while down)
+- Green-white (3 alternating flashes): Settings changed via dashboard
+- Orange (3 blinks, repeating): WiFi disconnected (repeats every 5s)
+- Red (2 blinks, repeating): MQTT disconnected (Station mode only, repeats every 5s)
+
+**Important:** MQTT status LED (red blinks) only applies to Station mode. In Access Point mode, MQTT is not used.
 
 Useful for debugging without serial monitor.
 

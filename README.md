@@ -435,10 +435,14 @@ blackbox/
 - Eliminates drift over time
 
 **Mode Detection (mode.rs)**
-- **IDLE**: Low acceleration, low speed
-- **ACCEL**: Longitudinal accel > 0.21g
-- **BRAKE**: Longitudinal accel < -0.25g  
-- **CORNER**: Lateral accel > 0.20g AND yaw rate > 0.07 rad/s AND same sign
+- **IDLE**: Low acceleration or below minimum speed
+- **ACCEL**: Longitudinal accel exceeds threshold (configurable via presets)
+- **BRAKE**: Longitudinal decel exceeds threshold (configurable via presets)
+- **CORNER**: Lateral accel AND yaw rate exceed thresholds, same sign
+- **ACCEL+CORNER**: Trail throttle / corner exit
+- **BRAKE+CORNER**: Trail braking / corner entry
+
+Thresholds are adjustable via the dashboard's **Driving Preset** selector with 4 built-in profiles plus custom tuning.
 
 ---
 
@@ -459,7 +463,7 @@ struct TelemetryPacket {
     x, y: f32,          // Position (m, ENU frame)
     vx, vy: f32,        // Velocity (m/s)
     speed_kmh: f32,     // Display speed
-    mode: u8,           // 0=IDLE, 1=ACCEL, 2=BRAKE, 3=CORNER
+    mode: u8,           // 0=IDLE, 1=ACCEL, 2=BRAKE, 4=CORNER, 5=ACCEL+CORNER, 6=BRAKE+CORNER
     
     lat, lon: f32,      // GPS (degrees)
     gps_valid: u8,      // 0=no fix, 1=valid
@@ -504,16 +508,25 @@ const R_YAW: f32 = 0.10;    // Measurement noise: magnetometer (rad)²
 
 ### Mode Detection Thresholds
 
-Edit `sensors/blackbox/src/mode.rs`:
-```rust
-pub min_speed: f32 = 2.0;      // Minimum speed for maneuvers (m/s) ~7 km/h
-pub acc_thr: f32 = 0.15;       // Acceleration threshold (g)
-pub brake_thr: f32 = -0.15;    // Braking threshold (g)
-pub lat_thr: f32 = 0.12;       // Lateral accel threshold (g)
-pub yaw_thr: f32 = 0.05;       // Yaw rate threshold (rad/s) ~3°/s
-```
+Mode detection thresholds can be configured **live from the mobile dashboard** using the Driving Preset selector. Choose from 4 built-in presets or create custom settings:
 
-**Note:** Mode detection requires `speed > min_speed`. This prevents false ACCEL/BRAKE detection from IMU noise when stationary.
+| Preset | Accel | Brake | Lateral | Yaw | Min Speed | Best For |
+|--------|-------|-------|---------|-----|-----------|----------|
+| **Track** | 0.30g | 0.50g | 0.50g | 0.15 rad/s | 3.0 m/s | Racing, autocross |
+| **Canyon** | 0.20g | 0.35g | 0.30g | 0.10 rad/s | 2.5 m/s | Spirited twisty roads |
+| **City** | 0.10g | 0.18g | 0.12g | 0.05 rad/s | 2.0 m/s | Daily driving (default) |
+| **Highway** | 0.08g | 0.15g | 0.10g | 0.04 rad/s | 4.0 m/s | Cruise, subtle inputs |
+| **Custom** | User-defined via sliders | | | | | Fine-tuning |
+
+Each threshold has an **entry** and **exit** value (hysteresis) to prevent oscillation. Exit thresholds are typically 50% of entry values.
+
+**Preset Selection:**
+1. Open dashboard at `http://192.168.4.1`
+2. Scroll to "Driving Preset" section
+3. Tap a preset button - settings apply immediately
+4. Tap "Custom" to access individual sliders for fine-tuning
+
+**Note:** Mode detection requires `speed > min_speed`. This prevents false detection from IMU noise when stationary. Higher min_speed on Highway preset filters out parking lot maneuvers.
 
 ---
 
@@ -533,26 +546,36 @@ pub yaw_thr: f32 = 0.05;       // Yaw rate threshold (rad/s) ~3°/s
 
 ## LED Status Codes
 
-### Boot Sequence
+### Boot Sequence (Access Point Mode)
 | Pattern | Meaning |
 |---------|---------|
-| 3 blue blinks | Boot sequence started |
-| 5 green blinks | WiFi connected |
+| 3 magenta blinks | Boot sequence started (AP mode) |
+| 5 green blinks | WiFi AP started |
+| 3 cyan blinks | HTTP server ready |
+| Yellow pulses | IMU calibration in progress |
+| Continuous red blink | Critical error (WiFi AP failed) |
+
+### Boot Sequence (Station Mode)
+| Pattern | Meaning |
+|---------|---------|
+| 3 blue blinks | Boot sequence started (Station mode) |
+| 5 green blinks | WiFi connected to network |
 | 3 magenta blinks | MQTT connected |
 | 5 fast red blinks | MQTT connection failed (continuing without MQTT) |
 | 3 cyan blinks | UDP socket ready |
 | Yellow pulses | IMU calibration in progress |
-| Continuous red blink | Critical error (WiFi failed at boot) |
+| Continuous red blink | Critical error (WiFi connection failed) |
 
 ### Main Loop (operational)
 | Pattern | Meaning |
 |---------|---------|
+| Cyan pulse (2s cycle) | GPS locked, system operational |
 | Yellow fast blink | Waiting for GPS fix |
-| Cyan pulse (2s on/off) | GPS locked, system operational |
-| 3 orange blinks (repeating) | WiFi disconnected |
-| 2 red blinks (repeating) | MQTT disconnected |
+| 3 green-white flashes | Settings changed via dashboard |
+| 3 orange blinks | WiFi disconnected (repeats every 5s) |
+| 2 red blinks | MQTT disconnected (Station mode only, repeats every 5s) |
 
-Connectivity is checked every 5 seconds. Orange/red blinks repeat every 5 seconds while the connection remains down.
+**Note:** MQTT status LED only applies to Station mode. In Access Point mode, MQTT is not used and no red blinks will occur for MQTT status.
 
 ---
 
@@ -574,7 +597,8 @@ The firmware includes a built-in web dashboard that runs directly on the ESP32. 
 | **G-meter** | Real-time lateral/longitudinal G display with trail |
 | **Max G values** | Tracks peak L/R/Accel/Brake G-forces |
 | **Speed** | Current speed and session max speed |
-| **Driving mode** | IDLE, ACCEL, BRAKE, or CORNER detection |
+| **Driving mode** | IDLE, ACCEL, BRAKE, CORNER, or combined states (ACCEL+CORNER, BRAKE+CORNER) |
+| **Driving presets** | One-tap presets for Track, Canyon, City, Highway, or Custom tuning |
 | **Session timer** | Time since dashboard loaded |
 | **GPS status** | Current coordinates and fix status |
 | **Recording** | Capture data locally for CSV export |
@@ -583,9 +607,12 @@ The firmware includes a built-in web dashboard that runs directly on the ESP32. 
 
 | Action | Effect |
 |--------|--------|
-| **RST button** | Reset max values, timer, and trigger IMU recalibration |
+| **CLR button** | Clear max G values |
 | **Tap max speed** | Reset max speed only |
 | **Double-tap G-meter** | Reset max G values only |
+| **Preset buttons** | Switch driving profile (Track/Canyon/City/Highway/Custom) |
+| **Reset button** | Reset sliders to current preset defaults (Custom mode only) |
+| **Apply button** | Send custom slider values to device (Custom mode only) |
 | **REC button** | Start/stop recording data |
 | **Export button** | Download recorded data as CSV |
 
