@@ -1,9 +1,11 @@
 mod binary_telemetry;
+mod calibration;
 mod config;
 mod gps;
 mod imu;
 mod mode;
 mod mqtt;
+mod nvs_storage;
 mod rgb_led;
 mod system;
 mod udp_stream;
@@ -12,6 +14,7 @@ mod wifi;
 
 use std::sync::Arc;
 
+use calibration::{CalibrationConfig, CalibrationResult, MountCalibrator};
 use config::{SystemConfig, WifiModeConfig};
 use esp_idf_hal::{
     delay::FreeRtos,
@@ -52,6 +55,11 @@ fn main() {
     let peripherals = Peripherals::take().unwrap();
     let sysloop = EspSystemEventLoop::take().unwrap();
     let nvs = EspDefaultNvsPartition::take().ok();
+
+    // Create NVS storage for persistent settings (uses NVS partition)
+    let mut nvs_store = nvs
+        .as_ref()
+        .and_then(|p| nvs_storage::NvsStorage::new(p.clone()).ok());
 
     // Create LED for status indication
     let led = RgbLed::new(peripherals.rmt.channel0, peripherals.pins.gpio8)
@@ -258,6 +266,26 @@ fn main() {
     let mut estimator = StateEstimator::new();
     let mut publisher = TelemetryPublisher::new(udp_stream, mqtt_opt, telemetry_state.clone());
 
+    // Create mount calibrator for determining device orientation relative to vehicle
+    let mut mount_calibrator = MountCalibrator::new(CalibrationConfig::default());
+
+    // Load mount calibration from NVS if available
+    let mut mount_calibration = nvs_store
+        .as_ref()
+        .and_then(|s| s.load_mount_calibration())
+        .unwrap_or_default();
+
+    // Update server state with loaded calibration
+    if mount_calibration.is_calibrated {
+        if let Some(ref state) = telemetry_state {
+            state.set_mount_calibration(mount_calibration);
+        }
+        info!(
+            "Loaded mount calibration from NVS: {:.1}°",
+            mount_calibration.yaw_offset.to_degrees()
+        );
+    }
+
     // Main loop timing
     let mut last_telemetry_ms = 0u32;
     let mut last_heap_check_ms = 0u32;
@@ -321,6 +349,15 @@ fn main() {
                 }
                 status_mgr.led_mut().set_low().unwrap();
             }
+
+            // Check for mount calibration request from web UI
+            if state.take_mount_calibration_request() && !mount_calibrator.is_active() {
+                info!(">>> Mount calibration requested - drive forward then brake hard!");
+                mount_calibrator.trigger(now_ms);
+            }
+
+            // Update mount calibration state for web UI
+            state.update_mount_calibration_state(mount_calibrator.state());
         }
 
         // Periodic diagnostics (serial log every 5s)
@@ -427,16 +464,70 @@ fn main() {
 
         // Poll IMU and update EKF prediction (only after GPS warmup AND reset)
         if let Some((dt, _)) = sensors.poll_imu() {
+            let (ax_corr, ay_corr, az_corr) = sensors.imu_parser.get_accel_corrected();
+            let (ax_b, ay_b, az_b) = remove_gravity(
+                ax_corr,
+                ay_corr,
+                az_corr,
+                sensors.imu_parser.data().roll,
+                sensors.imu_parser.data().pitch,
+            );
+
+            // Update mount calibrator with body-frame acceleration (gravity removed)
+            // Use EKF speed when available (updates at IMU rate), fall back to GPS speed
+            if mount_calibrator.is_active() {
+                let speed = if unsafe { EKF_RESET_DONE } {
+                    // EKF is running - use its velocity estimate (fresh, 200Hz)
+                    let (vx, vy) = estimator.ekf.velocity();
+                    (vx * vx + vy * vy).sqrt()
+                } else {
+                    // Before EKF init - fall back to GPS speed (5Hz, may be stale)
+                    sensors
+                        .gps_parser
+                        .get_velocity_enu()
+                        .map(|(vx, vy)| (vx * vx + vy * vy).sqrt())
+                        .unwrap_or(0.0)
+                };
+
+                match mount_calibrator.update(
+                    ax_b,
+                    ay_b,
+                    sensors.imu_parser.data().wz,
+                    speed,
+                    now_ms,
+                ) {
+                    CalibrationResult::Success(cal) => {
+                        info!(
+                            ">>> Mount calibration SUCCESS! Offset: {:.1}°",
+                            cal.yaw_offset.to_degrees()
+                        );
+                        mount_calibration = cal;
+
+                        // Store in server state for UI display
+                        if let Some(ref state) = telemetry_state {
+                            state.set_mount_calibration(cal);
+                        }
+
+                        // Persist to NVS so it survives reboot
+                        if let Some(ref mut storage) = nvs_store {
+                            if let Err(e) = storage.save_mount_calibration(&cal) {
+                                info!(">>> Failed to save calibration to NVS: {:?}", e);
+                            }
+                        }
+
+                        // Reset calibrator to idle so user can recalibrate if needed
+                        mount_calibrator.reset();
+                    }
+                    CalibrationResult::Failure(e) => {
+                        info!(">>> Mount calibration FAILED: {:?}", e);
+                        mount_calibrator.reset();
+                    }
+                    CalibrationResult::InProgress(_) => {} // Keep going
+                }
+            }
+
             // Only run EKF prediction after reset is done
             if unsafe { EKF_RESET_DONE } {
-                let (ax_corr, ay_corr, az_corr) = sensors.imu_parser.get_accel_corrected();
-                let (ax_b, ay_b, az_b) = remove_gravity(
-                    ax_corr,
-                    ay_corr,
-                    az_corr,
-                    sensors.imu_parser.data().roll,
-                    sensors.imu_parser.data().pitch,
-                );
                 let (ax_e, ay_e) = body_to_earth(
                     ax_b,
                     ay_b,
@@ -447,9 +538,10 @@ fn main() {
                 );
                 estimator.predict(ax_e, ay_e, sensors.imu_parser.data().wz, dt);
 
-                // Update yaw from magnetometer
+                // Update yaw from magnetometer, applying mount calibration offset
                 let yaw_mag = sensors.imu_parser.data().yaw.to_radians();
-                estimator.update_yaw(yaw_mag);
+                let yaw_vehicle = mount_calibration.device_to_vehicle_yaw(yaw_mag);
+                estimator.update_yaw(yaw_vehicle);
             }
         }
 
