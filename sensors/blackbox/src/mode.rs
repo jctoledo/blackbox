@@ -112,14 +112,14 @@ impl Default for ModeConfig {
     fn default() -> Self {
         Self {
             min_speed: 2.0,    // ~7 km/h - must be moving for accel/brake/corner
-            acc_thr: 0.10,     // 0.10g - better for street driving (lowered from 0.15)
+            acc_thr: 0.10,     // 0.10g - city driving (gentle acceleration)
             acc_exit: 0.05,    // exit when below 0.05g
-            brake_thr: -0.18,  // -0.18g - slightly higher to reduce false positives
+            brake_thr: -0.18,  // -0.18g - city driving (normal braking)
             brake_exit: -0.09, // exit when above -0.09g
-            lat_thr: 0.12,     // 0.12g lateral - reasonable turn
+            lat_thr: 0.12,     // 0.12g lateral - city turns
             lat_exit: 0.06,    // exit when below 0.06g
-            yaw_thr: 0.05,     // ~3°/s yaw rate
-            alpha: 0.25,       // EMA smoothing factor
+            yaw_thr: 0.05,     // ~2.9°/s yaw rate
+            alpha: 0.35,       // EMA smoothing - balanced responsiveness vs bump rejection
         }
     }
 }
@@ -129,7 +129,8 @@ pub struct ModeClassifier {
     pub mode: Mode,
     pub config: ModeConfig,
 
-    // EMA filtered values
+    // EMA filtered values (all accelerations filtered to reject road bumps)
+    a_lon_ema: f32,
     a_lat_ema: f32,
     yaw_ema: f32,
 
@@ -143,6 +144,7 @@ impl ModeClassifier {
         Self {
             mode: Mode::default(),
             config: ModeConfig::default(),
+            a_lon_ema: 0.0,
             a_lat_ema: 0.0,
             yaw_ema: 0.0,
             v_disp: 0.0,
@@ -185,8 +187,9 @@ impl ModeClassifier {
         let a_lon = a_lon_ms2 / G;
         let a_lat = a_lat_ms2 / G;
 
-        // Update EMA filters
+        // Update EMA filters for ALL values (critical for rejecting road bump noise)
         let alpha = self.config.alpha;
+        self.a_lon_ema = (1.0 - alpha) * self.a_lon_ema + alpha * a_lon;
         self.a_lat_ema = (1.0 - alpha) * self.a_lat_ema + alpha * a_lat;
         self.yaw_ema = (1.0 - alpha) * self.yaw_ema + alpha * wz;
 
@@ -220,27 +223,29 @@ impl ModeClassifier {
         }
 
         // Check acceleration (mutually exclusive with braking)
+        // Uses filtered a_lon_ema to reject road bump noise
         if self.mode.has_accel() {
             // Exit if acceleration dropped
-            if a_lon < self.config.acc_exit {
+            if self.a_lon_ema < self.config.acc_exit {
                 self.mode.set_accel(false);
             }
         } else if !self.mode.has_brake() {
             // Enter accel if not braking and threshold met
-            if a_lon > self.config.acc_thr {
+            if self.a_lon_ema > self.config.acc_thr {
                 self.mode.set_accel(true);
             }
         }
 
         // Check braking (mutually exclusive with acceleration)
+        // Uses filtered a_lon_ema to reject road bump noise
         if self.mode.has_brake() {
             // Exit if braking force dropped
-            if a_lon > self.config.brake_exit {
+            if self.a_lon_ema > self.config.brake_exit {
                 self.mode.set_brake(false);
             }
         } else if !self.mode.has_accel() {
             // Enter brake if not accelerating and threshold met
-            if a_lon < self.config.brake_thr {
+            if self.a_lon_ema < self.config.brake_thr {
                 self.mode.set_brake(true);
             }
         }
@@ -311,7 +316,10 @@ mod tests {
         let vx = 5.0;
         let vy = 0.0;
 
-        classifier.update(ax, ay, yaw, wz, vx, vy);
+        // Multiple updates needed for EMA to converge (alpha=0.25)
+        for _ in 0..10 {
+            classifier.update(ax, ay, yaw, wz, vx, vy);
+        }
         assert!(classifier.get_mode().has_accel());
     }
 
@@ -327,7 +335,10 @@ mod tests {
         let vx = 5.0;
         let vy = 0.0;
 
-        classifier.update(ax, ay, yaw, wz, vx, vy);
+        // Multiple updates needed for EMA to converge
+        for _ in 0..10 {
+            classifier.update(ax, ay, yaw, wz, vx, vy);
+        }
         assert!(classifier.get_mode().has_brake());
     }
 
@@ -359,7 +370,10 @@ mod tests {
         let vx = 8.0; // 8 m/s speed
         let vy = 0.0;
 
-        classifier.update(ax, ay, yaw, wz, vx, vy);
+        // Multiple updates for EMA convergence
+        for _ in 0..10 {
+            classifier.update(ax, ay, yaw, wz, vx, vy);
+        }
 
         // Should detect both acceleration and cornering
         assert!(
@@ -385,7 +399,10 @@ mod tests {
         let vx = 8.0; // 8 m/s speed
         let vy = 0.0;
 
-        classifier.update(ax, ay, yaw, wz, vx, vy);
+        // Multiple updates for EMA convergence
+        for _ in 0..10 {
+            classifier.update(ax, ay, yaw, wz, vx, vy);
+        }
 
         // Should detect both braking and cornering
         assert!(classifier.get_mode().has_brake(), "Should detect braking");
@@ -406,28 +423,31 @@ mod tests {
         let wz = 0.0;
         let ay = 0.0;
 
-        // Acceleration just above entry threshold (0.10g)
-        let ax1 = 0.11 * G;
-        classifier.update(ax1, ay, yaw, wz, vx, vy);
-        assert!(
-            classifier.get_mode().has_accel(),
-            "Should enter ACCEL at 0.11g"
-        );
+        // Acceleration above entry threshold - multiple updates for EMA
+        let ax1 = 0.20 * G; // Use higher value to ensure EMA exceeds threshold
+        for _ in 0..10 {
+            classifier.update(ax1, ay, yaw, wz, vx, vy);
+        }
+        assert!(classifier.get_mode().has_accel(), "Should enter ACCEL");
 
-        // Drop to 0.06g (above 0.05g exit threshold)
+        // Drop to 0.06g (above 0.05g exit threshold) - EMA should stay above exit
         let ax2 = 0.06 * G;
-        classifier.update(ax2, ay, yaw, wz, vx, vy);
+        for _ in 0..5 {
+            classifier.update(ax2, ay, yaw, wz, vx, vy);
+        }
         assert!(
             classifier.get_mode().has_accel(),
-            "Should stay ACCEL at 0.06g (above exit)"
+            "Should stay ACCEL (EMA still above exit)"
         );
 
-        // Drop to 0.04g (below 0.05g exit threshold)
-        let ax3 = 0.04 * G;
-        classifier.update(ax3, ay, yaw, wz, vx, vy);
+        // Drop to 0.00g - EMA will gradually fall below exit threshold
+        let ax3 = 0.00 * G;
+        for _ in 0..20 {
+            classifier.update(ax3, ay, yaw, wz, vx, vy);
+        }
         assert!(
             classifier.get_mode().is_idle(),
-            "Should exit to IDLE at 0.04g (below exit)"
+            "Should exit to IDLE (EMA below exit)"
         );
     }
 
@@ -443,7 +463,9 @@ mod tests {
         let vx = 1.5; // Below 2.0 m/s threshold
         let vy = 0.0;
 
-        classifier.update(ax, ay, yaw, wz, vx, vy);
+        for _ in 0..10 {
+            classifier.update(ax, ay, yaw, wz, vx, vy);
+        }
         assert!(
             classifier.get_mode().is_idle(),
             "Should stay IDLE when speed < min_speed"
@@ -451,7 +473,9 @@ mod tests {
 
         // Same acceleration, speed above threshold
         let vx2 = 2.5;
-        classifier.update(ax, ay, yaw, wz, vx2, vy);
+        for _ in 0..10 {
+            classifier.update(ax, ay, yaw, wz, vx2, vy);
+        }
         assert!(
             classifier.get_mode().has_accel(),
             "Should detect ACCEL when speed > min_speed"
@@ -462,7 +486,7 @@ mod tests {
     fn test_corner_independent_persistence() {
         let mut classifier = ModeClassifier::new();
 
-        // Start cornering
+        // Start cornering - multiple updates for EMA
         let ax = 0.0;
         let ay = 0.15 * G;
         let yaw = 0.0;
@@ -470,12 +494,16 @@ mod tests {
         let vx = 8.0;
         let vy = 0.0;
 
-        classifier.update(ax, ay, yaw, wz, vx, vy);
+        for _ in 0..10 {
+            classifier.update(ax, ay, yaw, wz, vx, vy);
+        }
         assert!(classifier.get_mode().has_corner(), "Should detect corner");
 
         // Add acceleration while still cornering
-        let ax2 = 0.15 * G;
-        classifier.update(ax2, ay, yaw, wz, vx, vy);
+        let ax2 = 0.20 * G;
+        for _ in 0..10 {
+            classifier.update(ax2, ay, yaw, wz, vx, vy);
+        }
         assert!(classifier.get_mode().has_accel(), "Should detect accel");
         assert!(
             classifier.get_mode().has_corner(),
@@ -483,9 +511,11 @@ mod tests {
         );
         assert_eq!(classifier.get_mode().as_u8(), 5, "Should be ACCEL+CORNER");
 
-        // Stop accelerating but keep cornering
-        let ax3 = 0.02 * G;
-        classifier.update(ax3, ay, yaw, wz, vx, vy);
+        // Stop accelerating but keep cornering - EMA needs to drop
+        let ax3 = 0.0;
+        for _ in 0..20 {
+            classifier.update(ax3, ay, yaw, wz, vx, vy);
+        }
         assert!(!classifier.get_mode().has_accel(), "Should exit accel");
         assert!(classifier.get_mode().has_corner(), "Should still corner");
     }
