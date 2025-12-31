@@ -92,7 +92,8 @@ impl TelemetryPacket {
     }
 }
 
-/// Helper to convert mode enum to u8
+/// Helper to convert mode enum to u8 (legacy, now using Mode::as_u8())
+#[allow(dead_code)]
 pub fn mode_to_u8(mode_str: &str) -> u8 {
     match mode_str {
         "IDLE" => 0,

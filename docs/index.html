@@ -840,6 +840,7 @@
                 <div class="nav-links">
                     <a href="#about">About</a>
                     <a href="#features">Features</a>
+                    <a href="#dashboard">Dashboard</a>
                     <a href="#hardware">Hardware</a>
                     <a href="https://github.com/jctoledo/blackbox" target="_blank">GitHub</a>
                     <a href="#flash" class="nav-cta">Flash Firmware</a>
@@ -1025,7 +1026,7 @@
                             </svg>
                         </div>
                         <h3>Mode Detection</h3>
-                        <p>Classifies driving state: idle, acceleration, braking, or cornering.</p>
+                        <p>Classifies driving state using bitflags: IDLE, ACCEL, BRAKE, CORNER, or combined states (ACCEL+CORNER, BRAKE+CORNER).</p>
                     </div>
 
                     <div class="feature-card">
@@ -1037,7 +1038,18 @@
                             </svg>
                         </div>
                         <h3>WiFi Streaming</h3>
-                        <p>Binary UDP at 20Hz. Compact 67-byte packets for real-time display.</p>
+                        <p>HTTP polling at ~20Hz or UDP streaming. Compact binary packets for real-time display.</p>
+                    </div>
+
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="5" y="2" width="14" height="20" rx="2"/>
+                                <circle cx="12" cy="18" r="1"/>
+                            </svg>
+                        </div>
+                        <h3>Mobile Dashboard</h3>
+                        <p>Built-in web dashboard. Connect phone to ESP32's WiFi AP, view telemetry in browser.</p>
                     </div>
 
                     <div class="feature-card">
@@ -1066,7 +1078,125 @@
             </div>
         </section>
 
-        <section class="section" id="hardware">
+        <section class="section" id="dashboard">
+            <div class="section-inner">
+                <div class="section-header">
+                    <h2>Mobile Dashboard</h2>
+                    <p>Built-in real-time telemetry display on your phone</p>
+                </div>
+
+                <div class="comparison-grid">
+                    <div class="comparison-card">
+                        <h3>How It Works</h3>
+                        <ul>
+                            <li>
+                                <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+                                ESP32 creates WiFi network "Blackbox"
+                            </li>
+                            <li>
+                                <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+                                Connect phone to this network
+                            </li>
+                            <li>
+                                <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+                                Open browser to 192.168.4.1
+                            </li>
+                            <li>
+                                <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+                                Live telemetry via HTTP polling (~20Hz)
+                            </li>
+                        </ul>
+                    </div>
+
+                    <div class="comparison-card highlight">
+                        <h3>Dashboard Features</h3>
+                        <ul>
+                            <li>
+                                <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+                                G-meter with trail and max values
+                            </li>
+                            <li>
+                                <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+                                Speed display with session max
+                            </li>
+                            <li>
+                                <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+                                Mode detection (6 states: IDLE, ACCEL, BRAKE, CORNER, ACCEL+CORNER, BRAKE+CORNER)
+                            </li>
+                            <li>
+                                <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+                                Record & export to CSV
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+                <p class="comparison-note">No app required. Works in any mobile browser. No internet connection needed.</p>
+
+                <div class="section-header" style="margin-top: 60px;">
+                    <h2>WiFi Operating Modes</h2>
+                    <p>Two modes available depending on your use case</p>
+                </div>
+
+                <div class="comparison-grid">
+                    <div class="comparison-card highlight">
+                        <h3>Access Point Mode (Default)</h3>
+                        <div class="price" style="font-size: 18px; margin-bottom: 16px;">Standalone Operation</div>
+                        <ul>
+                            <li>
+                                <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+                                ESP32 creates its own WiFi network
+                            </li>
+                            <li>
+                                <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+                                No router or internet required
+                            </li>
+                            <li>
+                                <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+                                Connect phone directly to device
+                            </li>
+                            <li>
+                                <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+                                Dashboard at 192.168.4.1
+                            </li>
+                            <li>
+                                <svg class="icon-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                Python tools not available
+                            </li>
+                        </ul>
+                    </div>
+
+                    <div class="comparison-card">
+                        <h3>Station Mode</h3>
+                        <div class="price" style="font-size: 18px; margin-bottom: 16px; color: var(--text-secondary);">Network Integration</div>
+                        <ul>
+                            <li>
+                                <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+                                Connects to your existing WiFi
+                            </li>
+                            <li>
+                                <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+                                UDP streaming to Python receivers
+                            </li>
+                            <li>
+                                <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+                                MQTT status messages
+                            </li>
+                            <li>
+                                <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+                                Multiple clients can receive data
+                            </li>
+                            <li>
+                                <svg class="icon-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                Requires router/network setup
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+                <p class="comparison-note">Mode is set at compile time. See README for build instructions.</p>
+            </div>
+        </section>
+
+        <section class="section section-alt" id="hardware">
             <div class="section-inner">
                 <div class="section-header">
                     <h2>Hardware</h2>

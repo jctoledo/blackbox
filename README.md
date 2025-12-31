@@ -17,7 +17,8 @@ A complete ESP32-C3 firmware that fuses GPS and IMU data to track your vehicle's
 - Measures velocity in 2D (earth frame)
 - Calculates true acceleration (gravity compensated)
 - Detects driving modes (idle, accelerating, braking, cornering)
-- Streams telemetry at 20Hz over UDP
+- Streams telemetry at 20-30Hz over WiFi
+- **Built-in mobile dashboard** - view live data on your phone
 
 **How it works:**
 - 7-state Extended Kalman Filter fuses GPS (5Hz) and IMU (50Hz)
@@ -404,6 +405,7 @@ blackbox/
 │       │   ├── transforms.rs      # Body↔Earth coordinate math
 │       │   ├── mode.rs            # Driving mode classifier
 │       │   ├── binary_telemetry.rs # 67-byte packet format
+│       │   ├── websocket_server.rs # Mobile dashboard & WebSocket server
 │       │   ├── udp_stream.rs      # High-speed UDP client
 │       │   ├── mqtt.rs            # MQTT client for status
 │       │   ├── wifi.rs            # WiFi connection manager
@@ -504,12 +506,14 @@ const R_YAW: f32 = 0.10;    // Measurement noise: magnetometer (rad)²
 
 Edit `sensors/blackbox/src/mode.rs`:
 ```rust
-pub min_speed: f32 = 2.0;      // Minimum speed for maneuvers (m/s)
-pub acc_thr: f32 = 0.21;       // Acceleration threshold (g)
-pub brake_thr: f32 = -0.25;    // Braking threshold (g)
-pub lat_thr: f32 = 0.20;       // Lateral accel threshold (g)
-pub yaw_thr: f32 = 0.07;       // Yaw rate threshold (rad/s)
+pub min_speed: f32 = 2.0;      // Minimum speed for maneuvers (m/s) ~7 km/h
+pub acc_thr: f32 = 0.15;       // Acceleration threshold (g)
+pub brake_thr: f32 = -0.15;    // Braking threshold (g)
+pub lat_thr: f32 = 0.12;       // Lateral accel threshold (g)
+pub yaw_thr: f32 = 0.05;       // Yaw rate threshold (rad/s) ~3°/s
 ```
+
+**Note:** Mode detection requires `speed > min_speed`. This prevents false ACCEL/BRAKE detection from IMU noise when stationary.
 
 ---
 
@@ -552,10 +556,157 @@ Connectivity is checked every 5 seconds. Orange/red blinks repeat every 5 second
 
 ---
 
+## Mobile Dashboard
+
+The firmware includes a built-in web dashboard that runs directly on the ESP32. No external server needed - just connect your phone and view live telemetry.
+
+### How to Use
+
+1. **Power on the device** - it creates a WiFi network called "Blackbox"
+2. **Connect your phone** to the "Blackbox" WiFi (password: `blackbox123`)
+3. **Open a browser** and go to `http://192.168.4.1`
+4. **View live telemetry** - data streams at ~30Hz via WebSocket
+
+### Dashboard Features
+
+| Feature | Description |
+|---------|-------------|
+| **G-meter** | Real-time lateral/longitudinal G display with trail |
+| **Max G values** | Tracks peak L/R/Accel/Brake G-forces |
+| **Speed** | Current speed and session max speed |
+| **Driving mode** | IDLE, ACCEL, BRAKE, or CORNER detection |
+| **Session timer** | Time since dashboard loaded |
+| **GPS status** | Current coordinates and fix status |
+| **Recording** | Capture data locally for CSV export |
+
+### Controls
+
+| Action | Effect |
+|--------|--------|
+| **RST button** | Reset max values, timer, and trigger IMU recalibration |
+| **Tap max speed** | Reset max speed only |
+| **Double-tap G-meter** | Reset max G values only |
+| **REC button** | Start/stop recording data |
+| **Export button** | Download recorded data as CSV |
+
+### Connection Status
+
+The indicator in the top-right shows connection quality:
+- **Blue dot + "WS"** - WebSocket connected (~30Hz, best)
+- **Green dot + "HTTP"** - HTTP polling fallback (~15Hz)
+- **Gray dot + "Offline"** - No connection
+
+### WiFi Modes
+
+The firmware supports two WiFi modes, each with different connectivity options:
+
+#### Access Point Mode (Default)
+
+**Best for:** Mobile use, track days, standalone operation
+
+```
+┌──────────────┐     WiFi: "Blackbox"      ┌──────────────┐
+│   ESP32      │◄─────────────────────────►│    Phone     │
+│  (creates    │     192.168.4.1:80        │  (connects)  │
+│   network)   │                           │              │
+└──────────────┘                           └──────────────┘
+```
+
+- ESP32 creates its own WiFi network: `Blackbox` / `blackbox123`
+- Connect your phone directly to view the dashboard
+- No router or internet required
+- Data delivered via WebSocket (fast) or HTTP polling (fallback)
+- **No Python tools** - dashboard only
+
+**To use (default, no changes needed):**
+```bash
+cargo build --release
+```
+
+#### Station Mode
+
+**Best for:** Home testing, data logging to laptop, multiple receivers
+
+```
+┌──────────────┐                           ┌──────────────┐
+│   ESP32      │     Your WiFi Network     │   Laptop     │
+│  (connects   │◄─────────────────────────►│  (Python     │
+│   to router) │                           │   tools)     │
+└──────────────┘                           └──────────────┘
+        │                                         │
+        │              ┌──────────┐              │
+        └──────────────►│  Router  │◄────────────┘
+                       └──────────┘
+```
+
+- ESP32 connects to your existing WiFi network
+- Telemetry sent via **UDP** to your laptop (high-speed, 20Hz)
+- Status messages via **MQTT** broker
+- Python tools can receive and log data
+- Dashboard NOT available (no web server in this mode)
+
+**To use:**
+```bash
+# Set environment variables before building
+export WIFI_MODE="station"
+export WIFI_SSID="YourHomeNetwork"
+export WIFI_PASSWORD="YourPassword"
+export MQTT_BROKER="mqtt://192.168.1.100:1883"
+export UDP_SERVER="192.168.1.100:9000"
+cargo build --release
+```
+
+### Using Python Tools (Station Mode Only)
+
+The Python tools in `tools/python/` only work in **Station mode** when ESP32 is on the same network as your laptop.
+
+**Setup:**
+```bash
+# Install dependencies
+cd tools/python
+pip install -r requirements.txt
+
+# Start MQTT broker (if not already running)
+# On Ubuntu: sudo apt install mosquitto && sudo systemctl start mosquitto
+# On macOS: brew install mosquitto && brew services start mosquitto
+```
+
+**Receive UDP Telemetry (recommended):**
+```bash
+python3 udp_telemetry_server.py
+```
+Output:
+```
+[20Hz] Spd: 45.3km/h Pos:(123.4,456.7)m Acc:(+1.23,-0.15)m/s² CORNER
+```
+
+**Receive MQTT Status:**
+```bash
+python3 mqtt_binary_decoder.py
+```
+
+**Subscribe to raw MQTT topics:**
+```bash
+mosquitto_sub -h localhost -t 'car/#' -v
+```
+
+### Choosing a Mode
+
+| Feature | Access Point | Station |
+|---------|--------------|---------|
+| Mobile dashboard | ✅ Yes | ❌ No |
+| Python tools | ❌ No | ✅ Yes |
+| Needs router | ❌ No | ✅ Yes |
+| Range | ~30m | Network dependent |
+| Multiple receivers | ❌ No | ✅ Yes |
+| Data logging to laptop | ❌ No | ✅ Yes |
+
+---
+
 ## Future Enhancements
 
 - [ ] SD card logging for offline operation
-- [ ] Web dashboard for live visualization
+- [x] ~~Web dashboard for live visualization~~ ✓ Built-in mobile dashboard
 - [ ] CAN bus integration for vehicle data
 - [ ] Support for external wheel speed sensors
 - [ ] Bluetooth for phone connectivity

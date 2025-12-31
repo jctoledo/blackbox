@@ -108,7 +108,7 @@ This will display:
 [Position: 8 bytes] x, y (f32, m)
 [Velocity: 8 bytes] vx, vy (f32, m/s)
 [Speed: 4 bytes] speed (f32, km/h)
-[Mode: 1 byte] driving mode (0=IDLE, 1=ACCEL, 2=BRAKE, 3=CORNER)
+[Mode: 1 byte] driving mode - bitflags (0=IDLE, 1=ACCEL, 2=BRAKE, 4=CORNER, 5=ACCEL+CORNER, 6=BRAKE+CORNER)
 [GPS: 9 bytes] lat, lon (f32, deg), valid flag (u8)
 [Checksum: 2 bytes] sum of first 65 bytes
 ```
