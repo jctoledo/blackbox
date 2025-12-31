@@ -14,13 +14,30 @@ if [[ ! $VERSION =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     exit 1
 fi
 
+# Find repo root (directory containing .git)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Verify we found the repo root
+if [ ! -d "$REPO_ROOT/.git" ]; then
+    echo "Error: Could not find repository root (no .git directory)"
+    exit 1
+fi
+
+if [ ! -d "$REPO_ROOT/sensors/blackbox" ]; then
+    echo "Error: Could not find sensors/blackbox directory"
+    exit 1
+fi
+
 echo "======================================"
 echo "Building Blackbox Release $VERSION"
 echo "======================================"
 echo ""
+echo "Repository: $REPO_ROOT"
+echo ""
 
 # Navigate to firmware directory
-cd sensors/blackbox
+cd "$REPO_ROOT/sensors/blackbox"
 
 # Build optimized firmware
 echo "📦 Building optimized firmware..."
@@ -47,7 +64,7 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-echo "✅ Binary created: sensors/blackbox/blackbox-${VERSION}.bin"
+echo "✅ Binary created: $REPO_ROOT/sensors/blackbox/blackbox-${VERSION}.bin"
 echo ""
 
 # Get binary size
@@ -59,11 +76,11 @@ echo "======================================"
 echo "Release build complete!"
 echo "======================================"
 echo ""
-echo "Binary location: sensors/blackbox/blackbox-${VERSION}.bin"
+echo "Binary location: $REPO_ROOT/sensors/blackbox/blackbox-${VERSION}.bin"
 echo ""
 echo "Next steps:"
 echo "1. Test the binary:"
-echo "   espflash write-bin 0x0 sensors/blackbox/blackbox-${VERSION}.bin"
+echo "   espflash write-bin 0x0 $REPO_ROOT/sensors/blackbox/blackbox-${VERSION}.bin"
 echo ""
 echo "2. Commit any remaining changes:"
 echo "   git add ."
@@ -79,6 +96,7 @@ echo "   git tag -a ${VERSION} -m 'Release ${VERSION} - Access Point Mode + Mobi
 echo "   git push origin ${VERSION}"
 echo ""
 echo "5. Create GitHub release with binary:"
+echo "   cd $REPO_ROOT"
 echo "   gh release create ${VERSION} \\"
 echo "     --title '${VERSION} - Access Point Mode + Mobile Dashboard' \\"
 echo "     --notes-file release-notes.md \\"
