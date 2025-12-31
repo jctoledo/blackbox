@@ -512,13 +512,18 @@ Mode detection thresholds can be configured **live from the mobile dashboard** u
 
 | Preset | Accel | Brake | Lateral | Yaw | Min Speed | Best For |
 |--------|-------|-------|---------|-----|-----------|----------|
-| **Track** | 0.30g | 0.50g | 0.50g | 0.15 rad/s | 3.0 m/s | Racing, autocross |
-| **Canyon** | 0.20g | 0.35g | 0.30g | 0.10 rad/s | 2.5 m/s | Spirited twisty roads |
-| **City** | 0.10g | 0.18g | 0.12g | 0.05 rad/s | 2.0 m/s | Daily driving (default) |
-| **Highway** | 0.08g | 0.15g | 0.10g | 0.04 rad/s | 4.0 m/s | Cruise, subtle inputs |
+| **Track** | 0.45g | 0.70g | 0.65g | 0.20 rad/s | 4.0 m/s | Racing, track days |
+| **Canyon** | 0.25g | 0.40g | 0.35g | 0.12 rad/s | 3.0 m/s | Spirited mountain roads |
+| **City** | 0.15g | 0.25g | 0.18g | 0.06 rad/s | 2.0 m/s | Daily driving (default) |
+| **Highway** | 0.10g | 0.20g | 0.12g | 0.04 rad/s | 5.0 m/s | Highway cruising |
 | **Custom** | User-defined via sliders | | | | | Fine-tuning |
 
 Each threshold has an **entry** and **exit** value (hysteresis) to prevent oscillation. Exit thresholds are typically 50% of entry values.
+
+**Threshold tuning tips:**
+- **Too many false detections?** Increase thresholds
+- **Missing real events?** Decrease thresholds
+- **Road bumps triggering modes?** Increase thresholds or check calibration
 
 **Preset Selection:**
 1. Open dashboard at `http://192.168.4.1`
@@ -576,6 +581,65 @@ Each threshold has an **entry** and **exit** value (hysteresis) to prevent oscil
 | 2 red blinks | MQTT disconnected (Station mode only, repeats every 5s) |
 
 **Note:** MQTT status LED only applies to Station mode. In Access Point mode, MQTT is not used and no red blinks will occur for MQTT status.
+
+---
+
+## Calibration
+
+Proper calibration is **critical** for accurate mode detection. The IMU calibration measures accelerometer biases that are subtracted from all future readings.
+
+### Calibration Procedure
+
+1. **Mount the device** in its final position in the car
+   - Must be rigidly attached (no wobble or vibration)
+   - Orientation matters: device forward = car forward
+   - Does NOT need to be perfectly level (IMU handles tilt)
+
+2. **Park on reasonably level ground**
+   - Doesn't need to be perfectly flat
+   - Avoid steep hills during calibration
+
+3. **Turn OFF the engine**
+   - Engine vibration corrupts calibration
+   - For EVs, ensure the car is in Park with no systems active
+
+4. **Power on the ESP32**
+   - Wait for boot sequence LED pattern
+
+5. **Don't touch ANYTHING during yellow LED flashing** (~10 seconds)
+   - The device collects 150 accelerometer samples
+   - ANY movement corrupts the bias calculation
+   - Keep doors closed, don't sit in the car
+
+6. **Wait for operational state**
+   - Yellow fast blink = waiting for GPS lock
+   - Cyan pulse = GPS locked, ready to drive
+
+### Recalibration
+
+You can trigger recalibration from the dashboard:
+1. Open dashboard at `http://192.168.4.1`
+2. Stop the vehicle on level ground, engine off
+3. Tap the **CLR** button to reset and recalibrate
+
+### Signs of Bad Calibration
+
+- Mode detection triggers incorrectly (constant ACCEL or BRAKE)
+- Non-zero acceleration shown when stationary
+- Speed reads incorrectly
+- G-meter not centered when parked
+
+**Fix:** Power cycle and recalibrate following the procedure above.
+
+### Tips for Best Results
+
+| Do | Don't |
+|----|-------|
+| Mount rigidly with zip ties or bracket | Use velcro or loose mounting |
+| Calibrate with engine off | Calibrate while idling |
+| Wait for full yellow LED sequence | Touch car during calibration |
+| Orient device correctly (forward = forward) | Mount sideways or upside down |
+| Recalibrate if detection seems wrong | Assume it's a software bug |
 
 ---
 
