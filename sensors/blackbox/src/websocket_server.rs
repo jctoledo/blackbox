@@ -1,0 +1,676 @@
+use std::sync::{
+    atomic::{AtomicBool, AtomicU32, Ordering},
+    Arc, Mutex,
+};
+
+/// HTTP telemetry server for dashboard and settings
+/// Uses HTTP polling for reliable updates without thread blocking
+use esp_idf_svc::http::server::{Configuration, EspHttpServer};
+use esp_idf_svc::io::Write;
+use log::info;
+
+/// Mode detection settings (matching mode.rs ModeConfig)
+#[derive(Clone, Copy)]
+pub struct ModeSettings {
+    pub acc_thr: f32,    // Acceleration threshold (g)
+    pub acc_exit: f32,   // Acceleration exit threshold (g)
+    pub brake_thr: f32,  // Braking threshold (g, negative)
+    pub brake_exit: f32, // Braking exit threshold (g, negative)
+    pub lat_thr: f32,    // Lateral threshold (g)
+    pub lat_exit: f32,   // Lateral exit threshold (g)
+    pub yaw_thr: f32,    // Yaw rate threshold (rad/s)
+    pub min_speed: f32,  // Minimum speed for mode detection (m/s)
+}
+
+impl Default for ModeSettings {
+    fn default() -> Self {
+        Self {
+            acc_thr: 0.10,     // Lowered from 0.15 for street driving
+            acc_exit: 0.05,    // Exit at 50% of entry
+            brake_thr: -0.18,  // Slightly higher to reduce false positives
+            brake_exit: -0.09, // Exit at 50% of entry
+            lat_thr: 0.12,
+            lat_exit: 0.06,
+            yaw_thr: 0.05,
+            min_speed: 2.0,
+        }
+    }
+}
+
+/// Shared state for telemetry server
+pub struct TelemetryServerState {
+    /// Latest telemetry packet (raw bytes)
+    telemetry_data: Mutex<Vec<u8>>,
+    /// Packet counter for clients to detect updates
+    packet_counter: AtomicU32,
+    /// Calibration requested flag
+    calibration_requested: AtomicBool,
+    /// Mode detection settings
+    mode_settings: Mutex<ModeSettings>,
+    /// Settings changed flag
+    settings_changed: AtomicBool,
+}
+
+impl TelemetryServerState {
+    pub fn new() -> Self {
+        Self {
+            telemetry_data: Mutex::new(Vec::with_capacity(128)),
+            packet_counter: AtomicU32::new(0),
+            calibration_requested: AtomicBool::new(false),
+            mode_settings: Mutex::new(ModeSettings::default()),
+            settings_changed: AtomicBool::new(false),
+        }
+    }
+
+    /// Request calibration from the UI
+    pub fn request_calibration(&self) {
+        self.calibration_requested.store(true, Ordering::SeqCst);
+    }
+
+    /// Check if calibration was requested and clear the flag
+    pub fn take_calibration_request(&self) -> bool {
+        self.calibration_requested.swap(false, Ordering::SeqCst)
+    }
+
+    /// Get current mode settings
+    pub fn get_settings(&self) -> ModeSettings {
+        self.mode_settings.lock().map(|g| *g).unwrap_or_default()
+    }
+
+    /// Update mode settings
+    pub fn set_settings(&self, settings: ModeSettings) {
+        if let Ok(mut guard) = self.mode_settings.lock() {
+            *guard = settings;
+            self.settings_changed.store(true, Ordering::SeqCst);
+        }
+    }
+
+    /// Check if settings were changed and clear the flag
+    pub fn take_settings_change(&self) -> Option<ModeSettings> {
+        if self.settings_changed.swap(false, Ordering::SeqCst) {
+            Some(self.get_settings())
+        } else {
+            None
+        }
+    }
+
+    /// Update telemetry data
+    pub fn update_telemetry(&self, data: &[u8]) {
+        if let Ok(mut guard) = self.telemetry_data.lock() {
+            guard.clear();
+            guard.extend_from_slice(data);
+            self.packet_counter.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    /// Get current telemetry data as base64 for JSON transport
+    pub fn get_telemetry_base64(&self) -> Option<String> {
+        self.telemetry_data
+            .lock()
+            .ok()
+            .map(|data| base64_encode(&data))
+    }
+
+    /// Get raw telemetry bytes (kept for potential future use)
+    #[allow(dead_code)]
+    pub fn get_telemetry_raw(&self) -> Option<Vec<u8>> {
+        self.telemetry_data.lock().ok().map(|g| g.clone())
+    }
+
+    /// Get packet counter
+    pub fn packet_count(&self) -> u32 {
+        self.packet_counter.load(Ordering::SeqCst)
+    }
+}
+
+impl Default for TelemetryServerState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Simple base64 encoder
+fn base64_encode(data: &[u8]) -> String {
+    const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut result = String::with_capacity(data.len().div_ceil(3) * 4);
+
+    for chunk in data.chunks(3) {
+        let b0 = chunk[0] as usize;
+        let b1 = chunk.get(1).copied().unwrap_or(0) as usize;
+        let b2 = chunk.get(2).copied().unwrap_or(0) as usize;
+
+        result.push(CHARS[b0 >> 2] as char);
+        result.push(CHARS[((b0 & 0x03) << 4) | (b1 >> 4)] as char);
+
+        if chunk.len() > 1 {
+            result.push(CHARS[((b1 & 0x0f) << 2) | (b2 >> 6)] as char);
+        } else {
+            result.push('=');
+        }
+
+        if chunk.len() > 2 {
+            result.push(CHARS[b2 & 0x3f] as char);
+        } else {
+            result.push('=');
+        }
+    }
+
+    result
+}
+
+/// Telemetry HTTP server
+pub struct TelemetryServer {
+    _server: EspHttpServer<'static>,
+    state: Arc<TelemetryServerState>,
+}
+
+/// Mobile-optimized dashboard with HTTP polling, G-meter trail and max values
+const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes"><title>Blackbox</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0f;color:#f0f0f0;min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;-webkit-user-select:none;user-select:none}
+.hdr{background:#111;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #222}
+.logo{font-weight:700;font-size:16px;letter-spacing:2px}
+.hdr-r{display:flex;align-items:center;gap:10px}
+.timer{font-size:11px;color:#444;font-variant-numeric:tabular-nums}
+.st{display:flex;align-items:center;gap:6px;font-size:12px;color:#888}
+.dot{width:8px;height:8px;border-radius:50%;background:#444}
+.dot.on{background:#22c55e}
+.dot.ws{background:#3b82f6}
+.dot.rec{background:#ef4444;animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.4}}
+@keyframes recPulse{0%,100%{border-color:#252530}50%{border-color:#ef4444}}
+.main{flex:1;padding:12px;display:flex;flex-direction:column;gap:10px;overflow-y:auto}
+.mode-box{background:linear-gradient(135deg,#12121a,#1a1a24);border-radius:14px;padding:16px;text-align:center;border:1px solid #252530;transition:border-color .3s}
+.mode-box.rec{animation:recPulse 1s infinite}
+.mode-lbl{font-size:10px;color:#555;text-transform:uppercase;letter-spacing:2px}
+.mode-val{font-size:38px;font-weight:700;letter-spacing:2px;margin:4px 0}
+.mode-icon{font-size:20px}
+.m-idle{color:#555}.m-accel{color:#22c55e}.m-brake{color:#ef4444}.m-corner{color:#3b82f6}
+.spd-row{display:flex;gap:10px}
+.spd-box{flex:1;background:linear-gradient(135deg,#12121a,#1a1a24);border-radius:14px;padding:14px;text-align:center;border:1px solid #252530}
+.spd-val{font-size:56px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
+.spd-unit{font-size:12px;color:#555;margin-top:2px}
+.max-spd{width:70px;background:#111;border-radius:14px;padding:10px 8px;text-align:center;border:1px solid #1a1a24;display:flex;flex-direction:column;justify-content:center}
+.max-spd-val{font-size:24px;font-weight:700;color:#f59e0b;font-variant-numeric:tabular-nums}
+.max-spd-lbl{font-size:8px;color:#555;text-transform:uppercase;letter-spacing:1px}
+.gf-box{background:#111;border-radius:12px;padding:16px 12px;display:flex;flex-direction:column;align-items:center;border:1px solid #1a1a24}
+.gf-container{position:relative;width:140px;height:140px}
+.gf-canvas{position:absolute;top:0;left:0}
+.gf-max-row{display:flex;justify-content:space-between;align-items:center;width:100%;margin-top:8px}
+.gf-max{display:flex;gap:4px;font-size:11px;color:#444;font-variant-numeric:tabular-nums;font-weight:600}
+.gf-max span{padding:3px 8px;background:#0a0a0f;border-radius:6px;border:1px solid #1a1a24}
+.gf-max .val{color:#60a5fa;font-weight:700}
+.rst-btn{background:#1a1a24;border:1px solid #252530;border-radius:4px;color:#555;font-size:8px;padding:4px 8px;cursor:pointer;text-transform:uppercase;letter-spacing:1px}
+.rst-btn:active{background:#252530;color:#888}
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.met{background:#111;border-radius:10px;padding:10px 6px;text-align:center;border:1px solid #1a1a24}
+.met-val{font-size:18px;font-weight:600;font-variant-numeric:tabular-nums}
+.met-lbl{font-size:9px;color:#444;text-transform:uppercase;margin-top:2px}
+.ctrl{display:flex;gap:8px;padding:10px 12px;background:#111;border-top:1px solid #222}
+.btn{flex:1;padding:12px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px}
+.btn-rec{background:#1e3a5f;color:#60a5fa}.btn-rec.on{background:#5f1e1e;color:#f87171}
+.btn-exp{background:#1a1a24;color:#666}
+.btn:active{opacity:.8}
+.gps-box{background:#111;border-radius:8px;padding:8px 12px;text-align:center;font-size:11px;color:#555;border:1px solid #1a1a24}
+.gps-box.ok{color:#22c55e}
+.cfg-section{background:#111;border-radius:10px;padding:12px;margin-top:10px;border:1px solid #1a1a24}
+.cfg-title{font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;text-align:center}
+.cfg-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.cfg-lbl{font-size:10px;color:#666;width:45px}
+.cfg-slider{flex:1;-webkit-appearance:none;background:#1a1a24;height:6px;border-radius:3px}
+.cfg-slider::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;background:#3b82f6;border-radius:50%}
+.cfg-val{font-size:12px;color:#60a5fa;width:35px;text-align:right}
+.cfg-unit{font-size:9px;color:#444;width:22px}
+.cfg-btns{display:flex;gap:8px;margin-top:10px}
+.cfg-btn{flex:1;padding:8px;border:none;border-radius:6px;font-size:11px;background:#1a1a24;color:#666;cursor:pointer}
+.cfg-btn.cfg-save{background:#1e3a5f;color:#60a5fa}
+</style></head>
+<body>
+<div class="hdr"><div class="logo">BLACKBOX <span style="font-size:9px;color:#333">v4</span></div><div class="hdr-r"><span class="timer" id="timer">00:00</span><div class="st"><span class="dot" id="dot"></span><span id="stxt">--</span></div></div></div>
+<div class="main">
+<div class="mode-box" id="modebox"><div class="mode-lbl">Mode</div><div class="mode-val m-idle" id="mode">IDLE</div><div class="mode-icon" id="icon">●</div></div>
+<div class="spd-row">
+<div class="spd-box"><div class="spd-val" id="spd">0</div><div class="spd-unit">km/h</div></div>
+<div class="max-spd" id="maxspdbox"><div class="max-spd-val" id="maxspd">0</div><div class="max-spd-lbl">MAX</div></div>
+</div>
+<div class="gf-box">
+<div class="gf-container"><canvas id="gfc" class="gf-canvas" width="140" height="140"></canvas></div>
+<div class="gf-max-row">
+<div class="gf-max"><span>L <b class="val" id="maxL">0.0</b></span><span>B <b class="val" id="maxB">0.0</b></span><span>A <b class="val" id="maxA">0.0</b></span><span>R <b class="val" id="maxR">0.0</b></span></div>
+<button class="rst-btn" id="rstg">CLR</button>
+</div>
+</div>
+<div class="metrics">
+<div class="met"><div class="met-val" id="latg">0.0</div><div class="met-lbl">Lat G</div></div>
+<div class="met"><div class="met-val" id="lng">0.0</div><div class="met-lbl">Lon G</div></div>
+<div class="met"><div class="met-val" id="yaw">0</div><div class="met-lbl">Yaw°/s</div></div>
+<div class="met"><div class="met-val" id="hz">0</div><div class="met-lbl">Hz</div></div>
+</div>
+<div class="gps-box" id="gpsbox"><span id="gps">GPS: --</span></div>
+<div class="cfg-section">
+<div class="cfg-title">Mode Detection Settings</div>
+<div class="cfg-row"><span class="cfg-lbl">Accel</span><input type="range" min="0.05" max="0.50" step="0.01" class="cfg-slider" id="s-acc" value="0.10" oninput="updS('acc')"><span class="cfg-val" id="v-acc">0.10</span><span class="cfg-unit">g</span></div>
+<div class="cfg-row"><span class="cfg-lbl">Acc Exit</span><input type="range" min="0.02" max="0.50" step="0.01" class="cfg-slider" id="s-accexit" value="0.05" oninput="updS('accexit')"><span class="cfg-val" id="v-accexit">0.05</span><span class="cfg-unit">g</span></div>
+<div class="cfg-row"><span class="cfg-lbl">Brake</span><input type="range" min="0.05" max="0.50" step="0.01" class="cfg-slider" id="s-brake" value="0.18" oninput="updS('brake')"><span class="cfg-val" id="v-brake">0.18</span><span class="cfg-unit">g</span></div>
+<div class="cfg-row"><span class="cfg-lbl">Brk Exit</span><input type="range" min="0.02" max="0.50" step="0.01" class="cfg-slider" id="s-brakeexit" value="0.09" oninput="updS('brakeexit')"><span class="cfg-val" id="v-brakeexit">0.09</span><span class="cfg-unit">g</span></div>
+<div class="cfg-row"><span class="cfg-lbl">Lateral</span><input type="range" min="0.05" max="0.50" step="0.01" class="cfg-slider" id="s-lat" value="0.12" oninput="updS('lat')"><span class="cfg-val" id="v-lat">0.12</span><span class="cfg-unit">g</span></div>
+<div class="cfg-row"><span class="cfg-lbl">Lat Exit</span><input type="range" min="0.02" max="0.50" step="0.01" class="cfg-slider" id="s-latexit" value="0.06" oninput="updS('latexit')"><span class="cfg-val" id="v-latexit">0.06</span><span class="cfg-unit">g</span></div>
+<div class="cfg-row"><span class="cfg-lbl">Yaw</span><input type="range" min="0.01" max="0.20" step="0.005" class="cfg-slider" id="s-yaw" value="0.05" oninput="updS('yaw')"><span class="cfg-val" id="v-yaw">0.050</span><span class="cfg-unit">r/s</span></div>
+<div class="cfg-row"><span class="cfg-lbl">Min Spd</span><input type="range" min="0.5" max="5.0" step="0.1" class="cfg-slider" id="s-minspd" value="2.0" oninput="updS('minspd')"><span class="cfg-val" id="v-minspd">2.0</span><span class="cfg-unit">m/s</span></div>
+<div class="cfg-btns"><button class="cfg-btn" onclick="resetDef()">Defaults</button><button class="cfg-btn cfg-save" onclick="saveCfg()">Save</button></div>
+</div>
+</div>
+<div class="ctrl">
+<button class="btn btn-rec" id="rec">● REC</button>
+<button class="btn btn-exp" id="exp">Export</button>
+</div>
+<script>
+const M={0:'IDLE',1:'ACCEL',2:'BRAKE',4:'CORNER',5:'ACCEL+CORNER',6:'BRAKE+CORNER'},C={0:'m-idle',1:'m-accel',2:'m-brake',4:'m-corner',5:'m-accel',6:'m-brake'},I={0:'●',1:'▲',2:'▼',4:'◆',5:'⬈',6:'⬊'};
+let rec=0,data=[],cnt=0,lastSeq=0;
+let trail=[],maxL=0,maxR=0,maxA=0,maxB=0,maxSpd=0;
+let speed_ema=0;
+let sessionStart=Date.now();
+const $=id=>document.getElementById(id);
+const cv=$('gfc'),ctx=cv.getContext('2d');
+const CX=70,CY=70,R=55,SCL=R/2;
+
+function fmtTime(ms){const s=Math.floor(ms/1000),m=Math.floor(s/60);return String(m).padStart(2,'0')+':'+String(s%60).padStart(2,'0')}
+
+function resetGMax(){maxL=maxR=maxA=maxB=0;$('maxL').textContent=$('maxR').textContent=$('maxA').textContent=$('maxB').textContent='0.0'}
+function resetAll(){
+// Just clear max values and reset timer - no calibration trigger
+resetGMax();maxSpd=0;$('maxspd').textContent='0';sessionStart=Date.now();$('timer').textContent='00:00';trail=[];
+}
+
+function drawG(){
+ctx.clearRect(0,0,140,140);
+// Outer ring with gradient
+const grd=ctx.createRadialGradient(CX,CY,0,CX,CY,R);
+grd.addColorStop(0,'#0a0a0f');grd.addColorStop(1,'#1a1a24');
+ctx.strokeStyle=grd;ctx.lineWidth=1.5;
+ctx.beginPath();ctx.arc(CX,CY,R,0,Math.PI*2);ctx.stroke();
+// Inner rings with subtle gradient
+ctx.strokeStyle='#252530';ctx.lineWidth=1;
+ctx.beginPath();ctx.arc(CX,CY,R*0.66,0,Math.PI*2);ctx.stroke();
+ctx.strokeStyle='#1a1a24';
+ctx.beginPath();ctx.arc(CX,CY,R*0.33,0,Math.PI*2);ctx.stroke();
+// Cross with tick marks
+ctx.strokeStyle='#252530';ctx.lineWidth=1;
+ctx.beginPath();ctx.moveTo(CX-R,CY);ctx.lineTo(CX+R,CY);ctx.moveTo(CX,CY-R);ctx.lineTo(CX,CY+R);ctx.stroke();
+// Tick marks at 0.5g intervals
+ctx.strokeStyle='#1a1a24';ctx.lineWidth=1;
+for(let g of[0.25,0.5,0.75,1.0]){
+const r=g*R/2;
+ctx.beginPath();ctx.moveTo(CX-3,CY-r);ctx.lineTo(CX+3,CY-r);ctx.stroke();
+ctx.beginPath();ctx.moveTo(CX-3,CY+r);ctx.lineTo(CX+3,CY+r);ctx.stroke();
+ctx.beginPath();ctx.moveTo(CX-r,CY-3);ctx.lineTo(CX-r,CY+3);ctx.stroke();
+ctx.beginPath();ctx.moveTo(CX+r,CY-3);ctx.lineTo(CX+r,CY+3);ctx.stroke();
+}
+// Labels - larger and bolder
+ctx.fillStyle='#60a5fa';ctx.font='bold 12px system-ui';ctx.textAlign='center';
+ctx.fillText('BRK',CX,11);ctx.fillText('ACC',CX,135);
+ctx.textAlign='left';ctx.fillText('L',2,CY+4);
+ctx.textAlign='right';ctx.fillText('R',138,CY+4);
+// Trail with connecting line (the tail)
+if(trail.length>1){
+ctx.strokeStyle='rgba(59,130,246,0.15)';ctx.lineWidth=2;
+ctx.beginPath();
+ctx.moveTo(CX+trail[0].x*SCL,CY-trail[0].y*SCL);
+for(let i=1;i<trail.length;i++){
+ctx.lineTo(CX+trail[i].x*SCL,CY-trail[i].y*SCL);
+}
+ctx.stroke();
+}
+// Trail dots with gradient fade
+for(let i=0;i<trail.length;i++){
+const t=trail[i],a=(i+1)/trail.length;
+const hue=200+a*20;
+ctx.fillStyle=`hsla(${hue},70%,60%,${a*0.6})`;
+ctx.shadowColor=`hsla(${hue},70%,60%,${a*0.3})`;ctx.shadowBlur=4;
+ctx.beginPath();ctx.arc(CX+t.x*SCL,CY-t.y*SCL,2+a*2,0,Math.PI*2);ctx.fill();
+}
+ctx.shadowBlur=0;
+// Current dot with enhanced glow
+if(trail.length>0){
+const c=trail[trail.length-1];
+ctx.shadowColor='#3b82f6';ctx.shadowBlur=12;
+ctx.fillStyle='#60a5fa';
+ctx.beginPath();ctx.arc(CX+c.x*SCL,CY-c.y*SCL,7,0,Math.PI*2);ctx.fill();
+ctx.shadowBlur=6;
+ctx.fillStyle='#fff';
+ctx.beginPath();ctx.arc(CX+c.x*SCL,CY-c.y*SCL,3,0,Math.PI*2);ctx.fill();
+ctx.shadowBlur=0;
+}
+}
+
+function process(buf){
+const d=new DataView(buf);
+const ax=d.getFloat32(7,1),ay=d.getFloat32(11,1),wz=d.getFloat32(19,1),sp=d.getFloat32(51,1),mo=d.getUint8(55);
+const lat=d.getFloat32(56,1),lon=d.getFloat32(60,1),gpsOk=d.getUint8(64);
+const latg=ay/9.81,lng=-ax/9.81,yaw=Math.abs(wz*57.3);
+// EMA filter for smooth speed display (like car speedometer)
+speed_ema=0.4*sp+(1-0.4)*speed_ema;
+const dspd=speed_ema<3?0:Math.round(speed_ema);
+$('mode').textContent=M[mo]||'IDLE';$('mode').className='mode-val '+(C[mo]||'m-idle');$('icon').textContent=I[mo]||'●';
+$('spd').textContent=dspd;$('latg').textContent=latg.toFixed(2);$('lng').textContent=lng.toFixed(2);
+$('yaw').textContent=yaw.toFixed(0);
+// Max speed
+if(dspd>maxSpd){maxSpd=dspd;$('maxspd').textContent=maxSpd}
+if(gpsOk){$('gps').textContent=lat.toFixed(6)+', '+lon.toFixed(6);$('gpsbox').className='gps-box ok'}
+else{$('gps').textContent='GPS: No Fix';$('gpsbox').className='gps-box'}
+// G-meter: x=lateral(+right), y=longitudinal(+accel)
+const gx=Math.max(-2,Math.min(2,latg)),gy=Math.max(-2,Math.min(2,lng));
+trail.push({x:gx,y:gy});if(trail.length>30)trail.shift();
+// Max G values
+if(latg<0&&Math.abs(latg)>maxL){maxL=Math.abs(latg);$('maxL').textContent=maxL.toFixed(2)}
+if(latg>0&&latg>maxR){maxR=latg;$('maxR').textContent=maxR.toFixed(2)}
+if(lng>0&&lng>maxA){maxA=lng;$('maxA').textContent=maxA.toFixed(2)}
+if(lng<0&&Math.abs(lng)>maxB){maxB=Math.abs(lng);$('maxB').textContent=maxB.toFixed(2)}
+drawG();
+cnt++;
+if(rec)data.push({t:Date.now(),sp,ax,ay,wz,mo,latg,lng,lat,lon,gpsOk});
+}
+
+// HTTP polling - interval optimized for WiFi latency
+let polling=0,skips=0;
+async function poll(){
+if(polling){skips++;return} // Skip if previous poll still running
+polling=1;
+const start=Date.now();
+try{
+const r=await fetch('/api/telemetry');
+const j=await r.json();
+if(j.data&&j.seq!==lastSeq){
+lastSeq=j.seq;
+const b=atob(j.data),a=new Uint8Array(b.length);
+for(let i=0;i<b.length;i++)a[i]=b.charCodeAt(i);
+process(a.buffer);
+$('dot').className='dot on';$('stxt').textContent='HTTP';
+}
+}catch(e){$('dot').className='dot';$('stxt').textContent='Offline'}
+polling=0;
+}
+
+// Reset button: resets G max, speed max, timer, and triggers calibration
+$('rstg').onclick=resetAll;
+$('gfc').ondblclick=resetGMax;
+
+// Reset max speed on tap
+$('maxspdbox').onclick=()=>{maxSpd=0;$('maxspd').textContent='0'};
+
+// Update timer and Hz display
+setInterval(()=>{$('hz').textContent=cnt;cnt=0;$('timer').textContent=fmtTime(Date.now()-sessionStart)},1000);
+drawG();
+
+$('rec').onclick=()=>{rec=!rec;if(rec){data=[];$('rec').className='btn btn-rec on';$('rec').textContent='■ STOP';$('dot').classList.add('rec');$('modebox').classList.add('rec')}
+else{$('rec').className='btn btn-rec';$('rec').textContent='● REC';$('dot').classList.remove('rec');$('modebox').classList.remove('rec');
+if(data.length){const s=JSON.parse(localStorage.getItem('bb')||'[]');s.unshift({id:Date.now(),n:data.length,d:data});
+localStorage.setItem('bb',JSON.stringify(s.slice(0,10)));alert('Saved '+data.length+' pts')}}};
+
+$('exp').onclick=()=>{const s=JSON.parse(localStorage.getItem('bb')||'[]');if(!s.length)return alert('No data');
+let c='time,speed,ax,ay,wz,mode,lat_g,lon_g,gps_lat,gps_lon,gps_valid\n';s[0].d.forEach(r=>{c+=r.t+','+r.sp+','+r.ax+','+r.ay+','+r.wz+','+r.mo+','+r.latg+','+r.lng+','+(r.lat||0)+','+(r.lon||0)+','+(r.gpsOk||0)+'\n'});
+const b=new Blob([c],{type:'text/csv'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download='blackbox.csv';a.click()};
+
+// Settings functions
+function updS(id){var s=$('s-'+id),v=$('v-'+id);if(s&&v)v.textContent=parseFloat(s.value).toFixed(id==='minspd'?1:(id==='yaw'?3:2))}
+function resetDef(){
+$('s-acc').value=0.10;$('v-acc').textContent='0.10';
+$('s-accexit').value=0.05;$('v-accexit').textContent='0.05';
+$('s-brake').value=0.18;$('v-brake').textContent='0.18';
+$('s-brakeexit').value=0.09;$('v-brakeexit').textContent='0.09';
+$('s-lat').value=0.12;$('v-lat').textContent='0.12';
+$('s-latexit').value=0.06;$('v-latexit').textContent='0.06';
+$('s-yaw').value=0.05;$('v-yaw').textContent='0.050';
+$('s-minspd').value=2.0;$('v-minspd').textContent='2.0';
+}
+async function saveCfg(){
+var acc=parseFloat($('s-acc').value),accexit=parseFloat($('s-accexit').value),brake=parseFloat($('s-brake').value),brakeexit=parseFloat($('s-brakeexit').value),lat=parseFloat($('s-lat').value),latexit=parseFloat($('s-latexit').value),yaw=parseFloat($('s-yaw').value),minspd=parseFloat($('s-minspd').value);
+// Validation
+if(accexit>=acc){alert('⚠️ Accel Exit must be < Accel Entry!');return}
+if(brakeexit>=brake){alert('⚠️ Brake Exit must be > Brake Entry!\n(Less negative)');return}
+if(latexit>=lat){alert('⚠️ Lateral Exit must be < Lateral Entry!');return}
+// Negate for transmission
+brake=-Math.abs(brake);brakeexit=-Math.abs(brakeexit);
+// Send via HTTP
+try{
+const url='/api/settings/set?acc='+acc+'&acc_exit='+accexit+'&brake='+brake+'&brake_exit='+brakeexit+'&lat='+lat+'&lat_exit='+latexit+'&yaw='+yaw+'&min_speed='+minspd;
+await fetch(url);
+// Visual feedback
+var btn=document.querySelector('.cfg-save');
+btn.textContent='✓ Saved!';btn.style.background='#10b981';
+setTimeout(()=>{btn.textContent='Save';btn.style.background=''},2000);
+}catch(e){alert('❌ Save failed: '+e.message)}
+}
+// Load current settings from ESP32 on page load
+async function loadCfg(){
+try{
+const r=await fetch('/api/settings');
+const s=await r.json();
+if(s.acc!==undefined){
+$('s-acc').value=s.acc;$('v-acc').textContent=s.acc.toFixed(2);
+$('s-accexit').value=s.acc_exit;$('v-accexit').textContent=s.acc_exit.toFixed(2);
+$('s-brake').value=Math.abs(s.brake);$('v-brake').textContent=Math.abs(s.brake).toFixed(2);
+$('s-brakeexit').value=Math.abs(s.brake_exit);$('v-brakeexit').textContent=Math.abs(s.brake_exit).toFixed(2);
+$('s-lat').value=s.lat;$('v-lat').textContent=s.lat.toFixed(2);
+$('s-latexit').value=s.lat_exit;$('v-latexit').textContent=s.lat_exit.toFixed(2);
+$('s-yaw').value=s.yaw;$('v-yaw').textContent=s.yaw.toFixed(3);
+$('s-minspd').value=s.min_speed;$('v-minspd').textContent=s.min_speed.toFixed(1);
+}
+}catch(e){console.log('Settings load failed:',e)}
+}
+// Load settings, then start polling (40ms interval accounts for WiFi/HTTP overhead)
+loadCfg().then(()=>setInterval(poll,40));
+</script></body></html>"#;
+
+impl TelemetryServer {
+    /// Create and start the telemetry server with HTTP polling
+    pub fn new(port: u16) -> Result<Self, Box<dyn std::error::Error>> {
+        info!("Starting Telemetry server on port {}", port);
+
+        let server_config = Configuration {
+            http_port: port,
+            max_uri_handlers: 7, /* Dashboard, telemetry, status, calibrate, settings GET,
+                                  * settings SET */
+            max_open_sockets: 8, // HTTP only - no long-lived WebSocket connections
+            stack_size: 10240,
+            ..Default::default()
+        };
+
+        let mut server = EspHttpServer::new(&server_config)?;
+        let state = Arc::new(TelemetryServerState::new());
+
+        // Serve the dashboard HTML
+        server.fn_handler(
+            "/",
+            esp_idf_svc::http::Method::Get,
+            |req| -> Result<(), esp_idf_svc::io::EspIOError> {
+                let html_bytes = DASHBOARD_HTML.as_bytes();
+                let content_length = html_bytes.len().to_string();
+                let mut response = req.into_response(
+                    200,
+                    None,
+                    &[
+                        ("Content-Type", "text/html; charset=utf-8"),
+                        ("Content-Length", &content_length),
+                        ("Connection", "close"),
+                    ],
+                )?;
+                response.write_all(html_bytes)?;
+                Ok(())
+            },
+        )?;
+
+        // WebSocket removed - using HTTP polling for reliability and to eliminate
+        // thread blocking
+
+        // HTTP polling fallback endpoint
+        let state_poll = state.clone();
+        server.fn_handler(
+            "/api/telemetry",
+            esp_idf_svc::http::Method::Get,
+            move |req| -> Result<(), esp_idf_svc::io::EspIOError> {
+                let json = if let Some(data) = state_poll.get_telemetry_base64() {
+                    format!(
+                        r#"{{"seq":{},"data":"{}"}}"#,
+                        state_poll.packet_count(),
+                        data
+                    )
+                } else {
+                    r#"{"seq":0,"data":null}"#.to_string()
+                };
+
+                let mut response = req.into_response(
+                    200,
+                    None,
+                    &[
+                        ("Content-Type", "application/json"),
+                        ("Access-Control-Allow-Origin", "*"),
+                        ("Cache-Control", "no-cache"),
+                    ],
+                )?;
+                response.write_all(json.as_bytes())?;
+                Ok(())
+            },
+        )?;
+
+        // Health check
+        server.fn_handler(
+            "/api/status",
+            esp_idf_svc::http::Method::Get,
+            |req| -> Result<(), esp_idf_svc::io::EspIOError> {
+                info!(">>> /api/status called");
+                #[cfg(esp_idf_httpd_ws_support)]
+                let body = b"{\"status\":\"ok\",\"ws\":true}";
+                #[cfg(not(esp_idf_httpd_ws_support))]
+                let body = b"{\"status\":\"ok\",\"ws\":false}";
+
+                let content_length = body.len().to_string();
+                let mut response = req.into_response(
+                    200,
+                    None,
+                    &[
+                        ("Content-Type", "application/json"),
+                        ("Content-Length", &content_length),
+                        ("Connection", "close"),
+                    ],
+                )?;
+                response.write_all(body)?;
+                info!(">>> /api/status response sent");
+                Ok(())
+            },
+        )?;
+
+        // Calibration trigger endpoint
+        let state_calib = state.clone();
+        server.fn_handler(
+            "/api/calibrate",
+            esp_idf_svc::http::Method::Get,
+            move |req| -> Result<(), esp_idf_svc::io::EspIOError> {
+                info!(">>> /api/calibrate endpoint called - requesting calibration");
+                state_calib.request_calibration();
+                let mut response = req.into_response(
+                    200,
+                    None,
+                    &[
+                        ("Content-Type", "application/json"),
+                        ("Access-Control-Allow-Origin", "*"),
+                    ],
+                )?;
+                response.write_all(b"{\"status\":\"calibrating\"}")?;
+                Ok(())
+            },
+        )?;
+
+        // Get current settings
+        let state_get = state.clone();
+        server.fn_handler("/api/settings", esp_idf_svc::http::Method::Get, move |req| -> Result<(), esp_idf_svc::io::EspIOError> {
+            info!(">>> /api/settings GET called");
+            let s = state_get.get_settings();
+            let json = format!(
+                r#"{{"acc":{:.2},"acc_exit":{:.2},"brake":{:.2},"brake_exit":{:.2},"lat":{:.2},"lat_exit":{:.2},"yaw":{:.3},"min_speed":{:.1}}}"#,
+                s.acc_thr, s.acc_exit, s.brake_thr, s.brake_exit, s.lat_thr, s.lat_exit, s.yaw_thr, s.min_speed
+            );
+            let content_length = json.len().to_string();
+            info!(">>> /api/settings response: {} bytes", content_length);
+            let mut response = req.into_response(
+                200,
+                None,
+                &[
+                    ("Content-Type", "application/json"),
+                    ("Content-Length", &content_length),
+                    ("Connection", "close"),
+                    ("Access-Control-Allow-Origin", "*"),
+                ],
+            )?;
+            response.write_all(json.as_bytes())?;
+            info!(">>> /api/settings response sent");
+            Ok(())
+        })?;
+
+        // Update settings via query params
+        let state_set = state.clone();
+        server.fn_handler("/api/settings/set", esp_idf_svc::http::Method::Get, move |req| -> Result<(), esp_idf_svc::io::EspIOError> {
+            let uri = req.uri();
+            let mut settings = state_set.get_settings();
+
+            // Parse query parameters
+            if let Some(query) = uri.split('?').nth(1) {
+                for param in query.split('&') {
+                    let mut parts = param.split('=');
+                    if let (Some(key), Some(val)) = (parts.next(), parts.next()) {
+                        if let Ok(v) = val.parse::<f32>() {
+                            match key {
+                                "acc" => settings.acc_thr = v,
+                                "acc_exit" => settings.acc_exit = v,
+                                "brake" => settings.brake_thr = v,
+                                "brake_exit" => settings.brake_exit = v,
+                                "lat" => settings.lat_thr = v,
+                                "lat_exit" => settings.lat_exit = v,
+                                "yaw" => settings.yaw_thr = v,
+                                "min_speed" => settings.min_speed = v,
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+            }
+
+            state_set.set_settings(settings);
+            info!("Settings updated: acc={:.2}, acc_exit={:.2}, brake={:.2}, brake_exit={:.2}, lat={:.2}, lat_exit={:.2}, yaw={:.3}, min_speed={:.1}",
+                settings.acc_thr, settings.acc_exit, settings.brake_thr, settings.brake_exit, settings.lat_thr, settings.lat_exit, settings.yaw_thr, settings.min_speed);
+
+            let json = format!(
+                r#"{{"status":"ok","acc":{:.2},"acc_exit":{:.2},"brake":{:.2},"brake_exit":{:.2},"lat":{:.2},"lat_exit":{:.2},"yaw":{:.3},"min_speed":{:.1}}}"#,
+                settings.acc_thr, settings.acc_exit, settings.brake_thr, settings.brake_exit, settings.lat_thr, settings.lat_exit, settings.yaw_thr, settings.min_speed
+            );
+            let content_length = json.len().to_string();
+            let mut response = req.into_response(
+                200,
+                None,
+                &[
+                    ("Content-Type", "application/json"),
+                    ("Content-Length", &content_length),
+                    ("Connection", "close"),
+                    ("Access-Control-Allow-Origin", "*"),
+                ],
+            )?;
+            response.write_all(json.as_bytes())?;
+            Ok(())
+        })?;
+
+        info!("Telemetry server ready on port {}", port);
+
+        Ok(Self {
+            _server: server,
+            state,
+        })
+    }
+
+    /// Get reference to shared state for updating telemetry
+    pub fn state(&self) -> Arc<TelemetryServerState> {
+        self.state.clone()
+    }
+}

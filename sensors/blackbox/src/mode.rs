@@ -7,23 +7,90 @@ use motorsport_telemetry::transforms::earth_to_car;
 
 const G: f32 = 9.80665; // m/s²
 
-/// Driving modes
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Mode {
-    Idle,
-    Accel,
-    Brake,
-    Corner,
+/// Driving mode flags - can be combined
+pub struct Mode {
+    flags: u8,
 }
 
+// Mode bit flags
+const IDLE: u8 = 0;
+const ACCEL: u8 = 1;
+const BRAKE: u8 = 2;
+const CORNER: u8 = 4;
+
 impl Mode {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Mode::Idle => "IDLE",
-            Mode::Accel => "ACCEL",
-            Mode::Brake => "BRAKE",
-            Mode::Corner => "CORNER",
+    pub fn idle() -> Self {
+        Self { flags: IDLE }
+    }
+
+    pub fn is_idle(&self) -> bool {
+        self.flags == IDLE
+    }
+
+    pub fn has_accel(&self) -> bool {
+        self.flags & ACCEL != 0
+    }
+
+    pub fn has_brake(&self) -> bool {
+        self.flags & BRAKE != 0
+    }
+
+    pub fn has_corner(&self) -> bool {
+        self.flags & CORNER != 0
+    }
+
+    pub fn set_accel(&mut self, enabled: bool) {
+        if enabled {
+            self.flags |= ACCEL;
+            self.flags &= !BRAKE; // Clear brake (mutually exclusive)
+        } else {
+            self.flags &= !ACCEL;
         }
+    }
+
+    pub fn set_brake(&mut self, enabled: bool) {
+        if enabled {
+            self.flags |= BRAKE;
+            self.flags &= !ACCEL; // Clear accel (mutually exclusive)
+        } else {
+            self.flags &= !BRAKE;
+        }
+    }
+
+    pub fn set_corner(&mut self, enabled: bool) {
+        if enabled {
+            self.flags |= CORNER;
+        } else {
+            self.flags &= !CORNER;
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.flags = IDLE;
+    }
+
+    /// Get mode as string for display
+    pub fn as_str(&self) -> &'static str {
+        match self.flags {
+            0 => "IDLE",
+            1 => "ACCEL",
+            2 => "BRAKE",
+            4 => "CORNER",
+            5 => "ACCEL+CORNER",
+            6 => "BRAKE+CORNER",
+            _ => "UNKNOWN",
+        }
+    }
+
+    /// Get mode as u8 for binary telemetry
+    pub fn as_u8(&self) -> u8 {
+        self.flags
+    }
+}
+
+impl Default for Mode {
+    fn default() -> Self {
+        Self::idle()
     }
 }
 
@@ -44,15 +111,15 @@ pub struct ModeConfig {
 impl Default for ModeConfig {
     fn default() -> Self {
         Self {
-            min_speed: 2.0, // ~7 km/h
-            acc_thr: 0.21,
-            acc_exit: 0.11,
-            brake_thr: -0.25,
-            brake_exit: -0.12,
-            lat_thr: 0.20,
-            lat_exit: 0.10,
-            yaw_thr: 0.07, // rad/s
-            alpha: 0.20,
+            min_speed: 2.0,    // ~7 km/h - must be moving for accel/brake/corner
+            acc_thr: 0.10,     // 0.10g - better for street driving (lowered from 0.15)
+            acc_exit: 0.05,    // exit when below 0.05g
+            brake_thr: -0.18,  // -0.18g - slightly higher to reduce false positives
+            brake_exit: -0.09, // exit when above -0.09g
+            lat_thr: 0.12,     // 0.12g lateral - reasonable turn
+            lat_exit: 0.06,    // exit when below 0.06g
+            yaw_thr: 0.05,     // ~3°/s yaw rate
+            alpha: 0.25,       // EMA smoothing factor
         }
     }
 }
@@ -74,12 +141,12 @@ pub struct ModeClassifier {
 impl ModeClassifier {
     pub fn new() -> Self {
         Self {
-            mode: Mode::Idle,
+            mode: Mode::default(),
             config: ModeConfig::default(),
             a_lat_ema: 0.0,
             yaw_ema: 0.0,
             v_disp: 0.0,
-            v_alpha: 0.6, // Faster smoothing for speed display
+            v_alpha: 0.85, // High alpha = fast response to GPS speed changes
         }
     }
 
@@ -106,8 +173,8 @@ impl ModeClassifier {
 
         // Update display speed with EMA
         self.v_disp = (1.0 - self.v_alpha) * self.v_disp + self.v_alpha * speed;
-        if self.v_disp < 0.5 / 3.6 {
-            // < 0.5 km/h
+        if self.v_disp < 3.0 / 3.6 {
+            // < 3 km/h (below walking speed, treat as stationary for display)
             self.v_disp = 0.0;
         }
 
@@ -123,54 +190,70 @@ impl ModeClassifier {
         self.a_lat_ema = (1.0 - alpha) * self.a_lat_ema + alpha * a_lat;
         self.yaw_ema = (1.0 - alpha) * self.yaw_ema + alpha * wz;
 
-        // State machine for mode detection
-        match self.mode {
-            Mode::Idle => {
-                // Check for corner entry (high lateral accel + yaw rate, same sign)
-                if speed > self.config.min_speed
-                    && self.a_lat_ema.abs() > self.config.lat_thr
-                    && self.yaw_ema.abs() > self.config.yaw_thr
-                    && (self.a_lat_ema * self.yaw_ema) > 0.0
-                {
-                    self.mode = Mode::Corner;
-                }
-                // Check for acceleration
-                else if a_lon > self.config.acc_thr {
-                    self.mode = Mode::Accel;
-                }
-                // Check for braking
-                else if a_lon < self.config.brake_thr {
-                    self.mode = Mode::Brake;
-                }
-            }
+        // Independent state detection for each mode component
+        // Modes can be combined (e.g., ACCEL+CORNER, BRAKE+CORNER)
 
-            Mode::Accel => {
-                if a_lon < self.config.acc_exit {
-                    self.mode = Mode::Idle;
-                }
-            }
+        // If stopped, clear all modes
+        if speed < self.config.min_speed {
+            self.mode.clear();
+            return;
+        }
 
-            Mode::Brake => {
-                if a_lon > self.config.brake_exit {
-                    self.mode = Mode::Idle;
-                }
-            }
+        // Check cornering (independent of accel/brake)
+        let cornering_active = self.a_lat_ema.abs() > self.config.lat_thr
+            && self.yaw_ema.abs() > self.config.yaw_thr
+            && (self.a_lat_ema * self.yaw_ema) > 0.0;
 
-            Mode::Corner => {
-                // Exit corner if speed drops or lateral forces subside
-                if speed < self.config.min_speed
-                    || (self.a_lat_ema.abs() < self.config.lat_exit
-                        && self.yaw_ema.abs() < self.config.yaw_thr * 0.5)
-                {
-                    self.mode = Mode::Idle;
-                }
+        let cornering_exit = self.a_lat_ema.abs() < self.config.lat_exit
+            && self.yaw_ema.abs() < self.config.yaw_thr * 0.5;
+
+        if self.mode.has_corner() {
+            // Exit corner if conditions no longer met
+            if cornering_exit {
+                self.mode.set_corner(false);
+            }
+        } else {
+            // Enter corner if conditions met
+            if cornering_active {
+                self.mode.set_corner(true);
+            }
+        }
+
+        // Check acceleration (mutually exclusive with braking)
+        if self.mode.has_accel() {
+            // Exit if acceleration dropped
+            if a_lon < self.config.acc_exit {
+                self.mode.set_accel(false);
+            }
+        } else if !self.mode.has_brake() {
+            // Enter accel if not braking and threshold met
+            if a_lon > self.config.acc_thr {
+                self.mode.set_accel(true);
+            }
+        }
+
+        // Check braking (mutually exclusive with acceleration)
+        if self.mode.has_brake() {
+            // Exit if braking force dropped
+            if a_lon > self.config.brake_exit {
+                self.mode.set_brake(false);
+            }
+        } else if !self.mode.has_accel() {
+            // Enter brake if not accelerating and threshold met
+            if a_lon < self.config.brake_thr {
+                self.mode.set_brake(true);
             }
         }
     }
 
     /// Get current mode
-    pub fn get_mode(&self) -> Mode {
-        self.mode
+    pub fn get_mode(&self) -> &Mode {
+        &self.mode
+    }
+
+    /// Get current mode as u8 for telemetry
+    pub fn get_mode_u8(&self) -> u8 {
+        self.mode.as_u8()
     }
 
     /// Get display speed in km/h
@@ -213,30 +296,30 @@ mod tests {
     #[test]
     fn test_mode_idle_by_default() {
         let classifier = ModeClassifier::new();
-        assert_eq!(classifier.get_mode(), Mode::Idle);
+        assert!(classifier.get_mode().is_idle());
     }
 
     #[test]
     fn test_acceleration_detection() {
         let mut classifier = ModeClassifier::new();
 
-        // Simulate forward acceleration at 3 m/s
+        // Simulate forward acceleration at 5 m/s (above min_speed of 2.0)
         let ax = 0.25 * G; // 0.25g forward
         let ay = 0.0;
         let yaw = 0.0;
         let wz = 0.0;
-        let vx = 3.0;
+        let vx = 5.0;
         let vy = 0.0;
 
         classifier.update(ax, ay, yaw, wz, vx, vy);
-        assert_eq!(classifier.get_mode(), Mode::Accel);
+        assert!(classifier.get_mode().has_accel());
     }
 
     #[test]
     fn test_braking_detection() {
         let mut classifier = ModeClassifier::new();
 
-        // Simulate braking at 5 m/s
+        // Simulate braking at 5 m/s (above min_speed of 2.0)
         let ax = -0.3 * G; // 0.3g deceleration
         let ay = 0.0;
         let yaw = 0.0;
@@ -245,6 +328,165 @@ mod tests {
         let vy = 0.0;
 
         classifier.update(ax, ay, yaw, wz, vx, vy);
-        assert_eq!(classifier.get_mode(), Mode::Brake);
+        assert!(classifier.get_mode().has_brake());
+    }
+
+    #[test]
+    fn test_no_mode_when_stopped() {
+        let mut classifier = ModeClassifier::new();
+
+        // Even with high acceleration, should stay IDLE when speed is 0
+        let ax = -0.5 * G; // 0.5g deceleration (would trigger brake)
+        let ay = 0.0;
+        let yaw = 0.0;
+        let wz = 0.0;
+        let vx = 0.0; // STOPPED
+        let vy = 0.0;
+
+        classifier.update(ax, ay, yaw, wz, vx, vy);
+        assert!(classifier.get_mode().is_idle()); // Must stay IDLE when stopped
+    }
+
+    #[test]
+    fn test_combined_accel_corner() {
+        let mut classifier = ModeClassifier::new();
+
+        // Simulate acceleration while cornering (corner exit)
+        let ax = 0.20 * G; // 0.20g forward acceleration
+        let ay = 0.15 * G; // 0.15g lateral
+        let yaw = 0.0;
+        let wz = 0.08; // 0.08 rad/s yaw rate
+        let vx = 8.0; // 8 m/s speed
+        let vy = 0.0;
+
+        classifier.update(ax, ay, yaw, wz, vx, vy);
+
+        // Should detect both acceleration and cornering
+        assert!(
+            classifier.get_mode().has_accel(),
+            "Should detect acceleration"
+        );
+        assert!(
+            classifier.get_mode().has_corner(),
+            "Should detect cornering"
+        );
+        assert_eq!(classifier.get_mode().as_str(), "ACCEL+CORNER");
+    }
+
+    #[test]
+    fn test_combined_brake_corner() {
+        let mut classifier = ModeClassifier::new();
+
+        // Simulate braking while cornering (corner entry)
+        let ax = -0.25 * G; // 0.25g braking
+        let ay = -0.15 * G; // 0.15g lateral (left turn)
+        let yaw = 0.0;
+        let wz = -0.08; // -0.08 rad/s yaw rate (left)
+        let vx = 8.0; // 8 m/s speed
+        let vy = 0.0;
+
+        classifier.update(ax, ay, yaw, wz, vx, vy);
+
+        // Should detect both braking and cornering
+        assert!(classifier.get_mode().has_brake(), "Should detect braking");
+        assert!(
+            classifier.get_mode().has_corner(),
+            "Should detect cornering"
+        );
+        assert_eq!(classifier.get_mode().as_str(), "BRAKE+CORNER");
+    }
+
+    #[test]
+    fn test_hysteresis_prevents_oscillation() {
+        let mut classifier = ModeClassifier::new();
+
+        let vx = 5.0;
+        let vy = 0.0;
+        let yaw = 0.0;
+        let wz = 0.0;
+        let ay = 0.0;
+
+        // Acceleration just above entry threshold (0.10g)
+        let ax1 = 0.11 * G;
+        classifier.update(ax1, ay, yaw, wz, vx, vy);
+        assert!(
+            classifier.get_mode().has_accel(),
+            "Should enter ACCEL at 0.11g"
+        );
+
+        // Drop to 0.06g (above 0.05g exit threshold)
+        let ax2 = 0.06 * G;
+        classifier.update(ax2, ay, yaw, wz, vx, vy);
+        assert!(
+            classifier.get_mode().has_accel(),
+            "Should stay ACCEL at 0.06g (above exit)"
+        );
+
+        // Drop to 0.04g (below 0.05g exit threshold)
+        let ax3 = 0.04 * G;
+        classifier.update(ax3, ay, yaw, wz, vx, vy);
+        assert!(
+            classifier.get_mode().is_idle(),
+            "Should exit to IDLE at 0.04g (below exit)"
+        );
+    }
+
+    #[test]
+    fn test_speed_threshold_prevents_false_modes() {
+        let mut classifier = ModeClassifier::new();
+
+        // High acceleration but speed below threshold
+        let ax = 0.30 * G;
+        let ay = 0.0;
+        let yaw = 0.0;
+        let wz = 0.0;
+        let vx = 1.5; // Below 2.0 m/s threshold
+        let vy = 0.0;
+
+        classifier.update(ax, ay, yaw, wz, vx, vy);
+        assert!(
+            classifier.get_mode().is_idle(),
+            "Should stay IDLE when speed < min_speed"
+        );
+
+        // Same acceleration, speed above threshold
+        let vx2 = 2.5;
+        classifier.update(ax, ay, yaw, wz, vx2, vy);
+        assert!(
+            classifier.get_mode().has_accel(),
+            "Should detect ACCEL when speed > min_speed"
+        );
+    }
+
+    #[test]
+    fn test_corner_independent_persistence() {
+        let mut classifier = ModeClassifier::new();
+
+        // Start cornering
+        let ax = 0.0;
+        let ay = 0.15 * G;
+        let yaw = 0.0;
+        let wz = 0.08;
+        let vx = 8.0;
+        let vy = 0.0;
+
+        classifier.update(ax, ay, yaw, wz, vx, vy);
+        assert!(classifier.get_mode().has_corner(), "Should detect corner");
+
+        // Add acceleration while still cornering
+        let ax2 = 0.15 * G;
+        classifier.update(ax2, ay, yaw, wz, vx, vy);
+        assert!(classifier.get_mode().has_accel(), "Should detect accel");
+        assert!(
+            classifier.get_mode().has_corner(),
+            "Should still detect corner"
+        );
+        assert_eq!(classifier.get_mode().as_u8(), 5, "Should be ACCEL+CORNER");
+
+        // Stop accelerating but keep cornering
+        let ax3 = 0.02 * G;
+        classifier.update(ax3, ay, yaw, wz, vx, vy);
+        assert!(!classifier.get_mode().has_accel(), "Should exit accel");
+        assert!(classifier.get_mode().has_corner(), "Should still corner");
     }
 }

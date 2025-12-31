@@ -7,9 +7,12 @@ mod mqtt;
 mod rgb_led;
 mod system;
 mod udp_stream;
+mod websocket_server;
 mod wifi;
 
-use config::SystemConfig;
+use std::sync::Arc;
+
+use config::{SystemConfig, WifiModeConfig};
 use esp_idf_hal::{
     delay::FreeRtos,
     peripherals::Peripherals,
@@ -22,6 +25,7 @@ use mqtt::MqttClient;
 use rgb_led::RgbLed;
 use system::{SensorManager, StateEstimator, StatusManager, TelemetryPublisher};
 use udp_stream::UdpTelemetryStream;
+use websocket_server::{TelemetryServer, TelemetryServerState};
 use wifi::WifiManager;
 
 fn main() {
@@ -30,15 +34,17 @@ fn main() {
 
     let config = SystemConfig::from_env();
 
+    let is_ap_mode = config.network.wifi_mode == WifiModeConfig::AccessPoint;
+
     info!("=== ESP32-C3 Telemetry System ===");
     info!(
-        "Config: SSID={}, Rate={}Hz",
+        "Mode: {}, SSID: {}, Rate: {}Hz",
+        if is_ap_mode {
+            "Access Point"
+        } else {
+            "Station"
+        },
         config.network.wifi_ssid,
-        1000 / config.telemetry.interval_ms
-    );
-    info!("MQTT: Status messages");
-    info!(
-        "UDP:  Binary telemetry @ {} Hz",
         1000 / config.telemetry.interval_ms
     );
 
@@ -52,12 +58,16 @@ fn main() {
         .expect("Failed to initialize RGB LED");
     let mut status_mgr = StatusManager::new(led);
 
-    // Boot sequence
+    // Boot sequence - purple for AP mode, blue for station mode
     status_mgr.led_mut().set_low().unwrap();
     FreeRtos::delay_ms(1000);
 
     for i in 0..3 {
-        status_mgr.led_mut().blue().unwrap();
+        if is_ap_mode {
+            status_mgr.led_mut().magenta().unwrap();
+        } else {
+            status_mgr.led_mut().blue().unwrap();
+        }
         FreeRtos::delay_ms(300);
         status_mgr.led_mut().set_low().unwrap();
         FreeRtos::delay_ms(300);
@@ -65,80 +75,142 @@ fn main() {
     }
     FreeRtos::delay_ms(1000);
 
-    // Connect WiFi
+    // Initialize WiFi
     info!("Initializing WiFi");
     let mut wifi =
         WifiManager::new(peripherals.modem, sysloop.clone(), nvs).expect("WiFi init failed");
 
-    info!("Connecting to WiFi: {}", config.network.wifi_ssid);
-    match wifi.connect(config.network.wifi_ssid, config.network.wifi_password) {
-        Ok(_) => {
-            info!("WiFi connected");
-            for _ in 0..5 {
-                status_mgr.led_mut().green().unwrap();
-                FreeRtos::delay_ms(200);
-                status_mgr.led_mut().set_low().unwrap();
-                FreeRtos::delay_ms(200);
+    // Telemetry server state (for AP mode)
+    let mut telemetry_server: Option<TelemetryServer> = None;
+    let mut telemetry_state: Option<Arc<TelemetryServerState>> = None;
+
+    // MQTT client (for Station mode)
+    let mut mqtt_opt: Option<MqttClient> = None;
+
+    // UDP stream (for Station mode)
+    let mut udp_stream: Option<UdpTelemetryStream> = None;
+
+    if is_ap_mode {
+        // === ACCESS POINT MODE ===
+        info!("Starting WiFi Access Point: {}", config.network.wifi_ssid);
+        match wifi.start_ap(config.network.wifi_ssid, config.network.wifi_password) {
+            Ok(_) => {
+                info!("WiFi AP started");
+                // Green blinks for AP ready
+                for _ in 0..5 {
+                    status_mgr.led_mut().green().unwrap();
+                    FreeRtos::delay_ms(200);
+                    status_mgr.led_mut().set_low().unwrap();
+                    FreeRtos::delay_ms(200);
+                }
+
+                // Start HTTP telemetry server
+                info!(
+                    "Starting telemetry server on port {}",
+                    config.network.ws_port
+                );
+                match TelemetryServer::new(config.network.ws_port) {
+                    Ok(server) => {
+                        telemetry_state = Some(server.state());
+                        telemetry_server = Some(server);
+                        info!("Telemetry server ready!");
+                        // Cyan blinks for server ready
+                        for _ in 0..3 {
+                            status_mgr.led_mut().cyan().unwrap();
+                            FreeRtos::delay_ms(150);
+                            status_mgr.led_mut().set_low().unwrap();
+                            FreeRtos::delay_ms(150);
+                        }
+                    }
+                    Err(e) => {
+                        info!("Telemetry server failed: {:?}", e);
+                    }
+                }
+            }
+            Err(e) => {
+                info!("WiFi AP failed: {:?}", e);
+                loop {
+                    status_mgr.led_mut().red().unwrap();
+                    FreeRtos::delay_ms(500);
+                    status_mgr.led_mut().set_low().unwrap();
+                    FreeRtos::delay_ms(500);
+                }
             }
         }
-        Err(e) => {
-            info!("WiFi failed: {:?}", e);
-            loop {
-                status_mgr.led_mut().red().unwrap();
-                FreeRtos::delay_ms(500);
-                status_mgr.led_mut().set_low().unwrap();
-                FreeRtos::delay_ms(500);
+    } else {
+        // === STATION MODE ===
+        info!("Connecting to WiFi: {}", config.network.wifi_ssid);
+        match wifi.connect(config.network.wifi_ssid, config.network.wifi_password) {
+            Ok(_) => {
+                info!("WiFi connected");
+                for _ in 0..5 {
+                    status_mgr.led_mut().green().unwrap();
+                    FreeRtos::delay_ms(200);
+                    status_mgr.led_mut().set_low().unwrap();
+                    FreeRtos::delay_ms(200);
+                }
+            }
+            Err(e) => {
+                info!("WiFi failed: {:?}", e);
+                loop {
+                    status_mgr.led_mut().red().unwrap();
+                    FreeRtos::delay_ms(500);
+                    status_mgr.led_mut().set_low().unwrap();
+                    FreeRtos::delay_ms(500);
+                }
+            }
+        }
+
+        // Connect MQTT for status messages
+        info!("Initializing MQTT");
+        mqtt_opt = match MqttClient::new(config.network.mqtt_broker) {
+            Ok(m) => {
+                info!("MQTT connected");
+                for _ in 0..3 {
+                    status_mgr.led_mut().magenta().unwrap();
+                    FreeRtos::delay_ms(200);
+                    status_mgr.led_mut().set_low().unwrap();
+                    FreeRtos::delay_ms(200);
+                }
+                Some(m)
+            }
+            Err(e) => {
+                info!("MQTT failed: {:?}", e);
+                for _ in 0..5 {
+                    status_mgr.led_mut().red().unwrap();
+                    FreeRtos::delay_ms(100);
+                    status_mgr.led_mut().set_low().unwrap();
+                    FreeRtos::delay_ms(100);
+                }
+                None
+            }
+        };
+
+        // Initialize UDP for telemetry
+        info!(
+            "Initializing UDP telemetry to {}",
+            config.network.udp_server
+        );
+        let mut stream = UdpTelemetryStream::new(config.network.udp_server);
+        match stream.init() {
+            Ok(_) => {
+                info!("UDP ready!");
+                for _ in 0..3 {
+                    status_mgr.led_mut().cyan().unwrap();
+                    FreeRtos::delay_ms(150);
+                    status_mgr.led_mut().set_low().unwrap();
+                    FreeRtos::delay_ms(150);
+                }
+                udp_stream = Some(stream);
+            }
+            Err(e) => {
+                info!("UDP init failed: {:?}", e);
             }
         }
     }
 
-    // Connect MQTT for status messages
-    info!("Initializing MQTT");
-    let mut mqtt_opt = match MqttClient::new(config.network.mqtt_broker) {
-        Ok(m) => {
-            info!("MQTT connected");
-            // Magenta blinks = MQTT success
-            for _ in 0..3 {
-                status_mgr.led_mut().magenta().unwrap();
-                FreeRtos::delay_ms(200);
-                status_mgr.led_mut().set_low().unwrap();
-                FreeRtos::delay_ms(200);
-            }
-            Some(m)
-        }
-        Err(e) => {
-            info!("MQTT failed: {:?}", e);
-            // Red blinks = MQTT failed
-            for _ in 0..5 {
-                status_mgr.led_mut().red().unwrap();
-                FreeRtos::delay_ms(100);
-                status_mgr.led_mut().set_low().unwrap();
-                FreeRtos::delay_ms(100);
-            }
-            None
-        }
-    };
-
-    // Initialize UDP for telemetry (connectionless - no handshake needed)
-    info!(
-        "Initializing UDP telemetry to {}",
-        config.network.tcp_server
-    );
-    let mut udp_stream = UdpTelemetryStream::new(config.network.tcp_server);
-    match udp_stream.init() {
-        Ok(_) => {
-            info!("UDP ready!");
-            for _ in 0..3 {
-                status_mgr.led_mut().cyan().unwrap();
-                FreeRtos::delay_ms(150);
-                status_mgr.led_mut().set_low().unwrap();
-                FreeRtos::delay_ms(150);
-            }
-        }
-        Err(e) => {
-            info!("UDP init failed: {:?}", e);
-        }
-    }
+    // Keep server alive (prevent drop)
+    let _server = telemetry_server;
 
     // Initialize UART for IMU
     let imu_config = Config::new().baudrate(9600.into());
@@ -184,7 +256,7 @@ fn main() {
 
     // Create state estimator and telemetry publisher
     let mut estimator = StateEstimator::new();
-    let mut publisher = TelemetryPublisher::new(udp_stream, mqtt_opt);
+    let mut publisher = TelemetryPublisher::new(udp_stream, mqtt_opt, telemetry_state.clone());
 
     // Main loop timing
     let mut last_telemetry_ms = 0u32;
@@ -202,6 +274,45 @@ fn main() {
     loop {
         let now_ms = unsafe { (esp_idf_svc::sys::esp_timer_get_time() / 1000) as u32 };
         loop_count += 1;
+
+        // Check for calibration request from web UI
+        if let Some(ref state) = telemetry_state {
+            if state.take_calibration_request() {
+                info!(">>> Calibration requested via web UI - recalibrating IMU...");
+                match sensors.calibrate_imu(status_mgr.led_mut(), None) {
+                    Ok(bias) => {
+                        sensors.imu_parser.set_bias(bias);
+                        info!(
+                            ">>> Recalibration complete! Bias: ax={:.4}, ay={:.4}, az={:.4}",
+                            bias.ax, bias.ay, bias.az
+                        );
+                    }
+                    Err(e) => {
+                        info!(">>> Recalibration FAILED: {:?}", e);
+                    }
+                }
+            }
+
+            // Check for settings changes from web UI
+            if let Some(s) = state.take_settings_change() {
+                let new_config = mode::ModeConfig {
+                    min_speed: s.min_speed,
+                    acc_thr: s.acc_thr,
+                    acc_exit: s.acc_exit,
+                    brake_thr: s.brake_thr,
+                    brake_exit: s.brake_exit,
+                    lat_thr: s.lat_thr,
+                    lat_exit: s.lat_exit,
+                    yaw_thr: s.yaw_thr,
+                    alpha: 0.25, // Keep default smoothing
+                };
+                estimator.mode_classifier.update_config(new_config);
+                info!(
+                    ">>> Mode config updated: acc={:.2}g/{:.2}g, brake={:.2}g/{:.2}g, lat={:.2}g/{:.2}g, yaw={:.3}rad/s, min_spd={:.1}m/s",
+                    s.acc_thr, s.acc_exit, s.brake_thr, s.brake_exit, s.lat_thr, s.lat_exit, s.yaw_thr, s.min_speed
+                );
+            }
+        }
 
         // Periodic diagnostics (serial log every 5s)
         if now_ms - last_heap_check_ms >= 5000 {
@@ -267,7 +378,8 @@ fn main() {
             last_connectivity_check_ms = now_ms;
         }
 
-        // MQTT diagnostics (every 30s - low priority, LED handles connectivity feedback)
+        // MQTT diagnostics (every 30s - low priority, LED handles connectivity
+        // feedback)
         if now_ms - last_mqtt_diag_ms >= 30000 {
             if let Some(mqtt) = publisher.mqtt_client_mut() {
                 let (ekf_x, ekf_y) = estimator.ekf.position();

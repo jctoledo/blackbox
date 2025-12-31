@@ -4,11 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Blackbox is an ESP32-C3 vehicle telemetry system that performs real-time sensor fusion of IMU and GPS data using an Extended Kalman Filter (EKF). It streams binary telemetry at 20 Hz over TCP for live data acquisition during track days, autocross, rally, and vehicle dynamics research.
+Blackbox is an ESP32-C3 vehicle telemetry system that performs real-time sensor fusion of IMU and GPS data using an Extended Kalman Filter (EKF). It includes a built-in web dashboard for mobile use and supports UDP streaming for data logging during track days, autocross, rally, and vehicle dynamics research.
 
 **Target Hardware:** ESP32-C3 microcontroller
 **Sensors:** WT901 9-axis IMU (UART), NEO-6M GPS (UART)
-**Output:** TCP streaming (20 Hz binary telemetry), MQTT (status messages)
+**Output:** HTTP dashboard (~20 Hz, AP mode) or UDP streaming (20 Hz, Station mode) + MQTT status
+**Operating Modes:** Access Point (standalone/mobile) or Station (network integration)
 **Cost:** ~$50 in parts vs. $500+ commercial alternatives
 
 ## Build and Development Commands
@@ -123,7 +124,7 @@ blackbox/
 │                │                                            │
 │                ▼                                            │
 │           mode.rs                                          │
-│           Classify: IDLE/ACCEL/BRAKE/CORNER               │
+│           Classify: IDLE/ACCEL/BRAKE/CORNER/ACCEL+CORNER/BRAKE+CORNER │
 │                │                                            │
 │                ▼                                            │
 │      binary_telemetry.rs                                   │
@@ -221,22 +222,35 @@ After 5 consecutive stationary detections:
 
 ### Driving Mode Classification (mode.rs)
 
-**Modes:** IDLE, ACCEL, BRAKE, CORNER
+**Modes:** IDLE, ACCEL, BRAKE, CORNER, ACCEL+CORNER, BRAKE+CORNER
+
+**NEW: Combined States** - Modes use bitflags and can be combined:
+- ACCEL + CORNER = 5 (corner exit / trail throttle)
+- BRAKE + CORNER = 6 (corner entry / trail braking)
+- ACCEL and BRAKE are mutually exclusive
+- CORNER is independent and can combine with either
 
 **How it works:**
 1. Transform earth-frame acceleration → vehicle frame using current yaw
 2. Split into longitudinal (forward/back) and lateral (left/right)
 3. EMA filter both lateral accel and yaw rate
-4. State machine with hysteresis (different entry/exit thresholds)
+4. Independent state detection with hysteresis for each component
 
-**Corner Detection (`mode.rs:117-122`):**
+**Default Thresholds (Tuned for Street Driving):**
+- Acceleration: 0.10g entry, 0.05g exit (lowered from 0.15g)
+- Braking: -0.18g entry, -0.09g exit (raised from -0.15g to reduce false positives)
+- Lateral: 0.12g entry, 0.06g exit
+- Yaw rate: 0.05 rad/s (~2.9°/s)
+- Min speed: 2.0 m/s (7.2 km/h)
+
+**Corner Detection:**
 Requires ALL:
-- Speed > 2.0 m/s
-- |Lateral accel| > 0.20g
-- |Yaw rate| > 0.07 rad/s
+- Speed > min_speed
+- |Lateral accel| > lat_thr (EMA filtered)
+- |Yaw rate| > yaw_thr (EMA filtered)
 - Lateral accel and yaw rate same sign (consistent turn direction)
 
-**Why EMA filtering?** Raw accelerometer is noisy. EMA smooths while staying responsive (alpha=0.20 by default).
+**Why EMA filtering?** Raw accelerometer is noisy. EMA smooths while staying responsive (alpha=0.25 by default).
 
 ### Binary Telemetry Protocol (binary_telemetry.rs)
 
@@ -252,7 +266,7 @@ struct TelemetryPacket {
     f32  x, y;           // Position (m)
     f32  vx, vy;         // Velocity (m/s)
     f32  speed_kmh;      // Speed (km/h)
-    u8   mode;           // 0=IDLE, 1=ACCEL, 2=BRAKE, 3=CORNER
+    u8   mode;           // Bitflags: 0=IDLE, 1=ACCEL, 2=BRAKE, 4=CORNER, 5=ACCEL+CORNER, 6=BRAKE+CORNER
     f32  lat, lon;       // GPS (degrees, 0 if invalid)
     u8   gps_valid;      // 0 or 1
     u16  checksum;       // Sum of first 64 bytes
@@ -265,18 +279,48 @@ struct TelemetryPacket {
 
 ## Configuration and Calibration
 
-### Network Configuration (main.rs:29-33)
+### Network Configuration (config.rs)
 
-**IMPORTANT:** These are hardcoded and must be changed for your environment:
+**Two Operating Modes:**
 
-```rust
-const WIFI_SSID: &str = "GiraffeWireless";
-const WIFI_PASSWORD: &str = "basicchair411";
-const MQTT_BROKER: &str = "mqtt://192.168.50.46:1883";
-const TCP_SERVER: &str = "192.168.50.46:9000";
+**1. Access Point Mode (Default) - Mobile/Standalone Use**
+- ESP32 creates WiFi network: `Blackbox` / `blackbox123`
+- Fixed IP: `192.168.4.1`
+- HTTP dashboard on port 80
+- No router required
+- No MQTT or UDP - dashboard only
+
+**2. Station Mode - Network Integration**
+- ESP32 connects to your WiFi network
+- UDP telemetry streaming (20 Hz)
+- MQTT status messages
+- No HTTP dashboard
+
+**Configuration via Environment Variables:**
+```bash
+# Access Point mode (default, no env vars needed)
+cargo build --release
+
+# Station mode with custom credentials
+export WIFI_MODE="station"
+export WIFI_SSID="YourNetwork"
+export WIFI_PASSWORD="YourPassword"
+export MQTT_BROKER="mqtt://192.168.1.100:1883"
+export UDP_SERVER="192.168.1.100:9000"
+cargo build --release
 ```
 
-**Security Note:** WiFi credentials are in plaintext in firmware. Don't commit real credentials to public repos. Consider using environment variables or a secrets file (gitignored).
+**Defaults (config.rs):**
+```rust
+wifi_mode: AccessPoint
+wifi_ssid: "Blackbox"
+wifi_password: "blackbox123"
+mqtt_broker: "mqtt://192.168.1.100:1883"  // Placeholder - set via env var for Station mode
+udp_server: "192.168.1.100:9000"          // Placeholder - set via env var for Station mode
+ws_port: 80
+```
+
+**Security Note:** Credentials compiled into firmware. Use environment variables to avoid committing secrets. AP mode password is public by design (mobile convenience).
 
 ### Hardware Pin Assignments (main.rs:49, 124-141)
 
@@ -386,23 +430,78 @@ Result: acceleration due to motion only (no gravity component).
 
 ### mode.rs - Driving Mode Classifier
 
-**State Machine:**
+**NEW: Independent Component Detection** (replaces exclusive state machine)
 ```
-IDLE ──┬─→ ACCEL   (if a_lon > 0.21g)
-       ├─→ BRAKE   (if a_lon < -0.25g)
-       └─→ CORNER  (if |a_lat| > 0.20g && |wz| > 0.07 rad/s)
+Each mode component detected independently with hysteresis:
 
-ACCEL ──→ IDLE     (if a_lon < 0.11g)
-BRAKE ──→ IDLE     (if a_lon > -0.12g)
-CORNER ─→ IDLE     (if speed < 2 m/s or low lateral forces)
+ACCEL:    entry at 0.10g → exit at 0.05g
+BRAKE:    entry at -0.18g → exit at -0.09g  (mutually exclusive with ACCEL)
+CORNER:   entry at 0.12g lat + 0.05rad/s yaw → exit at 0.06g lat or low yaw
+
+Combined states possible:
+- ACCEL + CORNER = corner exit (trail throttle)
+- BRAKE + CORNER = corner entry (trail braking)
 ```
 
 **Hysteresis:** Entry threshold > exit threshold prevents oscillation.
 
-**Speed Display Filtering:**
-Separate EMA filter (alpha=0.6, faster than mode detection) for smooth speed display. Set to exactly 0 when < 0.5 km/h.
+**All modes require:** speed > min_speed (2.0 m/s / 7.2 km/h)
 
-### tcp_stream.rs - TCP Client
+**Speed Display:**
+Uses **raw GPS speed** directly (system.rs:295-297) for responsive updates.
+- No longer uses EKF-filtered velocity (which was laggy)
+- Server sends raw GPS speed (5 Hz updates)
+- Dashboard applies light EMA smoothing (alpha=0.4) for car speedometer-like display
+- Mode detection still uses EKF velocity for stability
+
+### websocket_server.rs - HTTP Dashboard Server
+
+**Overview:**
+Built-in web dashboard for mobile viewing of live telemetry. Runs directly on ESP32 in Access Point mode.
+
+**Features:**
+- Mobile-optimized HTML dashboard (single-page, embedded in firmware)
+- HTTP polling at ~20 Hz (40ms interval with WiFi overhead compensation)
+- G-meter with trail visualization and max values
+- Real-time mode detection display
+- Live settings configuration with validation
+- CSV data export for recorded sessions
+
+**Architecture:**
+- HTTP server with 7 endpoints: `/`, `/api/telemetry`, `/api/status`, `/api/calibrate`, `/api/settings`, `/api/settings/set`
+- Shared state via `Arc<TelemetryServerState>` for thread-safe telemetry updates
+- Base64-encoded binary telemetry packets for JSON transport
+- Settings changes propagated to main loop via atomic flags
+
+**HTTP Polling Implementation:**
+```javascript
+// Client-side polling (40ms interval)
+setInterval(async () => {
+  const r = await fetch('/api/telemetry');
+  const j = await r.json();
+  if (j.seq !== lastSeq) {
+    // Decode base64, process binary packet
+    // Update UI with EMA-filtered speed for smoothness
+  }
+}, 40);
+```
+
+**Why HTTP instead of WebSocket?**
+- WebSocket handler's blocking loop monopolized ESP-IDF server threads
+- Limited thread pool (4-5 threads) meant one WebSocket = blocked HTTP requests
+- HTTP polling eliminates blocking, allows concurrent API calls
+- 40ms interval compensates for WiFi latency to achieve ~20 Hz effective rate
+
+**Settings Validation:**
+Dashboard validates threshold ranges before sending to ESP32:
+- Accel exit < accel entry
+- Brake exit > brake entry (both negative, exit less negative)
+- Lateral exit < lateral entry
+
+**Changed from WebSocket (ap_enabled branch):**
+Originally used WebSocket push at 30Hz but this caused thread starvation. Refactored to HTTP polling for reliability.
+
+### udp_stream.rs - UDP Client (Station Mode)
 
 **Features:**
 - Disables Nagle's algorithm (`set_nodelay(true)`) for low latency
@@ -414,12 +513,29 @@ Counts failures, attempts reconnect periodically. MQTT also available as backup 
 
 ### wifi.rs - WiFi Manager
 
-**Connection Sequence:**
+**Supports Two Modes:**
+
+**Access Point Mode (Default):**
 1. Initialize WiFi with NVS (persistent storage)
+2. Configure as AP (network creator)
+3. Create WiFi network with SSID/password
+4. Start DHCP server (assigns IPs to clients)
+5. Fixed IP: 192.168.4.1
+6. Clients connect directly to ESP32
+
+**Station Mode:**
+1. Initialize WiFi with NVS
 2. Configure as station (client) mode
-3. Connect to AP with SSID/password
-4. Wait for DHCP lease
-5. Log IP address
+3. Connect to existing AP with SSID/password
+4. Wait for DHCP lease from router
+5. Log assigned IP address
+
+**Mode Selection:**
+Set at compile time via environment variable:
+```bash
+export WIFI_MODE="station"  # or "ap" for access point
+cargo build --release
+```
 
 **2.4 GHz Only:** ESP32 doesn't support 5 GHz WiFi.
 

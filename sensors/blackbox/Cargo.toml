@@ -18,6 +18,8 @@ esp-idf-svc = { version = "0.51", default-features = false, features = [
     "binstart",
     "alloc",
     "std",
+    "embassy-sync",
+    "experimental",
 ] }
 esp-idf-sys = { version = "0.36", default-features = false }
 log = "0.4"

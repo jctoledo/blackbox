@@ -1,12 +1,13 @@
 #![allow(dead_code)] // System API for future use
 
+use std::sync::Arc;
+
 /// System-level architecture for telemetry system
 /// Implements proper separation of concerns and dependency inversion
 use esp_idf_hal::delay::FreeRtos;
 use esp_idf_hal::uart::UartDriver;
 // Import from framework crate
 use motorsport_telemetry::ekf::Ekf;
-use motorsport_telemetry::transforms::{body_to_earth, remove_gravity};
 
 use crate::{
     binary_telemetry,
@@ -16,6 +17,7 @@ use crate::{
     mqtt::MqttClient,
     rgb_led::RgbLed,
     udp_stream::UdpTelemetryStream,
+    websocket_server::TelemetryServerState,
 };
 
 const CALIB_SAMPLES: usize = 150;
@@ -66,9 +68,28 @@ impl SensorManager {
         led: &mut RgbLed,
         mut mqtt: Option<&mut MqttClient>,
     ) -> Result<ImuBias, SystemError> {
+        use log::info;
+
+        info!("=== IMU Calibration Starting ===");
+        info!(
+            "Collecting {} samples, keep device stationary!",
+            CALIB_SAMPLES
+        );
+
+        // Initial yellow LED burst to indicate calibration starting
+        for _ in 0..3 {
+            led.yellow().ok();
+            FreeRtos::delay_ms(100);
+            led.set_low().ok();
+            FreeRtos::delay_ms(100);
+        }
+
         let mut calibrator = ImuCalibrator::new(CALIB_SAMPLES);
         let mut buf = [0u8; 1];
         let mut last_progress = 0;
+
+        // Keep LED on during calibration (solid yellow)
+        led.yellow().ok();
 
         while !calibrator.is_complete() {
             if self.imu_uart.read(&mut buf, 0).unwrap_or(0) > 0 {
@@ -80,20 +101,26 @@ impl SensorManager {
 
                         let progress = (calibrator.progress() * 100.0) as u32;
                         if progress > last_progress && progress.is_multiple_of(10) {
+                            info!("Calibration progress: {}%", progress);
                             if let Some(ref mut mqtt_client) = mqtt {
                                 mqtt_client
                                     .publish_status("calib_running", Some(calibrator.progress()))
                                     .ok();
                             }
                             last_progress = progress;
-                            led.yellow().ok();
-                            FreeRtos::delay_ms(50);
+                            // Blink off briefly then back on to show progress
                             led.set_low().ok();
+                            FreeRtos::delay_ms(50);
+                            led.yellow().ok();
                         }
                     }
                 }
             }
         }
+
+        // Turn off LED when done
+        led.set_low().ok();
+        info!("=== IMU Calibration Complete ===");
 
         calibrator
             .compute_bias()
@@ -213,19 +240,25 @@ impl StateEstimator {
     }
 }
 
-/// Manages telemetry publishing
+/// Manages telemetry publishing (supports both UDP/Station and HTTP/AP modes)
 pub struct TelemetryPublisher {
-    udp_stream: UdpTelemetryStream,
+    udp_stream: Option<UdpTelemetryStream>,
     mqtt_client: Option<MqttClient>,
+    http_state: Option<Arc<TelemetryServerState>>,
     telemetry_count: u32,
     telemetry_fail_count: u32,
 }
 
 impl TelemetryPublisher {
-    pub fn new(udp_stream: UdpTelemetryStream, mqtt_client: Option<MqttClient>) -> Self {
+    pub fn new(
+        udp_stream: Option<UdpTelemetryStream>,
+        mqtt_client: Option<MqttClient>,
+        http_state: Option<Arc<TelemetryServerState>>,
+    ) -> Self {
         Self {
             udp_stream,
             mqtt_client,
+            http_state,
             telemetry_count: 0,
             telemetry_fail_count: 0,
         }
@@ -236,38 +269,21 @@ impl TelemetryPublisher {
         self.mqtt_client.as_mut()
     }
 
-    /// Publish binary telemetry packet via UDP
+    /// Publish binary telemetry packet via UDP and/or HTTP server state
     pub fn publish_telemetry(
         &mut self,
         sensors: &SensorManager,
         estimator: &StateEstimator,
         now_ms: u32,
     ) -> Result<(), SystemError> {
-        // UDP is connectionless - just check if socket is ready
-        if !self.udp_stream.is_ready() {
-            return Err(SystemError::CommunicationError("UDP not ready"));
-        }
-
+        // Send bias-corrected accelerations (client can process further if needed)
         let (ax_corr, ay_corr, az_corr) = sensors.imu_parser.get_accel_corrected();
-        let (ax_b, ay_b, _) = remove_gravity(
-            ax_corr,
-            ay_corr,
-            sensors.imu_parser.data().az,
-            sensors.imu_parser.data().roll,
-            sensors.imu_parser.data().pitch,
-        );
-        let (_ax_e, _ay_e) = body_to_earth(
-            ax_b,
-            ay_b,
-            0.0,
-            sensors.imu_parser.data().roll,
-            sensors.imu_parser.data().pitch,
-            estimator.ekf.yaw(),
-        );
 
         let mut packet = binary_telemetry::TelemetryPacket::new();
         packet.timestamp_ms = now_ms;
 
+        // Send bias-corrected accelerations in body frame
+        // Client-side processing can remove gravity and transform to vehicle frame
         packet.ax = ax_corr;
         packet.ay = ay_corr;
         packet.az = az_corr;
@@ -278,10 +294,14 @@ impl TelemetryPublisher {
 
         let (ekf_x, ekf_y) = estimator.ekf.position();
         let (mut ekf_vx, mut ekf_vy) = estimator.ekf.velocity();
-        let mut ekf_speed_kmh = estimator.mode_classifier.get_speed_kmh();
 
-        if ekf_speed_kmh < 0.5 {
-            ekf_speed_kmh = 0.0;
+        // Use GPS speed directly for display (more responsive, no lag from EKF
+        // filtering) Convert from m/s to km/h
+        let mut display_speed_kmh = sensors.gps_parser.last_fix().speed * 3.6;
+
+        // Zero out very low speeds to clean up display
+        if display_speed_kmh < 0.5 {
+            display_speed_kmh = 0.0;
             ekf_vx = 0.0;
             ekf_vy = 0.0;
         }
@@ -290,8 +310,8 @@ impl TelemetryPublisher {
         packet.y = ekf_y;
         packet.vx = ekf_vx;
         packet.vy = ekf_vy;
-        packet.speed_kmh = ekf_speed_kmh;
-        packet.mode = binary_telemetry::mode_to_u8(estimator.mode_classifier.get_mode().as_str());
+        packet.speed_kmh = display_speed_kmh;
+        packet.mode = estimator.mode_classifier.get_mode_u8();
 
         if sensors.gps_parser.last_fix().valid {
             packet.lat = sensors.gps_parser.last_fix().lat as f32;
@@ -302,16 +322,32 @@ impl TelemetryPublisher {
         }
 
         let bytes = packet.to_bytes();
+        let mut sent = false;
 
-        match self.udp_stream.send(bytes) {
-            Ok(_) => {
-                self.telemetry_count += 1;
-                Ok(())
+        // Send via UDP if available (Station mode)
+        if let Some(ref mut udp) = self.udp_stream {
+            if udp.is_ready() {
+                match udp.send(bytes) {
+                    Ok(_) => sent = true,
+                    Err(_) => self.telemetry_fail_count += 1,
+                }
             }
-            Err(_) => {
-                self.telemetry_fail_count += 1;
-                Err(SystemError::CommunicationError("UDP send failed"))
-            }
+        }
+
+        // Update HTTP server state if available (AP mode)
+        if let Some(ref http_state) = self.http_state {
+            http_state.update_telemetry(bytes);
+            sent = true;
+        }
+
+        if sent {
+            self.telemetry_count += 1;
+            Ok(())
+        } else {
+            self.telemetry_fail_count += 1;
+            Err(SystemError::CommunicationError(
+                "No telemetry output available",
+            ))
         }
     }
 

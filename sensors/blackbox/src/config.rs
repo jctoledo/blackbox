@@ -6,22 +6,68 @@ use motorsport_telemetry::ekf::EkfConfig;
 
 use crate::mode::ModeConfig;
 
+/// WiFi operating mode
+/// Default: AccessPoint (standalone operation)
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum WifiModeConfig {
+    /// Station mode - connect to existing network (home/track WiFi)
+    Station,
+    /// Access Point mode - ESP32 creates own network (mobile/standalone use)
+    #[default]
+    AccessPoint,
+}
+
 /// Network configuration
 #[derive(Debug, Clone)]
 pub struct NetworkConfig {
+    /// WiFi mode: Station (connect to network) or AccessPoint (create network)
+    pub wifi_mode: WifiModeConfig,
+    /// For STA mode: network to connect to. For AP mode: network name to create
     pub wifi_ssid: &'static str,
+    /// WiFi password (empty for open network in AP mode)
     pub wifi_password: &'static str,
+    /// MQTT broker URL (only used in STA mode)
     pub mqtt_broker: &'static str,
-    pub tcp_server: &'static str,
+    /// UDP server address (only used in STA mode)
+    pub udp_server: &'static str,
+    /// WebSocket server port (used in AP mode, default 8080)
+    pub ws_port: u16,
 }
 
 impl Default for NetworkConfig {
     fn default() -> Self {
         Self {
-            wifi_ssid: "GiraffeWireless",
-            wifi_password: "basicchair411",
-            mqtt_broker: "mqtt://192.168.50.46:1883",
-            tcp_server: "192.168.50.46:9000",
+            wifi_mode: WifiModeConfig::AccessPoint,
+            wifi_ssid: "Blackbox",
+            wifi_password: "blackbox123",
+            // Station mode placeholders - MUST set via environment variables
+            mqtt_broker: "mqtt://192.168.1.100:1883",
+            udp_server: "192.168.1.100:9000",
+            ws_port: 80,
+        }
+    }
+}
+
+impl NetworkConfig {
+    /// Configuration for Station mode (home/track use with router)
+    #[allow(dead_code)]
+    pub fn station(ssid: &'static str, password: &'static str) -> Self {
+        Self {
+            wifi_mode: WifiModeConfig::Station,
+            wifi_ssid: ssid,
+            wifi_password: password,
+            ..Default::default()
+        }
+    }
+
+    /// Configuration for Access Point mode (standalone/mobile use)
+    #[allow(dead_code)]
+    pub fn access_point(ssid: &'static str, password: &'static str) -> Self {
+        Self {
+            wifi_mode: WifiModeConfig::AccessPoint,
+            wifi_ssid: ssid,
+            wifi_password: password,
+            ..Default::default()
         }
     }
 }
@@ -35,7 +81,7 @@ pub struct TelemetryConfig {
 impl Default for TelemetryConfig {
     fn default() -> Self {
         Self {
-            interval_ms: 50, // 20 Hz
+            interval_ms: 33, // 30 Hz
         }
     }
 }
@@ -104,14 +150,35 @@ pub struct SystemConfig {
 
 impl SystemConfig {
     /// Create configuration from environment variables (compile-time)
-    /// Usage: Set environment variables before building:
+    ///
+    /// **Access Point Mode (default):** No environment variables required
+    /// - Uses default SSID "Blackbox" and password "blackbox123"
+    /// - Creates standalone WiFi network at 192.168.4.1
+    ///
+    /// **Station Mode:** REQUIRES environment variables
     /// ```bash
-    /// export WIFI_SSID="MyNetwork"
-    /// export WIFI_PASSWORD="MyPassword"
-    /// cargo build
+    /// export WIFI_MODE="station"
+    /// export WIFI_SSID="YourNetworkName"
+    /// export WIFI_PASSWORD="YourPassword"
+    /// export MQTT_BROKER="mqtt://192.168.1.100:1883"  # Your MQTT broker
+    /// export UDP_SERVER="192.168.1.100:9000"          # Your laptop IP
+    /// cargo build --release
     /// ```
+    ///
+    /// **WARNING:** Station mode defaults (192.168.1.100) are placeholders
+    /// only. You MUST set MQTT_BROKER and UDP_SERVER for Station mode to
+    /// work.
     pub fn from_env() -> Self {
         let mut config = Self::default();
+
+        // Check for WiFi mode override
+        if let Some(mode) = option_env!("WIFI_MODE") {
+            config.network.wifi_mode = match mode.to_lowercase().as_str() {
+                "station" | "sta" | "client" => WifiModeConfig::Station,
+                "ap" | "accesspoint" | "access_point" => WifiModeConfig::AccessPoint,
+                _ => WifiModeConfig::AccessPoint,
+            };
+        }
 
         // Override with environment variables if available
         if let Some(ssid) = option_env!("WIFI_SSID") {
@@ -123,8 +190,8 @@ impl SystemConfig {
         if let Some(broker) = option_env!("MQTT_BROKER") {
             config.network.mqtt_broker = broker;
         }
-        if let Some(server) = option_env!("TCP_SERVER") {
-            config.network.tcp_server = server;
+        if let Some(server) = option_env!("UDP_SERVER") {
+            config.network.udp_server = server;
         }
 
         config
