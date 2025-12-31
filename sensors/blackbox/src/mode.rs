@@ -352,18 +352,24 @@ mod tests {
         let mut classifier = ModeClassifier::new();
 
         // Simulate acceleration while cornering (corner exit)
-        let ax = 0.20 * G;  // 0.20g forward acceleration
-        let ay = 0.15 * G;  // 0.15g lateral
+        let ax = 0.20 * G; // 0.20g forward acceleration
+        let ay = 0.15 * G; // 0.15g lateral
         let yaw = 0.0;
-        let wz = 0.08;      // 0.08 rad/s yaw rate
-        let vx = 8.0;       // 8 m/s speed
+        let wz = 0.08; // 0.08 rad/s yaw rate
+        let vx = 8.0; // 8 m/s speed
         let vy = 0.0;
 
         classifier.update(ax, ay, yaw, wz, vx, vy);
 
         // Should detect both acceleration and cornering
-        assert!(classifier.get_mode().has_accel(), "Should detect acceleration");
-        assert!(classifier.get_mode().has_corner(), "Should detect cornering");
+        assert!(
+            classifier.get_mode().has_accel(),
+            "Should detect acceleration"
+        );
+        assert!(
+            classifier.get_mode().has_corner(),
+            "Should detect cornering"
+        );
         assert_eq!(classifier.get_mode().as_str(), "ACCEL+CORNER");
     }
 
@@ -375,15 +381,18 @@ mod tests {
         let ax = -0.25 * G; // 0.25g braking
         let ay = -0.15 * G; // 0.15g lateral (left turn)
         let yaw = 0.0;
-        let wz = -0.08;     // -0.08 rad/s yaw rate (left)
-        let vx = 8.0;       // 8 m/s speed
+        let wz = -0.08; // -0.08 rad/s yaw rate (left)
+        let vx = 8.0; // 8 m/s speed
         let vy = 0.0;
 
         classifier.update(ax, ay, yaw, wz, vx, vy);
 
         // Should detect both braking and cornering
         assert!(classifier.get_mode().has_brake(), "Should detect braking");
-        assert!(classifier.get_mode().has_corner(), "Should detect cornering");
+        assert!(
+            classifier.get_mode().has_corner(),
+            "Should detect cornering"
+        );
         assert_eq!(classifier.get_mode().as_str(), "BRAKE+CORNER");
     }
 
@@ -400,17 +409,26 @@ mod tests {
         // Acceleration just above entry threshold (0.10g)
         let ax1 = 0.11 * G;
         classifier.update(ax1, ay, yaw, wz, vx, vy);
-        assert!(classifier.get_mode().has_accel(), "Should enter ACCEL at 0.11g");
+        assert!(
+            classifier.get_mode().has_accel(),
+            "Should enter ACCEL at 0.11g"
+        );
 
         // Drop to 0.06g (above 0.05g exit threshold)
         let ax2 = 0.06 * G;
         classifier.update(ax2, ay, yaw, wz, vx, vy);
-        assert!(classifier.get_mode().has_accel(), "Should stay ACCEL at 0.06g (above exit)");
+        assert!(
+            classifier.get_mode().has_accel(),
+            "Should stay ACCEL at 0.06g (above exit)"
+        );
 
         // Drop to 0.04g (below 0.05g exit threshold)
         let ax3 = 0.04 * G;
         classifier.update(ax3, ay, yaw, wz, vx, vy);
-        assert!(classifier.get_mode().is_idle(), "Should exit to IDLE at 0.04g (below exit)");
+        assert!(
+            classifier.get_mode().is_idle(),
+            "Should exit to IDLE at 0.04g (below exit)"
+        );
     }
 
     #[test]
@@ -422,16 +440,22 @@ mod tests {
         let ay = 0.0;
         let yaw = 0.0;
         let wz = 0.0;
-        let vx = 1.5;  // Below 2.0 m/s threshold
+        let vx = 1.5; // Below 2.0 m/s threshold
         let vy = 0.0;
 
         classifier.update(ax, ay, yaw, wz, vx, vy);
-        assert!(classifier.get_mode().is_idle(), "Should stay IDLE when speed < min_speed");
+        assert!(
+            classifier.get_mode().is_idle(),
+            "Should stay IDLE when speed < min_speed"
+        );
 
         // Same acceleration, speed above threshold
         let vx2 = 2.5;
         classifier.update(ax, ay, yaw, wz, vx2, vy);
-        assert!(classifier.get_mode().has_accel(), "Should detect ACCEL when speed > min_speed");
+        assert!(
+            classifier.get_mode().has_accel(),
+            "Should detect ACCEL when speed > min_speed"
+        );
     }
 
     #[test]
@@ -453,7 +477,10 @@ mod tests {
         let ax2 = 0.15 * G;
         classifier.update(ax2, ay, yaw, wz, vx, vy);
         assert!(classifier.get_mode().has_accel(), "Should detect accel");
-        assert!(classifier.get_mode().has_corner(), "Should still detect corner");
+        assert!(
+            classifier.get_mode().has_corner(),
+            "Should still detect corner"
+        );
         assert_eq!(classifier.get_mode().as_u8(), 5, "Should be ACCEL+CORNER");
 
         // Stop accelerating but keep cornering

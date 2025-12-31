@@ -1,13 +1,13 @@
 #![allow(dead_code)] // System API for future use
 
+use std::sync::Arc;
+
 /// System-level architecture for telemetry system
 /// Implements proper separation of concerns and dependency inversion
 use esp_idf_hal::delay::FreeRtos;
 use esp_idf_hal::uart::UartDriver;
 // Import from framework crate
 use motorsport_telemetry::ekf::Ekf;
-
-use std::sync::Arc;
 
 use crate::{
     binary_telemetry,
@@ -71,7 +71,10 @@ impl SensorManager {
         use log::info;
 
         info!("=== IMU Calibration Starting ===");
-        info!("Collecting {} samples, keep device stationary!", CALIB_SAMPLES);
+        info!(
+            "Collecting {} samples, keep device stationary!",
+            CALIB_SAMPLES
+        );
 
         // Initial yellow LED burst to indicate calibration starting
         for _ in 0..3 {
@@ -292,8 +295,8 @@ impl TelemetryPublisher {
         let (ekf_x, ekf_y) = estimator.ekf.position();
         let (mut ekf_vx, mut ekf_vy) = estimator.ekf.velocity();
 
-        // Use GPS speed directly for display (more responsive, no lag from EKF filtering)
-        // Convert from m/s to km/h
+        // Use GPS speed directly for display (more responsive, no lag from EKF
+        // filtering) Convert from m/s to km/h
         let mut display_speed_kmh = sensors.gps_parser.last_fix().speed * 3.6;
 
         // Zero out very low speeds to clean up display
@@ -333,7 +336,7 @@ impl TelemetryPublisher {
 
         // Update HTTP server state if available (AP mode)
         if let Some(ref http_state) = self.http_state {
-            http_state.update_telemetry(&bytes);
+            http_state.update_telemetry(bytes);
             sent = true;
         }
 
@@ -342,7 +345,9 @@ impl TelemetryPublisher {
             Ok(())
         } else {
             self.telemetry_fail_count += 1;
-            Err(SystemError::CommunicationError("No telemetry output available"))
+            Err(SystemError::CommunicationError(
+                "No telemetry output available",
+            ))
         }
     }
 

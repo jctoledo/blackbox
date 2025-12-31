@@ -10,6 +10,8 @@ mod udp_stream;
 mod websocket_server;
 mod wifi;
 
+use std::sync::Arc;
+
 use config::{SystemConfig, WifiModeConfig};
 use esp_idf_hal::{
     delay::FreeRtos,
@@ -21,7 +23,6 @@ use log::info;
 use motorsport_telemetry::transforms::{body_to_earth, remove_gravity};
 use mqtt::MqttClient;
 use rgb_led::RgbLed;
-use std::sync::Arc;
 use system::{SensorManager, StateEstimator, StatusManager, TelemetryPublisher};
 use udp_stream::UdpTelemetryStream;
 use websocket_server::{TelemetryServer, TelemetryServerState};
@@ -38,7 +39,11 @@ fn main() {
     info!("=== ESP32-C3 Telemetry System ===");
     info!(
         "Mode: {}, SSID: {}, Rate: {}Hz",
-        if is_ap_mode { "Access Point" } else { "Station" },
+        if is_ap_mode {
+            "Access Point"
+        } else {
+            "Station"
+        },
         config.network.wifi_ssid,
         1000 / config.telemetry.interval_ms
     );
@@ -100,7 +105,10 @@ fn main() {
                 }
 
                 // Start HTTP telemetry server
-                info!("Starting telemetry server on port {}", config.network.ws_port);
+                info!(
+                    "Starting telemetry server on port {}",
+                    config.network.ws_port
+                );
                 match TelemetryServer::new(config.network.ws_port) {
                     Ok(server) => {
                         telemetry_state = Some(server.state());
@@ -179,7 +187,10 @@ fn main() {
         };
 
         // Initialize UDP for telemetry
-        info!("Initializing UDP telemetry to {}", config.network.udp_server);
+        info!(
+            "Initializing UDP telemetry to {}",
+            config.network.udp_server
+        );
         let mut stream = UdpTelemetryStream::new(config.network.udp_server);
         match stream.init() {
             Ok(_) => {
@@ -367,7 +378,8 @@ fn main() {
             last_connectivity_check_ms = now_ms;
         }
 
-        // MQTT diagnostics (every 30s - low priority, LED handles connectivity feedback)
+        // MQTT diagnostics (every 30s - low priority, LED handles connectivity
+        // feedback)
         if now_ms - last_mqtt_diag_ms >= 30000 {
             if let Some(mqtt) = publisher.mqtt_client_mut() {
                 let (ekf_x, ekf_y) = estimator.ekf.position();

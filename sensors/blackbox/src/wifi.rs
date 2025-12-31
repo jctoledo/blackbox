@@ -1,8 +1,8 @@
 use esp_idf_hal::peripheral;
-/// WiFi connection manager - supports both STA (client) and AP (access point) modes
+/// WiFi connection manager - supports both STA (client) and AP (access point)
+/// modes
 use esp_idf_svc::wifi::{
-    AccessPointConfiguration, AuthMethod, BlockingWifi, ClientConfiguration, Configuration,
-    EspWifi,
+    AccessPointConfiguration, AuthMethod, BlockingWifi, ClientConfiguration, Configuration, EspWifi,
 };
 use esp_idf_svc::{eventloop::EspSystemEventLoop, nvs::EspDefaultNvsPartition};
 use log::info;
@@ -74,7 +74,15 @@ impl WifiManager {
         password: &str,
     ) -> Result<(), Box<dyn std::error::Error>> {
         info!("Setting WiFi configuration (AP mode)");
-        info!("SSID: {}, Password: {}", ssid, if password.is_empty() { "(open)" } else { "****" });
+        info!(
+            "SSID: {}, Password: {}",
+            ssid,
+            if password.is_empty() {
+                "(open)"
+            } else {
+                "****"
+            }
+        );
 
         let auth_method = if password.is_empty() {
             AuthMethod::None
@@ -101,7 +109,10 @@ impl WifiManager {
 
         let ip_info = self.wifi.wifi().ap_netif().get_ip_info()?;
         info!("WiFi AP started! IP: {}", ip_info.ip);
-        info!("Clients should connect to '{}' and access 192.168.4.1", ssid);
+        info!(
+            "Clients should connect to '{}' and access 192.168.4.1",
+            ssid
+        );
 
         self.mode = WifiMode::AccessPoint;
         Ok(())

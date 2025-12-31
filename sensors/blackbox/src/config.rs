@@ -7,19 +7,14 @@ use motorsport_telemetry::ekf::EkfConfig;
 use crate::mode::ModeConfig;
 
 /// WiFi operating mode
-#[derive(Debug, Clone, Copy, PartialEq)]
+/// Default: AccessPoint (standalone operation)
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum WifiModeConfig {
     /// Station mode - connect to existing network (home/track WiFi)
     Station,
     /// Access Point mode - ESP32 creates own network (mobile/standalone use)
+    #[default]
     AccessPoint,
-}
-
-impl Default for WifiModeConfig {
-    fn default() -> Self {
-        // Default to AP mode for standalone operation
-        Self::AccessPoint
-    }
 }
 
 /// Network configuration
@@ -170,8 +165,9 @@ impl SystemConfig {
     /// cargo build --release
     /// ```
     ///
-    /// **WARNING:** Station mode defaults (192.168.1.100) are placeholders only.
-    /// You MUST set MQTT_BROKER and UDP_SERVER for Station mode to work.
+    /// **WARNING:** Station mode defaults (192.168.1.100) are placeholders
+    /// only. You MUST set MQTT_BROKER and UDP_SERVER for Station mode to
+    /// work.
     pub fn from_env() -> Self {
         let mut config = Self::default();
 

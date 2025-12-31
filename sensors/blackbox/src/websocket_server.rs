@@ -1,32 +1,34 @@
+use std::sync::{
+    atomic::{AtomicBool, AtomicU32, Ordering},
+    Arc, Mutex,
+};
+
 /// HTTP telemetry server for dashboard and settings
 /// Uses HTTP polling for reliable updates without thread blocking
-
 use esp_idf_svc::http::server::{Configuration, EspHttpServer};
 use esp_idf_svc::io::Write;
 use log::info;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::sync::{Arc, Mutex};
 
 /// Mode detection settings (matching mode.rs ModeConfig)
 #[derive(Clone, Copy)]
 pub struct ModeSettings {
-    pub acc_thr: f32,     // Acceleration threshold (g)
-    pub acc_exit: f32,    // Acceleration exit threshold (g)
-    pub brake_thr: f32,   // Braking threshold (g, negative)
-    pub brake_exit: f32,  // Braking exit threshold (g, negative)
-    pub lat_thr: f32,     // Lateral threshold (g)
-    pub lat_exit: f32,    // Lateral exit threshold (g)
-    pub yaw_thr: f32,     // Yaw rate threshold (rad/s)
-    pub min_speed: f32,   // Minimum speed for mode detection (m/s)
+    pub acc_thr: f32,    // Acceleration threshold (g)
+    pub acc_exit: f32,   // Acceleration exit threshold (g)
+    pub brake_thr: f32,  // Braking threshold (g, negative)
+    pub brake_exit: f32, // Braking exit threshold (g, negative)
+    pub lat_thr: f32,    // Lateral threshold (g)
+    pub lat_exit: f32,   // Lateral exit threshold (g)
+    pub yaw_thr: f32,    // Yaw rate threshold (rad/s)
+    pub min_speed: f32,  // Minimum speed for mode detection (m/s)
 }
 
 impl Default for ModeSettings {
     fn default() -> Self {
         Self {
-            acc_thr: 0.10,      // Lowered from 0.15 for street driving
-            acc_exit: 0.05,     // Exit at 50% of entry
-            brake_thr: -0.18,   // Slightly higher to reduce false positives
-            brake_exit: -0.09,  // Exit at 50% of entry
+            acc_thr: 0.10,     // Lowered from 0.15 for street driving
+            acc_exit: 0.05,    // Exit at 50% of entry
+            brake_thr: -0.18,  // Slightly higher to reduce false positives
+            brake_exit: -0.09, // Exit at 50% of entry
             lat_thr: 0.12,
             lat_exit: 0.06,
             yaw_thr: 0.05,
@@ -103,7 +105,10 @@ impl TelemetryServerState {
 
     /// Get current telemetry data as base64 for JSON transport
     pub fn get_telemetry_base64(&self) -> Option<String> {
-        self.telemetry_data.lock().ok().map(|data| base64_encode(&data))
+        self.telemetry_data
+            .lock()
+            .ok()
+            .map(|data| base64_encode(&data))
     }
 
     /// Get raw telemetry bytes (kept for potential future use)
@@ -127,7 +132,7 @@ impl Default for TelemetryServerState {
 /// Simple base64 encoder
 fn base64_encode(data: &[u8]) -> String {
     const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut result = String::with_capacity((data.len() + 2) / 3 * 4);
+    let mut result = String::with_capacity(data.len().div_ceil(3) * 4);
 
     for chunk in data.chunks(3) {
         let b0 = chunk[0] as usize;
@@ -467,8 +472,9 @@ impl TelemetryServer {
 
         let server_config = Configuration {
             http_port: port,
-            max_uri_handlers: 7,  // Dashboard, telemetry, status, calibrate, settings GET, settings SET
-            max_open_sockets: 8,   // HTTP only - no long-lived WebSocket connections
+            max_uri_handlers: 7, /* Dashboard, telemetry, status, calibrate, settings GET,
+                                  * settings SET */
+            max_open_sockets: 8, // HTTP only - no long-lived WebSocket connections
             stack_size: 10240,
             ..Default::default()
         };
@@ -477,78 +483,106 @@ impl TelemetryServer {
         let state = Arc::new(TelemetryServerState::new());
 
         // Serve the dashboard HTML
-        server.fn_handler("/", esp_idf_svc::http::Method::Get, |req| -> Result<(), esp_idf_svc::io::EspIOError> {
-            let html_bytes = DASHBOARD_HTML.as_bytes();
-            let content_length = html_bytes.len().to_string();
-            let mut response = req.into_response(
-                200,
-                None,
-                &[
-                    ("Content-Type", "text/html; charset=utf-8"),
-                    ("Content-Length", &content_length),
-                    ("Connection", "close"),
-                ],
-            )?;
-            response.write_all(html_bytes)?;
-            Ok(())
-        })?;
+        server.fn_handler(
+            "/",
+            esp_idf_svc::http::Method::Get,
+            |req| -> Result<(), esp_idf_svc::io::EspIOError> {
+                let html_bytes = DASHBOARD_HTML.as_bytes();
+                let content_length = html_bytes.len().to_string();
+                let mut response = req.into_response(
+                    200,
+                    None,
+                    &[
+                        ("Content-Type", "text/html; charset=utf-8"),
+                        ("Content-Length", &content_length),
+                        ("Connection", "close"),
+                    ],
+                )?;
+                response.write_all(html_bytes)?;
+                Ok(())
+            },
+        )?;
 
-        // WebSocket removed - using HTTP polling for reliability and to eliminate thread blocking
+        // WebSocket removed - using HTTP polling for reliability and to eliminate
+        // thread blocking
 
         // HTTP polling fallback endpoint
         let state_poll = state.clone();
-        server.fn_handler("/api/telemetry", esp_idf_svc::http::Method::Get, move |req| -> Result<(), esp_idf_svc::io::EspIOError> {
-            let json = if let Some(data) = state_poll.get_telemetry_base64() {
-                format!(r#"{{"seq":{},"data":"{}"}}"#, state_poll.packet_count(), data)
-            } else {
-                r#"{"seq":0,"data":null}"#.to_string()
-            };
+        server.fn_handler(
+            "/api/telemetry",
+            esp_idf_svc::http::Method::Get,
+            move |req| -> Result<(), esp_idf_svc::io::EspIOError> {
+                let json = if let Some(data) = state_poll.get_telemetry_base64() {
+                    format!(
+                        r#"{{"seq":{},"data":"{}"}}"#,
+                        state_poll.packet_count(),
+                        data
+                    )
+                } else {
+                    r#"{"seq":0,"data":null}"#.to_string()
+                };
 
-            let mut response = req.into_response(
-                200,
-                None,
-                &[("Content-Type", "application/json"), ("Access-Control-Allow-Origin", "*"), ("Cache-Control", "no-cache")],
-            )?;
-            response.write_all(json.as_bytes())?;
-            Ok(())
-        })?;
+                let mut response = req.into_response(
+                    200,
+                    None,
+                    &[
+                        ("Content-Type", "application/json"),
+                        ("Access-Control-Allow-Origin", "*"),
+                        ("Cache-Control", "no-cache"),
+                    ],
+                )?;
+                response.write_all(json.as_bytes())?;
+                Ok(())
+            },
+        )?;
 
         // Health check
-        server.fn_handler("/api/status", esp_idf_svc::http::Method::Get, |req| -> Result<(), esp_idf_svc::io::EspIOError> {
-            info!(">>> /api/status called");
-            #[cfg(esp_idf_httpd_ws_support)]
-            let body = b"{\"status\":\"ok\",\"ws\":true}";
-            #[cfg(not(esp_idf_httpd_ws_support))]
-            let body = b"{\"status\":\"ok\",\"ws\":false}";
+        server.fn_handler(
+            "/api/status",
+            esp_idf_svc::http::Method::Get,
+            |req| -> Result<(), esp_idf_svc::io::EspIOError> {
+                info!(">>> /api/status called");
+                #[cfg(esp_idf_httpd_ws_support)]
+                let body = b"{\"status\":\"ok\",\"ws\":true}";
+                #[cfg(not(esp_idf_httpd_ws_support))]
+                let body = b"{\"status\":\"ok\",\"ws\":false}";
 
-            let content_length = body.len().to_string();
-            let mut response = req.into_response(
-                200,
-                None,
-                &[
-                    ("Content-Type", "application/json"),
-                    ("Content-Length", &content_length),
-                    ("Connection", "close"),
-                ],
-            )?;
-            response.write_all(body)?;
-            info!(">>> /api/status response sent");
-            Ok(())
-        })?;
+                let content_length = body.len().to_string();
+                let mut response = req.into_response(
+                    200,
+                    None,
+                    &[
+                        ("Content-Type", "application/json"),
+                        ("Content-Length", &content_length),
+                        ("Connection", "close"),
+                    ],
+                )?;
+                response.write_all(body)?;
+                info!(">>> /api/status response sent");
+                Ok(())
+            },
+        )?;
 
         // Calibration trigger endpoint
         let state_calib = state.clone();
-        server.fn_handler("/api/calibrate", esp_idf_svc::http::Method::Get, move |req| -> Result<(), esp_idf_svc::io::EspIOError> {
-            info!(">>> /api/calibrate endpoint called - requesting calibration");
-            state_calib.request_calibration();
-            let mut response = req.into_response(
-                200,
-                None,
-                &[("Content-Type", "application/json"), ("Access-Control-Allow-Origin", "*")],
-            )?;
-            response.write_all(b"{\"status\":\"calibrating\"}")?;
-            Ok(())
-        })?;
+        server.fn_handler(
+            "/api/calibrate",
+            esp_idf_svc::http::Method::Get,
+            move |req| -> Result<(), esp_idf_svc::io::EspIOError> {
+                info!(">>> /api/calibrate endpoint called - requesting calibration");
+                state_calib.request_calibration();
+                let mut response = req.into_response(
+                    200,
+                    None,
+                    &[
+                        ("Content-Type", "application/json"),
+                        ("Access-Control-Allow-Origin", "*"),
+                    ],
+                )?;
+                response.write_all(b"{\"status\":\"calibrating\"}")?;
+                Ok(())
+            },
+        )?;
 
         // Get current settings
         let state_get = state.clone();
