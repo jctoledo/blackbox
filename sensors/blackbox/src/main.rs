@@ -311,6 +311,15 @@ fn main() {
                     ">>> Mode config updated: acc={:.2}g/{:.2}g, brake={:.2}g/{:.2}g, lat={:.2}g/{:.2}g, yaw={:.3}rad/s, min_spd={:.1}m/s",
                     s.acc_thr, s.acc_exit, s.brake_thr, s.brake_exit, s.lat_thr, s.lat_exit, s.yaw_thr, s.min_speed
                 );
+
+                // Visual confirmation: 3 green-white alternating flashes
+                for _ in 0..3 {
+                    status_mgr.led_mut().green().unwrap();
+                    FreeRtos::delay_ms(80);
+                    status_mgr.led_mut().white().unwrap();
+                    FreeRtos::delay_ms(80);
+                }
+                status_mgr.led_mut().set_low().unwrap();
             }
         }
 
@@ -351,12 +360,12 @@ fn main() {
                     FreeRtos::delay_ms(150);
                 }
             }
-            // Blink while MQTT is disconnected (only if WiFi is up)
-            else if !mqtt_connected {
+            // Blink while MQTT is disconnected (only in Station mode, and only if WiFi is up)
+            else if !is_ap_mode && !mqtt_connected {
                 if was_mqtt_connected {
                     info!("MQTT connection lost!");
                 }
-                // 2 red blinks for MQTT down
+                // 2 red blinks for MQTT down (Station mode only)
                 for _ in 0..2 {
                     status_mgr.led_mut().red().unwrap();
                     FreeRtos::delay_ms(150);

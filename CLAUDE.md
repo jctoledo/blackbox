@@ -554,22 +554,36 @@ cargo build --release
 
 ### rgb_led.rs - WS2812 LED Control
 
-**LED Status Codes:**
+**Available Colors:** red, green, blue, yellow, cyan, magenta, orange, white
+
+**LED Status Codes (Access Point Mode):**
 
 Boot sequence:
-- Blue (3 blinks): Boot sequence started
-- Green (5 blinks): WiFi connected
+- Magenta (3 blinks): Boot sequence started (AP mode)
+- Green (5 blinks): WiFi AP started
+- Cyan (3 blinks): HTTP server ready
+- Yellow (pulsing): IMU calibrating
+- Red (continuous slow blink): WiFi AP failed (critical error)
+
+**LED Status Codes (Station Mode):**
+
+Boot sequence:
+- Blue (3 blinks): Boot sequence started (Station mode)
+- Green (5 blinks): WiFi connected to network
 - Magenta (3 blinks): MQTT connected
 - Red (5 fast blinks): MQTT connection failed
 - Cyan (3 blinks): UDP socket ready
 - Yellow (pulsing): IMU calibrating
 - Red (continuous slow blink): WiFi failed at boot (critical error)
 
-Main loop (operational):
+**Main Loop (operational, both modes):**
 - Cyan (2s pulse): GPS locked, operational
 - Yellow (fast blink): Waiting for GPS lock
-- Orange (3 blinks, repeating): WiFi disconnected (repeats every 5s while down)
-- Red (2 blinks, repeating): MQTT disconnected (repeats every 5s while down)
+- Green-white (3 alternating flashes): Settings changed via dashboard
+- Orange (3 blinks, repeating): WiFi disconnected (repeats every 5s)
+- Red (2 blinks, repeating): MQTT disconnected (Station mode only, repeats every 5s)
+
+**Important:** MQTT status LED (red blinks) only applies to Station mode. In Access Point mode, MQTT is not used.
 
 Useful for debugging without serial monitor.
 

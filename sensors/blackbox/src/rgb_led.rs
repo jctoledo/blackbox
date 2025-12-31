@@ -91,6 +91,11 @@ impl RgbLed {
     pub fn orange(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         self.set_color(64, 32, 0)
     }
+
+    /// Set to white (dimmed)
+    pub fn white(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        self.set_color(64, 64, 64)
+    }
 }
 
 fn ns(nanos: u64) -> std::time::Duration {

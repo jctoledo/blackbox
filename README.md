@@ -546,26 +546,36 @@ Each threshold has an **entry** and **exit** value (hysteresis) to prevent oscil
 
 ## LED Status Codes
 
-### Boot Sequence
+### Boot Sequence (Access Point Mode)
 | Pattern | Meaning |
 |---------|---------|
-| 3 blue blinks | Boot sequence started |
-| 5 green blinks | WiFi connected |
+| 3 magenta blinks | Boot sequence started (AP mode) |
+| 5 green blinks | WiFi AP started |
+| 3 cyan blinks | HTTP server ready |
+| Yellow pulses | IMU calibration in progress |
+| Continuous red blink | Critical error (WiFi AP failed) |
+
+### Boot Sequence (Station Mode)
+| Pattern | Meaning |
+|---------|---------|
+| 3 blue blinks | Boot sequence started (Station mode) |
+| 5 green blinks | WiFi connected to network |
 | 3 magenta blinks | MQTT connected |
 | 5 fast red blinks | MQTT connection failed (continuing without MQTT) |
 | 3 cyan blinks | UDP socket ready |
 | Yellow pulses | IMU calibration in progress |
-| Continuous red blink | Critical error (WiFi failed at boot) |
+| Continuous red blink | Critical error (WiFi connection failed) |
 
 ### Main Loop (operational)
 | Pattern | Meaning |
 |---------|---------|
+| Cyan pulse (2s cycle) | GPS locked, system operational |
 | Yellow fast blink | Waiting for GPS fix |
-| Cyan pulse (2s on/off) | GPS locked, system operational |
-| 3 orange blinks (repeating) | WiFi disconnected |
-| 2 red blinks (repeating) | MQTT disconnected |
+| 3 green-white flashes | Settings changed via dashboard |
+| 3 orange blinks | WiFi disconnected (repeats every 5s) |
+| 2 red blinks | MQTT disconnected (Station mode only, repeats every 5s) |
 
-Connectivity is checked every 5 seconds. Orange/red blinks repeat every 5 seconds while the connection remains down.
+**Note:** MQTT status LED only applies to Station mode. In Access Point mode, MQTT is not used and no red blinks will occur for MQTT status.
 
 ---
 
