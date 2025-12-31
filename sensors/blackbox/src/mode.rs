@@ -428,10 +428,7 @@ mod tests {
         for _ in 0..10 {
             classifier.update(ax1, ay, yaw, wz, vx, vy);
         }
-        assert!(
-            classifier.get_mode().has_accel(),
-            "Should enter ACCEL"
-        );
+        assert!(classifier.get_mode().has_accel(), "Should enter ACCEL");
 
         // Drop to 0.06g (above 0.05g exit threshold) - EMA should stay above exit
         let ax2 = 0.06 * G;
