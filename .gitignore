@@ -43,6 +43,7 @@ dist/
 *.csv
 *.dat
 telemetry_*.bin
+blackbox-v*.bin
 
 # Credentials (NEVER commit these!)
 secrets.toml
