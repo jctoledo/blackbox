@@ -318,9 +318,7 @@ impl MountCalibrator {
                 }
             }
 
-            CalibrationState::Failed => {
-                CalibrationResult::Failure(CalibrationError::Cancelled)
-            }
+            CalibrationState::Failed => CalibrationResult::Failure(CalibrationError::Cancelled),
         }
     }
 

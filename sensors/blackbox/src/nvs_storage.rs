@@ -77,7 +77,10 @@ impl NvsStorage {
         self.set_f32(KEY_MOUNT_OFFSET, cal.yaw_offset)?;
         self.set_u8(KEY_MOUNT_VALID, 1)?;
 
-        info!("NVS: Saved mount offset: {:.1}°", cal.yaw_offset.to_degrees());
+        info!(
+            "NVS: Saved mount offset: {:.1}°",
+            cal.yaw_offset.to_degrees()
+        );
         Ok(())
     }
 }

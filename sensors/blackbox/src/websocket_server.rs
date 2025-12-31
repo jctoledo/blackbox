@@ -136,12 +136,14 @@ impl TelemetryServerState {
 
     /// Request mount calibration from the UI
     pub fn request_mount_calibration(&self) {
-        self.mount_calibration_requested.store(true, Ordering::SeqCst);
+        self.mount_calibration_requested
+            .store(true, Ordering::SeqCst);
     }
 
     /// Check if mount calibration was requested and clear the flag
     pub fn take_mount_calibration_request(&self) -> bool {
-        self.mount_calibration_requested.swap(false, Ordering::SeqCst)
+        self.mount_calibration_requested
+            .swap(false, Ordering::SeqCst)
     }
 
     /// Update mount calibration state (called from main loop)
@@ -154,7 +156,8 @@ impl TelemetryServerState {
             CalibrationState::Complete => 4,
             CalibrationState::Failed => 5,
         };
-        self.mount_calibration_state.store(state_u8, Ordering::SeqCst);
+        self.mount_calibration_state
+            .store(state_u8, Ordering::SeqCst);
     }
 
     /// Get mount calibration state
