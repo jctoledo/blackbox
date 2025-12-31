@@ -391,9 +391,9 @@ const d=new DataView(buf);
 const ax=d.getFloat32(7,1),ay=d.getFloat32(11,1),wz=d.getFloat32(19,1),sp=d.getFloat32(51,1),mo=d.getUint8(55);
 const lat=d.getFloat32(56,1),lon=d.getFloat32(60,1),gpsOk=d.getUint8(64);
 const latg=ay/9.81,lng=-ax/9.81,yaw=Math.abs(wz*57.3);
-// EMA filter for smooth speed display (like car speedometer)
-speed_ema=0.4*sp+(1-0.4)*speed_ema;
-const dspd=speed_ema<3?0:Math.round(speed_ema);
+// EMA filter - alpha=0.7 for responsive yet smooth display
+speed_ema=0.7*sp+(1-0.7)*speed_ema;
+const dspd=speed_ema<1?0:Math.round(speed_ema);
 $('mode').textContent=M[mo]||'IDLE';$('mode').className='mode-val '+(C[mo]||'m-idle');$('icon').textContent=I[mo]||'●';
 $('spd').textContent=dspd;$('latg').textContent=latg.toFixed(2);$('lng').textContent=lng.toFixed(2);
 $('yaw').textContent=yaw.toFixed(0);
@@ -414,12 +414,8 @@ cnt++;
 if(rec)data.push({t:Date.now(),sp,ax,ay,wz,mo,latg,lng,lat,lon,gpsOk});
 }
 
-// HTTP polling - interval optimized for WiFi latency
-let polling=0,skips=0;
+// HTTP polling - self-scheduling for maximum throughput
 async function poll(){
-if(polling){skips++;return} // Skip if previous poll still running
-polling=1;
-const start=Date.now();
 try{
 const r=await fetch('/api/telemetry');
 const j=await r.json();
@@ -430,8 +426,8 @@ for(let i=0;i<b.length;i++)a[i]=b.charCodeAt(i);
 process(a.buffer);
 $('dot').className='dot on';$('stxt').textContent='HTTP';
 }
-}catch(e){$('dot').className='dot';$('stxt').textContent='Offline'}
-polling=0;
+setTimeout(poll,5); // Immediately schedule next poll
+}catch(e){$('dot').className='dot';$('stxt').textContent='Offline';setTimeout(poll,500)} // Retry slower on error
 }
 
 // Reset button: resets G max, speed max, timer, and triggers calibration
@@ -570,8 +566,8 @@ selectPreset('city');
 }
 }
 
-// Load settings, then start polling (40ms interval accounts for WiFi/HTTP overhead)
-loadCfg().then(()=>setInterval(poll,40));
+// Load settings, then start polling (self-scheduling for max throughput)
+loadCfg().then(()=>poll());
 </script></body></html>"#;
 
 impl TelemetryServer {
