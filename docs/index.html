@@ -1318,13 +1318,6 @@
                         </button>
 
                         <div class="dev-panel" id="dev-panel">
-                            <div class="form-group">
-                                <label>Baud Rate</label>
-                                <select id="baudrate">
-                                    <option value="115200" selected>115200</option>
-                                    <option value="460800">460800</option>
-                                </select>
-                            </div>
                             <div class="debug-window" id="debug-window">
                                 <div class="debug-line info">Ready.</div>
                             </div>
@@ -1345,8 +1338,9 @@
     </div>
 
     <script src="projects-config.js"></script>
-    <script type="module">
-        import { Transport, ESPLoader } from 'https://unpkg.com/esptool-js@0.4.5/bundle.js';
+    <script src="https://cdn.jsdelivr.net/gh/adam-weber/esp-webflash-toolkit@main/dist/esp-webflash-toolkit.min.js"></script>
+    <script>
+        const { ESPFlasher } = ESPWebFlash;
 
         const nav = document.getElementById('nav');
         window.addEventListener('scroll', () => {
@@ -1360,10 +1354,8 @@
         const devToggle = document.getElementById('dev-toggle');
         const devPanel = document.getElementById('dev-panel');
         const debugWindow = document.getElementById('debug-window');
-        const baudrateSelect = document.getElementById('baudrate');
 
-        let transport = null, espStub = null, isConnected = false;
-
+        let flasher = null;
         const projects = typeof PROJECTS !== 'undefined' ? PROJECTS : {};
 
         Object.entries(projects).forEach(([id, project]) => {
@@ -1375,86 +1367,66 @@
 
         projectSelect.addEventListener('change', (e) => {
             if (e.target.value) {
+                const project = projects[e.target.value];
                 projectInfo.style.display = 'block';
                 flashButton.disabled = false;
                 flashButton.textContent = 'Connect Device';
                 updateStatus('', 'Ready', 'Click Connect to begin');
-                log('Selected: ' + projects[e.target.value].name, 'info');
+                log('Selected: ' + project.name, 'info');
+
+                // Create flasher for selected project
+                flasher = new ESPFlasher({
+                    chip: project.chip,
+                    firmwareUrl: project.firmwareUrl
+                });
+
+                flasher.addEventListener('log', e => {
+                    if (e.detail.level !== 'debug') log(e.detail.message, e.detail.level);
+                });
+                flasher.addEventListener('progress', e => {
+                    updateStatus('flashing', 'Flashing ' + e.detail.percent + '%', e.detail.written + '/' + e.detail.total);
+                });
+                flasher.addEventListener('connected', e => {
+                    updateStatus('connected', 'Connected', e.detail.chipType);
+                    flashButton.textContent = 'Flash Firmware';
+                    flashButton.disabled = false;
+                });
+                flasher.addEventListener('complete', () => {
+                    updateStatus('success', 'Success', 'Flash complete! Unplug and reset your device.');
+                    flashButton.textContent = 'Done';
+                    flashButton.disabled = false;
+                });
+                flasher.addEventListener('error', e => {
+                    updateStatus('error', 'Error', e.detail.message);
+                    flashButton.disabled = false;
+                    flashButton.textContent = 'Retry';
+                });
             } else {
                 projectInfo.style.display = 'none';
                 flashButton.disabled = true;
                 flashButton.textContent = 'Select Firmware';
+                if (flasher) { flasher.dispose(); flasher = null; }
             }
         });
 
         devToggle.addEventListener('click', () => devPanel.classList.toggle('active'));
 
         flashButton.addEventListener('click', async () => {
-            if (!isConnected) await connect();
-            else await flash();
-        });
-
-        async function connect() {
-            if (!projectSelect.value) return;
-            if (transport) { try { await transport.disconnect(); } catch {} }
-            transport = null; espStub = null; isConnected = false;
-
-            try {
-                log('Requesting port...', 'info');
-                updateStatus('', 'Connecting...', 'Select device');
-                const port = await navigator.serial.requestPort();
-                transport = new Transport(port, true);
-                espStub = new ESPLoader({
-                    transport,
-                    baudrate: parseInt(baudrateSelect.value),
-                    terminal: { clean: () => {}, writeLine: () => {}, write: () => {} }
-                });
-                const chip = await Promise.race([
-                    espStub.main(),
-                    new Promise((_, r) => setTimeout(() => r(new Error('Timeout')), 15000))
-                ]);
-                log('Connected: ' + chip, 'success');
-                isConnected = true;
-                updateStatus('connected', 'Connected', chip);
-                flashButton.textContent = 'Flash Firmware';
-            } catch (e) {
-                transport = null; espStub = null; isConnected = false;
-                updateStatus('error', 'Error', e.message.includes('imeout') ? 'Hold BOOT and retry' : e.message);
-                log('Error: ' + e.message, 'error');
-            }
-        }
-
-        async function flash() {
-            if (!projectSelect.value || !espStub) return;
-            const project = projects[projectSelect.value];
+            if (!flasher) return;
             flashButton.disabled = true;
+
             try {
-                log('Downloading...', 'info');
-                updateStatus('flashing', 'Downloading...', 'Please wait');
-                const res = await fetch(project.firmwareUrl);
-                if (!res.ok) throw new Error('Download failed');
-                const fw = await res.arrayBuffer();
-                log('Downloaded ' + fw.byteLength + ' bytes', 'success');
-                updateStatus('flashing', 'Flashing...', 'Do not disconnect');
-                const data = new Uint8Array(fw);
-                let bin = '';
-                for (let i = 0; i < data.length; i++) bin += String.fromCharCode(data[i]);
-                await espStub.writeFlash({
-                    fileArray: [{ data: bin, address: 0x10000 }],
-                    flashSize: 'keep',
-                    compress: true,
-                    reportProgress: (_, w, t) => updateStatus('flashing', 'Flashing ' + Math.round(w/t*100) + '%', w + '/' + t)
-                });
-                log('Complete!', 'success');
-                updateStatus('success', 'Success', 'Reset device');
-                flashButton.textContent = 'Done';
+                if (!flasher.isConnected()) {
+                    await flasher.connect();
+                } else {
+                    await flasher.flash();
+                }
             } catch (e) {
-                log('Error: ' + e.message, 'error');
-                updateStatus('error', 'Failed', e.message);
+                updateStatus('error', 'Error', e.message.includes('imeout') ? 'Hold BOOT and retry' : e.message);
                 flashButton.disabled = false;
                 flashButton.textContent = 'Retry';
             }
-        }
+        });
 
         function updateStatus(s, t, st) {
             statusBox.className = 'status-box ' + s;
@@ -1463,7 +1435,7 @@
 
         function log(m, type) {
             const d = document.createElement('div');
-            d.className = 'debug-line ' + type;
+            d.className = 'debug-line ' + (type || 'info');
             d.textContent = '[' + new Date().toLocaleTimeString() + '] ' + m;
             debugWindow.appendChild(d);
             debugWindow.scrollTop = debugWindow.scrollHeight;
