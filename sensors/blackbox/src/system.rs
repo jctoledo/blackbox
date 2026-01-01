@@ -293,18 +293,16 @@ impl TelemetryPublisher {
         packet.yaw = estimator.ekf.yaw();
 
         let (ekf_x, ekf_y) = estimator.ekf.position();
-        let (mut ekf_vx, mut ekf_vy) = estimator.ekf.velocity();
+        let (ekf_vx, ekf_vy) = estimator.ekf.velocity();
 
-        // Use EKF velocity magnitude for responsive speed display
-        // EKF fuses IMU at ~200 Hz, much faster than 5 Hz GPS updates
-        let ekf_speed_ms = (ekf_vx * ekf_vx + ekf_vy * ekf_vy).sqrt();
-        let mut display_speed_kmh = ekf_speed_ms * 3.6;
+        // Use RAW GPS speed for accuracy - EKF velocity was unreliable
+        // GPS updates at 5Hz but is ground truth; JS applies EMA for smooth display
+        let gps_speed_ms = sensors.gps_parser.last_fix().speed; // m/s from NMEA
+        let mut display_speed_kmh = gps_speed_ms * 3.6;
 
         // Zero out very low speeds to clean up display
         if display_speed_kmh < 1.0 {
             display_speed_kmh = 0.0;
-            ekf_vx = 0.0;
-            ekf_vy = 0.0;
         }
 
         packet.x = ekf_x;
