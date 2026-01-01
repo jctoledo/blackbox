@@ -267,7 +267,7 @@ body{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0f;color:#f0
 .cfg-btn.cfg-save{background:linear-gradient(135deg,#1e3a5f,#1a2d4a);color:#60a5fa}
 </style></head>
 <body>
-<div class="hdr"><div class="logo">BLACKBOX <span style="font-size:9px;color:#333">v4</span></div><div class="hdr-r"><a href="/diagnostics" style="color:#333;text-decoration:none;font-size:9px;margin-right:10px;opacity:0.6">DIAG</a><span class="timer" id="timer">00:00</span><div class="st"><span class="dot" id="dot"></span><span id="stxt">--</span></div></div></div>
+<div class="hdr"><div class="logo">BLACKBOX <span style="font-size:9px;color:#333">v4</span></div><div class="hdr-r"><a href="/autotune" style="color:#60a5fa;text-decoration:none;font-size:10px;margin-right:12px">⚙ Tune</a><a href="/diagnostics" style="color:#333;text-decoration:none;font-size:9px;margin-right:10px;opacity:0.6">DIAG</a><span class="timer" id="timer">00:00</span><div class="st"><span class="dot" id="dot"></span><span id="stxt">--</span></div></div></div>
 <div class="main">
 <div class="mode-box" id="modebox"><div class="mode-lbl">Mode</div><div class="mode-val m-idle" id="mode">IDLE</div><div class="mode-icon" id="icon">●</div></div>
 <div class="spd-row">
@@ -332,17 +332,51 @@ const $=id=>document.getElementById(id);
 const cv=$('gfc'),ctx=cv.getContext('2d');
 const CX=70,CY=70,R=55,SCL=R/2;
 
-// Preset definitions based on real-world G-forces (tested values):
-// City: gentle-normal inputs (0.10-0.20g accel, 0.15-0.30g brake, 0.10-0.25g lateral)
-// Highway: mostly cruising, higher speed threshold to filter parking maneuvers
-// Canyon: spirited driving (0.20-0.40g range)
-// Track: racing (0.35-0.80g+ range)
-const PRESETS={
-track:{acc:0.35,acc_exit:0.17,brake:0.55,brake_exit:0.27,lat:0.50,lat_exit:0.25,yaw:0.15,min_speed:4.0,desc:'Racing/track days'},
+// Scaling factors: multiply city (baseline) thresholds by these for other modes
+// Based on physics: track pushes vehicle harder, highway is gentle lane changes
+const PROFILE_SCALES={
+track:{acc:2.5,brake:2.0,lat:3.0,yaw:2.5,min_speed:5.0,desc:'Racing/track days'},
+canyon:{acc:1.5,brake:1.5,lat:1.8,yaw:1.6,min_speed:3.0,desc:'Spirited mountain roads'},
+city:{acc:1.0,brake:1.0,lat:1.0,yaw:1.0,min_speed:2.0,desc:'Daily street driving'},
+highway:{acc:0.8,brake:0.7,lat:0.6,yaw:0.6,min_speed:12.0,desc:'Highway cruising'}
+};
+
+// Default presets (used when no calibration exists)
+const DEFAULT_PRESETS={
+track:{acc:0.35,acc_exit:0.17,brake:0.55,brake_exit:0.27,lat:0.50,lat_exit:0.25,yaw:0.15,min_speed:5.0,desc:'Racing/track days'},
 canyon:{acc:0.22,acc_exit:0.11,brake:0.35,brake_exit:0.17,lat:0.28,lat_exit:0.14,yaw:0.10,min_speed:3.0,desc:'Spirited mountain roads'},
 city:{acc:0.10,acc_exit:0.05,brake:0.18,brake_exit:0.09,lat:0.12,lat_exit:0.06,yaw:0.05,min_speed:2.0,desc:'Daily street driving'},
-highway:{acc:0.12,acc_exit:0.06,brake:0.22,brake_exit:0.11,lat:0.14,lat_exit:0.07,yaw:0.04,min_speed:5.0,desc:'Highway cruising'}
+highway:{acc:0.12,acc_exit:0.06,brake:0.22,brake_exit:0.11,lat:0.14,lat_exit:0.07,yaw:0.04,min_speed:12.0,desc:'Highway cruising'}
 };
+
+// Generate all profiles from city baseline thresholds
+function generateAllProfiles(cityBase){
+const profiles={};
+for(const[mode,scale]of Object.entries(PROFILE_SCALES)){
+profiles[mode]={
+acc:Math.max(0.05,cityBase.acc*scale.acc),
+acc_exit:Math.max(0.02,cityBase.acc_exit*scale.acc),
+brake:Math.max(0.08,cityBase.brake*scale.brake),
+brake_exit:Math.max(0.04,cityBase.brake_exit*scale.brake),
+lat:Math.max(0.05,cityBase.lat*scale.lat),
+lat_exit:Math.max(0.02,cityBase.lat_exit*scale.lat),
+yaw:Math.max(0.02,cityBase.yaw*scale.yaw),
+min_speed:scale.min_speed,
+desc:scale.desc
+};
+}
+return profiles;
+}
+
+// Get presets - prefer calibrated profiles, fall back to defaults
+function getPresets(){
+const calib=localStorage.getItem('bb_profiles');
+if(calib){
+try{return JSON.parse(calib).profiles}catch(e){}
+}
+return DEFAULT_PRESETS;
+}
+const PRESETS=getPresets();
 
 function fmtTime(ms){const s=Math.floor(ms/1000),m=Math.floor(s/60);return String(m).padStart(2,'0')+':'+String(s%60).padStart(2,'0')}
 
@@ -501,6 +535,18 @@ $('s-yaw').value=p.yaw;$('v-yaw').textContent=p.yaw.toFixed(3);
 $('s-minspd').value=p.min_speed;$('v-minspd').textContent=p.min_speed.toFixed(1);
 }
 
+// Get most recent autotune profile from localStorage
+function getCalibrationData(){
+try{
+const data=JSON.parse(localStorage.getItem('bb_profiles')||'null');
+return data;
+}catch(e){return null}
+}
+function isCalibrated(){
+const data=getCalibrationData();
+return data&&data.profiles;
+}
+
 // Select preset and apply
 function selectPreset(name){
 currentPreset=name;
@@ -518,6 +564,14 @@ const p=PRESETS[name];
 updateSummary(p);
 applyPresetToSliders(p);
 sendSettings(p);
+}else if(isCustom){
+// For custom, try to load from autotune profile
+const at=getAutotuneProfile();
+if(at){
+const p={acc:at.acc,acc_exit:at.acc_exit,brake:at.brake,brake_exit:at.brake_exit,lat:at.lat,lat_exit:at.lat_exit,yaw:at.yaw,min_speed:at.min_speed};
+applyPresetToSliders(p);
+sendSettings(p);
+}
 }
 }
 
@@ -573,6 +627,21 @@ for(const[name,p]of Object.entries(PRESETS)){
 if(Math.abs(s.acc-p.acc)<0.01&&Math.abs(s.lat-p.lat)<0.01&&Math.abs(s.min_speed-p.min_speed)<0.1){
 matched=name;break;
 }
+}
+// Update preset buttons to show calibration status
+const calib=getCalibrationData();
+document.querySelectorAll('.preset-btn:not(.custom)').forEach(btn=>{
+const name=btn.dataset.preset;
+if(calib&&calib.profiles){
+// Show calibrated indicator
+btn.innerHTML=name.charAt(0).toUpperCase()+name.slice(1)+' <span style="color:#22c55e;font-size:8px">●</span>';
+btn.title='Calibrated '+new Date(calib.date).toLocaleDateString();
+}
+});
+// Update custom button
+const customBtn=document.querySelector('.preset-btn.custom');
+if(customBtn){
+customBtn.textContent='Custom';
 }
 currentPreset=matched;
 // Update UI
@@ -716,6 +785,952 @@ update();
 </script>
 </body></html>"#;
 
+/// Auto-tune page for calibration assistance
+/// Uses EVENT DETECTION with full physics validation including:
+/// - GPS heading vs gyro yaw rate
+/// - Centripetal acceleration check (a_lat = v × ω)
+/// - Impulse validation (ΔV = G × t)
+/// - Event duration tracking
+/// - Report export and localStorage save
+const AUTOTUNE_HTML: &str = r#"<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes"><title>Blackbox AutoTune</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0f;color:#f0f0f0;min-height:100vh;display:flex;flex-direction:column}
+.hdr{background:#111;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #222}
+.logo{font-weight:700;font-size:14px;letter-spacing:2px}
+.back{color:#60a5fa;text-decoration:none;font-size:12px}
+.main{flex:1;padding:12px;display:flex;flex-direction:column;gap:10px;overflow-y:auto}
+.card{background:#111;border-radius:10px;padding:14px;border:1px solid #1a1a24}
+.card-title{font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
+.scenario-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.scenario{background:#0a0a0f;border:2px solid #1a1a24;border-radius:10px;padding:12px;cursor:pointer;transition:all .2s}
+.scenario.active{border-color:#3b82f6;background:linear-gradient(135deg,#0f1a2e,#0a0a0f)}
+.scenario:active{transform:scale(0.98)}
+.scenario-icon{font-size:24px;margin-bottom:6px}
+.scenario-name{font-size:12px;font-weight:600;color:#f0f0f0}
+.scenario-desc{font-size:9px;color:#555;margin-top:4px;line-height:1.3}
+.scenario-time{font-size:8px;color:#3b82f6;margin-top:6px}
+.instructions{background:#0f1a2e;border:1px solid #1e3a5f;border-radius:8px;padding:12px;margin-top:10px}
+.instructions-title{font-size:10px;color:#60a5fa;font-weight:600;margin-bottom:8px}
+.instructions-text{font-size:11px;color:#888;line-height:1.5}
+.instructions-text li{margin-bottom:4px}
+.status-bar{display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-top:10px}
+.status{display:flex;align-items:center;gap:6px}
+.dot{width:8px;height:8px;border-radius:50%;background:#444}
+.dot.on{background:#22c55e}
+.dot.rec{background:#ef4444;animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.4}}
+.events{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+.event{background:#0a0a0f;border-radius:6px;padding:10px;text-align:center;border:1px solid #1a1a24}
+.event-count{font-size:24px;font-weight:700;color:#60a5fa;font-variant-numeric:tabular-nums}
+.event-peak{font-size:10px;color:#22c55e;margin-top:2px}
+.event-lbl{font-size:9px;color:#555;text-transform:uppercase;margin-top:4px}
+.event.needs-more .event-count{color:#f59e0b}
+.event.complete .event-count{color:#22c55e}
+.live-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px}
+.live{background:#0a0a0f;border-radius:6px;padding:8px;text-align:center;border:1px solid #1a1a24}
+.live-val{font-size:14px;font-weight:600;font-variant-numeric:tabular-nums}
+.live-lbl{font-size:8px;color:#555;text-transform:uppercase}
+.live.active-accel{border-color:#22c55e}.live.active-accel .live-val{color:#22c55e}
+.live.active-brake{border-color:#ef4444}.live.active-brake .live-val{color:#ef4444}
+.live.active-turn{border-color:#3b82f6}.live.active-turn .live-val{color:#3b82f6}
+.progress-bar{width:100%;height:6px;background:#1a1a24;border-radius:3px;margin-top:10px;overflow:hidden}
+.progress-fill{height:100%;background:linear-gradient(90deg,#3b82f6,#22c55e);border-radius:3px;transition:width 0.3s}
+.progress-text{font-size:10px;color:#666;margin-top:6px;text-align:center}
+.progress-text.excellent{color:#22c55e}
+.progress-text.good{color:#60a5fa}
+.confidence-badge{display:inline-block;font-size:9px;padding:2px 8px;border-radius:10px;margin-left:6px}
+.confidence-badge.low{background:#2a1a1a;color:#f87171}
+.confidence-badge.med{background:#2a2a1a;color:#fbbf24}
+.confidence-badge.high{background:#1a2a1a;color:#22c55e}
+.results{margin-top:10px}
+.result-row{display:flex;justify-content:space-between;align-items:center;padding:10px;background:#0a0a0f;border-radius:6px;margin-bottom:6px;border:1px solid #1a1a24}
+.result-name{font-size:11px;color:#888}
+.result-vals{display:flex;align-items:center;gap:6px;font-size:12px}
+.result-current{color:#555}
+.result-arrow{color:#444}
+.result-new{color:#22c55e;font-weight:600}
+.result-method{font-size:8px;color:#3b82f6;background:#0f1a2e;padding:2px 6px;border-radius:3px}
+.btns{display:flex;gap:8px;margin-top:12px}
+.btn{flex:1;padding:14px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer}
+.btn-start{background:#1e3a5f;color:#60a5fa}
+.btn-start.recording{background:#5f1e1e;color:#f87171}
+.btn-apply{background:#1a1a24;color:#555}
+.btn-apply.ready{background:linear-gradient(135deg,#1e3a5f,#1a2d4a);color:#60a5fa}
+.btn-sm{font-size:10px;padding:6px 10px;border-radius:4px;background:#1a1a24;color:#60a5fa;border:none;cursor:pointer}
+.btn:active,.btn-sm:active{opacity:.8}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.report{margin-top:10px;padding:10px;background:#0a0a0f;border-radius:6px;font-size:9px;color:#888;max-height:200px;overflow-y:auto;white-space:pre-wrap;font-family:monospace;line-height:1.4}
+.validation{margin-top:10px}
+.val-section{font-size:9px;color:#555;text-transform:uppercase;margin:8px 0 4px;letter-spacing:1px}
+.val-row{display:flex;justify-content:space-between;align-items:center;padding:6px 8px;background:#0a0a0f;border-radius:4px;margin-bottom:4px;font-size:11px}
+.val-check{color:#22c55e}.val-warn{color:#f59e0b}.val-fail{color:#ef4444}
+.baseline-row{display:flex;justify-content:space-between;background:#0a0a0f;border-radius:6px;padding:8px 12px;margin-top:8px;font-size:11px}
+.baseline-row span:nth-child(odd){color:#666}
+.baseline-row span:nth-child(even){color:#22c55e;font-weight:600}
+.profile-table{width:100%;border-collapse:collapse;margin-top:8px;font-size:10px}
+.profile-table th{background:#1a1a24;color:#888;padding:6px 4px;text-align:center;font-weight:500}
+.profile-table td{padding:6px 4px;text-align:center;border-bottom:1px solid #1a1a24}
+.profile-table tr:hover{background:#0f0f14}
+.profile-table .mode-name{text-align:left;color:#60a5fa;font-weight:600}
+.profile-table .mode-city{background:#0a1a0a}
+.profile-table .mode-city .mode-name{color:#22c55e}
+.profile-note{font-size:9px;color:#555;text-align:center;margin-top:8px}
+</style></head>
+<body>
+<div class="hdr"><a href="/" class="back">← Dashboard</a><div class="logo">AUTOTUNE</div></div>
+<div class="main">
+
+<div class="card" id="scenario-card">
+<div class="card-title">Select Calibration Scenario</div>
+<div class="scenario-grid">
+<div class="scenario active" data-scenario="guided">
+<div class="scenario-icon">🎯</div>
+<div class="scenario-name">Guided</div>
+<div class="scenario-desc">Best accuracy. Perform specific maneuvers when prompted.</div>
+<div class="scenario-time">~3 min</div>
+</div>
+<div class="scenario" data-scenario="city">
+<div class="scenario-icon">🏙️</div>
+<div class="scenario-name">City Loop</div>
+<div class="scenario-desc">Drive around the block 5-10 times. Stop signs, turns, traffic.</div>
+<div class="scenario-time">~5 min</div>
+</div>
+<div class="scenario" data-scenario="highway">
+<div class="scenario-icon">🛣️</div>
+<div class="scenario-name">Highway</div>
+<div class="scenario-desc">Highway driving with lane changes and on/off ramps.</div>
+<div class="scenario-time">~5 min</div>
+</div>
+<div class="scenario" data-scenario="parking">
+<div class="scenario-icon">🅿️</div>
+<div class="scenario-name">Parking Lot</div>
+<div class="scenario-desc">Empty lot. Hard stops, tight turns, figure-8s for max G.</div>
+<div class="scenario-time">~2 min</div>
+</div>
+</div>
+<div class="instructions" id="instructions">
+<div class="instructions-title">📋 Guided Calibration Instructions</div>
+<div class="instructions-text" id="instructions-text">
+<ol>
+<li>Find a safe, quiet road or empty parking lot</li>
+<li>Press Start - events are auto-detected as you drive</li>
+<li><b>Accelerate</b> firmly 5+ times (from stops or slow speed)</li>
+<li><b>Brake</b> normally 5+ times (to stops or slow down)</li>
+<li><b>Turn</b> at intersections or make 10+ turns in a lot</li>
+<li>Drive as you <i>normally</i> would - don't overdo it!</li>
+</ol>
+</div>
+</div>
+</div>
+
+<div class="card">
+<div class="card-title">Event Detection<span id="time" style="font-size:12px;color:#60a5fa">0:00</span></div>
+<div class="status-bar">
+<div class="status"><span class="dot" id="dot"></span><span id="stxt">Ready</span></div>
+<span id="gps-status" style="font-size:10px;color:#555">GPS: --</span>
+</div>
+<div class="events">
+<div class="event" id="ev-accel"><div class="event-count" id="ev-accel-n">0</div><div class="event-peak" id="ev-accel-peak">peak --</div><div class="event-lbl">Accels</div></div>
+<div class="event" id="ev-brake"><div class="event-count" id="ev-brake-n">0</div><div class="event-peak" id="ev-brake-peak">peak --</div><div class="event-lbl">Brakes</div></div>
+<div class="event" id="ev-turn"><div class="event-count" id="ev-turn-n">0</div><div class="event-peak" id="ev-turn-peak">peak --</div><div class="event-lbl">Turns</div></div>
+</div>
+<div class="live-bar">
+<div class="live" id="live-lon"><div class="live-val" id="lv-lon">0.00</div><div class="live-lbl">Lon G</div></div>
+<div class="live" id="live-lat"><div class="live-val" id="lv-lat">0.00</div><div class="live-lbl">Lat G</div></div>
+<div class="live" id="live-cent"><div class="live-val" id="lv-cent">0.00</div><div class="live-lbl">v×ω G</div></div>
+<div class="live" id="live-spd"><div class="live-val" id="lv-spd">0</div><div class="live-lbl">km/h</div></div>
+</div>
+<div class="progress-bar"><div class="progress-fill" id="progress" style="width:0%"></div></div>
+<div class="progress-text" id="progress-text">Drive to collect events</div>
+</div>
+
+<div class="card" id="results-card" style="display:none">
+<div class="card-title">Learned Baseline (City)</div>
+<div class="baseline-row"><span>Accel</span><span id="base-acc">--</span><span>Brake</span><span id="base-brake">--</span><span>Lateral</span><span id="base-lat">--</span><span>Yaw</span><span id="base-yaw">--</span></div>
+<div class="card-title" style="margin-top:12px">Generated Profiles (from your vehicle)</div>
+<table class="profile-table">
+<thead><tr><th>Mode</th><th>Accel</th><th>Brake</th><th>Lateral</th><th>Yaw</th><th>MinSpd</th></tr></thead>
+<tbody id="profile-tbody"></tbody>
+</table>
+<div class="profile-note">All profiles scaled from YOUR driving data. Select mode on Dashboard.</div>
+</div>
+
+<div class="card" id="val-card" style="display:none">
+<div class="card-title">Physics Validation</div>
+<div class="validation">
+<div class="val-section">Speed & Position</div>
+<div class="val-row"><span>GPS vs Sensor Speed</span><span id="val-spd" class="val-warn">--</span></div>
+<div class="val-row"><span>GPS Acceleration Match</span><span id="val-gpsacc" class="val-warn">--</span></div>
+<div class="val-section">Event Physics</div>
+<div class="val-row"><span>Accel → Speed Increase</span><span id="val-acc" class="val-warn">--</span></div>
+<div class="val-row"><span>Brake → Speed Decrease</span><span id="val-brake" class="val-warn">--</span></div>
+<div class="val-row"><span>Impulse Accuracy (ΔV=G×t)</span><span id="val-impulse" class="val-warn">--</span></div>
+<div class="val-section">Turn Physics</div>
+<div class="val-row"><span>Centripetal (a=v×ω)</span><span id="val-cent" class="val-warn">--</span></div>
+<div class="val-row"><span>GPS Heading vs Gyro</span><span id="val-heading" class="val-warn">--</span></div>
+</div>
+</div>
+
+<div class="btns">
+<button class="btn btn-start" id="btn-start">Start Calibration</button>
+<button class="btn btn-apply" id="btn-apply" disabled>Apply Settings</button>
+</div>
+
+<div class="card" id="report-card" style="display:none">
+<div class="card-title">Analysis Report<button class="btn-sm" id="btn-export">Export</button></div>
+<div class="report" id="report"></div>
+</div>
+</div>
+
+<script>
+const M={0:'IDLE',1:'ACCEL',2:'BRAKE',4:'CORNER',5:'A+C',6:'B+C'};
+const $=id=>document.getElementById(id);
+const G=9.80665;
+
+// Noise floor and event parameters
+const NOISE_FLOOR=0.04; // 0.04g - slightly higher for robustness
+const EVENT_MIN_DURATION=200; // ms - must sustain for 200ms
+const EVENT_COOLDOWN=400; // ms - between events
+const MIN_SPEED_KMH=7.2; // Must match mode.rs min_speed (2.0 m/s = 7.2 km/h)
+const EMA_ALPHA=0.35; // Must match mode.rs EMA alpha for accurate simulation
+
+// State
+let scenario='guided';
+let recording=false;
+let startTime=0;
+let lastSeq=0;
+let hasGpsLock=false; // Track GPS status for calibration requirement
+
+// Telemetry state
+let prevVx=0,prevVy=0,prevTs=0;
+let prevLat=0,prevLon=0,prevGpsTs=0;
+let prevGpsSpd=0,prevGpsSpdTs=0;
+let prevGpsHeading=null;
+
+// EMA for display
+let emaLonG=0,emaLatG=0;
+
+// EMA state matching mode.rs (for accurate threshold simulation)
+let emaLonSim=0,emaLatSim=0,emaYawSim=0;
+
+// Event detection
+let accelEv={on:false,t0:0,peak:0,spd0:0,integral:0};
+let brakeEv={on:false,t0:0,peak:0,spd0:0,integral:0};
+let turnEv={on:false,t0:0,peakLat:0,peakYaw:0,centSum:0,latSum:0,n:0};
+let lastEvEnd=0;
+
+// Collected events with full data
+let accelEvents=[];  // {peak, duration, speedChange, impulse, expectedDV}
+let brakeEvents=[];
+let turnEvents=[];   // {peakLat, peakYaw, avgCent, avgLat}
+
+// Validation data
+let gpsSpeedErrors=[];
+let gpsAccelCorr=[];  // correlation between GPS accel and velocity accel
+let centCorr=[];      // lat_g vs v*omega correlation
+let headingVsGyro=[]; // GPS heading rate vs gyro wz
+
+// Scenario instructions
+const INSTRUCTIONS={
+guided:`<ol>
+<li>Find a safe road or empty parking lot</li>
+<li><b>Calibrate on level ground</b> - inclines affect accuracy!</li>
+<li>Press Start - events auto-detect as you drive</li>
+<li><b>Accelerate</b> firmly 5+ times from slow/stop</li>
+<li><b>Brake</b> normally 5+ times to slow/stop</li>
+<li><b>Turn</b> 10+ times at normal driving speed</li>
+<li>Drive as you <i>normally</i> would!</li>
+</ol>`,
+city:`<ol>
+<li>Drive around the block or a few city blocks</li>
+<li>Include: stop signs, traffic lights, turns</li>
+<li>5-10 loops captures enough events</li>
+<li>Normal city driving - no need to rush</li>
+</ol>`,
+highway:`<ol>
+<li>Merge onto highway, cruise at speed</li>
+<li>Make 3-5 lane changes</li>
+<li>Use on/off ramps for accel/brake</li>
+<li>One exit-and-re-enter cycle works</li>
+</ol>`,
+parking:`<ol>
+<li>Empty <b>flat</b> parking lot is ideal</li>
+<li>Start/stop on level ground (not inclines!)</li>
+<li>5 firm accelerations from stop</li>
+<li>5 firm (safe) braking stops</li>
+<li>Figure-8s or circles for turn data</li>
+<li>Cleanest calibration data!</li>
+</ol>`
+};
+
+function selectScenario(s){
+    scenario=s;
+    document.querySelectorAll('.scenario').forEach(el=>el.classList.toggle('active',el.dataset.scenario===s));
+    $('instructions-text').innerHTML=INSTRUCTIONS[s];
+}
+
+function parsePacket(buf){
+    const d=new DataView(buf);
+    return{
+        ts:d.getUint32(3,true),
+        ax:d.getFloat32(7,true),  // Raw IMU accel (m/s²)
+        ay:d.getFloat32(11,true),
+        vx:d.getFloat32(43,true),
+        vy:d.getFloat32(47,true),
+        speed:d.getFloat32(51,true),
+        wz:d.getFloat32(19,true),
+        yaw:d.getFloat32(31,true), // EKF yaw for body→vehicle transform
+        mode:d.getUint8(55),
+        lat:d.getFloat32(56,true),
+        lon:d.getFloat32(60,true),
+        gpsOk:d.getUint8(64)
+    };
+}
+
+// Velocity-derived acceleration (for physics validation - what vehicle actually experienced)
+function computeAccelVelocity(vx,vy,ts){
+    if(prevTs===0){prevVx=vx;prevVy=vy;prevTs=ts;return{lonG:0,latG:0,dt:0}}
+    const dt=(ts-prevTs)/1000;
+    if(dt<=0||dt>0.25){prevVx=vx;prevVy=vy;prevTs=ts;return{lonG:0,latG:0,dt:0}}
+    const dvx=(vx-prevVx)/dt,dvy=(vy-prevVy)/dt;
+    const spd=Math.sqrt(vx*vx+vy*vy);
+    let lonG=0,latG=0;
+    if(spd>0.5){
+        lonG=(dvx*vx+dvy*vy)/(spd*G);
+        latG=(-dvx*vy+dvy*vx)/(spd*G);
+    }
+    prevVx=vx;prevVy=vy;prevTs=ts;
+    return{lonG,latG,dt};
+}
+
+// IMU-based acceleration matching mode.rs (earth_to_car transformation)
+// This is what mode classifier actually sees - use for threshold calibration
+function earthToCar(ax,ay,yaw){
+    // Matches mode.rs earth_to_car: rotate earth-frame accel by -yaw to get vehicle frame
+    const c=Math.cos(yaw),s=Math.sin(yaw);
+    const lonG=(ax*c+ay*s)/G;  // Forward in vehicle frame
+    const latG=(-ax*s+ay*c)/G; // Left in vehicle frame
+    return{lonG,latG};
+}
+
+// GPS-derived values with heading
+function computeGps(lat,lon,ts,spd,gpsOk){
+    if(!gpsOk||prevLat===0){prevLat=lat;prevLon=lon;prevGpsTs=ts;prevGpsSpd=spd;prevGpsSpdTs=ts;return null}
+    const dt=(ts-prevGpsTs)/1000;
+    if(dt<0.15||dt>2){prevLat=lat;prevLon=lon;prevGpsTs=ts;return null}
+
+    // Distance via haversine
+    const R=6371000;
+    const dLat=(lat-prevLat)*Math.PI/180,dLon=(lon-prevLon)*Math.PI/180;
+    const a=Math.sin(dLat/2)**2+Math.cos(prevLat*Math.PI/180)*Math.cos(lat*Math.PI/180)*Math.sin(dLon/2)**2;
+    const dist=R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+    const gpsSpd=(dist/dt)*3.6;
+
+    // GPS heading from position change
+    let heading=null,headingRate=null;
+    if(dist>0.5){// Only if moved >0.5m
+        const y=Math.sin(dLon)*Math.cos(lat*Math.PI/180);
+        const x=Math.cos(prevLat*Math.PI/180)*Math.sin(lat*Math.PI/180)-Math.sin(prevLat*Math.PI/180)*Math.cos(lat*Math.PI/180)*Math.cos(dLon);
+        heading=Math.atan2(y,x);
+        if(prevGpsHeading!==null){
+            let dh=heading-prevGpsHeading;
+            if(dh>Math.PI)dh-=2*Math.PI;
+            if(dh<-Math.PI)dh+=2*Math.PI;
+            headingRate=dh/dt;
+        }
+        prevGpsHeading=heading;
+    }
+
+    // GPS-based acceleration
+    let gpsAcc=null;
+    const dtSpd=(ts-prevGpsSpdTs)/1000;
+    if(dtSpd>0.1&&dtSpd<2){
+        gpsAcc=((spd-prevGpsSpd)/3.6)/dtSpd/G; // km/h → m/s → g
+    }
+    prevGpsSpd=spd;prevGpsSpdTs=ts;
+
+    prevLat=lat;prevLon=lon;prevGpsTs=ts;
+    return{gpsSpd,heading,headingRate,gpsAcc};
+}
+
+function process(p){
+    // Velocity-derived accel (for physics validation)
+    const accVel=computeAccelVelocity(p.vx,p.vy,p.ts);
+
+    // IMU-based accel matching mode.rs (for threshold calibration)
+    const accImu=earthToCar(p.ax,p.ay,p.yaw);
+
+    const gps=computeGps(p.lat,p.lon,p.ts,p.speed,p.gpsOk);
+    const now=Date.now();
+    const spdMs=p.speed/3.6;
+
+    // Update EMA simulation matching mode.rs (alpha=0.35)
+    emaLonSim=(1-EMA_ALPHA)*emaLonSim+EMA_ALPHA*accImu.lonG;
+    emaLatSim=(1-EMA_ALPHA)*emaLatSim+EMA_ALPHA*accImu.latG;
+    emaYawSim=(1-EMA_ALPHA)*emaYawSim+EMA_ALPHA*p.wz;
+
+    // Centripetal: theoretical lateral acceleration = v × ω
+    const centG=(spdMs*Math.abs(p.wz))/G;
+
+    // Raw IMU in g's (earth frame, gravity-compensated) - for desk testing
+    const rawLonG=p.ax/G, rawLatG=p.ay/G;
+
+    // Use IMU-based when moving, raw when stationary (for display)
+    const isMoving=spdMs>0.5;
+    const displayLonG=isMoving?accImu.lonG:rawLonG;
+    const displayLatG=isMoving?accImu.latG:rawLatG;
+
+    // EMA for display
+    emaLonG=0.2*displayLonG+0.8*emaLonG;
+    emaLatG=0.2*displayLatG+0.8*emaLatG;
+
+    // Track GPS lock status
+    hasGpsLock=p.gpsOk===1;
+
+    // Live display
+    $('lv-lon').textContent=emaLonG.toFixed(2);
+    $('lv-lat').textContent=emaLatG.toFixed(2);
+    $('lv-cent').textContent=centG.toFixed(2);
+    $('lv-spd').textContent=Math.round(p.speed);
+    $('gps-status').textContent=p.gpsOk?'GPS: '+p.lat.toFixed(4)+','+p.lon.toFixed(4):(isMoving?'GPS: No Fix':'IMU RAW');
+    $('gps-status').style.color=p.gpsOk?'#22c55e':isMoving?'#555':'#f59e0b';
+
+    // Highlight active - use EMA-simulated values (what mode.rs sees)
+    $('live-lon').className='live'+(emaLonSim>NOISE_FLOOR?' active-accel':emaLonSim<-NOISE_FLOOR?' active-brake':'');
+    $('live-lat').className='live'+(Math.abs(emaLatSim)>NOISE_FLOOR?' active-turn':'');
+    $('live-cent').className='live'+(centG>NOISE_FLOOR?' active-turn':'');
+
+    if(!recording)return;
+
+    // === VALIDATION DATA COLLECTION (use velocity-derived for physics accuracy) ===
+
+    // GPS speed error
+    if(gps&&p.speed>5){
+        gpsSpeedErrors.push(Math.abs(gps.gpsSpd-p.speed));
+    }
+
+    // GPS acceleration correlation (velocity-derived vs GPS-derived)
+    if(gps&&gps.gpsAcc!==null&&Math.abs(accVel.lonG)>0.02){
+        gpsAccelCorr.push({gps:gps.gpsAcc,vel:accVel.lonG});
+    }
+
+    // Centripetal correlation (velocity-derived lat vs v×ω)
+    if(p.speed>10&&Math.abs(accVel.latG)>0.02){
+        centCorr.push({measured:Math.abs(accVel.latG),theory:centG});
+    }
+
+    // Heading vs gyro
+    if(gps&&gps.headingRate!==null&&p.speed>10){
+        headingVsGyro.push({gps:gps.headingRate,gyro:p.wz});
+    }
+
+    // === EVENT DETECTION (use EMA-simulated values matching mode.rs) ===
+    // This captures what the mode classifier actually sees after filtering
+
+    // ACCELERATION - use EMA values, speed threshold matches mode.rs
+    if(emaLonSim>NOISE_FLOOR&&p.speed>MIN_SPEED_KMH){
+        if(!accelEv.on&&now-lastEvEnd>EVENT_COOLDOWN){
+            accelEv={on:true,t0:now,peak:emaLonSim,spd0:p.speed,integral:emaLonSim*accVel.dt};
+        }else if(accelEv.on){
+            accelEv.peak=Math.max(accelEv.peak,emaLonSim);
+            accelEv.integral+=emaLonSim*accVel.dt;
+        }
+    }else if(accelEv.on){
+        const dur=now-accelEv.t0;
+        if(dur>EVENT_MIN_DURATION){
+            const dv=p.speed-accelEv.spd0;
+            const expectedDV=accelEv.integral*G*3.6; // g→km/h
+            accelEvents.push({peak:accelEv.peak,dur,dv,expectedDV,impulse:accelEv.integral});
+            updateEvents();
+        }
+        accelEv.on=false;lastEvEnd=now;
+    }
+
+    // BRAKING - use EMA values
+    if(emaLonSim<-NOISE_FLOOR&&p.speed>MIN_SPEED_KMH){
+        if(!brakeEv.on&&now-lastEvEnd>EVENT_COOLDOWN){
+            brakeEv={on:true,t0:now,peak:Math.abs(emaLonSim),spd0:p.speed,integral:Math.abs(emaLonSim)*accVel.dt};
+        }else if(brakeEv.on){
+            brakeEv.peak=Math.max(brakeEv.peak,Math.abs(emaLonSim));
+            brakeEv.integral+=Math.abs(emaLonSim)*accVel.dt;
+        }
+    }else if(brakeEv.on){
+        const dur=now-brakeEv.t0;
+        if(dur>EVENT_MIN_DURATION){
+            const dv=p.speed-brakeEv.spd0;
+            const expectedDV=-brakeEv.integral*G*3.6;
+            brakeEvents.push({peak:brakeEv.peak,dur,dv,expectedDV,impulse:brakeEv.integral});
+            updateEvents();
+        }
+        brakeEv.on=false;lastEvEnd=now;
+    }
+
+    // TURN - use EMA values with sign consistency check (matching mode.rs)
+    // mode.rs requires: lat_ema * yaw_ema > 0 (same sign = consistent turn)
+    const latEmaAbs=Math.abs(emaLatSim),yawEmaAbs=Math.abs(emaYawSim);
+    const signConsistent=(emaLatSim*emaYawSim)>0; // Both same sign = real turn
+    if(latEmaAbs>NOISE_FLOOR&&yawEmaAbs>0.02&&p.speed>MIN_SPEED_KMH&&signConsistent){
+        if(!turnEv.on&&now-lastEvEnd>EVENT_COOLDOWN){
+            turnEv={on:true,t0:now,peakLat:latEmaAbs,peakYaw:yawEmaAbs,centSum:centG,latSum:latEmaAbs,n:1};
+        }else if(turnEv.on){
+            turnEv.peakLat=Math.max(turnEv.peakLat,latEmaAbs);
+            turnEv.peakYaw=Math.max(turnEv.peakYaw,yawEmaAbs);
+            turnEv.centSum+=centG;turnEv.latSum+=latEmaAbs;turnEv.n++;
+        }
+    }else if(turnEv.on){
+        const dur=now-turnEv.t0;
+        if(dur>EVENT_MIN_DURATION){
+            turnEvents.push({
+                peakLat:turnEv.peakLat,peakYaw:turnEv.peakYaw,
+                avgCent:turnEv.centSum/turnEv.n,avgLat:turnEv.latSum/turnEv.n,dur
+            });
+            updateEvents();
+        }
+        turnEv.on=false;lastEvEnd=now;
+    }
+
+    // Progress & Confidence
+    // Base: 5 accel, 5 brake, 10 turns = 100%
+    // Excellent: 15+ accel, 15+ brake, 25+ turns = high confidence
+    const rawPct=((accelEvents.length/5+brakeEvents.length/5+turnEvents.length/10)/3)*100;
+    const displayPct=Math.min(100,rawPct);
+    $('progress').style.width=displayPct+'%';
+
+    // Confidence: based on minimum event count (weakest link)
+    const minEvents=Math.min(accelEvents.length,brakeEvents.length,turnEvents.length/2);
+    const ptxt=$('progress-text');
+    if(minEvents<3){
+        ptxt.textContent='Drive to collect events';
+        ptxt.className='progress-text';
+    }else if(minEvents<8){
+        ptxt.textContent='Good - keep driving for better accuracy';
+        ptxt.className='progress-text good';
+    }else if(minEvents<15){
+        ptxt.textContent='Great data! More driving still helps';
+        ptxt.className='progress-text good';
+    }else{
+        ptxt.textContent='Excellent! High confidence thresholds';
+        ptxt.className='progress-text excellent';
+    }
+
+    if(accelEvents.length>=3&&brakeEvents.length>=3&&turnEvents.length>=5)computeSuggestions();
+}
+
+function updateEvents(){
+    $('ev-accel-n').textContent=accelEvents.length;
+    $('ev-brake-n').textContent=brakeEvents.length;
+    $('ev-turn-n').textContent=turnEvents.length;
+    if(accelEvents.length)$('ev-accel-peak').textContent='peak '+Math.max(...accelEvents.map(e=>e.peak)).toFixed(2)+'g';
+    if(brakeEvents.length)$('ev-brake-peak').textContent='peak '+Math.max(...brakeEvents.map(e=>e.peak)).toFixed(2)+'g';
+    if(turnEvents.length)$('ev-turn-peak').textContent='peak '+Math.max(...turnEvents.map(e=>e.peakLat)).toFixed(2)+'g';
+    $('ev-accel').className='event'+(accelEvents.length>=5?' complete':accelEvents.length>=2?' needs-more':'');
+    $('ev-brake').className='event'+(brakeEvents.length>=5?' complete':brakeEvents.length>=2?' needs-more':'');
+    $('ev-turn').className='event'+(turnEvents.length>=10?' complete':turnEvents.length>=4?' needs-more':'');
+}
+
+function percentile(arr,p){
+    if(!arr.length)return 0;
+    const s=[...arr].sort((a,b)=>a-b);
+    return s[Math.min(Math.floor(s.length*p/100),s.length-1)];
+}
+
+function median(arr){return percentile(arr,50)}
+
+function confBadge(n,min,good,high){
+    if(n>=high)return'<span class="confidence-badge high">n='+n+'</span>';
+    if(n>=good)return'<span class="confidence-badge med">n='+n+'</span>';
+    if(n>=min)return'<span class="confidence-badge low">n='+n+'</span>';
+    return'';
+}
+
+// Global storage for generated profiles
+let generatedProfiles=null;
+let cityBaseline=null;
+
+function computeSuggestions(){
+    $('results-card').style.display='block';
+    $('val-card').style.display='block';
+
+    // Compute city baseline from collected events
+    // Use MEDIAN (P50) × 0.7 for entry threshold
+    cityBaseline={acc:0.10,acc_exit:0.05,brake:0.18,brake_exit:0.09,lat:0.12,lat_exit:0.06,yaw:0.05,min_speed:2.0};
+
+    if(accelEvents.length>=3){
+        const peaks=accelEvents.map(e=>e.peak);
+        const p50=median(peaks);
+        cityBaseline.acc=Math.max(0.05,p50*0.7);
+        cityBaseline.acc_exit=Math.max(0.02,cityBaseline.acc*0.5);
+    }
+
+    if(brakeEvents.length>=3){
+        const peaks=brakeEvents.map(e=>e.peak);
+        const p50=median(peaks);
+        cityBaseline.brake=Math.max(0.08,p50*0.7);
+        cityBaseline.brake_exit=Math.max(0.04,cityBaseline.brake*0.5);
+    }
+
+    if(turnEvents.length>=5){
+        const latPeaks=turnEvents.map(e=>e.peakLat);
+        const latP50=median(latPeaks);
+        cityBaseline.lat=Math.max(0.05,latP50*0.7);
+        cityBaseline.lat_exit=Math.max(0.02,cityBaseline.lat*0.5);
+
+        const yawPeaks=turnEvents.map(e=>e.peakYaw);
+        const yawP50=median(yawPeaks);
+        cityBaseline.yaw=Math.max(0.02,yawP50*0.7);
+    }
+
+    // Display baseline values
+    $('base-acc').textContent=cityBaseline.acc.toFixed(2)+'g'+confBadge(accelEvents.length,3,8,15);
+    $('base-brake').textContent=cityBaseline.brake.toFixed(2)+'g'+confBadge(brakeEvents.length,3,8,15);
+    $('base-lat').textContent=cityBaseline.lat.toFixed(2)+'g'+confBadge(turnEvents.length,5,12,20);
+    $('base-yaw').textContent=(cityBaseline.yaw*57.3).toFixed(1)+'°/s';
+
+    // Generate all 4 profiles from city baseline
+    generatedProfiles=generateAllProfiles(cityBaseline);
+
+    // Build profile table
+    const tbody=$('profile-tbody');
+    tbody.innerHTML='';
+    const modeOrder=['track','canyon','city','highway'];
+    const modeLabels={track:'🏁 Track',canyon:'🏔️ Canyon',city:'🏙️ City',highway:'🛣️ Highway'};
+    for(const mode of modeOrder){
+        const p=generatedProfiles[mode];
+        const tr=document.createElement('tr');
+        if(mode==='city')tr.className='mode-city';
+        tr.innerHTML='<td class="mode-name">'+modeLabels[mode]+'</td>'+
+            '<td>'+p.acc.toFixed(2)+'</td>'+
+            '<td>'+p.brake.toFixed(2)+'</td>'+
+            '<td>'+p.lat.toFixed(2)+'</td>'+
+            '<td>'+(p.yaw*57.3).toFixed(1)+'°</td>'+
+            '<td>'+p.min_speed.toFixed(0)+'</td>';
+        tbody.appendChild(tr);
+    }
+
+    // === VALIDATION ===
+
+    // GPS Speed
+    if(gpsSpeedErrors.length>=20){
+        const m=gpsSpeedErrors.reduce((a,b)=>a+b,0)/gpsSpeedErrors.length;
+        $('val-spd').className=m<3?'val-check':m<8?'val-warn':'val-fail';
+        $('val-spd').textContent=m<3?'✓ ±'+m.toFixed(1)+'km/h':m<8?'⚠ ±'+m.toFixed(1):'✗ '+m.toFixed(1);
+    }
+
+    // GPS Accel correlation
+    if(gpsAccelCorr.length>=10){
+        const corr=gpsAccelCorr.map(c=>Math.abs(c.gps-c.vel));
+        const m=corr.reduce((a,b)=>a+b,0)/corr.length;
+        $('val-gpsacc').className=m<0.05?'val-check':m<0.15?'val-warn':'val-fail';
+        $('val-gpsacc').textContent=m<0.05?'✓ ±'+m.toFixed(2)+'g':m<0.15?'⚠ ±'+m.toFixed(2)+'g':'✗ ±'+m.toFixed(2)+'g';
+    }
+
+    // Accel→speed
+    if(accelEvents.length>=3){
+        const pos=accelEvents.filter(e=>e.dv>0).length;
+        const r=pos/accelEvents.length;
+        $('val-acc').className=r>0.7?'val-check':r>0.4?'val-warn':'val-fail';
+        $('val-acc').textContent=(r*100).toFixed(0)+'% increased';
+    }
+
+    // Brake→speed
+    if(brakeEvents.length>=3){
+        const neg=brakeEvents.filter(e=>e.dv<0).length;
+        const r=neg/brakeEvents.length;
+        $('val-brake').className=r>0.7?'val-check':r>0.4?'val-warn':'val-fail';
+        $('val-brake').textContent=(r*100).toFixed(0)+'% decreased';
+    }
+
+    // Impulse accuracy: compare actual ΔV to G×t predicted
+    const allEvs=[...accelEvents,...brakeEvents];
+    if(allEvs.length>=3){
+        const errs=allEvs.map(e=>Math.abs(e.dv-e.expectedDV));
+        const m=errs.reduce((a,b)=>a+b,0)/errs.length;
+        $('val-impulse').className=m<3?'val-check':m<8?'val-warn':'val-fail';
+        $('val-impulse').textContent=m<3?'✓ ±'+m.toFixed(1)+'km/h':'⚠ ±'+m.toFixed(1)+'km/h';
+    }
+
+    // Centripetal correlation
+    if(centCorr.length>=20){
+        const errs=centCorr.map(c=>Math.abs(c.measured-c.theory));
+        const m=errs.reduce((a,b)=>a+b,0)/errs.length;
+        $('val-cent').className=m<0.05?'val-check':m<0.15?'val-warn':'val-fail';
+        $('val-cent').textContent=m<0.05?'✓ ±'+m.toFixed(2)+'g':m<0.15?'⚠ ±'+m.toFixed(2)+'g':'✗ Off';
+    }
+
+    // GPS heading vs gyro
+    if(headingVsGyro.length>=10){
+        const errs=headingVsGyro.map(h=>Math.abs(h.gps-h.gyro));
+        const m=errs.reduce((a,b)=>a+b,0)/errs.length;
+        $('val-heading').className=m<0.05?'val-check':m<0.15?'val-warn':'val-fail';
+        $('val-heading').textContent=m<0.05?'✓ ±'+(m*57.3).toFixed(1)+'°/s':'⚠ ±'+(m*57.3).toFixed(1)+'°/s';
+    }
+
+    // Enable apply
+    if(accelEvents.length>=3&&brakeEvents.length>=3&&turnEvents.length>=5){
+        $('btn-apply').disabled=false;
+        $('btn-apply').className='btn btn-apply ready';
+    }
+}
+
+function generateReport(){
+    const L=[];
+    const dur=startTime?Math.floor((Date.now()-startTime)/1000):0;
+    L.push('BLACKBOX AUTOTUNE CALIBRATION REPORT');
+    L.push('====================================');
+    L.push('Date: '+new Date().toISOString());
+    L.push('Duration: '+Math.floor(dur/60)+'m '+dur%60+'s');
+    L.push('Scenario: '+scenario);
+    L.push('');
+
+    // Confidence assessment
+    const minEv=Math.min(accelEvents.length,brakeEvents.length,turnEvents.length/2);
+    const conf=minEv>=15?'HIGH':minEv>=8?'MEDIUM':'LOW';
+    L.push('CALIBRATION QUALITY: '+conf);
+    L.push('  Accel events: '+accelEvents.length+(accelEvents.length>=15?' ✓':accelEvents.length>=8?' ○':' ⚠'));
+    L.push('  Brake events: '+brakeEvents.length+(brakeEvents.length>=15?' ✓':brakeEvents.length>=8?' ○':' ⚠'));
+    L.push('  Turn events:  '+turnEvents.length+(turnEvents.length>=20?' ✓':turnEvents.length>=12?' ○':' ⚠'));
+    L.push('');
+
+    // Event statistics
+    if(accelEvents.length){
+        const p=accelEvents.map(e=>e.peak);
+        const d=accelEvents.map(e=>e.dur);
+        const dv=accelEvents.map(e=>e.dv);
+        L.push('ACCELERATION EVENTS:');
+        L.push('  G-force: min='+Math.min(...p).toFixed(3)+' med='+median(p).toFixed(3)+' max='+Math.max(...p).toFixed(3));
+        L.push('  Duration(ms): min='+Math.min(...d)+' med='+Math.floor(median(d))+' max='+Math.max(...d));
+        L.push('  ΔSpeed(km/h): min='+Math.min(...dv).toFixed(1)+' med='+median(dv).toFixed(1)+' max='+Math.max(...dv).toFixed(1));
+        L.push('');
+    }
+    if(brakeEvents.length){
+        const p=brakeEvents.map(e=>e.peak);
+        const d=brakeEvents.map(e=>e.dur);
+        const dv=brakeEvents.map(e=>e.dv);
+        L.push('BRAKING EVENTS:');
+        L.push('  G-force: min='+Math.min(...p).toFixed(3)+' med='+median(p).toFixed(3)+' max='+Math.max(...p).toFixed(3));
+        L.push('  Duration(ms): min='+Math.min(...d)+' med='+Math.floor(median(d))+' max='+Math.max(...d));
+        L.push('  ΔSpeed(km/h): min='+Math.min(...dv).toFixed(1)+' med='+median(dv).toFixed(1)+' max='+Math.max(...dv).toFixed(1));
+        L.push('');
+    }
+    if(turnEvents.length){
+        const lat=turnEvents.map(e=>e.peakLat);
+        const yaw=turnEvents.map(e=>e.peakYaw*57.3);
+        const d=turnEvents.map(e=>e.dur);
+        L.push('TURN EVENTS:');
+        L.push('  Lateral G: min='+Math.min(...lat).toFixed(3)+' med='+median(lat).toFixed(3)+' max='+Math.max(...lat).toFixed(3));
+        L.push('  Yaw(°/s): min='+Math.min(...yaw).toFixed(1)+' med='+median(yaw).toFixed(1)+' max='+Math.max(...yaw).toFixed(1));
+        L.push('  Duration(ms): min='+Math.min(...d)+' med='+Math.floor(median(d))+' max='+Math.max(...d));
+        L.push('');
+    }
+
+    // Physics validation
+    L.push('PHYSICS VALIDATION:');
+    if(gpsSpeedErrors.length){
+        const m=gpsSpeedErrors.reduce((a,b)=>a+b,0)/gpsSpeedErrors.length;
+        const status=m<3?'✓':m<8?'⚠':'✗';
+        L.push('  GPS↔Sensor Speed: '+status+' ±'+m.toFixed(1)+' km/h (n='+gpsSpeedErrors.length+')');
+    }
+    if(accelEvents.length){
+        const pos=accelEvents.filter(e=>e.dv>0).length;
+        const r=pos/accelEvents.length;
+        L.push('  Accel→Speed↑: '+(r>0.7?'✓':r>0.4?'⚠':'✗')+' '+(r*100).toFixed(0)+'%');
+    }
+    if(brakeEvents.length){
+        const neg=brakeEvents.filter(e=>e.dv<0).length;
+        const r=neg/brakeEvents.length;
+        L.push('  Brake→Speed↓: '+(r>0.7?'✓':r>0.4?'⚠':'✗')+' '+(r*100).toFixed(0)+'%');
+    }
+    if(centCorr.length){
+        const errs=centCorr.map(c=>Math.abs(c.measured-c.theory));
+        const m=errs.reduce((a,b)=>a+b,0)/errs.length;
+        L.push('  Centripetal(v×ω): '+(m<0.05?'✓':m<0.15?'⚠':'✗')+' ±'+m.toFixed(3)+'g (n='+centCorr.length+')');
+    }
+    if(headingVsGyro.length){
+        const errs=headingVsGyro.map(h=>Math.abs(h.gps-h.gyro));
+        const m=errs.reduce((a,b)=>a+b,0)/errs.length;
+        L.push('  Heading↔Gyro: '+(m<0.05?'✓':'⚠')+' ±'+(m*57.3).toFixed(1)+'°/s (n='+headingVsGyro.length+')');
+    }
+    L.push('');
+
+    // Learned baseline
+    if(cityBaseline){
+        L.push('LEARNED BASELINE (City):');
+        L.push('  Accel: '+cityBaseline.acc.toFixed(3)+'g (exit: '+cityBaseline.acc_exit.toFixed(3)+'g)');
+        L.push('  Brake: '+cityBaseline.brake.toFixed(3)+'g (exit: '+cityBaseline.brake_exit.toFixed(3)+'g)');
+        L.push('  Lateral: '+cityBaseline.lat.toFixed(3)+'g (exit: '+cityBaseline.lat_exit.toFixed(3)+'g)');
+        L.push('  Yaw: '+(cityBaseline.yaw*57.3).toFixed(1)+'°/s ('+cityBaseline.yaw.toFixed(4)+' rad/s)');
+        L.push('');
+    }
+
+    // All generated profiles
+    if(generatedProfiles){
+        L.push('GENERATED PROFILES (scaled from baseline):');
+        L.push('  Mode      Accel   Brake   Lat     Yaw      MinSpd');
+        L.push('  ─────────────────────────────────────────────────');
+        for(const[mode,p]of Object.entries(generatedProfiles)){
+            const name=(mode+'        ').slice(0,8);
+            L.push('  '+name+' '+p.acc.toFixed(2)+'g   '+p.brake.toFixed(2)+'g   '+p.lat.toFixed(2)+'g   '+(p.yaw*57.3).toFixed(1)+'°/s   '+p.min_speed.toFixed(0)+'m/s');
+        }
+        L.push('');
+        L.push('SCALING FACTORS USED:');
+        L.push('  Track:   acc×2.5  brake×2.0  lat×3.0  yaw×2.5');
+        L.push('  Canyon:  acc×1.5  brake×1.5  lat×1.8  yaw×1.6');
+        L.push('  City:    acc×1.0  brake×1.0  lat×1.0  yaw×1.0 (baseline)');
+        L.push('  Highway: acc×0.8  brake×0.7  lat×0.6  yaw×0.6');
+    }
+
+    return L.join('\\n');
+}
+
+async function poll(){
+    try{
+        const r=await fetch('/api/telemetry');
+        const j=await r.json();
+        if(j.data&&j.seq!==lastSeq){
+            lastSeq=j.seq;
+            const b=atob(j.data),a=new Uint8Array(b.length);
+            for(let i=0;i<b.length;i++)a[i]=b.charCodeAt(i);
+            process(parsePacket(a.buffer));
+            $('dot').className='dot'+(recording?' rec':' on');
+            $('stxt').textContent=recording?'Recording':'Connected';
+        }
+        setTimeout(poll,40);
+    }catch(e){$('dot').className='dot';$('stxt').textContent='Offline';setTimeout(poll,500)}
+}
+
+async function applySettings(){
+    if(!generatedProfiles||!cityBaseline){
+        alert('Collect more data first');
+        return;
+    }
+
+    // Apply city profile to ESP32 (the baseline)
+    const p=generatedProfiles.city;
+    try{
+        await fetch('/api/settings/set?acc='+p.acc+'&acc_exit='+p.acc_exit+'&brake='+(0-p.brake)+'&brake_exit='+(0-p.brake_exit)+'&lat='+p.lat+'&lat_exit='+p.lat_exit+'&yaw='+p.yaw+'&min_speed='+p.min_speed);
+
+        // Save ALL profiles to localStorage for dashboard integration
+        const calibData={
+            version:1,
+            date:Date.now(),
+            dateStr:new Date().toISOString(),
+            scenario,
+            duration:startTime?Math.floor((Date.now()-startTime)/1000):0,
+            events:{
+                accel:accelEvents.length,
+                brake:brakeEvents.length,
+                turn:turnEvents.length
+            },
+            baseline:cityBaseline,
+            profiles:generatedProfiles,
+            scales:PROFILE_SCALES
+        };
+        localStorage.setItem('bb_profiles',JSON.stringify(calibData));
+
+        const rep=generateReport();
+        $('report').textContent=rep;
+        $('report-card').style.display='block';
+
+        if(confirm('All 4 profiles saved!\\n\\nCity profile applied to device.\\nAll profiles saved to browser.\\n\\nGo to Dashboard to switch profiles?')){
+            window.location.href='/';
+        }
+    }catch(e){alert('Failed: '+e)}
+}
+
+function exportReport(){
+    // Export comprehensive JSON with all data for analysis
+    const exportData={
+        version:1,
+        exportDate:new Date().toISOString(),
+        scenario,
+        duration:startTime?Math.floor((Date.now()-startTime)/1000):0,
+        quality:{
+            confidence:Math.min(accelEvents.length,brakeEvents.length,turnEvents.length/2)>=15?'HIGH':
+                       Math.min(accelEvents.length,brakeEvents.length,turnEvents.length/2)>=8?'MEDIUM':'LOW',
+            eventCounts:{accel:accelEvents.length,brake:brakeEvents.length,turn:turnEvents.length}
+        },
+        baseline:cityBaseline,
+        profiles:generatedProfiles,
+        scales:PROFILE_SCALES,
+        events:{
+            accel:accelEvents.map(e=>({peak:+e.peak.toFixed(4),dur:e.dur,dv:+e.dv.toFixed(2),expectedDV:+e.expectedDV.toFixed(2)})),
+            brake:brakeEvents.map(e=>({peak:+e.peak.toFixed(4),dur:e.dur,dv:+e.dv.toFixed(2),expectedDV:+e.expectedDV.toFixed(2)})),
+            turn:turnEvents.map(e=>({peakLat:+e.peakLat.toFixed(4),peakYaw:+e.peakYaw.toFixed(4),avgCent:+e.avgCent.toFixed(4),dur:e.dur}))
+        },
+        validation:{
+            gpsSpeedError:gpsSpeedErrors.length?+(gpsSpeedErrors.reduce((a,b)=>a+b,0)/gpsSpeedErrors.length).toFixed(2):null,
+            accelSpeedIncrease:accelEvents.length?+(accelEvents.filter(e=>e.dv>0).length/accelEvents.length).toFixed(3):null,
+            brakeSpeedDecrease:brakeEvents.length?+(brakeEvents.filter(e=>e.dv<0).length/brakeEvents.length).toFixed(3):null,
+            centripetalError:centCorr.length?+(centCorr.map(c=>Math.abs(c.measured-c.theory)).reduce((a,b)=>a+b,0)/centCorr.length).toFixed(4):null,
+            headingGyroError:headingVsGyro.length?+(headingVsGyro.map(h=>Math.abs(h.gps-h.gyro)).reduce((a,b)=>a+b,0)/headingVsGyro.length).toFixed(4):null
+        },
+        textReport:generateReport()
+    };
+
+    const blob=new Blob([JSON.stringify(exportData,null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;a.download='blackbox-calibration-'+Date.now()+'.json';
+    a.click();
+}
+
+function toggleRecording(){
+    const btn=$('btn-start');
+
+    // If trying to START, check for GPS lock first
+    if(!recording&&!hasGpsLock){
+        alert('GPS lock required!\\n\\nWait for GPS status to show coordinates (green) before starting calibration.\\n\\nThis ensures accurate speed and position data.');
+        return;
+    }
+
+    recording=!recording;
+    if(recording){
+        accelEvents=[];brakeEvents=[];turnEvents=[];
+        gpsSpeedErrors=[];gpsAccelCorr=[];centCorr=[];headingVsGyro=[];
+        accelEv.on=false;brakeEv.on=false;turnEv.on=false;
+        prevTs=0;prevGpsTs=0;prevGpsHeading=null;lastEvEnd=0;
+        emaLonSim=0;emaLatSim=0;emaYawSim=0; // Reset EMA simulation
+        startTime=Date.now();
+
+        updateEvents();
+        $('results-card').style.display='none';
+        $('val-card').style.display='none';
+        $('report-card').style.display='none';
+        $('btn-apply').disabled=true;
+        $('btn-apply').className='btn btn-apply';
+        $('progress').style.width='0%';
+
+        btn.textContent='Stop Calibration';
+        btn.className='btn btn-start recording';
+        $('scenario-card').style.opacity='0.5';
+    }else{
+        btn.textContent='Start Calibration';
+        btn.className='btn btn-start';
+        $('scenario-card').style.opacity='1';
+        computeSuggestions();
+        $('report').textContent=generateReport();
+        $('report-card').style.display='block';
+    }
+}
+
+setInterval(()=>{
+    if(recording){
+        const s=Math.floor((Date.now()-startTime)/1000);
+        $('time').textContent=Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
+    }
+},1000);
+
+document.querySelectorAll('.scenario').forEach(el=>el.onclick=()=>selectScenario(el.dataset.scenario));
+$('btn-start').onclick=toggleRecording;
+$('btn-apply').onclick=applySettings;
+$('btn-export').onclick=exportReport;
+
+poll();
+</script></body></html>"#;
+
 impl TelemetryServer {
     /// Create and start the telemetry server with HTTP polling
     ///
@@ -730,8 +1745,8 @@ impl TelemetryServer {
 
         let server_config = Configuration {
             http_port: port,
-            max_uri_handlers: 9, /* Dashboard, telemetry, status, calibrate, settings GET,
-                                  * settings SET, diagnostics page, diagnostics API */
+            max_uri_handlers: 10, /* Dashboard, autotune, telemetry, status, calibrate,
+                                   * settings GET, settings SET, diagnostics page, diagnostics API */
             max_open_sockets: 8, // HTTP only - no long-lived WebSocket connections
             stack_size: 10240,
             ..Default::default()
@@ -749,6 +1764,27 @@ impl TelemetryServer {
             esp_idf_svc::http::Method::Get,
             |req| -> Result<(), esp_idf_svc::io::EspIOError> {
                 let html_bytes = DASHBOARD_HTML.as_bytes();
+                let content_length = html_bytes.len().to_string();
+                let mut response = req.into_response(
+                    200,
+                    None,
+                    &[
+                        ("Content-Type", "text/html; charset=utf-8"),
+                        ("Content-Length", &content_length),
+                        ("Connection", "close"),
+                    ],
+                )?;
+                response.write_all(html_bytes)?;
+                Ok(())
+            },
+        )?;
+
+        // Serve the auto-tune calibration page
+        server.fn_handler(
+            "/autotune",
+            esp_idf_svc::http::Method::Get,
+            |req| -> Result<(), esp_idf_svc::io::EspIOError> {
+                let html_bytes = AUTOTUNE_HTML.as_bytes();
                 let content_length = html_bytes.len().to_string();
                 let mut response = req.into_response(
                     200,
