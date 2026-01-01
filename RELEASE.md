@@ -47,7 +47,7 @@ espflash write-bin 0x0 sensors/blackbox/blackbox-v0.0.1.bin --monitor
 Verify:
 - ✅ Device boots and shows LED sequence
 - ✅ WiFi AP "Blackbox" appears
-- ✅ Dashboard loads at 192.168.4.1
+- ✅ Dashboard loads at 192.168.71.1
 - ✅ Telemetry updates at ~20Hz
 - ✅ Settings save correctly
 

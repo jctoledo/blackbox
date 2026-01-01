@@ -67,7 +67,7 @@ impl WifiManager {
     }
 
     /// Start as Access Point (AP mode) - creates own WiFi network
-    /// Clients connect to this network and ESP32 is always at 192.168.4.1
+    /// Clients connect to this network and ESP32 is always at 192.168.71.1
     pub fn start_ap(
         &mut self,
         ssid: &str,
@@ -110,7 +110,7 @@ impl WifiManager {
         let ip_info = self.wifi.wifi().ap_netif().get_ip_info()?;
         info!("WiFi AP started! IP: {}", ip_info.ip);
         info!(
-            "Clients should connect to '{}' and access 192.168.4.1",
+            "Clients should connect to '{}' and access 192.168.71.1",
             ssid
         );
 

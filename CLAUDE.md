@@ -290,7 +290,7 @@ struct TelemetryPacket {
 
 **1. Access Point Mode (Default) - Mobile/Standalone Use**
 - ESP32 creates WiFi network: `Blackbox` / `blackbox123`
-- Fixed IP: `192.168.4.1`
+- Fixed IP: `192.168.71.1`
 - HTTP dashboard on port 80
 - No router required
 - No MQTT or UDP - dashboard only
@@ -533,7 +533,7 @@ Counts failures, attempts reconnect periodically. MQTT also available as backup 
 2. Configure as AP (network creator)
 3. Create WiFi network with SSID/password
 4. Start DHCP server (assigns IPs to clients)
-5. Fixed IP: 192.168.4.1
+5. Fixed IP: 192.168.71.1
 6. Clients connect directly to ESP32
 
 **Station Mode:**

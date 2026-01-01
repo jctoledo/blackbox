@@ -14,14 +14,14 @@ ESP32-C3 vehicle telemetry system with built-in mobile dashboard and dual WiFi m
 - CSV data recording and export
 - **Live settings configuration** with validation
 
-**Usage:** Connect phone to `Blackbox` WiFi → Open browser to `http://192.168.4.1`
+**Usage:** Connect phone to `Blackbox` WiFi → Open browser to `http://192.168.71.1`
 
 ### Dual WiFi Operating Modes
 
 **Access Point Mode (Default)**
 - ESP32 creates its own WiFi network - no router required
 - Perfect for track days, autocross, mobile use
-- Fixed IP: `192.168.4.1:80`
+- Fixed IP: `192.168.71.1:80`
 - SSID: `Blackbox` / Password: `blackbox123`
 
 **Station Mode**
@@ -63,7 +63,7 @@ espflash write-bin 0x0 blackbox-v0.0.1.bin
 ### First Boot
 1. Power on ESP32 - LED shows boot sequence (see README for codes)
 2. **AP Mode (default):** Connect phone to WiFi network "Blackbox" (password: `blackbox123`)
-3. Open browser to `http://192.168.4.1`
+3. Open browser to `http://192.168.71.1`
 4. View live telemetry!
 
 ### Switch to Station Mode

@@ -526,7 +526,7 @@ Each threshold has an **entry** and **exit** value (hysteresis) to prevent oscil
 - **Road bumps triggering modes?** Increase thresholds or check calibration
 
 **Preset Selection:**
-1. Open dashboard at `http://192.168.4.1`
+1. Open dashboard at `http://192.168.71.1`
 2. Scroll to "Driving Preset" section
 3. Tap a preset button - settings apply immediately
 4. Tap "Custom" to access individual sliders for fine-tuning
@@ -618,7 +618,7 @@ Proper calibration is **critical** for accurate mode detection. The IMU calibrat
 ### Recalibration
 
 You can trigger recalibration from the dashboard:
-1. Open dashboard at `http://192.168.4.1`
+1. Open dashboard at `http://192.168.71.1`
 2. Stop the vehicle on level ground, engine off
 3. Tap the **CLR** button to reset and recalibrate
 
@@ -651,7 +651,7 @@ The firmware includes a built-in web dashboard that runs directly on the ESP32. 
 
 1. **Power on the device** - it creates a WiFi network called "Blackbox"
 2. **Connect your phone** to the "Blackbox" WiFi (password: `blackbox123`)
-3. **Open a browser** and go to `http://192.168.4.1`
+3. **Open a browser** and go to `http://192.168.71.1`
 4. **View live telemetry** - data streams at ~30Hz via WebSocket
 
 ### Dashboard Features
@@ -698,7 +698,7 @@ The firmware supports two WiFi modes, each with different connectivity options:
 ```
 ┌──────────────┐     WiFi: "Blackbox"      ┌──────────────┐
 │   ESP32      │◄─────────────────────────►│    Phone     │
-│  (creates    │     192.168.4.1:80        │  (connects)  │
+│  (creates    │     192.168.71.1:80        │  (connects)  │
 │   network)   │                           │              │
 └──────────────┘                           └──────────────┘
 ```

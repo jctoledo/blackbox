@@ -153,7 +153,7 @@ impl SystemConfig {
     ///
     /// **Access Point Mode (default):** No environment variables required
     /// - Uses default SSID "Blackbox" and password "blackbox123"
-    /// - Creates standalone WiFi network at 192.168.4.1
+    /// - Creates standalone WiFi network at 192.168.71.1
     ///
     /// **Station Mode:** REQUIRES environment variables
     /// ```bash
