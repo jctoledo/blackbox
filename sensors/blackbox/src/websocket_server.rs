@@ -804,14 +804,6 @@ body{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0f;color:#f0
 .main{flex:1;padding:12px;display:flex;flex-direction:column;gap:10px;overflow-y:auto}
 .card{background:#111;border-radius:10px;padding:14px;border:1px solid #1a1a24}
 .card-title{font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
-.scenario-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.scenario{background:#0a0a0f;border:2px solid #1a1a24;border-radius:10px;padding:12px;cursor:pointer;transition:all .2s}
-.scenario.active{border-color:#3b82f6;background:linear-gradient(135deg,#0f1a2e,#0a0a0f)}
-.scenario:active{transform:scale(0.98)}
-.scenario-icon{font-size:24px;margin-bottom:6px}
-.scenario-name{font-size:12px;font-weight:600;color:#f0f0f0}
-.scenario-desc{font-size:9px;color:#555;margin-top:4px;line-height:1.3}
-.scenario-time{font-size:8px;color:#3b82f6;margin-top:6px}
 .instructions{background:#0f1a2e;border:1px solid #1e3a5f;border-radius:8px;padding:12px;margin-top:10px}
 .instructions-title{font-size:10px;color:#60a5fa;font-weight:600;margin-bottom:8px}
 .instructions-text{font-size:11px;color:#888;line-height:1.5}
@@ -883,45 +875,27 @@ body{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0f;color:#f0
 <div class="hdr"><a href="/" class="back">← Dashboard</a><div class="logo">AUTOTUNE</div></div>
 <div class="main">
 
-<div class="card" id="scenario-card">
-<div class="card-title">Select Calibration Scenario</div>
-<div class="scenario-grid">
-<div class="scenario active" data-scenario="guided">
-<div class="scenario-icon">🎯</div>
-<div class="scenario-name">Guided</div>
-<div class="scenario-desc">Best accuracy. Perform specific maneuvers when prompted.</div>
-<div class="scenario-time">~3 min</div>
+<div class="card">
+<div class="card-title">Calibration Drive</div>
+<div style="text-align:center;padding:8px 0">
+<div style="font-size:28px;margin-bottom:4px">🚗</div>
+<div style="font-size:14px;font-weight:600;color:#60a5fa">Drive normally for 10-20 minutes</div>
+<div style="font-size:11px;color:#666;margin-top:4px">One drive generates all 4 profiles (Track, Canyon, City, Highway)</div>
 </div>
-<div class="scenario" data-scenario="city">
-<div class="scenario-icon">🏙️</div>
-<div class="scenario-name">City Loop</div>
-<div class="scenario-desc">Drive around the block 5-10 times. Stop signs, turns, traffic.</div>
-<div class="scenario-time">~5 min</div>
-</div>
-<div class="scenario" data-scenario="highway">
-<div class="scenario-icon">🛣️</div>
-<div class="scenario-name">Highway</div>
-<div class="scenario-desc">Highway driving with lane changes and on/off ramps.</div>
-<div class="scenario-time">~5 min</div>
-</div>
-<div class="scenario" data-scenario="parking">
-<div class="scenario-icon">🅿️</div>
-<div class="scenario-name">Parking Lot</div>
-<div class="scenario-desc">Empty lot. Hard stops, tight turns, figure-8s for max G.</div>
-<div class="scenario-time">~2 min</div>
-</div>
-</div>
-<div class="instructions" id="instructions">
-<div class="instructions-title">📋 Guided Calibration Instructions</div>
-<div class="instructions-text" id="instructions-text">
+<div class="instructions">
+<div class="instructions-title">📋 How It Works</div>
+<div class="instructions-text">
 <ol>
-<li>Find a safe, quiet road or empty parking lot</li>
-<li>Press Start - events are auto-detected as you drive</li>
-<li><b>Accelerate</b> firmly 5+ times (from stops or slow speed)</li>
-<li><b>Brake</b> normally 5+ times (to stops or slow down)</li>
-<li><b>Turn</b> at intersections or make 10+ turns in a lot</li>
-<li>Drive as you <i>normally</i> would - don't overdo it!</li>
+<li>Press <b>Start Calibration</b> below</li>
+<li>Drive around your neighborhood normally</li>
+<li>Include stops, turns, and normal acceleration</li>
+<li>The system auto-detects driving events</li>
+<li>When progress bar fills, you have enough data</li>
+<li>Press <b>Apply</b> to save all 4 profiles</li>
 </ol>
+<div style="margin-top:8px;padding:8px;background:#0a1a0a;border-radius:6px;font-size:10px;color:#22c55e">
+<b>Tip:</b> More driving = better accuracy. 15+ events per category is ideal.
+</div>
 </div>
 </div>
 </div>
@@ -998,7 +972,7 @@ const MIN_SPEED_KMH=7.2; // Must match mode.rs min_speed (2.0 m/s = 7.2 km/h)
 const EMA_ALPHA=0.35; // Must match mode.rs EMA alpha for accurate simulation
 
 // State
-let scenario='guided';
+let scenario='neighborhood'; // Single calibration mode - drive normally
 let recording=false;
 let startTime=0;
 let lastSeq=0;
@@ -1032,45 +1006,6 @@ let gpsSpeedErrors=[];
 let gpsAccelCorr=[];  // correlation between GPS accel and velocity accel
 let centCorr=[];      // lat_g vs v*omega correlation
 let headingVsGyro=[]; // GPS heading rate vs gyro wz
-
-// Scenario instructions
-const INSTRUCTIONS={
-guided:`<ol>
-<li>Find a safe road or empty parking lot</li>
-<li><b>Calibrate on level ground</b> - inclines affect accuracy!</li>
-<li>Press Start - events auto-detect as you drive</li>
-<li><b>Accelerate</b> firmly 5+ times from slow/stop</li>
-<li><b>Brake</b> normally 5+ times to slow/stop</li>
-<li><b>Turn</b> 10+ times at normal driving speed</li>
-<li>Drive as you <i>normally</i> would!</li>
-</ol>`,
-city:`<ol>
-<li>Drive around the block or a few city blocks</li>
-<li>Include: stop signs, traffic lights, turns</li>
-<li>5-10 loops captures enough events</li>
-<li>Normal city driving - no need to rush</li>
-</ol>`,
-highway:`<ol>
-<li>Merge onto highway, cruise at speed</li>
-<li>Make 3-5 lane changes</li>
-<li>Use on/off ramps for accel/brake</li>
-<li>One exit-and-re-enter cycle works</li>
-</ol>`,
-parking:`<ol>
-<li>Empty <b>flat</b> parking lot is ideal</li>
-<li>Start/stop on level ground (not inclines!)</li>
-<li>5 firm accelerations from stop</li>
-<li>5 firm (safe) braking stops</li>
-<li>Figure-8s or circles for turn data</li>
-<li>Cleanest calibration data!</li>
-</ol>`
-};
-
-function selectScenario(s){
-    scenario=s;
-    document.querySelectorAll('.scenario').forEach(el=>el.classList.toggle('active',el.dataset.scenario===s));
-    $('instructions-text').innerHTML=INSTRUCTIONS[s];
-}
 
 function parsePacket(buf){
     const d=new DataView(buf);
@@ -1705,11 +1640,9 @@ function toggleRecording(){
 
         btn.textContent='Stop Calibration';
         btn.className='btn btn-start recording';
-        $('scenario-card').style.opacity='0.5';
     }else{
         btn.textContent='Start Calibration';
         btn.className='btn btn-start';
-        $('scenario-card').style.opacity='1';
         computeSuggestions();
         $('report').textContent=generateReport();
         $('report-card').style.display='block';
@@ -1723,7 +1656,6 @@ setInterval(()=>{
     }
 },1000);
 
-document.querySelectorAll('.scenario').forEach(el=>el.onclick=()=>selectScenario(el.dataset.scenario));
 $('btn-start').onclick=toggleRecording;
 $('btn-apply').onclick=applySettings;
 $('btn-export').onclick=exportReport;

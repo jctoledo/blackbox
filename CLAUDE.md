@@ -645,6 +645,121 @@ Displayed as updates per minute (rolling average), not cumulative count. Typical
 - ZUPT: 0-60/min (depends on stops)
 - Free heap: ~60KB (stable during operation)
 
+### Autotune System
+
+**Overview:**
+Autotune learns vehicle-specific mode detection thresholds from a calibration drive. Instead of generic presets, thresholds are derived from actual sensor data captured during normal driving.
+
+**Why Autotune?**
+- Every vehicle has different suspension, tire grip, weight distribution
+- Generic thresholds may trigger too early (sensitive car) or too late (stiff car)
+- Calibration captures your specific vehicle's g-force characteristics
+
+**Data Flow:**
+```
+Telemetry → Event Detection → Categorization → Median Calculation → Scaling → All Profiles
+    │              │                │                  │                │           │
+    └─►ax,ay,wz    └─►EMA filter    └─►ACCEL/BRAKE/    └─►P50 values    └─►×scale   └─►localStorage
+                      α=0.35           CORNER bins         (robust)        factors     bb_profiles
+```
+
+**Event Detection Algorithm:**
+```javascript
+// Detect events from telemetry stream
+const EMA_ALPHA = 0.35;          // Smoothing factor
+const EVENT_MIN_DURATION = 200;  // ms - reject transients
+const EVENT_TIMEOUT = 300;       // ms - gap to end event
+
+// Smooth raw sensor data
+ax_ema = ax_ema * (1 - EMA_ALPHA) + raw_ax * EMA_ALPHA;
+
+// Detect event start/end based on magnitude threshold
+// Record peak values during event
+// Categorize: positive ax → ACCEL, negative ax → BRAKE, high ay+wz → CORNER
+```
+
+**Threshold Calculation:**
+```javascript
+// For each event category (ACCEL, BRAKE, CORNER):
+const sortedPeaks = events.map(e => e.peak).sort((a,b) => a - b);
+const P50 = sortedPeaks[Math.floor(sortedPeaks.length * 0.5)];  // Median
+
+// Entry threshold: 70% of median (triggers before typical peak)
+const entry = P50 * 0.7;
+
+// Exit threshold: 50% of entry (hysteresis prevents oscillation)
+const exit = entry * 0.5;
+```
+
+**Profile Scaling System:**
+Single city calibration generates all 4 profiles using physics-based multipliers:
+
+```javascript
+const PROFILE_SCALES = {
+  track:   { acc: 2.5, brake: 2.0, lat: 3.0, yaw: 2.5, min_speed: 5.0 },
+  canyon:  { acc: 1.5, brake: 1.5, lat: 1.8, yaw: 1.6, min_speed: 3.0 },
+  city:    { acc: 1.0, brake: 1.0, lat: 1.0, yaw: 1.0, min_speed: 2.0 },
+  highway: { acc: 0.8, brake: 0.7, lat: 0.6, yaw: 0.6, min_speed: 12.0 }
+};
+
+// Scale from city baseline
+track.acc_entry = city.acc_entry * 2.5;  // Track expects 2.5× higher g-forces
+highway.lat_entry = city.lat_entry * 0.6; // Highway lane changes are gentler
+```
+
+**localStorage Data Structure:**
+```javascript
+// Stored as 'bb_profiles' in localStorage
+{
+  "track": {
+    "acc": 0.25,      // Entry threshold (g, converted to m/s²)
+    "acc_exit": 0.125,
+    "brake": 0.36,
+    "brake_exit": 0.18,
+    "lat": 0.36,
+    "lat_exit": 0.18,
+    "yaw": 0.125,
+    "min_speed": 5.0,
+    "desc": "Racing/track days"
+  },
+  "canyon": { ... },
+  "city": { ... },
+  "highway": { ... },
+  "calibrated_at": "2024-01-15T10:30:00.000Z",
+  "vehicle_id": "optional-user-label"
+}
+```
+
+**Physics Validation Metrics:**
+Autotune validates calibration quality using physics cross-checks:
+- GPS↔Sensor speed correlation (should be >0.8)
+- Accel events should show speed increasing
+- Brake events should show speed decreasing
+- Lateral events should correlate with heading change
+- Centripetal validation: ay ≈ v²/r (from wz)
+
+**Confidence Levels:**
+Based on sample count per event category:
+- HIGH: n ≥ 15 events (median very stable)
+- MEDIUM: n = 8-14 events (usable, some variance)
+- LOW: n = 3-7 events (may need more driving)
+- INSUFFICIENT: n < 3 (cannot compute reliable threshold)
+
+**Export Format:**
+JSON export includes:
+- All 4 scaled profiles with thresholds
+- Raw event data (peaks, durations, timestamps)
+- Scaling factors used
+- Validation metrics
+- Confidence per category
+- Timestamp and optional vehicle ID
+
+**Integration with Dashboard:**
+- Preset buttons show green calibration dot when `bb_profiles` exists
+- Clicking preset loads calibrated values (or defaults if uncalibrated)
+- Export button downloads comprehensive JSON for analysis
+- Progress bar shows real-time event capture during calibration
+
 ### udp_stream.rs - UDP Client (Station Mode)
 
 **Features:**

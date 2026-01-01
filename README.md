@@ -711,6 +711,69 @@ You can trigger recalibration from the dashboard:
 
 ---
 
+## Autotune (Threshold Calibration)
+
+The **Autotune** feature learns your vehicle's characteristics from a single city drive and automatically generates optimized thresholds for all 4 driving profiles.
+
+### Why Autotune?
+
+Default presets use generic thresholds, but every vehicle is different:
+- A sports car can pull 1.0g lateral; a minivan might max at 0.5g
+- Your driving style affects typical G-forces
+- One calibration drive personalizes ALL presets to YOUR vehicle
+
+### How to Use Autotune
+
+1. **Open the dashboard** at `http://192.168.71.1`
+2. **Tap "Autotune"** in the menu
+3. **Wait for GPS lock** (required before starting)
+4. **Select a scenario** (Guided, Parking Lot, or Free Drive)
+5. **Tap "Start Calibration"** and drive normally for 10-20 minutes
+6. **Collect events**: accelerations, brakes, and turns
+7. **Review results** - the system generates all 4 profiles
+8. **Tap "Apply"** to save and activate
+
+### What Gets Generated
+
+From your city driving baseline, Autotune generates 4 vehicle-specific profiles:
+
+| Profile | Scaling | Use Case |
+|---------|---------|----------|
+| **Track** | 2.0-3.0× baseline | Racing, track days |
+| **Canyon** | 1.5-1.8× baseline | Spirited mountain roads |
+| **City** | 1.0× (your baseline) | Daily driving |
+| **Highway** | 0.6-0.8× baseline | Highway cruising |
+
+### Confidence Levels
+
+The more events you collect, the more accurate the thresholds:
+
+| Events | Confidence | Recommendation |
+|--------|------------|----------------|
+| 3-7 each | Low | Keep driving |
+| 8-14 each | Medium | Good for most uses |
+| 15+ each | High | Excellent accuracy |
+
+### Export Data
+
+Autotune exports comprehensive JSON for analysis:
+- All 4 generated profiles
+- Raw event data (peaks, durations, speed changes)
+- Physics validation metrics
+- Scaling factors used
+
+This data helps evaluate calibration quality and can be used for post-analysis.
+
+### Tips for Best Results
+
+- **Drive normally** - don't exaggerate maneuvers
+- **Include variety** - different turn directions, brake intensities
+- **Flat ground preferred** - inclines can affect readings
+- **More driving = better** - the progress bar is just the minimum
+- **GPS lock required** - ensures accurate speed validation
+
+---
+
 ## Mobile Dashboard
 
 The firmware includes a built-in web dashboard that runs directly on the ESP32. No external server needed - just connect your phone and view live telemetry.
