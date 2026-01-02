@@ -52,7 +52,7 @@
 //! ## Example Usage
 //!
 //! ```rust,no_run
-//! use motorsport_telemetry::{
+//! use sensor_fusion::{
 //!     ekf::Ekf,
 //!     sensor_framework::{GpsReading, ImuReading, Sensor, SensorDataType, SensorRegistry},
 //! };
@@ -89,7 +89,7 @@
 //! The framework is **open for extension** without modification:
 //!
 //! ```rust,no_run
-//! use motorsport_telemetry::sensor_framework::{SensorDataType, SensorReading};
+//! use sensor_fusion::sensor_framework::{SensorDataType, SensorReading};
 //!
 //! #[derive(Debug)]
 //! struct RadarReading {
@@ -135,6 +135,7 @@ pub mod ekf;
 pub mod sensor_framework;
 pub mod sensors;
 pub mod transforms;
+pub mod velocity;
 
 // Re-export commonly used types from sensor_framework
 // Re-export EKF

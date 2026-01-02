@@ -2,7 +2,7 @@
 
 /// Configuration management for Blackbox telemetry system
 /// Provides defaults and structure for future config.toml loading
-use motorsport_telemetry::ekf::EkfConfig;
+use sensor_fusion::ekf::EkfConfig;
 
 use crate::mode::ModeConfig;
 

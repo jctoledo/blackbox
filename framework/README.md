@@ -1,6 +1,6 @@
-# Motorsport Telemetry Framework
+# Sensor Fusion Framework
 
-A modular, extensible Rust framework for building custom automotive sensor fusion systems. Build professional-grade telemetry for track days, racing, vehicle dynamics research, and fleet monitoring without vendor lock-in.
+A modular, extensible Rust framework for building custom sensor fusion systems. Build professional-grade telemetry for track days, racing, vehicle dynamics research, and fleet monitoring without vendor lock-in.
 
 ## Features
 
@@ -25,9 +25,9 @@ You focus on your specific sensors and application - the framework handles the f
 ## Example Usage
 
 ```rust
-use motorsport_telemetry::sensor_framework::{SensorRegistry, Sensor};
-use motorsport_telemetry::ekf::Ekf;
-use motorsport_telemetry::transforms::{body_to_earth, remove_gravity};
+use sensor_fusion::sensor_framework::{SensorRegistry, Sensor};
+use sensor_fusion::ekf::Ekf;
+use sensor_fusion::transforms::{body_to_earth, remove_gravity};
 
 // Create sensor registry
 let mut registry = SensorRegistry::new();
@@ -147,13 +147,15 @@ Basic sensor trait definitions (IMU, GPS, generic sensors).
                │ uses
                ▼
 ┌─────────────────────────────────────────┐
-│  Motorsport Telemetry Framework         │
+│  Sensor Fusion Framework                │
 │  ┌─────────────────────────────────┐    │
 │  │ sensor_framework (Plugin API)   │    │
 │  ├─────────────────────────────────┤    │
 │  │ ekf (Sensor Fusion)             │    │
 │  ├─────────────────────────────────┤    │
 │  │ transforms (Coordinate Math)    │    │
+│  ├─────────────────────────────────┤    │
+│  │ velocity (Speed Estimation)     │    │
 │  └─────────────────────────────────┘    │
 └─────────────────────────────────────────┘
 ```
@@ -173,10 +175,10 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-motorsport-telemetry = { path = "../path/to/framework" }
+sensor-fusion = { path = "../path/to/framework" }
 
 # Or from crates.io (when published):
-# motorsport-telemetry = "0.1"
+# sensor-fusion = "0.1"
 ```
 
 ## Features
@@ -185,7 +187,7 @@ The framework supports optional features:
 
 ```toml
 [dependencies]
-motorsport-telemetry = { version = "0.1", features = ["esp32", "mqtt"] }
+sensor-fusion = { version = "0.1", features = ["esp32", "mqtt"] }
 ```
 
 - `esp32` - ESP32-specific HAL support
@@ -231,7 +233,7 @@ MIT License - Use it, modify it, sell it, race with it. See `LICENSE` for detail
 
 ## Documentation
 
-- [API Documentation](https://docs.rs/motorsport-telemetry) (when published)
+- [API Documentation](https://docs.rs/sensor-fusion) (when published)
 - [Sensor Toolkit Guide](../docs/SENSOR_TOOLKIT_GUIDE.md)
 - [Architecture Guide](../docs/ARCHITECTURE.md)
 - [Workspace Structure](../WORKSPACE_STRUCTURE.md)

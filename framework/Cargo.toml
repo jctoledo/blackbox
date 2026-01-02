@@ -1,16 +1,16 @@
 [package]
-name = "motorsport-telemetry"
+name = "sensor-fusion"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-description = "Open-source framework for building custom automotive sensor fusion systems"
-keywords = ["telemetry", "sensor-fusion", "kalman-filter", "automotive", "motorsport"]
+description = "Sensor fusion and state estimation library for embedded systems"
+keywords = ["sensor-fusion", "kalman-filter", "ekf", "state-estimation", "embedded"]
 categories = ["embedded", "no-std", "science"]
 license = "MIT"
 repository = "https://github.com/jctoledo/blackbox"
 
 [lib]
-name = "motorsport_telemetry"
+name = "sensor_fusion"
 
 [dependencies]
 # Use workspace dependencies

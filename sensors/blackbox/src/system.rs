@@ -7,7 +7,8 @@ use std::sync::Arc;
 use esp_idf_hal::delay::FreeRtos;
 use esp_idf_hal::uart::UartDriver;
 // Import from framework crate
-use motorsport_telemetry::ekf::Ekf;
+use sensor_fusion::ekf::Ekf;
+use sensor_fusion::velocity::select_best_velocity;
 
 use crate::{
     binary_telemetry,
@@ -60,6 +61,26 @@ impl SensorManager {
     /// Get GPS fix (convenience method)
     pub fn gps_fix(&self) -> &neo6m::GpsFix {
         self.gps_parser.last_fix()
+    }
+
+    /// Get best available velocity estimate as (vx, vy, speed) tuple
+    ///
+    /// Returns consistent values from the same source:
+    /// - Prefers EKF velocity when magnitude > 0.1 m/s
+    /// - Falls back to GPS velocity (from speed + course)
+    /// - Returns zeros if no valid source available
+    pub fn get_velocity(&self, ekf: Option<&Ekf>) -> (f32, f32, f32) {
+        let ekf_velocity = ekf.map(|e| e.velocity());
+        let gps_velocity = self.gps_parser.get_velocity_enu();
+        select_best_velocity(ekf_velocity, gps_velocity)
+    }
+
+    /// Get best available speed estimate (m/s)
+    ///
+    /// Convenience wrapper around get_velocity() for consumers
+    /// that only need scalar speed.
+    pub fn get_speed(&self, ekf: Option<&Ekf>) -> f32 {
+        self.get_velocity(ekf).2
     }
 
     /// Calibrate IMU (must be stationary)
@@ -230,8 +251,8 @@ impl StateEstimator {
     }
 
     /// Update mode classifier
-    pub fn update_mode(&mut self, ax_e: f32, ay_e: f32, yaw: f32, wz: f32, vx: f32, vy: f32) {
-        self.mode_classifier.update(ax_e, ay_e, yaw, wz, vx, vy);
+    pub fn update_mode(&mut self, ax_e: f32, ay_e: f32, yaw: f32, wz: f32, speed: f32) {
+        self.mode_classifier.update(ax_e, ay_e, yaw, wz, speed);
     }
 
     /// Reset speed display (for ZUPT)
@@ -293,24 +314,23 @@ impl TelemetryPublisher {
         packet.yaw = estimator.ekf.yaw();
 
         let (ekf_x, ekf_y) = estimator.ekf.position();
-        let (mut ekf_vx, mut ekf_vy) = estimator.ekf.velocity();
 
-        // Use EKF velocity magnitude for responsive speed display
-        // EKF fuses IMU at ~200 Hz, much faster than 5 Hz GPS updates
-        let ekf_speed_ms = (ekf_vx * ekf_vx + ekf_vy * ekf_vy).sqrt();
-        let mut display_speed_kmh = ekf_speed_ms * 3.6;
+        // Get velocity from best available source (EKF preferred, GPS fallback)
+        // Returns consistent (vx, vy, speed) tuple from same source
+        let (mut vx, mut vy, speed_ms) = sensors.get_velocity(Some(&estimator.ekf));
+        let mut display_speed_kmh = speed_ms * 3.6;
 
         // Zero out very low speeds to clean up display
         if display_speed_kmh < 1.0 {
             display_speed_kmh = 0.0;
-            ekf_vx = 0.0;
-            ekf_vy = 0.0;
+            vx = 0.0;
+            vy = 0.0;
         }
 
         packet.x = ekf_x;
         packet.y = ekf_y;
-        packet.vx = ekf_vx;
-        packet.vy = ekf_vy;
+        packet.vx = vx;
+        packet.vy = vy;
         packet.speed_kmh = display_speed_kmh;
         packet.mode = estimator.mode_classifier.get_mode_u8();
 

@@ -20,9 +20,9 @@ use esp_idf_hal::{
 };
 use esp_idf_svc::{eventloop::EspSystemEventLoop, nvs::EspDefaultNvsPartition};
 use log::info;
-use motorsport_telemetry::transforms::{body_to_earth, remove_gravity};
 use mqtt::MqttClient;
 use rgb_led::RgbLed;
+use sensor_fusion::transforms::{body_to_earth, remove_gravity};
 use system::{SensorManager, StateEstimator, StatusManager, TelemetryPublisher};
 use udp_stream::UdpTelemetryStream;
 use websocket_server::{TelemetryServer, TelemetryServerState};
@@ -507,7 +507,7 @@ fn main() {
         // Publish telemetry at configured rate
         if now_ms - last_telemetry_ms >= config.telemetry.interval_ms {
             // Update mode classifier
-            let (vx, vy) = estimator.ekf.velocity();
+            let speed = sensors.get_speed(Some(&estimator.ekf));
             let (ax_corr, ay_corr, _) = sensors.imu_parser.get_accel_corrected();
             let (ax_b, ay_b, _) = remove_gravity(
                 ax_corr,
@@ -529,8 +529,7 @@ fn main() {
                 ay_e,
                 estimator.ekf.yaw(),
                 sensors.imu_parser.data().wz,
-                vx,
-                vy,
+                speed,
             );
 
             // Publish telemetry
