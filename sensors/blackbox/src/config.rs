@@ -25,7 +25,8 @@ pub enum GpsModel {
     Neo6M,
     /// NEO-7M: GPS + GLONASS, max 10 Hz (default)
     Neo7M,
-    /// NEO-8M: GPS + GLONASS + Galileo + BeiDou, max 10 Hz (18 Hz in single-GNSS mode)
+    /// NEO-8M: GPS + GLONASS + Galileo + BeiDou, max 10 Hz (18 Hz in
+    /// single-GNSS mode)
     Neo8M,
 }
 
@@ -34,7 +35,8 @@ impl Default for GpsModel {
         // Check environment variable at compile time
         match option_env!("GPS_MODEL") {
             Some(m) => {
-                // Note: to_lowercase() not available at compile time, so we match common variants
+                // Note: to_lowercase() not available at compile time, so we match common
+                // variants
                 match m {
                     "neo6m" | "Neo6M" | "NEO6M" | "6m" | "6M" | "6" => GpsModel::Neo6M,
                     "neo7m" | "Neo7M" | "NEO7M" | "7m" | "7M" | "7" => GpsModel::Neo7M,

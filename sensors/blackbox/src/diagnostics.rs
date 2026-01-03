@@ -1,7 +1,8 @@
 //! Diagnostics system for monitoring sensor health and system status
 //!
-//! This module provides real-time diagnostics without impacting telemetry performance.
-//! Updates use try_lock() to avoid blocking the main telemetry path.
+//! This module provides real-time diagnostics without impacting telemetry
+//! performance. Updates use try_lock() to avoid blocking the main telemetry
+//! path.
 
 use std::sync::{Arc, Mutex};
 
@@ -171,4 +172,3 @@ impl DiagnosticsState {
         self.data.lock().unwrap().clone()
     }
 }
-

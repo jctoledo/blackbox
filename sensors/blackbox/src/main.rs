@@ -114,7 +114,8 @@ fn main() {
                     "Starting telemetry server on port {}",
                     config.network.ws_port
                 );
-                match TelemetryServer::new(config.network.ws_port, Some(diagnostics_state.clone())) {
+                match TelemetryServer::new(config.network.ws_port, Some(diagnostics_state.clone()))
+                {
                     Ok(server) => {
                         telemetry_state = Some(server.state());
                         telemetry_server = Some(server);
