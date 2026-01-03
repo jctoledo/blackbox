@@ -346,7 +346,14 @@ RX: GPIO4  ← GPS TX
 
 **Why UART0 for GPS?** Console output is disabled in `sdkconfig.defaults` to free UART0. All logging goes through USB-JTAG instead.
 
-### IMU Calibration (main.rs:387-420)
+### IMU Calibration (system.rs:66-128)
+
+**Startup Procedure:**
+1. Affix device securely to vehicle
+2. Park on a flat, level surface with motor OFF (ICE) or stationary (EV)
+3. Power on the device
+4. Wait for yellow LED blinks to complete (~10 seconds)
+5. Then drive off
 
 **Process:**
 1. Device must be completely stationary on level surface
@@ -359,6 +366,28 @@ RX: GPIO4  ← GPS TX
 - Duration: ~10 seconds at 200 Hz IMU rate
 
 **Critical:** Any movement during calibration corrupts biases → poor EKF performance.
+
+### Mount Calibration (calibration.rs)
+
+**Purpose:** Determines the yaw offset between the device's forward axis and the vehicle's forward axis. The device can be mounted in any horizontal orientation.
+
+**How it works:** When braking hard in a straight line, the acceleration vector points directly backward relative to the vehicle. The angle of this vector in the device's body frame *is* the mounting offset.
+
+**Procedure:**
+1. Complete IMU calibration (device startup)
+2. Trigger mount calibration via web UI (`/api/calibrate` endpoint)
+3. Drive forward above 3 m/s (~11 km/h)
+4. Brake hard in a straight line (>0.25g deceleration)
+5. Hold brake for ~0.5 seconds while going straight
+
+**Calibration States:**
+- `WaitingForMotion`: Drive forward to start
+- `WaitingForBrake`: Now brake hard in a straight line
+- `Collecting`: Gathering brake samples
+- `Complete`: Offset computed and saved to NVS
+- `Failed`: Timeout or inconsistent samples (retry)
+
+**Persistence:** Mount calibration is stored in NVS flash and survives reboots. Only needs to be done once per mounting position.
 
 ### Telemetry Rate (main.rs:35)
 
