@@ -403,9 +403,6 @@ fn main() {
                 // GPS health
                 d.gps_health.fix_valid = sensors.gps_parser.last_fix().valid;
                 d.gps_health.warmup_complete = sensors.gps_parser.is_warmed_up();
-
-                // IMU temperature
-                d.imu_temp_celsius = sensors.imu_parser.data().temp;
             });
 
             last_diagnostics_ms = now_ms;

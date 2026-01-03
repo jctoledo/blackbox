@@ -57,6 +57,29 @@ python3 tools/python/mqtt_decoder.py           # JSON (legacy)
 python3 -m py_compile tools/python/*.py
 ```
 
+### Pre-Commit Checks (REQUIRED)
+
+**Always run these locally before pushing changes to avoid CI failures:**
+
+```bash
+# Format all code
+cargo fmt
+
+# Run tests on framework and drivers (no hardware needed)
+cargo test -p sensor-fusion -p wt901 -p ublox-neo
+
+# Lint framework and drivers
+cargo clippy -p sensor-fusion -p wt901 -p ublox-neo -- -D warnings
+
+# Check firmware compilation (requires ESP toolchain)
+cd sensors/blackbox && cargo check && cd ../..
+```
+
+**Quick one-liner for all checks:**
+```bash
+cargo fmt && cargo test -p sensor-fusion -p wt901 -p ublox-neo && cargo clippy -p sensor-fusion -p wt901 -p ublox-neo -- -D warnings
+```
+
 ### Project Structure
 ```
 blackbox/

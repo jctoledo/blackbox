@@ -128,8 +128,6 @@ pub struct DiagnosticsData {
     pub wifi_status: WifiStatus,
     /// Configuration snapshot
     pub config: ConfigSnapshot,
-    /// IMU temperature (Celsius)
-    pub imu_temp_celsius: f32,
 }
 
 /// Thread-safe diagnostics state

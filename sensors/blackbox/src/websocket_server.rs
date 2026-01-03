@@ -638,7 +638,6 @@ h1{font-size:18px;margin-bottom:16px;color:#60a5fa;letter-spacing:2px}
 <div class="row"><span class="label">GPS Rate</span><span class="value" id="gps-rate">--</span></div>
 <div class="row"><span class="label">GPS Fix</span><span class="value" id="gps-fix">--</span></div>
 <div class="row"><span class="label">Warmup</span><span class="value" id="gps-warmup">--</span></div>
-<div class="row"><span class="label">IMU Temp</span><span class="value" id="imu-temp">--</span></div>
 </div>
 </div>
 <div class="grid">
@@ -687,7 +686,6 @@ async function update(){
     $('gps-fix').className='value '+(d.gps.fix?'ok':'warn');
     $('gps-warmup').textContent=d.gps.warmup?'Complete':'Warming up...';
     $('gps-warmup').className='value '+(d.gps.warmup?'ok':'warn');
-    $('imu-temp').textContent=d.imu_temp.toFixed(1)+'°C';
     $('pos-sigma').textContent=d.ekf.pos_sigma.toFixed(2)+' m';
     $('vel-sigma').textContent=d.ekf.vel_sigma.toFixed(2)+' m/s';
     $('yaw-sigma').textContent=d.ekf.yaw_sigma_deg.toFixed(1)+'°';
@@ -929,8 +927,7 @@ impl TelemetryServer {
                             r#""system":{{"heap_free":{},"uptime_s":{},"tx_ok":{},"tx_fail":{}}},"#,
                             r#""gps":{{"model":"{}","rate_hz":{},"fix":{},"warmup":{}}},"#,
                             r#""wifi":{{"mode":"{}","ssid":"{}","ip":"{}"}},"#,
-                            r#""config":{{"telemetry_hz":{},"gps_model":"{}","warmup_fixes":{}}},"#,
-                            r#""imu_temp":{:.1}}}"#
+                            r#""config":{{"telemetry_hz":{},"gps_model":"{}","warmup_fixes":{}}}}}"#
                         ),
                         d.sensor_rates.imu_hz, d.sensor_rates.gps_hz,
                         d.sensor_rates.imu_expected_hz, d.sensor_rates.gps_expected_hz,
@@ -941,8 +938,7 @@ impl TelemetryServer {
                         d.gps_health.model_name, d.gps_health.configured_rate_hz,
                         d.gps_health.fix_valid, d.gps_health.warmup_complete,
                         d.wifi_status.mode, d.wifi_status.ssid, d.wifi_status.ip_address,
-                        d.config.telemetry_rate_hz, d.config.gps_model, d.config.gps_warmup_fixes,
-                        d.imu_temp_celsius
+                        d.config.telemetry_rate_hz, d.config.gps_model, d.config.gps_warmup_fixes
                     )
                 } else {
                     r#"{"error":"diagnostics not available"}"#.to_string()
