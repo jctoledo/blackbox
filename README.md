@@ -391,35 +391,15 @@ GPS (5-10Hz)        IMU (200Hz)
 └─────────────────────────────────┘       
 ```
 
-### File Structure
+### Project Structure
 
 ```
 blackbox/
-├── sensors/
-│   └── blackbox/
-│       ├── .cargo/
-│       │   └── config.toml       # ESP32-C3 build configuration
-│       ├── src/
-│       │   ├── main.rs            # Main loop and setup
-│       │   ├── imu.rs             # WT901 UART parser
-│       │   ├── gps.rs             # NMEA parser with warmup
-│       │   ├── ekf.rs             # 7-state Extended Kalman Filter
-│       │   ├── transforms.rs      # Body↔Earth coordinate math
-│       │   ├── mode.rs            # Driving mode classifier
-│       │   ├── binary_telemetry.rs # 67-byte packet format
-│       │   ├── websocket_server.rs # Mobile dashboard & WebSocket server
-│       │   ├── udp_stream.rs      # High-speed UDP client
-│       │   ├── mqtt.rs            # MQTT client for status
-│       │   ├── wifi.rs            # WiFi connection manager
-│       │   └── rgb_led.rs         # WS2812 status LED
-│       ├── Cargo.toml             # Rust dependencies
-│       ├── sdkconfig.defaults     # ESP-IDF configuration
-│       └── build.rs               # Build script
-├── tools/
-│   └── python/
-│       ├── udp_telemetry_server.py  # Python receiver (UDP)
-│       └── mqtt_binary_decoder.py   # Python receiver (MQTT)
-└── README.md                        # This file
+├── sensors/blackbox/    # ESP32 firmware (main application)
+├── framework/           # sensor-fusion crate (EKF, transforms, velocity)
+├── drivers/wt901/       # WT901 IMU driver crate
+├── drivers/ublox-neo/   # u-blox NEO GPS driver crate (NMEA + UBX)
+└── tools/python/        # Python telemetry receivers (Station mode)
 ```
 
 ### Key Algorithms
