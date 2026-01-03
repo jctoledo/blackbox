@@ -358,6 +358,18 @@ fn main() {
 
             // Update mount calibration state for web UI
             state.update_mount_calibration_state(mount_calibrator.state());
+
+            // Debug: log calibration state periodically when active
+            static mut LAST_CAL_LOG_MS: u32 = 0;
+            if mount_calibrator.is_active() && now_ms.wrapping_sub(unsafe { LAST_CAL_LOG_MS }) > 1000
+            {
+                unsafe { LAST_CAL_LOG_MS = now_ms };
+                info!(
+                    ">>> Mount cal state: {:?}, EKF_RESET_DONE={}",
+                    mount_calibrator.state(),
+                    unsafe { EKF_RESET_DONE }
+                );
+            }
         }
 
         // Periodic diagnostics (serial log every 5s)
@@ -481,13 +493,23 @@ fn main() {
                     let (vx, vy) = estimator.ekf.velocity();
                     (vx * vx + vy * vy).sqrt()
                 } else {
-                    // Before EKF init - fall back to GPS speed (5Hz, may be stale)
-                    sensors
-                        .gps_parser
-                        .get_velocity_enu()
-                        .map(|(vx, vy)| (vx * vx + vy * vy).sqrt())
-                        .unwrap_or(0.0)
+                    // Before EKF init - use raw GPS speed directly
+                    sensors.gps_parser.last_fix().speed / 3.6 // Convert km/h to m/s
                 };
+
+                // Debug: log speed and accel periodically
+                static mut LAST_SPEED_LOG_MS: u32 = 0;
+                if now_ms.wrapping_sub(unsafe { LAST_SPEED_LOG_MS }) > 500 {
+                    unsafe { LAST_SPEED_LOG_MS = now_ms };
+                    let accel_mag = (ax_b * ax_b + ay_b * ay_b).sqrt();
+                    info!(
+                        ">>> Cal: spd={:.1}m/s accel={:.2}m/s² wz={:.2}rad/s state={:?}",
+                        speed,
+                        accel_mag,
+                        sensors.imu_parser.data().wz,
+                        mount_calibrator.state()
+                    );
+                }
 
                 match mount_calibrator.update(
                     ax_b,
