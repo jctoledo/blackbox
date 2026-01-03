@@ -101,8 +101,40 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check
 
-  clippy:
-    name: Clippy
+  test:
+    name: Test Framework & Drivers
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run tests
+        run: cargo test -p sensor-fusion -p wt901 -p ublox-neo
+
+  clippy-libs:
+    name: Clippy (Framework & Drivers)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run clippy
+        run: cargo clippy -p sensor-fusion -p wt901 -p ublox-neo -- -D warnings
+
+  clippy-firmware:
+    name: Clippy (Firmware)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
