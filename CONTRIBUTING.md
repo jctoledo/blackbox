@@ -143,7 +143,7 @@ We especially welcome contributions in these areas:
 
 1. **Sensor Drivers** (in `drivers/`)
    - Additional IMU driver crates (MPU6050, BMI088, LSM6DSO)
-   - GPS improvements to neo6m (GPGGA parsing, RTK, SBAS)
+   - GPS improvements to ublox-neo (GPGGA parsing, RTK, SBAS)
    - New driver crates (barometer, temperature, pressure sensors)
    - All drivers should be no-std compatible with zero dependencies
 
@@ -212,7 +212,7 @@ cargo build
 # Build specific package
 cargo build -p blackbox
 cargo build -p wt901
-cargo build -p neo6m
+cargo build -p ublox-neo
 
 # Build release binary for ESP32
 cd sensors/blackbox

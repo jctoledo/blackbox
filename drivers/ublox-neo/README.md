@@ -1,24 +1,26 @@
-# NEO-6M GPS NMEA Parser
+# u-blox NEO GPS Driver
 
-Pure Rust parser for NMEA sentences from NEO-6M (and compatible) GPS receivers.
+Pure Rust NMEA parser and UBX configuration for u-blox NEO GPS receivers (NEO-6M/7M/8M).
 
 ## Features
 
-- ✅ Zero-allocation NMEA parsing
-- ✅ Supports GPRMC/GNRMC sentences
-- ✅ Reference point averaging (warmup)
-- ✅ Local coordinate conversion (lat/lon → meters)
-- ✅ Position-based speed calculation
-- ✅ `no_std` compatible
-- ✅ No external dependencies
+- Zero-allocation NMEA parsing (GPRMC/GNRMC sentences)
+- UBX protocol support for GPS rate configuration
+- Reference point averaging (warmup)
+- Local coordinate conversion (lat/lon → meters)
+- Position-based speed calculation
+- `no_std` compatible
+- No external dependencies
 
-## Hardware
+## Supported Modules
 
-This driver works with any GPS receiver that outputs NMEA sentences:
-- **NEO-6M** - Popular low-cost GPS module
-- **NEO-7M, NEO-8M** - Higher precision variants
-- Any NMEA 0183 compatible GPS
-- **Baud rate:** Typically 9600 (configurable on module)
+| Module | Max Update Rate | Notes |
+|--------|----------------|-------|
+| **NEO-6M** | 5 Hz | Most common, budget-friendly |
+| **NEO-7M** | 10 Hz | Better accuracy, recommended |
+| **NEO-8M** | 10 Hz (18 Hz*) | Best accuracy, multi-GNSS |
+
+*NEO-8M can achieve 18 Hz in single-GNSS mode, but 10 Hz is recommended for multi-GNSS accuracy.
 
 ## Usage
 
@@ -26,13 +28,13 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-neo6m = { path = "path/to/drivers/neo6m" }
+ublox-neo = { path = "path/to/drivers/ublox-neo" }
 ```
 
-### Basic Example
+### Basic NMEA Parsing
 
 ```rust
-use neo6m::NmeaParser;
+use ublox_neo::NmeaParser;
 
 let mut parser = NmeaParser::new();
 
@@ -54,14 +56,30 @@ loop {
 }
 ```
 
+### Configure GPS Update Rate (UBX)
+
+```rust
+use ublox_neo::ubx::cfg_rate_command;
+
+// Configure for 10 Hz (100ms measurement period)
+let cmd = cfg_rate_command(100);
+uart.write(&cmd);
+
+// Configure for 5 Hz (200ms measurement period)
+let cmd = cfg_rate_command(200);
+uart.write(&cmd);
+```
+
+The `cfg_rate_command()` function generates a complete UBX CFG-RATE command with proper Fletcher checksum.
+
 ### With Local Coordinates
 
 ```rust
-use neo6m::NmeaParser;
+use ublox_neo::NmeaParser;
 
 let mut parser = NmeaParser::new();
 
-// Feed data until warmup complete (averages first 5 fixes)
+// Feed data until warmup complete (averages first N fixes)
 while !parser.is_warmed_up() {
     if parser.feed_byte(uart.read_byte()) {
         println!("Warmup: {:.0}%", parser.warmup_progress() * 100.0);
@@ -84,7 +102,7 @@ loop {
 ### Position-Based Speed
 
 ```rust
-use neo6m::NmeaParser;
+use ublox_neo::NmeaParser;
 
 let mut parser = NmeaParser::new();
 let mut last_timestamp_ms = 0;
@@ -104,9 +122,34 @@ loop {
 }
 ```
 
-## NMEA Sentences
+## UBX Protocol
 
-This parser currently supports:
+The driver includes UBX protocol support for configuring u-blox GPS modules.
+
+### CFG-RATE Command
+
+Sets the GPS measurement and navigation rate:
+
+```rust
+use ublox_neo::ubx::cfg_rate_command;
+
+// Generate command for desired measurement period
+let cmd = cfg_rate_command(100);  // 100ms = 10 Hz
+// cmd is a [u8; 14] containing the complete UBX message with checksum
+```
+
+Command structure (14 bytes):
+```
+0xB5 0x62     - Sync characters (μb)
+0x06 0x08     - CFG-RATE class and message ID
+0x06 0x00     - Payload length (6 bytes)
+LL HH         - measRate: measurement period in ms (little-endian)
+0x01 0x00     - navRate: 1 navigation solution per measurement
+0x01 0x00     - timeRef: GPS time reference
+CK_A CK_B     - Fletcher checksum
+```
+
+## NMEA Sentences
 
 ### GPRMC/GNRMC - Recommended Minimum
 ```
@@ -147,10 +190,32 @@ This driver works in `no_std` environments:
 
 ```toml
 [dependencies]
-neo6m = { path = "...", default-features = false }
+ublox-neo = { path = "...", default-features = false }
 ```
 
 Note: Requires `alloc` feature for NMEA sentence parsing (Vec usage).
+
+## Migration from neo6m
+
+If upgrading from the old `neo6m` crate:
+
+```toml
+# Old
+neo6m = { path = "..." }
+
+# New
+ublox-neo = { path = "..." }
+```
+
+```rust
+// Old
+use neo6m::NmeaParser;
+
+// New
+use ublox_neo::NmeaParser;
+```
+
+The API is fully compatible - only the crate name changed.
 
 ## License
 

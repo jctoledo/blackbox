@@ -39,17 +39,34 @@ pub struct SensorManager {
     gps_uart: UartDriver<'static>,
     last_imu_us: u64,
     stationary_count: u32,
+    // Rate measurement counters
+    imu_packet_count: u32,
+    gps_fix_count: u32,
+    last_rate_calc_ms: u32,
+    /// Measured IMU rate (Hz), updated once per second
+    pub imu_rate_hz: f32,
+    /// Measured GPS rate (Hz), updated once per second
+    pub gps_rate_hz: f32,
 }
 
 impl SensorManager {
-    pub fn new(imu_uart: UartDriver<'static>, gps_uart: UartDriver<'static>) -> Self {
+    pub fn new(
+        imu_uart: UartDriver<'static>,
+        gps_uart: UartDriver<'static>,
+        gps_warmup_fixes: u8,
+    ) -> Self {
         Self {
             imu_parser: Wt901Parser::new(),
-            gps_parser: NmeaParser::new(),
+            gps_parser: NmeaParser::with_warmup_fixes(gps_warmup_fixes),
             imu_uart,
             gps_uart,
             last_imu_us: unsafe { esp_idf_svc::sys::esp_timer_get_time() as u64 },
             stationary_count: 0,
+            imu_packet_count: 0,
+            gps_fix_count: 0,
+            last_rate_calc_ms: 0,
+            imu_rate_hz: 0.0,
+            gps_rate_hz: 0.0,
         }
     }
 
@@ -59,7 +76,7 @@ impl SensorManager {
     }
 
     /// Get GPS fix (convenience method)
-    pub fn gps_fix(&self) -> &neo6m::GpsFix {
+    pub fn gps_fix(&self) -> &ublox_neo::GpsFix {
         self.gps_parser.last_fix()
     }
 
@@ -156,6 +173,7 @@ impl SensorManager {
         if self.imu_uart.read(&mut buf, 0).unwrap_or(0) > 0 {
             if let Some(packet_type) = self.imu_parser.feed_byte(buf[0], now_us) {
                 if packet_type == PacketType::Accel {
+                    self.imu_packet_count += 1; // Count for rate measurement
                     let dt = (now_us - self.last_imu_us) as f32 * 1e-6;
                     self.last_imu_us = now_us;
 
@@ -173,9 +191,27 @@ impl SensorManager {
         let mut buf = [0u8; 1];
 
         if self.gps_uart.read(&mut buf, 0).unwrap_or(0) > 0 {
-            return self.gps_parser.feed_byte(buf[0]);
+            let new_fix = self.gps_parser.feed_byte(buf[0]);
+            if new_fix {
+                self.gps_fix_count += 1; // Count for rate measurement
+            }
+            return new_fix;
         }
         false
+    }
+
+    /// Update sensor rate measurements (call once per second)
+    ///
+    /// Calculates IMU and GPS rates from packet counts over the last second.
+    /// Resets counters after calculation.
+    pub fn update_rates(&mut self, now_ms: u32) {
+        if now_ms.wrapping_sub(self.last_rate_calc_ms) >= 1000 {
+            self.imu_rate_hz = self.imu_packet_count as f32;
+            self.gps_rate_hz = self.gps_fix_count as f32;
+            self.imu_packet_count = 0;
+            self.gps_fix_count = 0;
+            self.last_rate_calc_ms = now_ms;
+        }
     }
 
     /// Check if vehicle is stationary

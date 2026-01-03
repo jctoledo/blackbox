@@ -10,7 +10,7 @@ sensor-fusion = { path = "../../framework" }
 
 # Sensor drivers (workspace members)
 wt901 = { path = "../../drivers/wt901" }
-neo6m = { path = "../../drivers/neo6m" }
+ublox-neo = { path = "../../drivers/ublox-neo" }
 
 # ESP32 HAL and services
 esp-idf-hal = "0.45"
