@@ -3,7 +3,7 @@
 /// Driving mode classifier
 /// Detects IDLE, ACCEL, BRAKE, and CORNER modes based on acceleration and yaw
 /// rate
-use motorsport_telemetry::transforms::earth_to_car;
+use sensor_fusion::transforms::earth_to_car;
 
 const G: f32 = 9.80665; // m/s²
 
@@ -159,20 +159,8 @@ impl ModeClassifier {
     /// * `ay_earth` - Lateral acceleration in earth frame (m/s²)
     /// * `yaw_rad` - Vehicle yaw angle (rad)
     /// * `wz` - Yaw rate (rad/s)
-    /// * `vx` - Velocity X in earth frame (m/s)
-    /// * `vy` - Velocity Y in earth frame (m/s)
-    pub fn update(
-        &mut self,
-        ax_earth: f32,
-        ay_earth: f32,
-        yaw_rad: f32,
-        wz: f32,
-        vx: f32,
-        vy: f32,
-    ) {
-        // Calculate speed
-        let speed = (vx * vx + vy * vy).sqrt();
-
+    /// * `speed` - Vehicle speed (m/s)
+    pub fn update(&mut self, ax_earth: f32, ay_earth: f32, yaw_rad: f32, wz: f32, speed: f32) {
         // Update display speed with EMA
         self.v_disp = (1.0 - self.v_alpha) * self.v_disp + self.v_alpha * speed;
         if self.v_disp < 3.0 / 3.6 {
@@ -313,12 +301,11 @@ mod tests {
         let ay = 0.0;
         let yaw = 0.0;
         let wz = 0.0;
-        let vx = 5.0;
-        let vy = 0.0;
+        let speed = 5.0;
 
         // Multiple updates needed for EMA to converge (alpha=0.25)
         for _ in 0..10 {
-            classifier.update(ax, ay, yaw, wz, vx, vy);
+            classifier.update(ax, ay, yaw, wz, speed);
         }
         assert!(classifier.get_mode().has_accel());
     }
@@ -332,12 +319,11 @@ mod tests {
         let ay = 0.0;
         let yaw = 0.0;
         let wz = 0.0;
-        let vx = 5.0;
-        let vy = 0.0;
+        let speed = 5.0;
 
         // Multiple updates needed for EMA to converge
         for _ in 0..10 {
-            classifier.update(ax, ay, yaw, wz, vx, vy);
+            classifier.update(ax, ay, yaw, wz, speed);
         }
         assert!(classifier.get_mode().has_brake());
     }
@@ -351,10 +337,9 @@ mod tests {
         let ay = 0.0;
         let yaw = 0.0;
         let wz = 0.0;
-        let vx = 0.0; // STOPPED
-        let vy = 0.0;
+        let speed = 0.0; // STOPPED
 
-        classifier.update(ax, ay, yaw, wz, vx, vy);
+        classifier.update(ax, ay, yaw, wz, speed);
         assert!(classifier.get_mode().is_idle()); // Must stay IDLE when stopped
     }
 
@@ -367,12 +352,11 @@ mod tests {
         let ay = 0.15 * G; // 0.15g lateral
         let yaw = 0.0;
         let wz = 0.08; // 0.08 rad/s yaw rate
-        let vx = 8.0; // 8 m/s speed
-        let vy = 0.0;
+        let speed = 8.0; // 8 m/s
 
         // Multiple updates for EMA convergence
         for _ in 0..10 {
-            classifier.update(ax, ay, yaw, wz, vx, vy);
+            classifier.update(ax, ay, yaw, wz, speed);
         }
 
         // Should detect both acceleration and cornering
@@ -396,12 +380,11 @@ mod tests {
         let ay = -0.15 * G; // 0.15g lateral (left turn)
         let yaw = 0.0;
         let wz = -0.08; // -0.08 rad/s yaw rate (left)
-        let vx = 8.0; // 8 m/s speed
-        let vy = 0.0;
+        let speed = 8.0; // 8 m/s
 
         // Multiple updates for EMA convergence
         for _ in 0..10 {
-            classifier.update(ax, ay, yaw, wz, vx, vy);
+            classifier.update(ax, ay, yaw, wz, speed);
         }
 
         // Should detect both braking and cornering
@@ -417,8 +400,7 @@ mod tests {
     fn test_hysteresis_prevents_oscillation() {
         let mut classifier = ModeClassifier::new();
 
-        let vx = 5.0;
-        let vy = 0.0;
+        let speed = 5.0;
         let yaw = 0.0;
         let wz = 0.0;
         let ay = 0.0;
@@ -426,14 +408,14 @@ mod tests {
         // Acceleration above entry threshold - multiple updates for EMA
         let ax1 = 0.20 * G; // Use higher value to ensure EMA exceeds threshold
         for _ in 0..10 {
-            classifier.update(ax1, ay, yaw, wz, vx, vy);
+            classifier.update(ax1, ay, yaw, wz, speed);
         }
         assert!(classifier.get_mode().has_accel(), "Should enter ACCEL");
 
         // Drop to 0.06g (above 0.05g exit threshold) - EMA should stay above exit
         let ax2 = 0.06 * G;
         for _ in 0..5 {
-            classifier.update(ax2, ay, yaw, wz, vx, vy);
+            classifier.update(ax2, ay, yaw, wz, speed);
         }
         assert!(
             classifier.get_mode().has_accel(),
@@ -443,7 +425,7 @@ mod tests {
         // Drop to 0.00g - EMA will gradually fall below exit threshold
         let ax3 = 0.00 * G;
         for _ in 0..20 {
-            classifier.update(ax3, ay, yaw, wz, vx, vy);
+            classifier.update(ax3, ay, yaw, wz, speed);
         }
         assert!(
             classifier.get_mode().is_idle(),
@@ -460,11 +442,10 @@ mod tests {
         let ay = 0.0;
         let yaw = 0.0;
         let wz = 0.0;
-        let vx = 1.5; // Below 2.0 m/s threshold
-        let vy = 0.0;
+        let speed_low = 1.5; // Below 2.0 m/s threshold
 
         for _ in 0..10 {
-            classifier.update(ax, ay, yaw, wz, vx, vy);
+            classifier.update(ax, ay, yaw, wz, speed_low);
         }
         assert!(
             classifier.get_mode().is_idle(),
@@ -472,9 +453,9 @@ mod tests {
         );
 
         // Same acceleration, speed above threshold
-        let vx2 = 2.5;
+        let speed_high = 2.5;
         for _ in 0..10 {
-            classifier.update(ax, ay, yaw, wz, vx2, vy);
+            classifier.update(ax, ay, yaw, wz, speed_high);
         }
         assert!(
             classifier.get_mode().has_accel(),
@@ -491,18 +472,17 @@ mod tests {
         let ay = 0.15 * G;
         let yaw = 0.0;
         let wz = 0.08;
-        let vx = 8.0;
-        let vy = 0.0;
+        let speed = 8.0;
 
         for _ in 0..10 {
-            classifier.update(ax, ay, yaw, wz, vx, vy);
+            classifier.update(ax, ay, yaw, wz, speed);
         }
         assert!(classifier.get_mode().has_corner(), "Should detect corner");
 
         // Add acceleration while still cornering
         let ax2 = 0.20 * G;
         for _ in 0..10 {
-            classifier.update(ax2, ay, yaw, wz, vx, vy);
+            classifier.update(ax2, ay, yaw, wz, speed);
         }
         assert!(classifier.get_mode().has_accel(), "Should detect accel");
         assert!(
@@ -514,7 +494,7 @@ mod tests {
         // Stop accelerating but keep cornering - EMA needs to drop
         let ax3 = 0.0;
         for _ in 0..20 {
-            classifier.update(ax3, ay, yaw, wz, vx, vy);
+            classifier.update(ax3, ay, yaw, wz, speed);
         }
         assert!(!classifier.get_mode().has_accel(), "Should exit accel");
         assert!(classifier.get_mode().has_corner(), "Should still corner");

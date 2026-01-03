@@ -122,7 +122,7 @@ None reported yet! This is the first release.
 Built with:
 - Rust ESP-IDF framework
 - ESP32-C3 RISC-V chip
-- motorsport-telemetry library
+- sensor-fusion library
 
 ---
 

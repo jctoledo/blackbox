@@ -1,6 +1,6 @@
 # Sensor Projects
 
-This directory contains sensor projects built using the **Motorsport Telemetry Framework**.
+This directory contains sensor projects built using the **Sensor Fusion Framework**.
 
 Each subdirectory is a complete, independent sensor application that uses the framework for sensor fusion and coordinate transformations.
 
@@ -57,7 +57,7 @@ edition = "2021"
 
 [dependencies]
 # Core framework
-motorsport-telemetry = { path = "../../framework" }
+sensor-fusion = { path = "../../framework" }
 
 # Sensor drivers (if using existing ones)
 wt901 = { path = "../../drivers/wt901" }
@@ -76,8 +76,8 @@ esp-idf-svc = "0.51"
 ### 4. Implement Your Application
 
 ```rust
-use motorsport_telemetry::ekf::Ekf;
-use motorsport_telemetry::transforms::{body_to_earth, remove_gravity};
+use sensor_fusion::ekf::Ekf;
+use sensor_fusion::transforms::{body_to_earth, remove_gravity};
 
 fn main() {
     // Initialize your hardware
