@@ -687,6 +687,7 @@ The firmware includes a built-in web dashboard that runs directly on the ESP32. 
 | **Session timer** | Time since dashboard loaded |
 | **GPS status** | Current coordinates and fix status |
 | **Recording** | Capture data locally for CSV export |
+| **Diagnostics page** | System health at `/diagnostics` (sensor rates, EKF health, GPS status) |
 
 ### Controls
 
@@ -728,6 +729,7 @@ The firmware supports two WiFi modes, each with different connectivity options:
 - Connect your phone directly to view the dashboard
 - No router or internet required
 - Data delivered via WebSocket (fast) or HTTP polling (fallback)
+- **Diagnostics page** at `http://192.168.71.1/diagnostics` shows sensor rates, EKF health, and system stats
 - **No Python tools** - dashboard only
 
 **To use (default, no changes needed):**
