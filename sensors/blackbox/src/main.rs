@@ -1,5 +1,6 @@
 mod binary_telemetry;
 mod config;
+mod diagnostics;
 mod gps;
 mod imu;
 mod mode;
@@ -13,6 +14,7 @@ mod wifi;
 use std::sync::Arc;
 
 use config::{SystemConfig, WifiModeConfig};
+use diagnostics::DiagnosticsState;
 use esp_idf_hal::{
     delay::FreeRtos,
     peripherals::Peripherals,
@@ -84,6 +86,9 @@ fn main() {
     let mut telemetry_server: Option<TelemetryServer> = None;
     let mut telemetry_state: Option<Arc<TelemetryServerState>> = None;
 
+    // Diagnostics state (shared between server and main loop, AP mode only)
+    let diagnostics_state = DiagnosticsState::new();
+
     // MQTT client (for Station mode)
     let mut mqtt_opt: Option<MqttClient> = None;
 
@@ -104,12 +109,12 @@ fn main() {
                     FreeRtos::delay_ms(200);
                 }
 
-                // Start HTTP telemetry server
+                // Start HTTP telemetry server with diagnostics support
                 info!(
                     "Starting telemetry server on port {}",
                     config.network.ws_port
                 );
-                match TelemetryServer::new(config.network.ws_port) {
+                match TelemetryServer::new(config.network.ws_port, Some(diagnostics_state.clone())) {
                     Ok(server) => {
                         telemetry_state = Some(server.state());
                         telemetry_server = Some(server);
@@ -225,7 +230,11 @@ fn main() {
     .unwrap();
 
     // Initialize UART for GPS
-    info!("Initializing GPS");
+    info!(
+        "Initializing GPS: {} @ {} Hz",
+        config.gps.model.name(),
+        config.gps.model.max_rate_hz()
+    );
     let gps_uart = UartDriver::new(
         peripherals.uart0,
         peripherals.pins.gpio5,
@@ -236,8 +245,16 @@ fn main() {
     )
     .unwrap();
 
-    // Create sensor manager
-    let mut sensors = SensorManager::new(imu_uart, gps_uart);
+    // Configure GPS update rate via UBX command
+    let ubx_cmd = ublox_neo::ubx::cfg_rate_command(config.gps.model.measurement_period_ms());
+    gps_uart.write(&ubx_cmd).ok();
+    info!(
+        "GPS rate configured: {} ms period",
+        config.gps.model.measurement_period_ms()
+    );
+
+    // Create sensor manager with GPS warmup from config
+    let mut sensors = SensorManager::new(imu_uart, gps_uart, config.gps.warmup_fixes);
 
     // Calibrate IMU
     if let Some(ref mut mqtt) = mqtt_opt {
@@ -258,11 +275,28 @@ fn main() {
     let mut estimator = StateEstimator::new();
     let mut publisher = TelemetryPublisher::new(udp_stream, mqtt_opt, telemetry_state.clone());
 
+    // Initialize diagnostics with static config (AP mode only)
+    if is_ap_mode {
+        diagnostics_state.update(|d| {
+            d.wifi_status.mode = "Access Point";
+            d.wifi_status.ssid = config.network.wifi_ssid;
+            d.wifi_status.ip_address = "192.168.71.1";
+            d.config.telemetry_rate_hz = 1000 / config.telemetry.interval_ms;
+            d.config.gps_model = config.gps.model.name();
+            d.config.gps_warmup_fixes = config.gps.warmup_fixes;
+            d.gps_health.model_name = config.gps.model.name();
+            d.gps_health.configured_rate_hz = config.gps.model.max_rate_hz();
+            d.sensor_rates.imu_expected_hz = 200.0;
+            d.sensor_rates.gps_expected_hz = config.gps.model.max_rate_hz() as f32;
+        });
+    }
+
     // Main loop timing
     let mut last_telemetry_ms = 0u32;
     let mut last_heap_check_ms = 0u32;
     let mut last_mqtt_diag_ms = 0u32;
     let mut last_connectivity_check_ms = 0u32;
+    let mut last_diagnostics_ms = 0u32;
     let mut loop_count = 0u32;
 
     // Track previous connectivity state to detect changes
@@ -337,6 +371,43 @@ fn main() {
             publisher.reset_stats();
             loop_count = 0;
             last_heap_check_ms = now_ms;
+        }
+
+        // Update diagnostics state (every second, AP mode only)
+        if is_ap_mode && now_ms - last_diagnostics_ms >= 1000 {
+            sensors.update_rates(now_ms);
+            let (tx_ok, tx_fail) = publisher.get_stats();
+
+            diagnostics_state.update(|d| {
+                // Sensor rates (updated by sensors.update_rates())
+                d.sensor_rates.imu_hz = sensors.imu_rate_hz;
+                d.sensor_rates.gps_hz = sensors.gps_rate_hz;
+
+                // EKF health (access public state x and covariance p directly)
+                let p = &estimator.ekf.p;
+                d.ekf_health.position_sigma = (p[0] + p[1]).sqrt(); // sqrt(px² + py²)
+                d.ekf_health.velocity_sigma = (p[3] + p[4]).sqrt(); // sqrt(vx² + vy²)
+                d.ekf_health.yaw_sigma_deg = p[2].sqrt().to_degrees();
+                let (bias_x, bias_y) = estimator.ekf.biases();
+                d.ekf_health.bias_x = bias_x;
+                d.ekf_health.bias_y = bias_y;
+
+                // System health
+                d.system_health.free_heap_bytes =
+                    unsafe { esp_idf_svc::sys::esp_get_free_heap_size() };
+                d.system_health.uptime_seconds = now_ms / 1000;
+                d.system_health.telemetry_sent = tx_ok;
+                d.system_health.telemetry_failed = tx_fail;
+
+                // GPS health
+                d.gps_health.fix_valid = sensors.gps_parser.last_fix().valid;
+                d.gps_health.warmup_complete = sensors.gps_parser.is_warmed_up();
+
+                // IMU temperature
+                d.imu_temp_celsius = sensors.imu_parser.data().temp;
+            });
+
+            last_diagnostics_ms = now_ms;
         }
 
         // Connectivity check every 5 seconds

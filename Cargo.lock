@@ -98,11 +98,11 @@ dependencies = [
  "esp-idf-svc",
  "esp-idf-sys",
  "log",
- "neo6m",
  "sensor-fusion",
  "serde",
  "serde_json",
  "smart-leds",
+ "ublox-neo",
  "ws2812-esp32-rmt-driver",
  "wt901",
 ]
@@ -952,14 +952,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d5439c4ad607c3c23abf66de8c8bf57ba8adcd1f129e699851a6e43935d339d"
 
 [[package]]
-name = "neo6m"
-version = "0.1.0"
-dependencies = [
- "libm",
- "log",
-]
-
-[[package]]
 name = "nix"
 version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1451,6 +1443,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c0cbe268d35bdb4bb5a56a2de88d0ad0eb70af5384a99d648cd4b3d04039800e"
 dependencies = [
  "winnow",
+]
+
+[[package]]
+name = "ublox-neo"
+version = "0.1.0"
+dependencies = [
+ "libm",
+ "log",
 ]
 
 [[package]]

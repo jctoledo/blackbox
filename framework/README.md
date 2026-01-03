@@ -229,7 +229,7 @@ MIT License - Use it, modify it, sell it, race with it. See `LICENSE` for detail
 
 - **Blackbox** - ESP32-based telemetry system using this framework
 - **wt901 driver** - Standalone WT901 IMU driver crate
-- **neo6m driver** - Standalone NEO-6M GPS driver crate
+- **ublox-neo driver** - u-blox NEO GPS driver crate (supports NEO-6M/7M/8M)
 
 ## Documentation
 

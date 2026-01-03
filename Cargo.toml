@@ -2,7 +2,7 @@
 members = [
     "framework",           # motorsport-telemetry crate
     "drivers/wt901",       # WT901 IMU driver
-    "drivers/neo6m",       # NEO-6M GPS driver
+    "drivers/ublox-neo",   # u-blox NEO GPS driver (6M/7M/8M)
     "sensors/blackbox", # Active Wing ESP32 telemetry application
 ]
 resolver = "2"

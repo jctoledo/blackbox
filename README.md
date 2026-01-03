@@ -21,7 +21,7 @@ A complete ESP32-C3 firmware that fuses GPS and IMU data to track your vehicle's
 - **Built-in mobile dashboard** - view live data on your phone
 
 **How it works:**
-- 7-state Extended Kalman Filter fuses GPS (5Hz) and IMU (50Hz)
+- 7-state Extended Kalman Filter fuses GPS (5-10Hz) and IMU (200Hz)
 - Gyro integrates yaw between GPS updates to maintain heading
 - Body-frame accelerations transformed to earth frame using current orientation
 - Zero-velocity updates eliminate IMU drift when stationary
@@ -44,8 +44,10 @@ A complete ESP32-C3 firmware that fuses GPS and IMU data to track your vehicle's
 |-----------|------|---------|--------------|
 | ESP32-C3 DevKit | $5 | Main controller | AliExpress, Amazon |
 | WT901 IMU | $25 | 9-axis motion sensor | WitMotion store |
-| NEO-6M GPS | $15 | Position/velocity | AliExpress, Amazon |
+| u-blox NEO GPS | $15 | Position/velocity | AliExpress, Amazon |
 | Wires + USB cable | $5 | Connections | - |
+
+**Supported GPS modules:** NEO-6M (5 Hz), NEO-7M (10 Hz, default), NEO-8M (10 Hz)
 
 ### Optional Add-ons
 
@@ -344,9 +346,9 @@ cargo install cargo-espflash
 ### Data Flow
 
 ```
-GPS (5Hz)           IMU (50Hz)           
-   │                   │                  
-   │ NMEA              │ Binary packets    
+GPS (5-10Hz)        IMU (200Hz)
+   │                   │
+   │ NMEA              │ Binary packets
    │ sentences         │                   
    ▼                   ▼                   
 ┌─────────────────────────────────┐       
@@ -369,7 +371,7 @@ GPS (5Hz)           IMU (50Hz)
 │   State: [x, y, ψ, vx, vy,      │       
 │           bias_ax, bias_ay]     │       
 │                                 │       
-│   • Predict using IMU (50Hz)    │       
+│   • Predict using IMU (200Hz)   │       
 │   • Update using GPS (5Hz)      │       
 │   • ZUPT when stationary        │       
 └────────────┬────────────────────┘       
@@ -493,6 +495,25 @@ const MQTT_BROKER: &str = "mqtt://192.168.1.100:1883";
 const TCP_SERVER: &str = "192.168.1.100:9000";
 ```
 
+### GPS Module Selection
+
+Set at compile time via environment variable:
+
+```bash
+# For NEO-6M (5 Hz max)
+export GPS_MODEL="neo6m"
+
+# For NEO-7M (10 Hz max) - DEFAULT
+export GPS_MODEL="neo7m"
+
+# For NEO-8M (10 Hz default)
+export GPS_MODEL="neo8m"
+
+cargo build --release
+```
+
+The firmware sends UBX commands at boot to configure the GPS update rate based on your module.
+
 ### EKF Tuning
 
 Edit `sensors/blackbox/src/ekf.rs`:
@@ -539,7 +560,7 @@ Each threshold has an **entry** and **exit** value (hysteresis) to prevent oscil
 
 | Metric | Value |
 |--------|-------|
-| Update rate | 50 Hz (IMU predict) / 5 Hz (GPS update) |
+| Update rate | 200 Hz (IMU predict) / 5-10 Hz (GPS update) |
 | Telemetry rate | 20 Hz (UDP stream) |
 | Position accuracy | ±1-2m (GPS dependent) |
 | Velocity accuracy | ±0.2 m/s |

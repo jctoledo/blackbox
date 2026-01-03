@@ -1,13 +1,25 @@
-//! NEO-6M GPS NMEA Parser
+//! u-blox NEO GPS NMEA Parser
 //!
-//! This crate provides a pure Rust parser for NMEA sentences from NEO-6M GPS
-//! receivers. It supports GPRMC and GNRMC sentences and provides position,
-//! velocity, and time information.
+//! This crate provides a pure Rust parser for NMEA sentences from u-blox NEO GPS
+//! receivers (NEO-6M, NEO-7M, NEO-8M). It supports GPRMC and GNRMC sentences
+//! and provides position, velocity, and time information. It also includes
+//! UBX protocol support for configuring GPS update rates.
+//!
+//! # Supported Modules
+//!
+//! | Module | Max Rate | Notes |
+//! |--------|----------|-------|
+//! | NEO-6M | 5 Hz | GPS only |
+//! | NEO-7M | 10 Hz | GPS + GLONASS |
+//! | NEO-8M | 10 Hz (18 Hz*) | GPS + GLONASS + Galileo + BeiDou |
+//!
+//! *18 Hz requires single-GNSS mode (GPS only)
 //!
 //! # Features
 //!
 //! - Zero-allocation NMEA parsing
 //! - Supports GPRMC/GNRMC sentences
+//! - UBX protocol for rate configuration
 //! - Reference point averaging (warmup)
 //! - Local coordinate conversion (lat/lon → meters)
 //! - Position-based speed calculation
@@ -16,8 +28,8 @@
 //!
 //! # Example
 //!
-//! ```no_run
-//! use neo6m::NmeaParser;
+//! ```ignore
+//! use ublox_neo::NmeaParser;
 //!
 //! let mut parser = NmeaParser::new();
 //!
@@ -85,6 +97,73 @@ pub mod transforms {
         let dx = lon_to_meters(dlon, ref_lat);
 
         sqrtf(dx * dx + dy * dy)
+    }
+}
+
+/// UBX protocol support for u-blox GPS configuration
+///
+/// UBX is u-blox's proprietary binary protocol for configuring GPS modules.
+/// This module provides functions to generate configuration commands.
+///
+/// # Example
+///
+/// ```ignore
+/// use ublox_neo::ubx;
+///
+/// // Configure GPS for 10 Hz (100ms period)
+/// let cmd = ubx::cfg_rate_command(100);
+/// uart.write(&cmd).ok();
+/// ```
+pub mod ubx {
+    /// Generate UBX CFG-RATE command for given measurement period
+    ///
+    /// This command sets the GPS navigation solution update rate.
+    /// The measurement period determines how often the GPS calculates a position fix.
+    ///
+    /// # Arguments
+    ///
+    /// * `measurement_period_ms` - Time between measurements in milliseconds
+    ///   - 200ms = 5 Hz (NEO-6M max)
+    ///   - 100ms = 10 Hz (NEO-7M/8M max for multi-GNSS)
+    ///   - 55ms ≈ 18 Hz (NEO-8M in single-GNSS mode only)
+    ///
+    /// # Returns
+    ///
+    /// 14-byte UBX command with proper framing and checksum
+    pub fn cfg_rate_command(measurement_period_ms: u16) -> [u8; 14] {
+        let mut cmd = [
+            0xB5, 0x62, // Sync chars (μb)
+            0x06, 0x08, // CFG-RATE class/id
+            0x06, 0x00, // Payload length (6 bytes)
+            0x00, 0x00, // measRate (filled below)
+            0x01, 0x00, // navRate: 1 navigation solution per measurement
+            0x01, 0x00, // timeRef: GPS time (0=UTC, 1=GPS)
+            0x00, 0x00, // Checksum (filled below)
+        ];
+
+        // Set measurement period (little-endian)
+        cmd[6] = (measurement_period_ms & 0xFF) as u8;
+        cmd[7] = (measurement_period_ms >> 8) as u8;
+
+        // Calculate Fletcher checksum over class, id, length, and payload (bytes 2-11)
+        let (ck_a, ck_b) = fletcher_checksum(&cmd[2..12]);
+        cmd[12] = ck_a;
+        cmd[13] = ck_b;
+
+        cmd
+    }
+
+    /// Calculate UBX Fletcher checksum
+    ///
+    /// UBX uses an 8-bit Fletcher checksum algorithm over the message
+    /// (excluding sync chars and checksum itself).
+    fn fletcher_checksum(data: &[u8]) -> (u8, u8) {
+        let (mut ck_a, mut ck_b) = (0u8, 0u8);
+        for byte in data {
+            ck_a = ck_a.wrapping_add(*byte);
+            ck_b = ck_b.wrapping_add(ck_a);
+        }
+        (ck_a, ck_b)
     }
 }
 
@@ -627,5 +706,48 @@ mod tests {
         // Test distance calculation
         let dist = gps_distance(37.0, -122.0, 37.0001, -122.0, 37.0);
         assert!((dist - 11.132).abs() < 0.1);
+    }
+
+    #[test]
+    fn test_ubx_cfg_rate() {
+        use ubx::cfg_rate_command;
+
+        // Test 10 Hz (100ms period)
+        let cmd = cfg_rate_command(100);
+
+        // Verify sync chars
+        assert_eq!(cmd[0], 0xB5);
+        assert_eq!(cmd[1], 0x62);
+
+        // Verify class/id (CFG-RATE)
+        assert_eq!(cmd[2], 0x06);
+        assert_eq!(cmd[3], 0x08);
+
+        // Verify payload length
+        assert_eq!(cmd[4], 0x06);
+        assert_eq!(cmd[5], 0x00);
+
+        // Verify measurement period (100ms = 0x0064 little-endian)
+        assert_eq!(cmd[6], 0x64);
+        assert_eq!(cmd[7], 0x00);
+
+        // Verify navRate = 1
+        assert_eq!(cmd[8], 0x01);
+        assert_eq!(cmd[9], 0x00);
+
+        // Verify timeRef = GPS
+        assert_eq!(cmd[10], 0x01);
+        assert_eq!(cmd[11], 0x00);
+
+        // Verify checksum is computed (non-zero for this payload)
+        // Expected: Fletcher checksum of [0x06, 0x08, 0x06, 0x00, 0x64, 0x00, 0x01, 0x00, 0x01, 0x00]
+        // Manual calculation: ck_a = 0x7A, ck_b = 0x12
+        assert_eq!(cmd[12], 0x7A);
+        assert_eq!(cmd[13], 0x12);
+
+        // Test 5 Hz (200ms period)
+        let cmd_5hz = cfg_rate_command(200);
+        assert_eq!(cmd_5hz[6], 0xC8); // 200 = 0x00C8 little-endian
+        assert_eq!(cmd_5hz[7], 0x00);
     }
 }

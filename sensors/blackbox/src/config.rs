@@ -17,6 +17,61 @@ pub enum WifiModeConfig {
     AccessPoint,
 }
 
+/// Supported u-blox NEO GPS modules
+/// Default: Neo7M (set via GPS_MODEL env var)
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum GpsModel {
+    /// NEO-6M: GPS only, max 5 Hz
+    Neo6M,
+    /// NEO-7M: GPS + GLONASS, max 10 Hz (default)
+    Neo7M,
+    /// NEO-8M: GPS + GLONASS + Galileo + BeiDou, max 10 Hz (18 Hz in single-GNSS mode)
+    Neo8M,
+}
+
+impl Default for GpsModel {
+    fn default() -> Self {
+        // Check environment variable at compile time
+        match option_env!("GPS_MODEL") {
+            Some(m) => {
+                // Note: to_lowercase() not available at compile time, so we match common variants
+                match m {
+                    "neo6m" | "Neo6M" | "NEO6M" | "6m" | "6M" | "6" => GpsModel::Neo6M,
+                    "neo7m" | "Neo7M" | "NEO7M" | "7m" | "7M" | "7" => GpsModel::Neo7M,
+                    "neo8m" | "Neo8M" | "NEO8M" | "8m" | "8M" | "8" => GpsModel::Neo8M,
+                    _ => GpsModel::Neo7M, // Default
+                }
+            }
+            None => GpsModel::Neo7M, // Default
+        }
+    }
+}
+
+impl GpsModel {
+    /// Maximum update rate for this GPS model
+    pub fn max_rate_hz(&self) -> u8 {
+        match self {
+            GpsModel::Neo6M => 5,
+            GpsModel::Neo7M => 10,
+            GpsModel::Neo8M => 10, // 18 Hz possible but 10 Hz better for multi-GNSS accuracy
+        }
+    }
+
+    /// Measurement period in milliseconds for UBX CFG-RATE command
+    pub fn measurement_period_ms(&self) -> u16 {
+        1000 / self.max_rate_hz() as u16
+    }
+
+    /// Human-readable model name
+    pub fn name(&self) -> &'static str {
+        match self {
+            GpsModel::Neo6M => "NEO-6M",
+            GpsModel::Neo7M => "NEO-7M",
+            GpsModel::Neo8M => "NEO-8M",
+        }
+    }
+}
+
 /// Network configuration
 #[derive(Debug, Clone)]
 pub struct NetworkConfig {
@@ -101,15 +156,17 @@ impl Default for ImuConfig {
 /// GPS configuration
 #[derive(Debug, Clone, Copy)]
 pub struct GpsConfig {
+    /// GPS module type (determines max update rate)
+    pub model: GpsModel,
+    /// Number of valid fixes to average for reference point (1 second at 10 Hz)
     pub warmup_fixes: u8,
-    pub update_rate_hz: u8,
 }
 
 impl Default for GpsConfig {
     fn default() -> Self {
         Self {
-            warmup_fixes: 5,
-            update_rate_hz: 5,
+            model: GpsModel::default(), // From GPS_MODEL env var
+            warmup_fixes: 10,
         }
     }
 }

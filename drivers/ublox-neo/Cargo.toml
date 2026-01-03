@@ -1,15 +1,15 @@
 [package]
-name = "neo6m"
+name = "ublox-neo"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-description = "NEO-6M GPS NMEA parser for embedded systems"
+description = "u-blox NEO GPS NMEA parser and UBX configuration for embedded systems"
 license = "MIT OR Apache-2.0"
-keywords = ["gps", "nmea", "neo6m", "parser", "embedded"]
+keywords = ["gps", "nmea", "ublox", "neo-6m", "neo-7m", "neo-8m", "parser", "embedded"]
 categories = ["embedded", "hardware-support", "no-std", "parser-implementations"]
 
 [lib]
-name = "neo6m"
+name = "ublox_neo"
 
 [dependencies]
 # Floating point math for no-std

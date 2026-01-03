@@ -7,7 +7,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Blackbox is an ESP32-C3 vehicle telemetry system that performs real-time sensor fusion of IMU and GPS data using an Extended Kalman Filter (EKF). It includes a built-in web dashboard for mobile use and supports UDP streaming for data logging during track days, autocross, rally, and vehicle dynamics research.
 
 **Target Hardware:** ESP32-C3 microcontroller
-**Sensors:** WT901 9-axis IMU (UART), NEO-6M GPS (UART)
+**Sensors:** WT901 9-axis IMU (UART, 200 Hz), u-blox NEO GPS (UART, 5-10 Hz)
+**Supported GPS:** NEO-6M (5 Hz), NEO-7M (10 Hz, default), NEO-8M (10 Hz)
 **Output:** HTTP dashboard (~20 Hz, AP mode) or UDP streaming (20 Hz, Station mode) + MQTT status
 **Operating Modes:** Access Point (standalone/mobile) or Station (network integration)
 **Cost:** ~$50 in parts vs. $500+ commercial alternatives
@@ -104,7 +105,7 @@ blackbox/
 ┌─────────────────────────────────────────────────────────────┐
 │                    Main Loop (main.rs)                      │
 │                                                             │
-│  WT901 IMU @ 200Hz          NEO-6M GPS @ 5Hz               │
+│  WT901 IMU @ 200Hz          u-blox NEO GPS @ 5-10Hz        │
 │       │                          │                          │
 │       ├─► imu.rs            ┌────┴─────┐                   │
 │       │   Parse UART        │  gps.rs  │                   │
@@ -214,7 +215,7 @@ After 5 consecutive stationary detections:
 **Problem:** GPS provides lat/lon (degrees), but we need local x/y (meters) for physics.
 
 **Solution (`gps.rs:63-80`):**
-1. First 5 valid GPS fixes are averaged → reference point
+1. First 10 valid GPS fixes are averaged → reference point (configurable via `warmup_fixes`)
 2. All subsequent positions converted to local meters relative to reference
 3. Simple approximation: `dx ≈ (lon - lon_ref) * cos(lat) * 111320`
 
@@ -327,6 +328,39 @@ ws_port: 80
 
 **Security Note:** Credentials compiled into firmware. Use environment variables to avoid committing secrets. AP mode password is public by design (mobile convenience).
 
+### GPS Module Selection
+
+Set at compile time via environment variable:
+
+```bash
+# For NEO-6M (5 Hz max)
+export GPS_MODEL="neo6m"
+
+# For NEO-7M (10 Hz max) - DEFAULT
+export GPS_MODEL="neo7m"
+
+# For NEO-8M (10 Hz default, 18 Hz possible in single-GNSS mode)
+export GPS_MODEL="neo8m"
+
+cargo build --release
+```
+
+The firmware sends a UBX CFG-RATE command at boot to configure the GPS update rate based on the selected model. See `drivers/ublox-neo/src/lib.rs` for the UBX protocol implementation.
+
+### Diagnostics Page (AP Mode Only)
+
+In Access Point mode, a diagnostics page is available at `http://192.168.71.1/diagnostics` showing:
+
+- **Sensor Rates:** Measured vs expected IMU (200 Hz) and GPS (5-10 Hz) update rates
+- **EKF Health:** Position/velocity uncertainty (sigma), yaw uncertainty, accelerometer biases
+- **GPS Health:** Module model, configured rate, fix status, warmup progress
+- **System Health:** Free heap memory, uptime, telemetry packet counts
+- **Configuration:** WiFi mode, SSID, IP address, telemetry rate
+
+The diagnostics system uses non-blocking updates (`try_lock()`) to avoid impacting the main telemetry path. Rate counters are updated every second.
+
+**API Endpoint:** `GET /api/diagnostics` returns JSON data for programmatic access.
+
 ### Hardware Pin Assignments (main.rs:49, 124-141)
 
 ```rust
@@ -337,11 +371,11 @@ peripherals.rmt.channel0, peripherals.pins.gpio8
 TX: GPIO18 → IMU RX
 RX: GPIO19 ← IMU TX
 
-// GPS (NEO-6M) - UART0, 9600 baud
+// GPS (u-blox NEO) - UART0, 9600 baud
 TX: GPIO5  → GPS RX
 RX: GPIO4  ← GPS TX
 
-// GPS configured for 5 Hz update rate (line 143-148)
+// GPS rate configured at boot via UBX CFG-RATE command (5-10 Hz depending on model)
 ```
 
 **Why UART0 for GPS?** Console output is disabled in `sdkconfig.defaults` to free UART0. All logging goes through USB-JTAG instead.
@@ -370,7 +404,7 @@ Change to:
 - 25ms → 40 Hz (may be unstable, CPU-limited)
 - 100ms → 10 Hz (more stable, lower bandwidth)
 
-IMU always samples at 200 Hz internal, GPS at 5 Hz. Telemetry rate only affects output frequency.
+IMU always samples at 200 Hz internal, GPS at 5-10 Hz (model-dependent). Telemetry rate only affects output frequency.
 
 ## Module Details
 

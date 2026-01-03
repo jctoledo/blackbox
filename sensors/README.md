@@ -61,7 +61,7 @@ sensor-fusion = { path = "../../framework" }
 
 # Sensor drivers (if using existing ones)
 wt901 = { path = "../../drivers/wt901" }
-neo6m = { path = "../../drivers/neo6m" }
+ublox-neo = { path = "../../drivers/ublox-neo" }
 
 # Your platform HAL
 # For ESP32:
@@ -182,7 +182,7 @@ See the framework documentation for details on:
 
 Reusable sensor drivers available:
 - [wt901](../drivers/wt901/) - WT901 9-axis IMU
-- [neo6m](../drivers/neo6m/) - NEO-6M GPS receiver
+- [ublox-neo](../drivers/ublox-neo/) - u-blox NEO GPS (supports NEO-6M/7M/8M)
 
 Create your own driver crates in `drivers/` for reuse across projects!
 
