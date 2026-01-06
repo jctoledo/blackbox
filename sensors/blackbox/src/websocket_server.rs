@@ -1,7 +1,9 @@
 use std::sync::{
-    atomic::{AtomicBool, AtomicU32, Ordering},
+    atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering},
     Arc, Mutex,
 };
+
+use crate::calibration::{CalibrationState, MountCalibration};
 
 /// HTTP telemetry server for dashboard and settings
 /// Uses HTTP polling for reliable updates without thread blocking
@@ -44,12 +46,18 @@ pub struct TelemetryServerState {
     telemetry_data: Mutex<Vec<u8>>,
     /// Packet counter for clients to detect updates
     packet_counter: AtomicU32,
-    /// Calibration requested flag
+    /// IMU bias calibration requested flag
     calibration_requested: AtomicBool,
     /// Mode detection settings
     mode_settings: Mutex<ModeSettings>,
     /// Settings changed flag
     settings_changed: AtomicBool,
+    /// Mount calibration requested flag
+    mount_calibration_requested: AtomicBool,
+    /// Mount calibration state (0=Idle, 1=WaitingForMotion, 2=WaitingForBrake, 3=Collecting, 4=Complete, 5=Failed)
+    mount_calibration_state: AtomicU8,
+    /// Current mount calibration
+    mount_calibration: Mutex<MountCalibration>,
 }
 
 impl TelemetryServerState {
@@ -60,6 +68,9 @@ impl TelemetryServerState {
             calibration_requested: AtomicBool::new(false),
             mode_settings: Mutex::new(ModeSettings::default()),
             settings_changed: AtomicBool::new(false),
+            mount_calibration_requested: AtomicBool::new(false),
+            mount_calibration_state: AtomicU8::new(0),
+            mount_calibration: Mutex::new(MountCalibration::default()),
         }
     }
 
@@ -121,6 +132,52 @@ impl TelemetryServerState {
     /// Get packet counter
     pub fn packet_count(&self) -> u32 {
         self.packet_counter.load(Ordering::SeqCst)
+    }
+
+    /// Request mount calibration from the UI
+    pub fn request_mount_calibration(&self) {
+        self.mount_calibration_requested
+            .store(true, Ordering::SeqCst);
+    }
+
+    /// Check if mount calibration was requested and clear the flag
+    pub fn take_mount_calibration_request(&self) -> bool {
+        self.mount_calibration_requested
+            .swap(false, Ordering::SeqCst)
+    }
+
+    /// Update mount calibration state (called from main loop)
+    pub fn update_mount_calibration_state(&self, state: CalibrationState) {
+        let state_u8 = match state {
+            CalibrationState::Idle => 0,
+            CalibrationState::WaitingForMotion => 1,
+            CalibrationState::WaitingForBrake => 2,
+            CalibrationState::Collecting => 3,
+            CalibrationState::Complete => 4,
+            CalibrationState::Failed => 5,
+        };
+        self.mount_calibration_state
+            .store(state_u8, Ordering::SeqCst);
+    }
+
+    /// Get mount calibration state
+    pub fn get_mount_calibration_state(&self) -> u8 {
+        self.mount_calibration_state.load(Ordering::SeqCst)
+    }
+
+    /// Store completed mount calibration
+    pub fn set_mount_calibration(&self, cal: MountCalibration) {
+        if let Ok(mut guard) = self.mount_calibration.lock() {
+            *guard = cal;
+        }
+    }
+
+    /// Get current mount calibration
+    pub fn get_mount_calibration(&self) -> MountCalibration {
+        self.mount_calibration
+            .lock()
+            .map(|g| *g)
+            .unwrap_or_default()
     }
 }
 
@@ -243,6 +300,14 @@ body{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0f;color:#f0
 .cfg-btn{flex:1;padding:10px;border:none;border-radius:6px;font-size:11px;font-weight:600;background:#1a1a24;color:#666;cursor:pointer;transition:all .2s}
 .cfg-btn:active{transform:scale(0.97)}
 .cfg-btn.cfg-save{background:linear-gradient(135deg,#1e3a5f,#1a2d4a);color:#60a5fa}
+.mount-section{background:#111;border-radius:10px;padding:12px;margin-top:10px;border:1px solid #1a1a24}
+.mount-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.mount-status{font-size:12px;color:#666}
+.mount-status .state{color:#60a5fa;font-weight:600}
+.mount-status .offset{color:#22c55e;font-weight:600}
+.mount-btn{padding:10px 16px;border:none;border-radius:6px;font-size:11px;background:#1e3a5f;color:#60a5fa;cursor:pointer;text-transform:uppercase;letter-spacing:1px}
+.mount-btn:disabled{background:#1a1a24;color:#444;cursor:not-allowed}
+.mount-btn.active{background:#5f1e1e;color:#f87171;animation:pulse 1s infinite}
 </style></head>
 <body>
 <div class="hdr"><div class="logo">BLACKBOX <span style="font-size:9px;color:#333">v4</span></div><div class="hdr-r"><span class="timer" id="timer">00:00</span><div class="st"><span class="dot" id="dot"></span><span id="stxt">--</span></div></div></div>
@@ -292,6 +357,13 @@ body{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0f;color:#f0
 <div class="cfg-row"><span class="cfg-lbl">Yaw</span><input type="range" min="0.02" max="0.35" step="0.005" class="cfg-slider" id="s-yaw" value="0.05" oninput="updS('yaw')"><span class="cfg-val" id="v-yaw">0.050</span><span class="cfg-unit">r/s</span></div>
 <div class="cfg-row"><span class="cfg-lbl">Min Spd</span><input type="range" min="1.0" max="10.0" step="0.5" class="cfg-slider" id="s-minspd" value="2.0" oninput="updS('minspd')"><span class="cfg-val" id="v-minspd">2.0</span><span class="cfg-unit">m/s</span></div>
 <div class="cfg-btns"><button class="cfg-btn" onclick="resetToPreset()">Reset</button><button class="cfg-btn cfg-save" onclick="saveCfg()">Apply</button></div>
+</div>
+</div>
+<div class="mount-section">
+<div class="cfg-title">Mount Calibration</div>
+<div class="mount-row">
+<div class="mount-status"><span id="mount-state" class="state">Not Calibrated</span><br><span>Offset: <span id="mount-offset" class="offset">0.0</span>°</span></div>
+<button class="mount-btn" id="mount-btn" onclick="startMountCal()">Calibrate</button>
 </div>
 </div>
 </div>
@@ -571,8 +643,35 @@ selectPreset('city');
 }
 }
 
+// Mount calibration functions
+const MOUNT_STATES={idle:'Ready',waiting_motion:'Drive Forward...',waiting_brake:'Brake Hard!',collecting:'Collecting...',complete:'Calibrated',failed:'Failed'};
+async function startMountCal(){
+try{
+await fetch('/api/mount_calibrate?action=start');
+$('mount-btn').className='mount-btn active';$('mount-btn').disabled=true;
+}catch(e){alert('Failed: '+e.message)}
+}
+async function pollMount(){
+try{
+const r=await fetch('/api/mount_calibrate');
+const m=await r.json();
+const active=m.state!=='idle'&&m.state!=='complete'&&m.state!=='failed';
+// Show calibration status: "Calibrated" if done, otherwise show current state
+if(m.calibrated&&!active){
+$('mount-state').textContent='Calibrated';
+$('mount-state').style.color='#22c55e';
+}else{
+$('mount-state').textContent=MOUNT_STATES[m.state]||m.state;
+$('mount-state').style.color=m.state==='failed'?'#ef4444':'#60a5fa';
+}
+$('mount-offset').textContent=m.offset_deg.toFixed(1);
+$('mount-btn').className=active?'mount-btn active':'mount-btn';
+$('mount-btn').disabled=active;
+}catch(e){}
+}
+
 // Load settings, then start polling (self-scheduling for max throughput)
-loadCfg().then(()=>poll());
+loadCfg().then(()=>{poll();setInterval(pollMount,500)})
 </script></body></html>"#;
 
 impl TelemetryServer {
@@ -582,8 +681,8 @@ impl TelemetryServer {
 
         let server_config = Configuration {
             http_port: port,
-            max_uri_handlers: 7, /* Dashboard, telemetry, status, calibrate, settings GET,
-                                  * settings SET */
+            max_uri_handlers: 8, /* Dashboard, telemetry, status, calibrate, mount_calibrate,
+                                  * settings GET, settings SET */
             max_open_sockets: 8, // HTTP only - no long-lived WebSocket connections
             stack_size: 10240,
             ..Default::default()
@@ -673,7 +772,7 @@ impl TelemetryServer {
             },
         )?;
 
-        // Calibration trigger endpoint
+        // IMU bias calibration trigger endpoint
         let state_calib = state.clone();
         server.fn_handler(
             "/api/calibrate",
@@ -690,6 +789,61 @@ impl TelemetryServer {
                     ],
                 )?;
                 response.write_all(b"{\"status\":\"calibrating\"}")?;
+                Ok(())
+            },
+        )?;
+
+        // Mount calibration endpoint - trigger and status
+        let state_mount = state.clone();
+        server.fn_handler(
+            "/api/mount_calibrate",
+            esp_idf_svc::http::Method::Get,
+            move |req| -> Result<(), esp_idf_svc::io::EspIOError> {
+                let uri = req.uri();
+                let action = uri.split('?').nth(1).and_then(|q| {
+                    q.split('&').find_map(|p| {
+                        let mut parts = p.split('=');
+                        if parts.next() == Some("action") {
+                            parts.next()
+                        } else {
+                            None
+                        }
+                    })
+                });
+
+                if action == Some("start") {
+                    info!(">>> Mount calibration requested via API");
+                    state_mount.request_mount_calibration();
+                }
+
+                // Return current state
+                let cal_state = state_mount.get_mount_calibration_state();
+                let cal = state_mount.get_mount_calibration();
+                let state_name = match cal_state {
+                    0 => "idle",
+                    1 => "waiting_motion",
+                    2 => "waiting_brake",
+                    3 => "collecting",
+                    4 => "complete",
+                    5 => "failed",
+                    _ => "unknown",
+                };
+                let json = format!(
+                    r#"{{"state":"{}","calibrated":{},"offset_deg":{:.1}}}"#,
+                    state_name,
+                    cal.is_calibrated,
+                    cal.yaw_offset.to_degrees()
+                );
+
+                let mut response = req.into_response(
+                    200,
+                    None,
+                    &[
+                        ("Content-Type", "application/json"),
+                        ("Access-Control-Allow-Origin", "*"),
+                    ],
+                )?;
+                response.write_all(json.as_bytes())?;
                 Ok(())
             },
         )?;

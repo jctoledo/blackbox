@@ -21,7 +21,7 @@ use crate::{
     websocket_server::TelemetryServerState,
 };
 
-const CALIB_SAMPLES: usize = 150;
+const CALIB_SAMPLES: usize = 500;
 
 /// System-level errors
 #[derive(Debug)]
