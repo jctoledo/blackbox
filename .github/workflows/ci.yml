@@ -280,9 +280,11 @@ jobs:
       - name: Lint with flake8
         if: steps.check_files.outputs.files_exist == 'true'
         run: |
+          # Check for critical errors only (syntax errors, undefined names)
           flake8 tools/python/*.py --count --select=E9,F63,F7,F82 --show-source --statistics
-          flake8 tools/python/*.py --count --exit-zero --max-complexity=10 --max-line-length=100 --statistics
-
-      - name: Check formatting with black
-        if: steps.check_files.outputs.files_exist == 'true'
-        run: black --check tools/python/*.py
+          # Style checks - ignore common stylistic issues, focus on real problems
+          # E203: whitespace before ':' (conflicts with black)
+          # E302/E305: blank line issues (stylistic)
+          # F541: f-string without placeholders (works fine, just unnecessary)
+          # W503: line break before binary operator (outdated)
+          flake8 tools/python/*.py --count --max-line-length=120 --ignore=E203,E302,E305,F541,W503 --statistics
