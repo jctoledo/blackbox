@@ -9,6 +9,8 @@ use esp_idf_svc::http::server::{Configuration, EspHttpServer};
 use esp_idf_svc::io::Write;
 use log::info;
 
+use crate::diagnostics::DiagnosticsState;
+
 /// Mode detection settings (matching mode.rs ModeConfig)
 #[derive(Clone, Copy)]
 pub struct ModeSettings {
@@ -50,6 +52,8 @@ pub struct TelemetryServerState {
     mode_settings: Mutex<ModeSettings>,
     /// Settings changed flag
     settings_changed: AtomicBool,
+    /// Optional diagnostics state (shared with main loop)
+    diagnostics_state: Option<Arc<DiagnosticsState>>,
 }
 
 impl TelemetryServerState {
@@ -60,7 +64,25 @@ impl TelemetryServerState {
             calibration_requested: AtomicBool::new(false),
             mode_settings: Mutex::new(ModeSettings::default()),
             settings_changed: AtomicBool::new(false),
+            diagnostics_state: None,
         }
+    }
+
+    /// Create with diagnostics state for diagnostics page support
+    pub fn with_diagnostics(diagnostics: Arc<DiagnosticsState>) -> Self {
+        Self {
+            telemetry_data: Mutex::new(Vec::with_capacity(128)),
+            packet_counter: AtomicU32::new(0),
+            calibration_requested: AtomicBool::new(false),
+            mode_settings: Mutex::new(ModeSettings::default()),
+            settings_changed: AtomicBool::new(false),
+            diagnostics_state: Some(diagnostics),
+        }
+    }
+
+    /// Get diagnostics state reference
+    pub fn diagnostics(&self) -> Option<&Arc<DiagnosticsState>> {
+        self.diagnostics_state.as_ref()
     }
 
     /// Request calibration from the UI
@@ -245,7 +267,7 @@ body{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0f;color:#f0
 .cfg-btn.cfg-save{background:linear-gradient(135deg,#1e3a5f,#1a2d4a);color:#60a5fa}
 </style></head>
 <body>
-<div class="hdr"><div class="logo">BLACKBOX <span style="font-size:9px;color:#333">v4</span></div><div class="hdr-r"><span class="timer" id="timer">00:00</span><div class="st"><span class="dot" id="dot"></span><span id="stxt">--</span></div></div></div>
+<div class="hdr"><div class="logo">BLACKBOX <span style="font-size:9px;color:#333">v4</span></div><div class="hdr-r"><a href="/diagnostics" style="color:#333;text-decoration:none;font-size:9px;margin-right:10px;opacity:0.6">DIAG</a><span class="timer" id="timer">00:00</span><div class="st"><span class="dot" id="dot"></span><span id="stxt">--</span></div></div></div>
 <div class="main">
 <div class="mode-box" id="modebox"><div class="mode-lbl">Mode</div><div class="mode-val m-idle" id="mode">IDLE</div><div class="mode-icon" id="icon">●</div></div>
 <div class="spd-row">
@@ -431,7 +453,7 @@ for(let i=0;i<b.length;i++)a[i]=b.charCodeAt(i);
 process(a.buffer);
 $('dot').className='dot on';$('stxt').textContent='HTTP';
 }
-setTimeout(poll,5); // Immediately schedule next poll
+setTimeout(poll,33); // Poll at ~30Hz to match ESP32 telemetry rate
 }catch(e){$('dot').className='dot';$('stxt').textContent='Offline';setTimeout(poll,500)} // Retry slower on error
 }
 
@@ -575,22 +597,151 @@ selectPreset('city');
 loadCfg().then(()=>poll());
 </script></body></html>"#;
 
+/// Diagnostics page HTML - auto-refreshes every second
+const DIAGNOSTICS_HTML: &str = r#"<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Blackbox Diagnostics</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,system-ui,monospace;background:#0a0a0f;color:#e0e0e0;padding:16px;font-size:14px}
+h1{font-size:18px;margin-bottom:16px;color:#60a5fa;letter-spacing:2px}
+.section{background:#111;border:1px solid #252530;border-radius:8px;padding:12px;margin-bottom:12px}
+.section h2{font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.row{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #1a1a24}
+.row:last-child{border-bottom:none}
+.label{color:#888}
+.value{color:#60a5fa;font-weight:600}
+.ok{color:#22c55e}
+.warn{color:#f59e0b}
+.err{color:#ef4444}
+.back{display:inline-block;margin-bottom:16px;color:#60a5fa;text-decoration:none;font-size:12px}
+.back:hover{text-decoration:underline}
+.uptime{color:#555;font-size:11px;margin-top:12px;text-align:center}
+</style></head>
+<body>
+<a href="/" class="back">&larr; Back to Dashboard</a>
+<h1>BLACKBOX DIAGNOSTICS</h1>
+<div class="grid">
+<div class="section">
+<h2>Configuration</h2>
+<div class="row"><span class="label">WiFi Mode</span><span class="value" id="wifi-mode">--</span></div>
+<div class="row"><span class="label">SSID</span><span class="value" id="wifi-ssid">--</span></div>
+<div class="row"><span class="label">Telemetry Rate</span><span class="value" id="telem-hz">--</span></div>
+<div class="row"><span class="label">GPS Model</span><span class="value" id="gps-model">--</span></div>
+<div class="row"><span class="label">Warmup Fixes</span><span class="value" id="warmup-fixes">--</span></div>
+</div>
+<div class="section">
+<h2>Sensors</h2>
+<div class="row"><span class="label">IMU Rate</span><span class="value" id="imu-rate">--</span></div>
+<div class="row"><span class="label">GPS Rate</span><span class="value" id="gps-rate">--</span></div>
+<div class="row"><span class="label">Loop Rate</span><span class="value" id="loop-rate">--</span></div>
+<div class="row"><span class="label">ZUPT Count</span><span class="value" id="zupt-count">--</span></div>
+<div class="row"><span class="label">EKF/GPS</span><span class="value" id="ekf-per-gps">--</span></div>
+<div class="row"><span class="label">GPS Fix</span><span class="value" id="gps-fix">--</span></div>
+<div class="row"><span class="label">Satellites</span><span class="value" id="gps-sats">--</span></div>
+<div class="row"><span class="label">HDOP</span><span class="value" id="gps-hdop">--</span></div>
+<div class="row"><span class="label">Warmup</span><span class="value" id="gps-warmup">--</span></div>
+</div>
+</div>
+<div class="grid">
+<div class="section">
+<h2>EKF Health</h2>
+<div class="row"><span class="label">Position sigma</span><span class="value" id="pos-sigma">--</span></div>
+<div class="row"><span class="label">Velocity sigma</span><span class="value" id="vel-sigma">--</span></div>
+<div class="row"><span class="label">Yaw sigma</span><span class="value" id="yaw-sigma">--</span></div>
+<div class="row"><span class="label">Bias X</span><span class="value" id="bias-x">--</span></div>
+<div class="row"><span class="label">Bias Y</span><span class="value" id="bias-y">--</span></div>
+</div>
+<div class="section">
+<h2>System</h2>
+<div class="row"><span class="label">Heap Free</span><span class="value" id="heap">--</span></div>
+<div class="row"><span class="label">TX Success</span><span class="value" id="tx-ok">--</span></div>
+<div class="row"><span class="label">TX Failed</span><span class="value" id="tx-fail">--</span></div>
+</div>
+</div>
+<div class="uptime" id="uptime">Uptime: --</div>
+<script>
+const $=id=>document.getElementById(id);
+function rateClass(actual,expected){
+  const pct=actual/expected;
+  if(pct>=0.9)return'ok';
+  if(pct>=0.5)return'warn';
+  return'err';
+}
+async function update(){
+  try{
+    const r=await fetch('/api/diagnostics');
+    const d=await r.json();
+    if(d.error)return;
+    $('wifi-mode').textContent=d.wifi.mode;
+    $('wifi-ssid').textContent=d.wifi.ssid;
+    $('telem-hz').textContent=d.config.telemetry_hz+' Hz';
+    $('gps-model').textContent=d.config.gps_model;
+    $('warmup-fixes').textContent=d.config.warmup_fixes;
+    const imuEl=$('imu-rate');
+    imuEl.textContent=d.sensor_rates.imu_hz.toFixed(0)+' / '+d.sensor_rates.imu_expected.toFixed(0)+' Hz';
+    imuEl.className='value '+rateClass(d.sensor_rates.imu_hz,d.sensor_rates.imu_expected);
+    const gpsEl=$('gps-rate');
+    gpsEl.textContent=d.sensor_rates.gps_hz.toFixed(1)+' / '+d.sensor_rates.gps_expected.toFixed(0)+' Hz';
+    gpsEl.className='value '+rateClass(d.sensor_rates.gps_hz,d.sensor_rates.gps_expected);
+    $('loop-rate').textContent=d.sensor_rates.loop_hz.toFixed(0)+' Hz';
+    $('zupt-count').textContent=d.sensor_rates.zupt_count;
+    $('ekf-per-gps').textContent=d.sensor_rates.ekf_per_gps.toFixed(1);
+    $('gps-fix').textContent=d.gps.fix?'Valid':'No Fix';
+    $('gps-fix').className='value '+(d.gps.fix?'ok':'warn');
+    $('gps-sats').textContent=d.gps.satellites;
+    $('gps-sats').className='value '+(d.gps.satellites>=4?'ok':(d.gps.satellites>=1?'warn':'err'));
+    $('gps-hdop').textContent=d.gps.hdop.toFixed(1);
+    $('gps-hdop').className='value '+(d.gps.hdop<2?'ok':(d.gps.hdop<5?'warn':'err'));
+    $('gps-warmup').textContent=d.gps.warmup?'Complete':'Warming up...';
+    $('gps-warmup').className='value '+(d.gps.warmup?'ok':'warn');
+    $('pos-sigma').textContent=d.ekf.pos_sigma.toFixed(2)+' m';
+    $('vel-sigma').textContent=d.ekf.vel_sigma.toFixed(2)+' m/s';
+    $('yaw-sigma').textContent=d.ekf.yaw_sigma_deg.toFixed(1)+'deg';
+    $('bias-x').textContent=d.ekf.bias_x.toFixed(4)+' m/s2';
+    $('bias-y').textContent=d.ekf.bias_y.toFixed(4)+' m/s2';
+    $('heap').textContent=(d.system.heap_free/1024).toFixed(0)+' KB';
+    $('tx-ok').textContent=d.system.tx_ok.toLocaleString();
+    const txf=$('tx-fail');
+    txf.textContent=d.system.tx_fail;
+    txf.className='value '+(d.system.tx_fail>0?'warn':'ok');
+    const s=d.system.uptime_s;
+    const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;
+    $('uptime').textContent='Uptime: '+h+'h '+m+'m '+sec+'s';
+  }catch(e){console.log('Diag fetch error:',e)}
+}
+setInterval(update,1000);
+update();
+</script>
+</body></html>"#;
+
 impl TelemetryServer {
     /// Create and start the telemetry server with HTTP polling
-    pub fn new(port: u16) -> Result<Self, Box<dyn std::error::Error>> {
+    ///
+    /// # Arguments
+    /// * `port` - HTTP port to listen on
+    /// * `diagnostics` - Optional diagnostics state for /diagnostics endpoint
+    pub fn new(
+        port: u16,
+        diagnostics: Option<Arc<DiagnosticsState>>,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         info!("Starting Telemetry server on port {}", port);
 
         let server_config = Configuration {
             http_port: port,
-            max_uri_handlers: 7, /* Dashboard, telemetry, status, calibrate, settings GET,
-                                  * settings SET */
+            max_uri_handlers: 9, /* Dashboard, telemetry, status, calibrate, settings GET,
+                                  * settings SET, diagnostics page, diagnostics API */
             max_open_sockets: 8, // HTTP only - no long-lived WebSocket connections
             stack_size: 10240,
             ..Default::default()
         };
 
         let mut server = EspHttpServer::new(&server_config)?;
-        let state = Arc::new(TelemetryServerState::new());
+        let state = Arc::new(match diagnostics {
+            Some(diag) => TelemetryServerState::with_diagnostics(diag),
+            None => TelemetryServerState::new(),
+        });
 
         // Serve the dashboard HTML
         server.fn_handler(
@@ -651,7 +802,6 @@ impl TelemetryServer {
             "/api/status",
             esp_idf_svc::http::Method::Get,
             |req| -> Result<(), esp_idf_svc::io::EspIOError> {
-                info!(">>> /api/status called");
                 #[cfg(esp_idf_httpd_ws_support)]
                 let body = b"{\"status\":\"ok\",\"ws\":true}";
                 #[cfg(not(esp_idf_httpd_ws_support))]
@@ -668,7 +818,6 @@ impl TelemetryServer {
                     ],
                 )?;
                 response.write_all(body)?;
-                info!(">>> /api/status response sent");
                 Ok(())
             },
         )?;
@@ -697,14 +846,12 @@ impl TelemetryServer {
         // Get current settings
         let state_get = state.clone();
         server.fn_handler("/api/settings", esp_idf_svc::http::Method::Get, move |req| -> Result<(), esp_idf_svc::io::EspIOError> {
-            info!(">>> /api/settings GET called");
             let s = state_get.get_settings();
             let json = format!(
                 r#"{{"acc":{:.2},"acc_exit":{:.2},"brake":{:.2},"brake_exit":{:.2},"lat":{:.2},"lat_exit":{:.2},"yaw":{:.3},"min_speed":{:.1}}}"#,
                 s.acc_thr, s.acc_exit, s.brake_thr, s.brake_exit, s.lat_thr, s.lat_exit, s.yaw_thr, s.min_speed
             );
             let content_length = json.len().to_string();
-            info!(">>> /api/settings response: {} bytes", content_length);
             let mut response = req.into_response(
                 200,
                 None,
@@ -716,7 +863,6 @@ impl TelemetryServer {
                 ],
             )?;
             response.write_all(json.as_bytes())?;
-            info!(">>> /api/settings response sent");
             Ok(())
         })?;
 
@@ -770,6 +916,77 @@ impl TelemetryServer {
             response.write_all(json.as_bytes())?;
             Ok(())
         })?;
+
+        // Diagnostics API endpoint (JSON)
+        let state_diag_api = state.clone();
+        server.fn_handler(
+            "/api/diagnostics",
+            esp_idf_svc::http::Method::Get,
+            move |req| -> Result<(), esp_idf_svc::io::EspIOError> {
+                let json = if let Some(diag_state) = state_diag_api.diagnostics() {
+                    let d = diag_state.snapshot();
+                    format!(
+                        concat!(
+                            r#"{{"sensor_rates":{{"imu_hz":{:.1},"gps_hz":{:.1},"loop_hz":{:.0},"imu_expected":{:.0},"gps_expected":{:.0},"zupt_count":{},"ekf_per_gps":{:.1}}},"#,
+                            r#""ekf":{{"pos_sigma":{:.2},"vel_sigma":{:.2},"yaw_sigma_deg":{:.1},"bias_x":{:.4},"bias_y":{:.4}}},"#,
+                            r#""system":{{"heap_free":{},"uptime_s":{},"tx_ok":{},"tx_fail":{}}},"#,
+                            r#""gps":{{"model":"{}","rate_hz":{},"fix":{},"warmup":{},"satellites":{},"hdop":{:.1}}},"#,
+                            r#""wifi":{{"mode":"{}","ssid":"{}"}},"#,
+                            r#""config":{{"telemetry_hz":{},"gps_model":"{}","warmup_fixes":{}}}}}"#
+                        ),
+                        d.sensor_rates.imu_hz, d.sensor_rates.gps_hz, d.sensor_rates.loop_hz,
+                        d.sensor_rates.imu_expected_hz, d.sensor_rates.gps_expected_hz,
+                        d.sensor_rates.zupt_count, d.sensor_rates.ekf_predictions_per_gps,
+                        d.ekf_health.position_sigma, d.ekf_health.velocity_sigma,
+                        d.ekf_health.yaw_sigma_deg, d.ekf_health.bias_x, d.ekf_health.bias_y,
+                        d.system_health.free_heap_bytes, d.system_health.uptime_seconds,
+                        d.system_health.telemetry_sent, d.system_health.telemetry_failed,
+                        d.gps_health.model_name, d.gps_health.configured_rate_hz,
+                        d.gps_health.fix_valid, d.gps_health.warmup_complete,
+                        d.gps_health.satellites, d.gps_health.hdop,
+                        d.wifi_status.mode, d.wifi_status.ssid,
+                        d.config.telemetry_rate_hz, d.config.gps_model, d.config.gps_warmup_fixes
+                    )
+                } else {
+                    r#"{"error":"diagnostics not available"}"#.to_string()
+                };
+
+                let content_length = json.len().to_string();
+                let mut response = req.into_response(
+                    200,
+                    None,
+                    &[
+                        ("Content-Type", "application/json"),
+                        ("Content-Length", &content_length),
+                        ("Access-Control-Allow-Origin", "*"),
+                        ("Cache-Control", "no-cache"),
+                    ],
+                )?;
+                response.write_all(json.as_bytes())?;
+                Ok(())
+            },
+        )?;
+
+        // Diagnostics HTML page
+        server.fn_handler(
+            "/diagnostics",
+            esp_idf_svc::http::Method::Get,
+            |req| -> Result<(), esp_idf_svc::io::EspIOError> {
+                let html_bytes = DIAGNOSTICS_HTML.as_bytes();
+                let content_length = html_bytes.len().to_string();
+                let mut response = req.into_response(
+                    200,
+                    None,
+                    &[
+                        ("Content-Type", "text/html; charset=utf-8"),
+                        ("Content-Length", &content_length),
+                        ("Connection", "close"),
+                    ],
+                )?;
+                response.write_all(html_bytes)?;
+                Ok(())
+            },
+        )?;
 
         info!("Telemetry server ready on port {}", port);
 

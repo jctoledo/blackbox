@@ -1,13 +1,14 @@
-//! NEO-6M GPS NMEA Parser
+//! NEO-6M / NEO-M9N GPS Driver
 //!
-//! This crate provides a pure Rust parser for NMEA sentences from NEO-6M GPS
-//! receivers. It supports GPRMC and GNRMC sentences and provides position,
-//! velocity, and time information.
+//! This crate provides a pure Rust parser for NMEA sentences from u-blox GPS
+//! receivers (NEO-6M, NEO-M9N, etc.). It supports GPRMC/GNRMC/GGA/GSA sentences
+//! and provides position, velocity, satellite info, and time information.
 //!
 //! # Features
 //!
 //! - Zero-allocation NMEA parsing
-//! - Supports GPRMC/GNRMC sentences
+//! - Supports GPRMC/GNRMC (position/velocity), GGA (satellites), GSA (DOP)
+//! - UBX protocol commands for GPS configuration
 //! - Reference point averaging (warmup)
 //! - Local coordinate conversion (lat/lon → meters)
 //! - Position-based speed calculation
@@ -38,6 +39,8 @@
 //! ```
 
 #![cfg_attr(not(any(test, feature = "std")), no_std)]
+
+pub mod ubx;
 
 // Import libm for no-std floating point operations
 use libm::{cos, floor, sin};
@@ -88,6 +91,26 @@ pub mod transforms {
     }
 }
 
+/// GPS fix quality indicator
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum FixQuality {
+    /// No fix
+    #[default]
+    NoFix = 0,
+    /// Standard GPS fix
+    GpsFix = 1,
+    /// Differential GPS fix (DGPS)
+    DgpsFix = 2,
+    /// PPS fix
+    PpsFix = 3,
+    /// RTK Fixed solution
+    RtkFixed = 4,
+    /// RTK Float solution
+    RtkFloat = 5,
+    /// Dead reckoning
+    DeadReckoning = 6,
+}
+
 /// GPS fix data from GPRMC/GNRMC sentence
 #[derive(Debug, Clone, Copy, Default)]
 pub struct GpsFix {
@@ -107,6 +130,18 @@ pub struct GpsFix {
     pub minute: u8,
     /// UTC second (0-59)
     pub second: u8,
+    /// Altitude above mean sea level (meters) - from GGA
+    pub altitude: f32,
+    /// Number of satellites in use - from GGA
+    pub satellites: u8,
+    /// Fix quality indicator - from GGA
+    pub fix_quality: FixQuality,
+    /// Horizontal dilution of precision - from GGA/GSA
+    pub hdop: f32,
+    /// Position dilution of precision - from GSA
+    pub pdop: f32,
+    /// Vertical dilution of precision - from GSA
+    pub vdop: f32,
 }
 
 /// GPS reference point for local coordinate conversion
@@ -317,6 +352,164 @@ impl NmeaParser {
 
         if line.starts_with("$GPRMC") || line.starts_with("$GNRMC") {
             self.parse_rmc(line);
+        } else if line.starts_with("$GPGGA") || line.starts_with("$GNGGA") {
+            self.parse_gga(line);
+        } else if line.starts_with("$GPGSA") || line.starts_with("$GNGSA") {
+            self.parse_gsa(line);
+        }
+    }
+
+    /// Parse GGA sentence for altitude, satellites, fix quality, and HDOP
+    /// Format: $GPGGA,hhmmss.ss,lat,N/S,lon,E/W,quality,numSV,hdop,alt,M,sep,M,age,refID*CS
+    #[cfg(not(any(test, feature = "std")))]
+    fn parse_gga(&mut self, line: &str) {
+        let mut field_idx = 0;
+        let mut field_start = 0;
+        let mut fields: [&str; 15] = [""; 15];
+
+        for (i, &byte) in line.as_bytes().iter().enumerate() {
+            if byte == b',' || byte == b'*' || i == line.len() - 1 {
+                if field_idx < 15 {
+                    let end = if byte == b',' || byte == b'*' { i } else { i + 1 };
+                    fields[field_idx] = &line[field_start..end];
+                    field_idx += 1;
+                }
+                field_start = i + 1;
+            }
+        }
+
+        if field_idx < 10 {
+            return;
+        }
+
+        // Field 6: Fix quality (0=invalid, 1=GPS, 2=DGPS, etc.)
+        if let Ok(q) = fields[6].parse::<u8>() {
+            self.last_fix.fix_quality = match q {
+                0 => FixQuality::NoFix,
+                1 => FixQuality::GpsFix,
+                2 => FixQuality::DgpsFix,
+                3 => FixQuality::PpsFix,
+                4 => FixQuality::RtkFixed,
+                5 => FixQuality::RtkFloat,
+                6 => FixQuality::DeadReckoning,
+                _ => FixQuality::NoFix,
+            };
+        }
+
+        // Field 7: Number of satellites
+        if let Ok(sats) = fields[7].parse::<u8>() {
+            self.last_fix.satellites = sats;
+        }
+
+        // Field 8: HDOP
+        if let Ok(hdop) = parse_f32(fields[8]) {
+            self.last_fix.hdop = hdop;
+        }
+
+        // Field 9: Altitude (meters above mean sea level)
+        if let Ok(alt) = parse_f32(fields[9]) {
+            self.last_fix.altitude = alt;
+        }
+    }
+
+    #[cfg(any(test, feature = "std"))]
+    fn parse_gga(&mut self, line: &str) {
+        let fields: Vec<&str> = line.split([',', '*']).collect();
+
+        if fields.len() < 10 {
+            return;
+        }
+
+        // Field 6: Fix quality
+        if let Ok(q) = fields[6].parse::<u8>() {
+            self.last_fix.fix_quality = match q {
+                0 => FixQuality::NoFix,
+                1 => FixQuality::GpsFix,
+                2 => FixQuality::DgpsFix,
+                3 => FixQuality::PpsFix,
+                4 => FixQuality::RtkFixed,
+                5 => FixQuality::RtkFloat,
+                6 => FixQuality::DeadReckoning,
+                _ => FixQuality::NoFix,
+            };
+        }
+
+        // Field 7: Number of satellites
+        if let Ok(sats) = fields[7].parse::<u8>() {
+            self.last_fix.satellites = sats;
+        }
+
+        // Field 8: HDOP
+        if let Ok(hdop) = fields[8].parse::<f32>() {
+            self.last_fix.hdop = hdop;
+        }
+
+        // Field 9: Altitude
+        if let Ok(alt) = fields[9].parse::<f32>() {
+            self.last_fix.altitude = alt;
+        }
+    }
+
+    /// Parse GSA sentence for DOP values
+    /// Format: $GPGSA,mode,fixType,sv1,sv2,...,sv12,pdop,hdop,vdop*CS
+    #[cfg(not(any(test, feature = "std")))]
+    fn parse_gsa(&mut self, line: &str) {
+        let mut field_idx = 0;
+        let mut field_start = 0;
+        let mut fields: [&str; 18] = [""; 18];
+
+        for (i, &byte) in line.as_bytes().iter().enumerate() {
+            if byte == b',' || byte == b'*' || i == line.len() - 1 {
+                if field_idx < 18 {
+                    let end = if byte == b',' || byte == b'*' { i } else { i + 1 };
+                    fields[field_idx] = &line[field_start..end];
+                    field_idx += 1;
+                }
+                field_start = i + 1;
+            }
+        }
+
+        if field_idx < 17 {
+            return;
+        }
+
+        // Field 15: PDOP
+        if let Ok(pdop) = parse_f32(fields[15]) {
+            self.last_fix.pdop = pdop;
+        }
+
+        // Field 16: HDOP (also in GGA, but GSA is more authoritative)
+        if let Ok(hdop) = parse_f32(fields[16]) {
+            self.last_fix.hdop = hdop;
+        }
+
+        // Field 17: VDOP
+        if let Ok(vdop) = parse_f32(fields[17]) {
+            self.last_fix.vdop = vdop;
+        }
+    }
+
+    #[cfg(any(test, feature = "std"))]
+    fn parse_gsa(&mut self, line: &str) {
+        let fields: Vec<&str> = line.split([',', '*']).collect();
+
+        if fields.len() < 18 {
+            return;
+        }
+
+        // Field 15: PDOP
+        if let Ok(pdop) = fields[15].parse::<f32>() {
+            self.last_fix.pdop = pdop;
+        }
+
+        // Field 16: HDOP
+        if let Ok(hdop) = fields[16].parse::<f32>() {
+            self.last_fix.hdop = hdop;
+        }
+
+        // Field 17: VDOP
+        if let Ok(vdop) = fields[17].parse::<f32>() {
+            self.last_fix.vdop = vdop;
         }
     }
 

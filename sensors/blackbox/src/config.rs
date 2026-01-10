@@ -98,18 +98,99 @@ impl Default for ImuConfig {
     }
 }
 
+/// GPS module model selection
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum GpsModel {
+    /// u-blox NEO-6M (default) - 5Hz max, 9600 baud default
+    #[default]
+    Neo6m,
+    /// u-blox NEO-M9N (SparkFun) - 25Hz max, 38400 baud default
+    NeoM9n,
+}
+
+impl GpsModel {
+    /// Get the factory default baud rate for this GPS model
+    /// This is the baud rate the GPS ships with from the manufacturer.
+    pub fn factory_baud(&self) -> u32 {
+        match self {
+            GpsModel::Neo6m => 9600,
+            GpsModel::NeoM9n => 38400, // SparkFun NEO-M9N factory default
+        }
+    }
+
+    /// Get the target operating baud rate for this GPS model
+    /// NEO-M9N uses 115200 for high refresh rates (10Hz+)
+    pub fn default_baud(&self) -> u32 {
+        match self {
+            GpsModel::Neo6m => 9600,
+            GpsModel::NeoM9n => 115200, // Required for 10Hz+
+        }
+    }
+
+    /// Get the recommended update rate (Hz) for this model
+    pub fn default_rate_hz(&self) -> u8 {
+        match self {
+            GpsModel::Neo6m => 5,
+            GpsModel::NeoM9n => 10, // Optimal for automotive
+        }
+    }
+
+    /// Get the maximum supported update rate (Hz)
+    pub fn max_rate_hz(&self) -> u8 {
+        match self {
+            GpsModel::Neo6m => 5,
+            GpsModel::NeoM9n => 25,
+        }
+    }
+
+    /// Whether this model needs UBX initialization commands
+    pub fn needs_ubx_init(&self) -> bool {
+        match self {
+            GpsModel::Neo6m => false,  // Works with factory defaults
+            GpsModel::NeoM9n => true,  // Needs rate + automotive mode config
+        }
+    }
+
+    /// Get model name for display
+    pub fn name(&self) -> &'static str {
+        match self {
+            GpsModel::Neo6m => "NEO-6M",
+            GpsModel::NeoM9n => "NEO-M9N",
+        }
+    }
+}
+
 /// GPS configuration
 #[derive(Debug, Clone, Copy)]
 pub struct GpsConfig {
+    /// GPS module model
+    pub model: GpsModel,
+    /// UART baud rate (0 = use model default)
+    pub baud_rate: u32,
+    /// Number of fixes to average for reference point
     pub warmup_fixes: u8,
+    /// Expected update rate in Hz (for diagnostics)
     pub update_rate_hz: u8,
 }
 
 impl Default for GpsConfig {
     fn default() -> Self {
         Self {
+            model: GpsModel::Neo6m,
+            baud_rate: 0, // Use model default
             warmup_fixes: 5,
             update_rate_hz: 5,
+        }
+    }
+}
+
+impl GpsConfig {
+    /// Get effective baud rate (model default if not specified)
+    pub fn effective_baud(&self) -> u32 {
+        if self.baud_rate > 0 {
+            self.baud_rate
+        } else {
+            self.model.default_baud()
         }
     }
 }
@@ -192,6 +273,31 @@ impl SystemConfig {
         }
         if let Some(server) = option_env!("UDP_SERVER") {
             config.network.udp_server = server;
+        }
+
+        // GPS model selection
+        if let Some(model) = option_env!("GPS_MODEL") {
+            config.gps.model = match model.to_lowercase().as_str() {
+                "neo6m" | "neo-6m" | "6m" => GpsModel::Neo6m,
+                "neom9n" | "neo-m9n" | "m9n" | "sparkfun" => GpsModel::NeoM9n,
+                _ => GpsModel::Neo6m,
+            };
+            // Set appropriate defaults for selected model
+            config.gps.update_rate_hz = config.gps.model.default_rate_hz();
+        }
+
+        // GPS rate override (optional, e.g., GPS_RATE=25 for 25Hz)
+        if let Some(rate) = option_env!("GPS_RATE") {
+            if let Ok(r) = rate.parse::<u8>() {
+                config.gps.update_rate_hz = r.min(config.gps.model.max_rate_hz());
+            }
+        }
+
+        // GPS baud rate override (optional)
+        if let Some(baud) = option_env!("GPS_BAUD") {
+            if let Ok(b) = baud.parse::<u32>() {
+                config.gps.baud_rate = b;
+            }
         }
 
         config

@@ -1,5 +1,6 @@
 mod binary_telemetry;
 mod config;
+mod diagnostics;
 mod gps;
 mod imu;
 mod mode;
@@ -13,6 +14,7 @@ mod wifi;
 use std::sync::Arc;
 
 use config::{SystemConfig, WifiModeConfig};
+use diagnostics::DiagnosticsState;
 use esp_idf_hal::{
     delay::FreeRtos,
     peripherals::Peripherals,
@@ -38,14 +40,28 @@ fn main() {
 
     info!("=== ESP32-C3 Telemetry System ===");
     info!(
-        "Mode: {}, SSID: {}, Rate: {}Hz",
+        "Mode: {}, SSID: {}, Rate: {}Hz, GPS: {}",
         if is_ap_mode {
             "Access Point"
         } else {
             "Station"
         },
         config.network.wifi_ssid,
-        1000 / config.telemetry.interval_ms
+        1000 / config.telemetry.interval_ms,
+        config.gps.model.name()
+    );
+
+    // Create diagnostics state
+    let diagnostics = Arc::new(DiagnosticsState::new());
+    diagnostics.init(
+        if is_ap_mode { "AP" } else { "Station" },
+        config.network.wifi_ssid,
+        config.gps.model.name(),
+        config.gps.update_rate_hz,
+        config.gps.warmup_fixes,
+        1000 / config.telemetry.interval_ms,
+        200.0, // IMU expected Hz (WT901 configured)
+        config.gps.update_rate_hz as f32,
     );
 
     // Initialize hardware
@@ -109,7 +125,7 @@ fn main() {
                     "Starting telemetry server on port {}",
                     config.network.ws_port
                 );
-                match TelemetryServer::new(config.network.ws_port) {
+                match TelemetryServer::new(config.network.ws_port, Some(diagnostics.clone())) {
                     Ok(server) => {
                         telemetry_state = Some(server.state());
                         telemetry_server = Some(server);
@@ -212,29 +228,197 @@ fn main() {
     // Keep server alive (prevent drop)
     let _server = telemetry_server;
 
-    // Initialize UART for IMU
-    let imu_config = Config::new().baudrate(9600.into());
+    // Initialize UART for IMU with auto-detection of baud rate
+    // WT901 could be at 9600 (factory) or 115200 (configured for 200Hz)
+    // LED feedback: orange blink = trying baud, green = found, red = not found
+    info!("Detecting IMU baud rate...");
+
+    // Start with 115200 (preferred for 200Hz operation)
     let imu_uart = UartDriver::new(
         peripherals.uart1,
         peripherals.pins.gpio18,
         peripherals.pins.gpio19,
         Option::<esp_idf_hal::gpio::Gpio0>::None,
         Option::<esp_idf_hal::gpio::Gpio1>::None,
-        &imu_config,
+        &Config::new().baudrate(115200.into()),
     )
     .unwrap();
 
+    // Try to detect IMU at different baud rates
+    let baud_rates: [u32; 4] = [115200, 9600, 38400, 19200];
+    let mut detected_baud: u32 = 0;
+
+    for (idx, &baud) in baud_rates.iter().enumerate() {
+        if baud != 115200 {
+            imu_uart
+                .change_baudrate(esp_idf_hal::units::Hertz(baud))
+                .ok();
+        }
+
+        // Orange blink to show which baud we're trying (1-4 blinks)
+        for _ in 0..=idx {
+            status_mgr.led_mut().orange().ok();
+            FreeRtos::delay_ms(100);
+            status_mgr.led_mut().set_low().ok();
+            FreeRtos::delay_ms(100);
+        }
+
+        info!("  Trying {} baud...", baud);
+
+        // Read for ~300ms and look for WT901 header bytes (0x55)
+        let mut buf = [0u8; 100];
+        let mut header_count = 0;
+
+        // Do 30 read attempts with 10ms timeout each = ~300ms total
+        for _ in 0..30 {
+            if let Ok(n) = imu_uart.read(&mut buf, 10) {
+                for &byte in buf.iter().take(n) {
+                    if byte == 0x55 {
+                        header_count += 1;
+                    }
+                }
+            }
+        }
+
+        if header_count >= 5 {
+            let estimated_hz = header_count as f32 / 0.3 / 3.0; // 3 packets per cycle
+            info!(
+                "  FOUND IMU at {} baud (~{:.0} Hz, {} headers)",
+                baud, estimated_hz, header_count
+            );
+            detected_baud = baud;
+
+            // Green blinks to confirm detection
+            for _ in 0..3 {
+                status_mgr.led_mut().green().ok();
+                FreeRtos::delay_ms(150);
+                status_mgr.led_mut().set_low().ok();
+                FreeRtos::delay_ms(150);
+            }
+            break;
+        } else {
+            info!("  No data at {} baud ({} headers)", baud, header_count);
+        }
+    }
+
+    if detected_baud == 0 {
+        info!("WARNING: Could not detect IMU! Check wiring.");
+        info!("Defaulting to 9600 baud...");
+
+        // Red blinks to show IMU not found
+        for _ in 0..5 {
+            status_mgr.led_mut().red().ok();
+            FreeRtos::delay_ms(200);
+            status_mgr.led_mut().set_low().ok();
+            FreeRtos::delay_ms(200);
+        }
+
+        imu_uart
+            .change_baudrate(esp_idf_hal::units::Hertz(9600))
+            .ok();
+    }
+
+    // Clear IMU UART buffer after detection (limited reads to avoid infinite loop)
+    // IMU continuously sends data, so we just do a few reads to clear backlog
+    {
+        let mut flush_buf = [0u8; 256];
+        for _ in 0..5 {
+            let _ = imu_uart.read(&mut flush_buf, 0); // Non-blocking
+        }
+    }
+    FreeRtos::delay_ms(10);
+
     // Initialize UART for GPS
-    info!("Initializing GPS");
+    // NEO-M9N two-step configuration:
+    // 1. Connect at factory baud (38400) to send baud rate change command
+    // 2. Reconnect at target baud (115200) to send rate/model config
+    // Configuration is saved to GPS flash for persistence across power cycles.
+    let target_baud = config.gps.effective_baud();
+    let factory_baud = config.gps.model.factory_baud();
+
+    info!(
+        "Initializing GPS ({} @ {} baud, {}Hz)",
+        config.gps.model.name(),
+        target_baud,
+        config.gps.update_rate_hz
+    );
+
+    // Generate UBX commands
+    let mut ubx_buffer: [u8; 128] = [0; 128];
+    let commands = if config.gps.model.needs_ubx_init() {
+        Some(gps::generate_init_sequence(
+            config.gps.update_rate_hz,
+            target_baud,
+            &mut ubx_buffer,
+        ))
+    } else {
+        None
+    };
+
+    // Create GPS UART - start at factory baud if we need to configure
+    let initial_baud = if config.gps.model.needs_ubx_init() && target_baud != factory_baud {
+        factory_baud
+    } else {
+        target_baud
+    };
+
     let gps_uart = UartDriver::new(
         peripherals.uart0,
         peripherals.pins.gpio5,
         peripherals.pins.gpio4,
         Option::<esp_idf_hal::gpio::Gpio2>::None,
         Option::<esp_idf_hal::gpio::Gpio3>::None,
-        &Config::new().baudrate(9600.into()),
+        &Config::new().baudrate(initial_baud.into()),
     )
     .unwrap();
+
+    // If we need to change baud rate, send command at factory baud then switch
+    if config.gps.model.needs_ubx_init() && target_baud != factory_baud {
+        info!("Configuring GPS at factory baud ({})...", factory_baud);
+
+        // Send baud rate change command (first command in sequence)
+        if let Some(cmds) = &commands {
+            let (offset, len) = cmds[0];
+            match gps_uart.write(&ubx_buffer[offset..offset + len]) {
+                Ok(_) => info!("  CFG-VALSET (baud={}) sent ({} bytes)", target_baud, len),
+                Err(e) => info!("  CFG-VALSET (baud) FAILED: {:?}", e),
+            }
+            FreeRtos::delay_ms(100); // Wait for GPS to process and switch baud
+        }
+
+        // Switch ESP32 UART to target baud rate
+        info!("Switching to target baud ({})...", target_baud);
+        gps_uart
+            .change_baudrate(esp_idf_hal::units::Hertz(target_baud))
+            .expect("Failed to change GPS UART baud rate");
+    }
+
+    // Send remaining UBX configuration commands (rate + model)
+    if let Some(cmds) = commands {
+        info!(
+            "Sending UBX configuration (rate={}Hz, mode=Automotive)...",
+            config.gps.update_rate_hz
+        );
+
+        // Skip first command if we already sent baud change
+        let start_idx = if target_baud != factory_baud { 1 } else { 0 };
+
+        for (i, (offset, len)) in cmds.iter().enumerate().skip(start_idx) {
+            let cmd_name = match i {
+                0 => "CFG-VALSET (baud)",
+                1 => "CFG-VALSET (rate + automotive)",
+                _ => "UBX",
+            };
+
+            match gps_uart.write(&ubx_buffer[*offset..*offset + *len]) {
+                Ok(_) => info!("  {} sent ({} bytes)", cmd_name, len),
+                Err(e) => info!("  {} FAILED: {:?}", cmd_name, e),
+            }
+            FreeRtos::delay_ms(100);
+        }
+
+        info!("GPS configuration saved to flash");
+    }
 
     // Create sensor manager
     let mut sensors = SensorManager::new(imu_uart, gps_uart);
@@ -274,6 +458,7 @@ fn main() {
     loop {
         let now_ms = unsafe { (esp_idf_svc::sys::esp_timer_get_time() / 1000) as u32 };
         loop_count += 1;
+        diagnostics.record_loop();
 
         // Check for calibration request from web UI
         if let Some(ref state) = telemetry_state {
@@ -334,13 +519,41 @@ fn main() {
                 free_heap, telem_rate, loop_rate, fail_count
             );
 
+            // Update diagnostics state
+            let uptime_s = now_ms / 1000;
+            diagnostics.update_rates(now_ms);
+            diagnostics.update_system(free_heap, uptime_s, telem_count, fail_count);
+
+            // EKF health: extract sigma from covariance diagonal
+            let pos_sigma = (estimator.ekf.p[0] + estimator.ekf.p[1]).sqrt();
+            let vel_sigma = (estimator.ekf.p[3] + estimator.ekf.p[4]).sqrt();
+            let yaw_sigma_deg = estimator.ekf.p[2].sqrt().to_degrees();
+            diagnostics.update_ekf(
+                pos_sigma,
+                vel_sigma,
+                yaw_sigma_deg,
+                estimator.ekf.x[5], // bias_x
+                estimator.ekf.x[6], // bias_y
+            );
+
+            // GPS health
+            let gps_fix = sensors.gps_parser.last_fix();
+            diagnostics.update_gps(
+                gps_fix.valid,
+                sensors.gps_parser.is_warmed_up(),
+                gps_fix.satellites,
+                gps_fix.hdop,
+                gps_fix.pdop,
+            );
+
             publisher.reset_stats();
             loop_count = 0;
             last_heap_check_ms = now_ms;
         }
 
-        // Connectivity check every 5 seconds
-        if now_ms - last_connectivity_check_ms >= 5000 {
+        // Connectivity check every 5 seconds (Station mode only)
+        // In AP mode, we ARE the access point so connectivity checks don't apply
+        if !is_ap_mode && now_ms - last_connectivity_check_ms >= 5000 {
             let wifi_connected = wifi.is_connected();
             let mqtt_connected = publisher
                 .mqtt_client_mut()
@@ -360,12 +573,12 @@ fn main() {
                     FreeRtos::delay_ms(150);
                 }
             }
-            // Blink while MQTT is disconnected (only in Station mode, and only if WiFi is up)
-            else if !is_ap_mode && !mqtt_connected {
+            // Blink while MQTT is disconnected (only if WiFi is up)
+            else if !mqtt_connected {
                 if was_mqtt_connected {
                     info!("MQTT connection lost!");
                 }
-                // 2 red blinks for MQTT down (Station mode only)
+                // 2 red blinks for MQTT down
                 for _ in 0..2 {
                     status_mgr.led_mut().red().unwrap();
                     FreeRtos::delay_ms(150);
@@ -426,7 +639,11 @@ fn main() {
         }
 
         // Poll IMU and update EKF prediction (only after GPS warmup AND reset)
-        if let Some((dt, _)) = sensors.poll_imu() {
+        if let Some((dt, _, accel_count)) = sensors.poll_imu() {
+            // Record all processed Accel packets for accurate rate measurement
+            for _ in 0..accel_count {
+                diagnostics.record_imu_packet();
+            }
             // Only run EKF prediction after reset is done
             if unsafe { EKF_RESET_DONE } {
                 let (ax_corr, ay_corr, az_corr) = sensors.imu_parser.get_accel_corrected();
@@ -457,6 +674,8 @@ fn main() {
         if sensors.poll_gps() {
             // Check if warmup complete (has reference point) AND fix is valid
             if sensors.gps_parser.is_warmed_up() && sensors.gps_parser.last_fix().valid {
+                // Only count valid position fixes for GPS rate
+                diagnostics.record_gps_fix();
                 let (ax_corr, ay_corr, _) = sensors.imu_parser.get_accel_corrected();
 
                 // Update position from GPS (only when fix is valid)
@@ -467,6 +686,7 @@ fn main() {
                 if sensors.is_stationary(ax_corr, ay_corr, sensors.imu_parser.data().wz) {
                     // Vehicle stopped - perform ZUPT and bias estimation
                     estimator.zupt();
+                    diagnostics.record_zupt();
 
                     let (ax_b, ay_b, _) = remove_gravity(
                         ax_corr,
