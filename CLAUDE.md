@@ -2,15 +2,64 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Your Role
+
+You are a seasoned embedded Rust engineer with deep expertise in:
+
+**Embedded Systems:**
+- ESP32/ESP-IDF ecosystem, FreeRTOS, bare-metal constraints
+- UART protocols, DMA, interrupt-driven I/O, ring buffers
+- Memory-constrained environments (~400KB RAM), heap monitoring
+- Real-time systems: timing constraints, deterministic execution
+- Peripheral drivers: GPS (UBX/NMEA), IMUs (SPI/I2C/UART), LEDs (WS2812/RMT)
+
+**Automotive Physics & Sensor Fusion:**
+- Coordinate frame transformations (body → earth → vehicle)
+- Extended Kalman Filters: state vectors, process/measurement noise tuning (Q/R matrices)
+- IMU characteristics: bias drift, gravity compensation, noise models
+- GPS behavior: HDOP/PDOP, fix quality, position-derived vs reported velocity
+- Vehicle dynamics: lateral/longitudinal acceleration, yaw rate, slip angle
+- ZUPT (Zero Velocity Update) for drift elimination
+
+**Rust Best Practices:**
+- Idiomatic Rust: ownership, lifetimes, error handling with `Result`/`Option`
+- `no_std` compatible patterns when applicable
+- Efficient binary protocols (fixed-size packets, checksums)
+- Avoid over-engineering: solve the problem at hand, not hypothetical future problems
+- Keep abstractions minimal until they prove necessary
+
+**Testing Philosophy:**
+- Write meaningful tests that catch real bugs, not boilerplate
+- **Every test MUST have assertions** (`assert!`, `assert_eq!`, etc.) - a test without assertions proves nothing
+- **Keep tests in sync with code**: When adding new features, add corresponding tests. When removing or changing features, update or remove stale tests.
+- Focus on: coordinate transforms, EKF math, protocol parsing, edge cases
+- Avoid: trivial getters, obvious constructors, framework code
+- Hardware-dependent code is hard to test—isolate pure functions where possible
+- Example good tests: `remove_gravity()` with known angles, EKF prediction with synthetic data, NMEA parser with malformed input
+- Run tests with: `cargo test -p sensor-fusion -p wt901 -p neo6m`
+
+**Code Review:**
+After implementing a new feature or making significant changes, perform a code review before considering the work complete. Focus on:
+- **Dead code**: Unused variables, unreachable branches, orphaned functions
+- **Embedded concerns**: Memory leaks, unbounded allocations, blocking in ISR context
+- **Correctness**: Off-by-one errors, unit mismatches (degrees vs radians, m/s vs km/h)
+- **Thread safety**: Atomic ordering, mutex contention, race conditions
+- **Consistency**: Naming conventions, code style, documentation accuracy
+- **Clippy compliance**: Run `cargo clippy -- -D warnings` and fix all issues
+
 ## Project Overview
 
 Blackbox is an ESP32-C3 vehicle telemetry system that performs real-time sensor fusion of IMU and GPS data using an Extended Kalman Filter (EKF). It includes a built-in web dashboard for mobile use and supports UDP streaming for data logging during track days, autocross, rally, and vehicle dynamics research.
 
 **Target Hardware:** ESP32-C3 microcontroller
-**Sensors:** WT901 9-axis IMU (UART), NEO-6M GPS (UART)
-**Output:** HTTP dashboard (~20 Hz, AP mode) or UDP streaming (20 Hz, Station mode) + MQTT status
+**Sensors:** WT901 9-axis IMU (UART @ 115200), NEO-6M or NEO-M9N GPS (UART)
+**Output:** HTTP dashboard (~30 Hz, AP mode) or UDP streaming (20 Hz, Station mode) + MQTT status
 **Operating Modes:** Access Point (standalone/mobile) or Station (network integration)
-**Cost:** ~$50 in parts vs. $500+ commercial alternatives
+**Cost:** ~$50-100 in parts vs. $1000+ commercial alternatives
+
+**GPS Options:**
+- **NEO-6M**: Budget GPS, 5 Hz max, NMEA only (~$15)
+- **NEO-M9N**: High-performance GPS, up to 25 Hz, UBX protocol, automotive mode (~$75)
 
 ## Build and Development Commands
 
@@ -26,7 +75,7 @@ cargo build --release              # Optimized for ESP32 (recommended)
 # Format code
 cargo fmt
 
-# Run linter
+# Run linter (REQUIRED before committing - no warnings allowed)
 cargo clippy -- -D warnings
 
 # Run tests (limited - most require hardware)
@@ -38,6 +87,11 @@ cargo espflash flash --release --monitor
 
 # Just monitor serial output (after flashing)
 espflash monitor
+
+# Build with NEO-M9N GPS at 25 Hz
+export GPS_MODEL="m9n"
+export GPS_RATE="25"
+cargo build --release
 ```
 
 ### Python Tools
@@ -51,6 +105,13 @@ python3 tools/python/tcp_telemetry_server.py
 # Run MQTT receivers
 python3 tools/python/mqtt_binary_decoder.py    # Binary protocol
 python3 tools/python/mqtt_decoder.py           # JSON (legacy)
+
+# Configure WT901 IMU for 200Hz (run ONCE, saves to EEPROM)
+# Disconnect IMU from ESP32, connect to USB-serial adapter
+python3 tools/python/configure_wt901.py /dev/ttyUSB0
+
+# Probe WT901 IMU baud rate (verify current config)
+python3 tools/python/probe_wt901.py /dev/ttyUSB0
 
 # Check Python syntax
 python3 -m py_compile tools/python/*.py
@@ -104,7 +165,8 @@ blackbox/
 ┌─────────────────────────────────────────────────────────────┐
 │                    Main Loop (main.rs)                      │
 │                                                             │
-│  WT901 IMU @ 200Hz          NEO-6M GPS @ 5Hz               │
+│  WT901 IMU @ 200Hz          GPS @ 5-25Hz                   │
+│  (auto-detect baud)         (NEO-6M or NEO-M9N)            │
 │       │                          │                          │
 │       ├─► imu.rs            ┌────┴─────┐                   │
 │       │   Parse UART        │  gps.rs  │                   │
@@ -128,7 +190,7 @@ blackbox/
 │                │                                            │
 │                ▼                                            │
 │      binary_telemetry.rs                                   │
-│      Pack 66-byte packet                                   │
+│      Pack 67-byte packet                                   │
 │                │                                            │
 │                ▼                                            │
 │      tcp_stream.rs ──► TCP @ 20Hz                         │
@@ -259,7 +321,7 @@ Requires ALL:
 
 ### Binary Telemetry Protocol (binary_telemetry.rs)
 
-**Packet Structure (66 bytes):**
+**Packet Structure (67 bytes):**
 ```c
 struct TelemetryPacket {
     u16  header;         // 0xAA55
@@ -275,10 +337,10 @@ struct TelemetryPacket {
     f32  lat, lon;       // GPS (degrees, 0 if invalid)
     u8   gps_valid;      // 0 or 1
     u16  checksum;       // Sum of first 64 bytes
-};  // Total: 66 bytes
+};  // Total: 67 bytes
 ```
 
-**Why binary?** 66 bytes vs. ~300 bytes JSON. At 20 Hz: 1.3 KB/s vs. 6 KB/s.
+**Why binary?** 67 bytes vs. ~300 bytes JSON. At 20 Hz: 1.3 KB/s vs. 6 KB/s.
 
 **Decoder:** See `tools/python/tcp_telemetry_server.py` for reference implementation.
 
@@ -313,6 +375,11 @@ export WIFI_PASSWORD="YourPassword"
 export MQTT_BROKER="mqtt://192.168.1.100:1883"
 export UDP_SERVER="192.168.1.100:9000"
 cargo build --release
+
+# GPS configuration (optional)
+export GPS_MODEL="m9n"   # "neo6m" (default) or "m9n" for NEO-M9N
+export GPS_RATE="25"     # Update rate in Hz (NEO-M9N: 1-25, NEO-6M: 1-5)
+cargo build --release
 ```
 
 **Defaults (config.rs):**
@@ -333,18 +400,21 @@ ws_port: 80
 // RGB LED
 peripherals.rmt.channel0, peripherals.pins.gpio8
 
-// IMU (WT901) - UART1, 9600 baud
+// IMU (WT901) - UART1, auto-detect baud (115200 preferred, falls back to 9600)
 TX: GPIO18 → IMU RX
 RX: GPIO19 ← IMU TX
 
-// GPS (NEO-6M) - UART0, 9600 baud
+// GPS (NEO-6M or NEO-M9N) - UART0
 TX: GPIO5  → GPS RX
 RX: GPIO4  ← GPS TX
-
-// GPS configured for 5 Hz update rate (line 143-148)
+// NEO-6M: 9600 baud, 5 Hz (NMEA only)
+// NEO-M9N: 115200 baud, up to 25 Hz (UBX CFG-VALSET configuration)
 ```
 
 **Why UART0 for GPS?** Console output is disabled in `sdkconfig.defaults` to free UART0. All logging goes through USB-JTAG instead.
+
+**IMU Baud Rate Auto-Detection:**
+At boot, firmware tries baud rates in order: 115200, 9600, 38400, 19200. Orange LED blinks indicate which baud is being tested. Green blinks confirm detection. This eliminates manual configuration when using different WT901 firmware versions.
 
 ### IMU Calibration (main.rs:387-420)
 
@@ -359,6 +429,32 @@ RX: GPIO4  ← GPS TX
 - Duration: ~10 seconds at 200 Hz IMU rate
 
 **Critical:** Any movement during calibration corrupts biases → poor EKF performance.
+
+### IMU Configuration (Optional - Only If Needed)
+
+**Factory default:** WT901 ships at 9600 baud / 10Hz output. Firmware auto-detects the baud rate.
+
+**When to configure:** Check the diagnostics page after flashing. If IMU Rate shows ~10-20 Hz instead of ~200 Hz, run the configuration tool.
+
+**Setup procedure (requires USB-serial adapter ~$5):**
+1. Disconnect IMU from ESP32
+2. Connect IMU to USB-serial adapter (TX→RX, RX→TX, GND, 5V)
+3. Run: `python3 tools/python/configure_wt901.py /dev/ttyUSB0`
+4. Settings are saved to IMU's EEPROM (persist across power cycles)
+5. Reconnect IMU to ESP32
+
+**What the tool does:**
+1. Tries common baud rates (9600, 115200, etc.) to find the IMU
+2. Sends unlock command: `FF AA 69 88 B5`
+3. Sets baud rate to 115200: `FF AA 04 06 00`
+4. Sets output rate to 200Hz: `FF AA 03 0B 00`
+5. Saves to EEPROM: `FF AA 00 00 00`
+
+**Rate options:**
+- 10Hz, 20Hz, 50Hz: Work at 9600 baud
+- 100Hz, 200Hz: Require 115200 baud (auto-configured by tool)
+
+**Why 200Hz?** Higher IMU rate = smoother EKF prediction between GPS updates. 200Hz gives 40 IMU samples between 5Hz GPS updates. The system works at 10Hz but sensor fusion quality is reduced.
 
 ### Telemetry Rate (main.rs:35)
 
@@ -481,7 +577,7 @@ Built-in web dashboard for mobile viewing of live telemetry. Runs directly on ES
 
 **HTTP Polling Implementation:**
 ```javascript
-// Client-side polling (40ms interval)
+// Client-side polling (~30 Hz)
 setInterval(async () => {
   const r = await fetch('/api/telemetry');
   const j = await r.json();
@@ -489,14 +585,14 @@ setInterval(async () => {
     // Decode base64, process binary packet
     // Update UI with EMA-filtered speed for smoothness
   }
-}, 40);
+}, 33);
 ```
 
 **Why HTTP instead of WebSocket?**
 - WebSocket handler's blocking loop monopolized ESP-IDF server threads
 - Limited thread pool (4-5 threads) meant one WebSocket = blocked HTTP requests
 - HTTP polling eliminates blocking, allows concurrent API calls
-- 40ms interval compensates for WiFi latency to achieve ~20 Hz effective rate
+- 33ms interval targets ~30 Hz to match ESP32 telemetry update rate
 
 **Preset System:**
 - 4 built-in presets (Track, Canyon, City, Highway) with physics-based thresholds
@@ -513,6 +609,41 @@ Dashboard validates threshold ranges before sending to ESP32:
 
 **Changed from WebSocket (ap_enabled branch):**
 Originally used WebSocket push at 30Hz but this caused thread starvation. Refactored to HTTP polling for reliability.
+
+### diagnostics.rs - System Health Monitoring
+
+**Purpose:**
+Real-time statistics for sensor rates, EKF health, GPS status, and system resources. Accessible via `/api/diagnostics` endpoint.
+
+**Data Structures:**
+- `SensorRates`: IMU Hz, GPS Hz (valid RMC fixes only), ZUPT rate (per minute), EKF predictions per GPS
+- `EkfHealth`: Position/velocity/yaw uncertainty (σ), accelerometer biases
+- `GpsHealth`: Fix valid, warmup complete, satellites, HDOP/PDOP
+- `SystemHealth`: Free heap, uptime, telemetry sent/failed counts
+- `WifiStatus`: Mode (AP/Station), SSID, IP address
+
+**Thread-Safe Design:**
+- `AtomicU32` counters for high-frequency IMU/GPS packet counts
+- `Mutex<DiagnosticsInner>` for complex data structures
+- `snapshot()` returns an immutable copy for HTTP response
+
+**Rate Calculation:**
+Uses exponential moving average (α=0.3) for smoother display:
+```rust
+imu_hz = α * (packets / dt) + (1 - α) * previous_hz
+```
+
+**GPS Rate Counting:**
+GPS rate counts only valid RMC position fixes using `take_new_fix()`. This prevents over-counting when GPS outputs multiple sentence types (RMC, GGA, GSA) per fix cycle.
+
+**ZUPT Rate:**
+Displayed as updates per minute (rolling average), not cumulative count. Typical values: 0-60/min depending on driving pattern.
+
+**Typical Values:**
+- IMU: 199-200 Hz (at 115200 baud)
+- GPS: 5 Hz (NEO-6M) or 8-25 Hz (NEO-M9N depending on config)
+- ZUPT: 0-60/min (depends on stops)
+- Free heap: ~60KB (stable during operation)
 
 ### udp_stream.rs - UDP Client (Station Mode)
 
@@ -613,7 +744,7 @@ Useful for debugging without serial monitor.
 **Problem:** Adding fields breaks decoder compatibility.
 **Solution:** Binary protocol is fixed size. If adding data, either:
 - Replace existing unused field
-- Add padding to maintain 66 bytes
+- Add padding to maintain 67 bytes
 - Version the protocol (add version field, decoders check it)
 
 ### 5. GPS Origin Reset

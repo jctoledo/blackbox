@@ -320,9 +320,9 @@ Theoretically yes, but:
 ### How much data does it use?
 
 **Bandwidth:**
-- 66 bytes per packet
+- 67 bytes per packet
 - 20 packets/second
-- = 1,320 bytes/second = 1.3 KB/s
+- = 1,340 bytes/second = 1.3 KB/s
 
 **Per hour:**
 - 1.3 KB/s × 3600 s = 4.7 MB/hour

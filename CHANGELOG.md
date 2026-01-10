@@ -24,8 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - CTRA motion model for turning dynamics
   - ZUPT for drift prevention when stationary
 - Coordinate frame transformations (body → earth → vehicle)
-- Driving mode classifier (IDLE, ACCEL, BRAKE, CORNER)
-- Binary telemetry protocol (66 bytes per packet)
+- Driving mode classifier (IDLE, ACCEL, BRAKE, CORNER, ACCEL+CORNER, BRAKE+CORNER)
+- Binary telemetry protocol (67 bytes per packet)
 - TCP streaming at 20 Hz
 - MQTT status messaging
 - RGB LED status indication

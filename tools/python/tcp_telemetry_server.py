@@ -17,7 +17,14 @@ class TelemetryDecoder:
     FORMAT = "=BHIffffffffffffBffBH"
     SIZE = 67  # Changed from 66
 
-    MODE_NAMES = ["IDLE", "ACCEL", "BRAKE", "CORNER"]
+    MODE_NAMES = {
+        0: "IDLE",
+        1: "ACCEL",
+        2: "BRAKE",
+        4: "CORNER",
+        5: "ACCEL+CORNER",
+        6: "BRAKE+CORNER",
+    }
 
     def __init__(self):
         self.packet_count = 0
@@ -82,7 +89,7 @@ class TelemetryDecoder:
             "vx": data[12],
             "vy": data[13],
             "speed_kmh": data[14],
-            "mode": self.MODE_NAMES[data[15]] if data[15] < 4 else "UNKNOWN",
+            "mode": self.MODE_NAMES.get(data[15], "UNKNOWN"),
             "lat": data[16],
             "lon": data[17],
             "gps_valid": bool(data[18]),
@@ -107,13 +114,16 @@ class TelemetryDisplay:
         )
         print(f"               Vel:   vx={data['vx']:+6.2f}  vy={data['vy']:+6.2f} m/s")
 
-        print(
-            f"📐 Orientation: Roll:  {data['roll'] * 57.3:+6.1f}°  Pitch: {data['pitch'] * 57.3:+6.1f}°  Yaw: {data['yaw'] * 57.3:+6.1f}°"
-        )
+        roll_deg = data['roll'] * 57.3
+        pitch_deg = data['pitch'] * 57.3
+        yaw_deg = data['yaw'] * 57.3
+        print(f"📐 Orientation: Roll: {roll_deg:+6.1f}°  Pitch: {pitch_deg:+6.1f}°")
+        print(f"                Yaw:  {yaw_deg:+6.1f}°")
 
-        print(
-            f"⚡ Accel:       ax={data['ax']:+6.2f}  ay={data['ay']:+6.2f}  az={data['az']:+6.2f} m/s²  |  wz={data['wz'] * 57.3:+5.1f}°/s"
-        )
+        wz_deg = data['wz'] * 57.3
+        ax, ay, az = data['ax'], data['ay'], data['az']
+        print(f"⚡ Accel:       ax={ax:+6.2f}  ay={ay:+6.2f}  az={az:+6.2f} m/s²")
+        print(f"               wz={wz_deg:+5.1f}°/s")
 
         print(f"📍 Position:    x={data['x']:8.2f}  y={data['y']:8.2f} m")
         if data["gps_valid"]:
@@ -133,9 +143,7 @@ class TelemetryDisplay:
             self.print_full(data, rate)
             return
 
-        gps_str = (
-            f"{data['lat']:.6f},{data['lon']:.6f}" if data["gps_valid"] else "NO_GPS"
-        )
+        gps = "GPS" if data["gps_valid"] else "---"
 
         print(
             f"[{rate:2d}Hz] "
@@ -145,7 +153,7 @@ class TelemetryDisplay:
             f"Acc:({data['ax']:+5.2f},{data['ay']:+5.2f},{data['az']:+5.2f})m/s² "
             f"Yaw:{data['yaw'] * 57.3:+5.0f}° "
             f"wz:{data['wz'] * 57.3:+4.0f}°/s "
-            f"{data['mode']:6s}"
+            f"{data['mode']:6s} {gps}"
         )
 
 
@@ -163,7 +171,7 @@ def handle_client(conn, addr, decoder, display):
 
             # Debug: show first packet
             if not first_packet_shown:
-                print(f"First packet (hex): {chunk[:66].hex()}")
+                print(f"First packet (hex): {chunk[:decoder.SIZE].hex()}")
                 first_packet_shown = True
 
             buffer += chunk

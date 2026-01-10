@@ -143,39 +143,80 @@ impl SensorManager {
         led.set_low().ok();
         info!("=== IMU Calibration Complete ===");
 
+        // Reset last_imu_us to current time so first poll_imu() doesn't have huge dt
+        self.last_imu_us = unsafe { esp_idf_svc::sys::esp_timer_get_time() as u64 };
+
         calibrator
             .compute_bias()
             .ok_or(SystemError::CalibrationFailed)
     }
 
     /// Poll IMU and return dt if new accel data available
-    pub fn poll_imu(&mut self) -> Option<(f32, u64)> {
+    ///
+    /// Reads ALL available bytes from UART buffer to prevent overflow.
+    /// At 115200 baud / 200 Hz, IMU sends ~6600 bytes/sec.
+    /// Reading multiple bytes per call keeps up with the data rate.
+    ///
+    /// Returns Option<(dt, timestamp_us, accel_packet_count)>
+    /// - dt: time since last valid Accel packet
+    /// - timestamp_us: current timestamp
+    /// - accel_packet_count: number of Accel packets processed (for
+    ///   diagnostics)
+    pub fn poll_imu(&mut self) -> Option<(f32, u64, u32)> {
         let now_us = unsafe { esp_idf_svc::sys::esp_timer_get_time() as u64 };
-        let mut buf = [0u8; 1];
+        let mut buf = [0u8; 64]; // Read up to 64 bytes at once (~10 packets worth)
+        let mut result: Option<(f32, u64)> = None;
+        let mut accel_count: u32 = 0;
 
-        if self.imu_uart.read(&mut buf, 0).unwrap_or(0) > 0 {
-            if let Some(packet_type) = self.imu_parser.feed_byte(buf[0], now_us) {
-                if packet_type == PacketType::Accel {
-                    let dt = (now_us - self.last_imu_us) as f32 * 1e-6;
-                    self.last_imu_us = now_us;
+        // Read all available bytes to prevent buffer overflow
+        while let Ok(n) = self.imu_uart.read(&mut buf, 0) {
+            if n == 0 {
+                break;
+            }
 
-                    if dt > 5e-4 && dt < 0.05 {
-                        return Some((dt, now_us));
+            // Process each byte
+            for &byte in buf.iter().take(n) {
+                if let Some(packet_type) = self.imu_parser.feed_byte(byte, now_us) {
+                    if packet_type == PacketType::Accel {
+                        accel_count += 1;
+                        let dt = (now_us - self.last_imu_us) as f32 * 1e-6;
+                        self.last_imu_us = now_us;
+
+                        // Validate dt range (0.5ms to 50ms)
+                        if dt > 5e-4 && dt < 0.05 {
+                            result = Some((dt, now_us));
+                        }
                     }
                 }
             }
         }
-        None
+
+        // Return result with packet count if we processed any Accel packets
+        if accel_count > 0 {
+            result.map(|(dt, ts)| (dt, ts, accel_count))
+        } else {
+            None
+        }
     }
 
     /// Poll GPS and return true if new fix available
+    ///
+    /// Reads all available bytes from UART buffer to prevent overflow.
     pub fn poll_gps(&mut self) -> bool {
-        let mut buf = [0u8; 1];
+        let mut buf = [0u8; 64];
+        let mut new_fix = false;
 
-        if self.gps_uart.read(&mut buf, 0).unwrap_or(0) > 0 {
-            return self.gps_parser.feed_byte(buf[0]);
+        while let Ok(n) = self.gps_uart.read(&mut buf, 0) {
+            if n == 0 {
+                break;
+            }
+            for &byte in buf.iter().take(n) {
+                if self.gps_parser.feed_byte(byte) {
+                    new_fix = true;
+                }
+            }
         }
-        false
+        new_fix
     }
 
     /// Check if vehicle is stationary

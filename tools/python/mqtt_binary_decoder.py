@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Binary telemetry decoder for ESP32-C3 Blackbox telemetry system
-Decodes 64-byte binary packets published to car/telemetry_bin
+Decodes 67-byte binary packets published to car/telemetry_bin
 """
 
 import struct
@@ -14,6 +14,7 @@ class TelemetryDecoder:
     """Decoder for binary telemetry packets"""
 
     # Rust struct (packed, no padding):
+    # u8 version,
     # u16 header, u32 timestamp_ms,
     # f32 ax, ay, az, wz, roll, pitch,  (6 floats)
     # f32 yaw, x, y, vx, vy, speed_kmh, (6 floats)
@@ -21,12 +22,19 @@ class TelemetryDecoder:
     # f32 lat, lon,                      (2 floats)
     # u8 gps_valid,
     # u16 checksum
-    # Total: 2+4+(12*4)+1+8+1+2 = 66 bytes
+    # Total: 1+2+4+(12*4)+1+8+1+2 = 67 bytes
 
-    FORMAT = "=HIffffffffffffBffBH"  # 12 f's for 12 floats
-    SIZE = 66  # Verified from actual packets
+    FORMAT = "=BHIffffffffffffBffBH"  # B for version, 12 f's for 12 floats
+    SIZE = 67  # Verified from actual packets
 
-    MODE_NAMES = ["IDLE", "ACCEL", "BRAKE", "CORNER"]
+    MODE_NAMES = {
+        0: "IDLE",
+        1: "ACCEL",
+        2: "BRAKE",
+        4: "CORNER",
+        5: "ACCEL+CORNER",
+        6: "BRAKE+CORNER",
+    }
 
     def __init__(self):
         self.packet_count = 0
@@ -49,10 +57,10 @@ class TelemetryDecoder:
             print(f"❌ Unpack error: {e}")
             return None
 
-        # Verify header
-        if data[0] != 0xAA55:
+        # Verify header (index 1 after version byte)
+        if data[1] != 0xAA55:
             self.error_count += 1
-            print(f"❌ Invalid header: 0x{data[0]:04X} (expected 0xAA55)")
+            print(f"❌ Invalid header: 0x{data[1]:04X} (expected 0xAA55)")
             return None
 
         # Verify checksum (last field in struct)
@@ -61,7 +69,8 @@ class TelemetryDecoder:
         if checksum_calc != checksum_recv:
             self.error_count += 1
             print(
-                f"⚠️  Checksum mismatch: calc=0x{checksum_calc:04X} recv=0x{checksum_recv:04X} (ignoring)"
+                f"⚠️  Checksum mismatch: calc=0x{checksum_calc:04X} "
+                f"recv=0x{checksum_recv:04X} (ignoring)"
             )
             # Don't return None - continue anyway for debugging
 
@@ -73,25 +82,26 @@ class TelemetryDecoder:
             self.packet_count = 0
             self.last_time = now
 
-        # Build dictionary (indices match struct order)
+        # Build dictionary (indices match struct order, version at index 0)
         return {
-            "timestamp_ms": data[1],
-            "ax": data[2],
-            "ay": data[3],
-            "az": data[4],
-            "wz": data[5],
-            "roll": data[6],
-            "pitch": data[7],
-            "yaw": data[8],
-            "x": data[9],
-            "y": data[10],
-            "vx": data[11],
-            "vy": data[12],
-            "speed_kmh": data[13],
-            "mode": self.MODE_NAMES[data[14]] if data[14] < 4 else "UNKNOWN",
-            "lat": data[15],
-            "lon": data[16],
-            "gps_valid": bool(data[17]),
+            "version": data[0],
+            "timestamp_ms": data[2],
+            "ax": data[3],
+            "ay": data[4],
+            "az": data[5],
+            "wz": data[6],
+            "roll": data[7],
+            "pitch": data[8],
+            "yaw": data[9],
+            "x": data[10],
+            "y": data[11],
+            "vx": data[12],
+            "vy": data[13],
+            "speed_kmh": data[14],
+            "mode": self.MODE_NAMES.get(data[15], "UNKNOWN"),
+            "lat": data[16],
+            "lon": data[17],
+            "gps_valid": bool(data[18]),
         }
 
 
@@ -187,7 +197,7 @@ def on_message(client, userdata, msg):
         # Print status messages in JSON
         try:
             print(f"\n📢 Status: {msg.payload.decode('utf-8')}")
-        except:
+        except Exception:
             pass
 
 

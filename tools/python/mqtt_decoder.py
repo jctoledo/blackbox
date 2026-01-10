@@ -15,12 +15,20 @@ class TelemetryDecoder:
 
     # Struct format: Little-endian packed
     # H = uint16, I = uint32, f = float32, B = uint8
-    # Header(2) + timestamp(4) + 6 floats(24) + 7 floats(28) + mode(1) + 2 floats(8) + gps_valid(1) + checksum(2) = 70 bytes
+    # Header(2) + timestamp(4) + 6 floats(24) + 7 floats(28) + mode(1)
+    # + 2 floats(8) + gps_valid(1) + checksum(2) = 70 bytes
     # But packet is packed, so actual size may vary
     FORMAT = "<HIffffffffffffffBffBH"
     SIZE = struct.calcsize(FORMAT)  # Calculate actual size
 
-    MODE_NAMES = ["IDLE", "ACCEL", "BRAKE", "CORNER"]
+    MODE_NAMES = {
+        0: "IDLE",
+        1: "ACCEL",
+        2: "BRAKE",
+        4: "CORNER",
+        5: "ACCEL+CORNER",
+        6: "BRAKE+CORNER",
+    }
 
     def __init__(self):
         self.packet_count = 0
@@ -55,7 +63,8 @@ class TelemetryDecoder:
         if checksum_calc != checksum_recv:
             self.error_count += 1
             print(
-                f"⚠️  Checksum mismatch: calc=0x{checksum_calc:04X} recv=0x{checksum_recv:04X} (ignoring)"
+                f"⚠️  Checksum mismatch: calc=0x{checksum_calc:04X} "
+                f"recv=0x{checksum_recv:04X} (ignoring)"
             )
             # Don't return None - continue anyway for debugging
 
@@ -82,7 +91,7 @@ class TelemetryDecoder:
             "vx": data[11],
             "vy": data[12],
             "speed_kmh": data[13],
-            "mode": self.MODE_NAMES[data[14]] if data[14] < 4 else "UNKNOWN",
+            "mode": self.MODE_NAMES.get(data[14], "UNKNOWN"),
             "lat": data[15],
             "lon": data[16],
             "gps_valid": bool(data[17]),
@@ -181,7 +190,7 @@ def on_message(client, userdata, msg):
         # Print status messages in JSON
         try:
             print(f"\n📢 Status: {msg.payload.decode('utf-8')}")
-        except:
+        except Exception:
             pass
 
 

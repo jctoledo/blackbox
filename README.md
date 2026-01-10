@@ -28,7 +28,7 @@ A complete ESP32-C3 firmware that fuses GPS and IMU data to track your vehicle's
 - Constant Turn Rate and Acceleration (CTRA) model for cornering
 
 **Why it's useful:**
-- Track day data logging without $500+ commercial systems
+- Track day data logging without $1000+ commercial systems
 - Vehicle dynamics research and education
 - DIY EV/kit car development
 - Test suspension, brakes, and aerodynamics
@@ -38,14 +38,18 @@ A complete ESP32-C3 firmware that fuses GPS and IMU data to track your vehicle's
 
 ## Hardware Requirements
 
-### Core Components ($50 total)
+### Core Components ($50-100 total)
 
 | Component | Cost | Purpose | Where to Buy |
 |-----------|------|---------|--------------|
 | ESP32-C3 DevKit | $5 | Main controller | AliExpress, Amazon |
-| WT901 IMU | $25 | 9-axis motion sensor | WitMotion store |
-| NEO-6M GPS | $15 | Position/velocity | AliExpress, Amazon |
+| WT901 IMU | $25 | 9-axis motion sensor (configurable to 200Hz) | WitMotion store |
+| **GPS (choose one):** | | | |
+| - NEO-6M | $15 | Budget GPS, 5Hz max | AliExpress, Amazon |
+| - NEO-M9N | $75 | High-performance GPS, up to 25Hz | SparkFun |
 | Wires + USB cable | $5 | Connections | - |
+
+**GPS Recommendation:** NEO-M9N provides significantly better position accuracy, faster updates (up to 25Hz), and automotive-optimized mode. Worth the investment for serious data logging.
 
 ### Optional Add-ons
 
@@ -75,6 +79,36 @@ ESP32-C3 DevKitC-02          WT901 IMU               NEO-6M GPS
 ```
 
 **Important:** GPS uses hardware UART0 (the same as USB console). During GPS operation, you won't see serial output unless using a separate USB-JTAG debugger. This is by design to free up the UART for GPS.
+
+### IMU Configuration (Optional - Only If Needed)
+
+The WT901 ships at 9600 baud / 10Hz. The firmware auto-detects the baud rate, so **most users can skip this step initially**.
+
+**Check if configuration is needed:**
+1. Flash the firmware and connect to the dashboard
+2. Check the diagnostics page - look at "IMU Rate"
+3. If it shows ~10-20 Hz instead of ~200 Hz, configure the IMU
+
+**To configure for 200Hz (requires USB-serial adapter, ~$5):**
+
+```bash
+# 1. Disconnect IMU from ESP32
+# 2. Connect IMU to USB-serial adapter:
+#    IMU TX  -> Adapter RX
+#    IMU RX  -> Adapter TX
+#    IMU GND -> Adapter GND
+#    IMU VCC -> Adapter 5V
+# 3. Run the configuration tool:
+cd tools/python
+pip install pyserial
+python3 configure_wt901.py /dev/ttyUSB0
+
+# 4. Reconnect IMU to ESP32
+```
+
+Settings are saved to the IMU's EEPROM - you only need to do this **once** per IMU.
+
+**Why 200Hz matters:** Higher IMU rate = smoother sensor fusion. At 5Hz GPS, you get 40 IMU samples between GPS updates at 200Hz vs only 2 samples at 10Hz.
 
 ---
 
@@ -145,7 +179,12 @@ source $HOME/export-esp.sh
 # Quick check (fast, no linking)
 cargo check
 
-# Build firmware
+# Build firmware (default: NEO-6M GPS at 5Hz)
+cargo build --release
+
+# Build with NEO-M9N GPS at 25Hz
+export GPS_MODEL="m9n"
+export GPS_RATE="25"
 cargo build --release
 
 # Build and flash in one command
@@ -344,10 +383,10 @@ cargo install cargo-espflash
 ### Data Flow
 
 ```
-GPS (5Hz)           IMU (50Hz)           
-   │                   │                  
-   │ NMEA              │ Binary packets    
-   │ sentences         │                   
+GPS (5-25Hz)        IMU (200Hz)
+   │                   │
+   │ NMEA              │ Binary packets
+   │ sentences         │
    ▼                   ▼                   
 ┌─────────────────────────────────┐       
 │   Sensor Parsers                │       
@@ -375,17 +414,19 @@ GPS (5Hz)           IMU (50Hz)
 └────────────┬────────────────────┘       
              │                            
              ▼                            
-┌─────────────────────────────────┐       
-│   Mode Classifier               │       
-│   • Detect: IDLE, ACCEL,        │       
-│     BRAKE, CORNER               │       
+┌─────────────────────────────────┐
+│   Mode Classifier               │
+│   • Detect: IDLE, ACCEL, BRAKE, │
+│     CORNER, ACCEL+CORNER,       │
+│     BRAKE+CORNER                │
 └────────────┬────────────────────┘       
              │                            
              ▼                            
-┌─────────────────────────────────┐       
+┌─────────────────────────────────┐
 │   Binary Telemetry (20Hz)       │
 │   • 67 bytes with checksum      │
-│   • UDP stream                  │       
+│   • HTTP poll (AP mode)         │
+│   • UDP/TCP stream (STA mode)   │
 └─────────────────────────────────┘       
 ```
 
@@ -399,13 +440,15 @@ blackbox/
 │       │   └── config.toml       # ESP32-C3 build configuration
 │       ├── src/
 │       │   ├── main.rs            # Main loop and setup
-│       │   ├── imu.rs             # WT901 UART parser
-│       │   ├── gps.rs             # NMEA parser with warmup
-│       │   ├── ekf.rs             # 7-state Extended Kalman Filter
+│       │   ├── config.rs          # Build-time configuration (GPS model, WiFi mode)
+│       │   ├── system.rs          # Sensor/estimator/publisher managers
+│       │   ├── imu.rs             # WT901 UART parser (auto-detect baud)
+│       │   ├── gps.rs             # NMEA/UBX parser with warmup (NEO-6M/M9N)
+│       │   ├── diagnostics.rs     # System health monitoring
 │       │   ├── transforms.rs      # Body↔Earth coordinate math
 │       │   ├── mode.rs            # Driving mode classifier
 │       │   ├── binary_telemetry.rs # 67-byte packet format
-│       │   ├── websocket_server.rs # Mobile dashboard & WebSocket server
+│       │   ├── websocket_server.rs # Mobile dashboard & HTTP server
 │       │   ├── udp_stream.rs      # High-speed UDP client
 │       │   ├── mqtt.rs            # MQTT client for status
 │       │   ├── wifi.rs            # WiFi connection manager
@@ -415,6 +458,8 @@ blackbox/
 │       └── build.rs               # Build script
 ├── tools/
 │   └── python/
+│       ├── configure_wt901.py       # IMU configuration tool (200Hz setup)
+│       ├── probe_wt901.py           # IMU baud rate detection
 │       ├── udp_telemetry_server.py  # Python receiver (UDP)
 │       └── mqtt_binary_decoder.py   # Python receiver (MQTT)
 └── README.md                        # This file
@@ -505,6 +550,29 @@ const R_POS: f32 = 20.0;    // Measurement noise: GPS position (m)²
 const R_VEL: f32 = 0.2;     // Measurement noise: GPS velocity (m/s)²
 const R_YAW: f32 = 0.10;    // Measurement noise: magnetometer (rad)²
 ```
+
+### EKF Health Metrics
+
+The diagnostics page shows real-time EKF state estimation quality. Understanding these metrics helps diagnose performance issues:
+
+| Metric | What It Measures | Healthy Values | Causes of Growth |
+|--------|------------------|----------------|------------------|
+| **Position σ** | Uncertainty in X/Y position (meters). Square root of position covariance. | <5m with GPS lock, <2m stable | GPS signal loss, long time between fixes, high acceleration |
+| **Velocity σ** | Uncertainty in velocity (m/s). How confident the EKF is about speed. | <0.5 m/s | GPS velocity unavailable, rapid acceleration changes |
+| **Yaw σ** | Heading uncertainty (degrees). Magnetometer fusion quality. | <5° | Magnetic interference, compass calibration issues |
+| **Bias X/Y** | Learned accelerometer bias (m/s²). Offset errors in IMU readings. | <0.5 m/s² | IMU not level during calibration, temperature drift |
+| **ZUPT Rate** | Zero-velocity updates per minute. Higher = more frequent stops. | 0-60/min typical | Updates when stationary detection triggers |
+| **EKF/GPS** | EKF predictions per GPS fix. Ratio of IMU to GPS updates. | ~40 (200Hz IMU / 5Hz GPS) | Lower = GPS rate issues, Higher = IMU rate issues |
+
+**Interpreting the metrics:**
+
+- **Position σ** starts high (~10m) at boot and decreases as GPS provides fixes. During GPS outages, it grows based on velocity uncertainty. ZUPT resets it when stationary.
+
+- **Velocity σ** reflects how well the EKF tracks speed. It grows during acceleration (model uncertainty) and shrinks with GPS velocity updates.
+
+- **Bias X/Y** are learned during ZUPT (when stationary). Values near zero mean good calibration. Values >0.3 m/s² suggest recalibration is needed.
+
+- **EKF/GPS ratio** ~40 is ideal (200Hz IMU / 5Hz GPS). Significantly lower values indicate GPS is updating too frequently or IMU rate is low. Higher values suggest GPS rate issues.
 
 ### Mode Detection Thresholds
 
@@ -666,6 +734,33 @@ The firmware includes a built-in web dashboard that runs directly on the ESP32. 
 | **Session timer** | Time since dashboard loaded |
 | **GPS status** | Current coordinates and fix status |
 | **Recording** | Capture data locally for CSV export |
+| **Diagnostics page** | System health: sensor rates, EKF uncertainty, GPS quality (HDOP/PDOP), heap usage |
+
+### Diagnostics Page
+
+Access the diagnostics page at `http://192.168.71.1/api/diagnostics` (JSON) or view it in the dashboard footer.
+
+**What it shows:**
+
+| Metric | Description | Healthy Range |
+|--------|-------------|---------------|
+| **IMU Rate** | Accelerometer packets per second | 195-200 Hz (configured) or 10-20 Hz (factory) |
+| **GPS Rate** | Valid RMC position fixes per second (excludes GGA/GSA) | 5 Hz (NEO-6M) or 8-25 Hz (NEO-M9N) |
+| **Loop Rate** | Main loop iterations per second | >1000 Hz |
+| **ZUPT Rate** | Zero-velocity updates per minute | 0-60/min typical |
+| **EKF/GPS** | EKF predictions per GPS fix | ~40 (200Hz IMU / 5Hz GPS) |
+| **Position σ** | EKF position uncertainty | <5m (with GPS lock) |
+| **Velocity σ** | EKF velocity uncertainty | <0.5 m/s |
+| **Yaw σ** | EKF heading uncertainty | <5° |
+| **Bias X/Y** | Learned accelerometer biases | <0.5 m/s² |
+| **HDOP** | GPS horizontal dilution of precision | <2.0 (good), <5.0 (acceptable) |
+| **Free Heap** | Available RAM | >40KB |
+
+**Troubleshooting with diagnostics:**
+- **IMU 0 Hz**: Check wiring, run `configure_wt901.py` to verify IMU is configured
+- **GPS 0 Hz**: Check wiring, verify GPS has sky view for fix
+- **Position σ growing**: GPS lost fix, or ZUPT not triggering when stationary
+- **High bias values**: Recalibrate IMU (CLR button in dashboard)
 
 ### Controls
 
@@ -781,6 +876,13 @@ python3 mqtt_binary_decoder.py
 mosquitto_sub -h localhost -t 'car/#' -v
 ```
 
+**Probe WT901 IMU baud rate (debugging tool):**
+```bash
+# Disconnect IMU from ESP32, connect to USB-serial adapter
+python3 probe_wt901.py /dev/ttyUSB0
+```
+Useful for verifying IMU is working before flashing, or determining what baud rate it's configured to.
+
 ### Choosing a Mode
 
 | Feature | Access Point | Station |
@@ -798,6 +900,8 @@ mosquitto_sub -h localhost -t 'car/#' -v
 
 - [ ] SD card logging for offline operation
 - [x] ~~Web dashboard for live visualization~~ ✓ Built-in mobile dashboard
+- [x] ~~High-rate GPS support~~ ✓ NEO-M9N at up to 25Hz with automotive mode
+- [x] ~~System diagnostics page~~ ✓ Sensor rates, EKF health, GPS quality
 - [ ] CAN bus integration for vehicle data
 - [ ] Support for external wheel speed sensors
 - [ ] Bluetooth for phone connectivity

@@ -19,7 +19,7 @@ ESP32-C3 based vehicle telemetry system with WT901 IMU and NEO-6M GPS.
 - Real-time sensor fusion (Extended Kalman Filter)
 - TCP binary telemetry streaming (20 Hz)
 - MQTT status messages
-- Driving mode detection (IDLE, ACCEL, BRAKE, CORNER)
+- Driving mode detection (IDLE, ACCEL, BRAKE, CORNER, ACCEL+CORNER, BRAKE+CORNER)
 - GPS-corrected position tracking
 
 **Use case:** Track day data logging, autocross, rally, vehicle dynamics research
