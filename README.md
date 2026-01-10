@@ -561,7 +561,7 @@ The diagnostics page shows real-time EKF state estimation quality. Understanding
 | **Velocity σ** | Uncertainty in velocity (m/s). How confident the EKF is about speed. | <0.5 m/s | GPS velocity unavailable, rapid acceleration changes |
 | **Yaw σ** | Heading uncertainty (degrees). Magnetometer fusion quality. | <5° | Magnetic interference, compass calibration issues |
 | **Bias X/Y** | Learned accelerometer bias (m/s²). Offset errors in IMU readings. | <0.5 m/s² | IMU not level during calibration, temperature drift |
-| **ZUPT Count** | Zero-velocity updates performed since boot. | Increments when stopped | Only updates when stationary detection triggers |
+| **ZUPT Rate** | Zero-velocity updates per minute. Higher = more frequent stops. | 0-60/min typical | Updates when stationary detection triggers |
 | **EKF/GPS** | EKF predictions per GPS fix. Ratio of IMU to GPS updates. | ~40 (200Hz IMU / 5Hz GPS) | Lower = GPS rate issues, Higher = IMU rate issues |
 
 **Interpreting the metrics:**
@@ -745,9 +745,9 @@ Access the diagnostics page at `http://192.168.71.1/api/diagnostics` (JSON) or v
 | Metric | Description | Healthy Range |
 |--------|-------------|---------------|
 | **IMU Rate** | Accelerometer packets per second | 195-200 Hz (configured) or 10-20 Hz (factory) |
-| **GPS Rate** | Valid position fixes per second | 5 Hz (NEO-6M) or 8-25 Hz (NEO-M9N) |
+| **GPS Rate** | Valid RMC position fixes per second (excludes GGA/GSA) | 5 Hz (NEO-6M) or 8-25 Hz (NEO-M9N) |
 | **Loop Rate** | Main loop iterations per second | >1000 Hz |
-| **ZUPT Count** | Zero-velocity updates since boot | Increments when stopped |
+| **ZUPT Rate** | Zero-velocity updates per minute | 0-60/min typical |
 | **EKF/GPS** | EKF predictions per GPS fix | ~40 (200Hz IMU / 5Hz GPS) |
 | **Position σ** | EKF position uncertainty | <5m (with GPS lock) |
 | **Velocity σ** | EKF velocity uncertainty | <0.5 m/s |

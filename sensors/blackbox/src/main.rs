@@ -672,10 +672,14 @@ fn main() {
 
         // Poll GPS and update EKF correction
         if sensors.poll_gps() {
+            // Count GPS rate only when a NEW valid RMC fix is received
+            // (not on every GGA/GSA sentence while last_fix.valid is still true)
+            if sensors.gps_parser.take_new_fix() {
+                diagnostics.record_gps_fix();
+            }
+
             // Check if warmup complete (has reference point) AND fix is valid
             if sensors.gps_parser.is_warmed_up() && sensors.gps_parser.last_fix().valid {
-                // Only count valid position fixes for GPS rate
-                diagnostics.record_gps_fix();
                 let (ax_corr, ay_corr, _) = sensors.imu_parser.get_accel_corrected();
 
                 // Update position from GPS (only when fix is valid)

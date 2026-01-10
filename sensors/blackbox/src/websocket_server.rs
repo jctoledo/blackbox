@@ -636,7 +636,7 @@ h1{font-size:18px;margin-bottom:16px;color:#60a5fa;letter-spacing:2px}
 <div class="row"><span class="label">IMU Rate</span><span class="value" id="imu-rate">--</span></div>
 <div class="row"><span class="label">GPS Rate</span><span class="value" id="gps-rate">--</span></div>
 <div class="row"><span class="label">Loop Rate</span><span class="value" id="loop-rate">--</span></div>
-<div class="row"><span class="label">ZUPT Count</span><span class="value" id="zupt-count">--</span></div>
+<div class="row"><span class="label">ZUPT Rate</span><span class="value" id="zupt-rate">--</span></div>
 <div class="row"><span class="label">EKF/GPS</span><span class="value" id="ekf-per-gps">--</span></div>
 <div class="row"><span class="label">GPS Fix</span><span class="value" id="gps-fix">--</span></div>
 <div class="row"><span class="label">Satellites</span><span class="value" id="gps-sats">--</span></div>
@@ -686,7 +686,7 @@ async function update(){
     gpsEl.textContent=d.sensor_rates.gps_hz.toFixed(1)+' / '+d.sensor_rates.gps_expected.toFixed(0)+' Hz';
     gpsEl.className='value '+rateClass(d.sensor_rates.gps_hz,d.sensor_rates.gps_expected);
     $('loop-rate').textContent=d.sensor_rates.loop_hz.toFixed(0)+' Hz';
-    $('zupt-count').textContent=d.sensor_rates.zupt_count;
+    $('zupt-rate').textContent=d.sensor_rates.zupt_per_min.toFixed(1)+'/min';
     $('ekf-per-gps').textContent=d.sensor_rates.ekf_per_gps.toFixed(1);
     $('gps-fix').textContent=d.gps.fix?'Valid':'No Fix';
     $('gps-fix').className='value '+(d.gps.fix?'ok':'warn');
@@ -927,7 +927,7 @@ impl TelemetryServer {
                     let d = diag_state.snapshot();
                     format!(
                         concat!(
-                            r#"{{"sensor_rates":{{"imu_hz":{:.1},"gps_hz":{:.1},"loop_hz":{:.0},"imu_expected":{:.0},"gps_expected":{:.0},"zupt_count":{},"ekf_per_gps":{:.1}}},"#,
+                            r#"{{"sensor_rates":{{"imu_hz":{:.1},"gps_hz":{:.1},"loop_hz":{:.0},"imu_expected":{:.0},"gps_expected":{:.0},"zupt_per_min":{:.1},"ekf_per_gps":{:.1}}},"#,
                             r#""ekf":{{"pos_sigma":{:.2},"vel_sigma":{:.2},"yaw_sigma_deg":{:.1},"bias_x":{:.4},"bias_y":{:.4}}},"#,
                             r#""system":{{"heap_free":{},"uptime_s":{},"tx_ok":{},"tx_fail":{}}},"#,
                             r#""gps":{{"model":"{}","rate_hz":{},"fix":{},"warmup":{},"satellites":{},"hdop":{:.1}}},"#,
@@ -936,7 +936,7 @@ impl TelemetryServer {
                         ),
                         d.sensor_rates.imu_hz, d.sensor_rates.gps_hz, d.sensor_rates.loop_hz,
                         d.sensor_rates.imu_expected_hz, d.sensor_rates.gps_expected_hz,
-                        d.sensor_rates.zupt_count, d.sensor_rates.ekf_predictions_per_gps,
+                        d.sensor_rates.zupt_per_min, d.sensor_rates.ekf_predictions_per_gps,
                         d.ekf_health.position_sigma, d.ekf_health.velocity_sigma,
                         d.ekf_health.yaw_sigma_deg, d.ekf_health.bias_x, d.ekf_health.bias_y,
                         d.system_health.free_heap_bytes, d.system_health.uptime_seconds,

@@ -31,6 +31,7 @@ You are a seasoned embedded Rust engineer with deep expertise in:
 **Testing Philosophy:**
 - Write meaningful tests that catch real bugs, not boilerplate
 - **Every test MUST have assertions** (`assert!`, `assert_eq!`, etc.) - a test without assertions proves nothing
+- **Keep tests in sync with code**: When adding new features, add corresponding tests. When removing or changing features, update or remove stale tests.
 - Focus on: coordinate transforms, EKF math, protocol parsing, edge cases
 - Avoid: trivial getters, obvious constructors, framework code
 - Hardware-dependent code is hard to test—isolate pure functions where possible
@@ -615,7 +616,7 @@ Originally used WebSocket push at 30Hz but this caused thread starvation. Refact
 Real-time statistics for sensor rates, EKF health, GPS status, and system resources. Accessible via `/api/diagnostics` endpoint.
 
 **Data Structures:**
-- `SensorRates`: IMU Hz (actual vs expected), GPS Hz (actual vs expected)
+- `SensorRates`: IMU Hz, GPS Hz (valid RMC fixes only), ZUPT rate (per minute), EKF predictions per GPS
 - `EkfHealth`: Position/velocity/yaw uncertainty (σ), accelerometer biases
 - `GpsHealth`: Fix valid, warmup complete, satellites, HDOP/PDOP
 - `SystemHealth`: Free heap, uptime, telemetry sent/failed counts
@@ -632,9 +633,16 @@ Uses exponential moving average (α=0.3) for smoother display:
 imu_hz = α * (packets / dt) + (1 - α) * previous_hz
 ```
 
+**GPS Rate Counting:**
+GPS rate counts only valid RMC position fixes using `take_new_fix()`. This prevents over-counting when GPS outputs multiple sentence types (RMC, GGA, GSA) per fix cycle.
+
+**ZUPT Rate:**
+Displayed as updates per minute (rolling average), not cumulative count. Typical values: 0-60/min depending on driving pattern.
+
 **Typical Values:**
 - IMU: 199-200 Hz (at 115200 baud)
 - GPS: 5 Hz (NEO-6M) or 8-25 Hz (NEO-M9N depending on config)
+- ZUPT: 0-60/min (depends on stops)
 - Free heap: ~60KB (stable during operation)
 
 ### udp_stream.rs - UDP Client (Station Mode)

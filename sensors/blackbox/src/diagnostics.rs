@@ -21,8 +21,8 @@ pub struct SensorRates {
     pub gps_expected_hz: f32,
     /// Main loop rate (Hz)
     pub loop_hz: f32,
-    /// Total ZUPT count since boot
-    pub zupt_count: u32,
+    /// ZUPT rate (per minute) - rolling average
+    pub zupt_per_min: f32,
     /// Average EKF predictions between GPS fixes
     pub ekf_predictions_per_gps: f32,
 }
@@ -132,6 +132,7 @@ struct DiagnosticsInner {
     last_imu_count: u32,
     last_gps_count: u32,
     last_loop_count: u32,
+    last_zupt_count: u32,
 }
 
 impl DiagnosticsState {
@@ -234,12 +235,16 @@ impl DiagnosticsState {
                     + (1.0 - alpha) * inner.sensor_rates.ekf_predictions_per_gps;
             }
 
-            // Update ZUPT count (cumulative total)
-            inner.sensor_rates.zupt_count = zupt_total;
+            // Calculate ZUPT rate (per minute)
+            let zupt_delta = zupt_total.saturating_sub(inner.last_zupt_count);
+            let zupt_per_min = (zupt_delta as f32 / dt_s) * 60.0;
+            inner.sensor_rates.zupt_per_min =
+                alpha * zupt_per_min + (1.0 - alpha) * inner.sensor_rates.zupt_per_min;
 
             inner.last_imu_count = imu_count;
             inner.last_gps_count = gps_count;
             inner.last_loop_count = loop_count_now;
+            inner.last_zupt_count = zupt_total;
         }
     }
 

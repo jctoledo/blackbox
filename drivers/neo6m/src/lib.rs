@@ -170,6 +170,8 @@ pub struct NmeaParser {
     last_valid_lat: f64,
     last_valid_lon: f64,
     position_based_speed: f32,
+    /// Flag set when a new valid RMC fix is received (cleared by take_new_fix)
+    new_fix_available: bool,
 }
 
 impl NmeaParser {
@@ -196,6 +198,7 @@ impl NmeaParser {
             last_valid_lat: 0.0,
             last_valid_lon: 0.0,
             position_based_speed: 0.0,
+            new_fix_available: false,
         }
     }
 
@@ -251,6 +254,16 @@ impl NmeaParser {
         } else {
             self.warmup_count as f32 / self.warmup_fixes as f32
         }
+    }
+
+    /// Check if a new valid RMC fix is available and clear the flag
+    ///
+    /// Returns true only once per valid RMC sentence with position data.
+    /// Use this for GPS rate calculation instead of checking last_fix().valid.
+    pub fn take_new_fix(&mut self) -> bool {
+        let available = self.new_fix_available;
+        self.new_fix_available = false;
+        available
     }
 
     /// Get position-based speed estimate (m/s)
@@ -580,6 +593,7 @@ impl NmeaParser {
         self.last_fix.lat = lat;
         self.last_fix.lon = lon;
         self.last_fix.valid = true;
+        self.new_fix_available = true;
     }
 
     #[cfg(not(any(test, feature = "std")))]
@@ -669,6 +683,7 @@ impl NmeaParser {
         // Field 2: Status (A = valid, V = invalid)
         if fields[2] == "A" {
             self.last_fix.valid = true;
+            self.new_fix_available = true;
         } else {
             self.last_fix.valid = false;
         }
