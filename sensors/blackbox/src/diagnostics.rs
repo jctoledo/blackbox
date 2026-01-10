@@ -3,8 +3,10 @@
 //! Provides real-time statistics about sensor rates, EKF health, GPS status,
 //! and system resources for the diagnostics dashboard.
 
-use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::Mutex;
+use std::sync::{
+    atomic::{AtomicU32, Ordering},
+    Mutex,
+};
 
 /// Sensor rate statistics
 #[derive(Debug, Clone, Copy, Default)]
@@ -177,7 +179,8 @@ impl DiagnosticsState {
         self.imu_packet_count.fetch_add(1, Ordering::Relaxed);
     }
 
-    /// Record a valid GPS position fix (called only for RMC with valid position)
+    /// Record a valid GPS position fix (called only for RMC with valid
+    /// position)
     #[inline]
     pub fn record_gps_fix(&self) {
         self.gps_fix_count.fetch_add(1, Ordering::Relaxed);
@@ -241,7 +244,14 @@ impl DiagnosticsState {
     }
 
     /// Update EKF health metrics
-    pub fn update_ekf(&self, pos_sigma: f32, vel_sigma: f32, yaw_sigma_deg: f32, bias_x: f32, bias_y: f32) {
+    pub fn update_ekf(
+        &self,
+        pos_sigma: f32,
+        vel_sigma: f32,
+        yaw_sigma_deg: f32,
+        bias_x: f32,
+        bias_y: f32,
+    ) {
         if let Ok(mut inner) = self.inner.lock() {
             inner.ekf_health.position_sigma = pos_sigma;
             inner.ekf_health.velocity_sigma = vel_sigma;
@@ -252,7 +262,14 @@ impl DiagnosticsState {
     }
 
     /// Update GPS status
-    pub fn update_gps(&self, fix_valid: bool, warmup_complete: bool, satellites: u8, hdop: f32, pdop: f32) {
+    pub fn update_gps(
+        &self,
+        fix_valid: bool,
+        warmup_complete: bool,
+        satellites: u8,
+        hdop: f32,
+        pdop: f32,
+    ) {
         if let Ok(mut inner) = self.inner.lock() {
             inner.gps_health.fix_valid = fix_valid;
             inner.gps_health.warmup_complete = warmup_complete;

@@ -160,7 +160,8 @@ impl SensorManager {
     /// Returns Option<(dt, timestamp_us, accel_packet_count)>
     /// - dt: time since last valid Accel packet
     /// - timestamp_us: current timestamp
-    /// - accel_packet_count: number of Accel packets processed (for diagnostics)
+    /// - accel_packet_count: number of Accel packets processed (for
+    ///   diagnostics)
     pub fn poll_imu(&mut self) -> Option<(f32, u64, u32)> {
         let now_us = unsafe { esp_idf_svc::sys::esp_timer_get_time() as u64 };
         let mut buf = [0u8; 64]; // Read up to 64 bytes at once (~10 packets worth)

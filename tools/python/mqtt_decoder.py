@@ -15,7 +15,8 @@ class TelemetryDecoder:
 
     # Struct format: Little-endian packed
     # H = uint16, I = uint32, f = float32, B = uint8
-    # Header(2) + timestamp(4) + 6 floats(24) + 7 floats(28) + mode(1) + 2 floats(8) + gps_valid(1) + checksum(2) = 70 bytes
+    # Header(2) + timestamp(4) + 6 floats(24) + 7 floats(28) + mode(1)
+    # + 2 floats(8) + gps_valid(1) + checksum(2) = 70 bytes
     # But packet is packed, so actual size may vary
     FORMAT = "<HIffffffffffffffBffBH"
     SIZE = struct.calcsize(FORMAT)  # Calculate actual size

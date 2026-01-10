@@ -146,8 +146,8 @@ impl GpsModel {
     /// Whether this model needs UBX initialization commands
     pub fn needs_ubx_init(&self) -> bool {
         match self {
-            GpsModel::Neo6m => false,  // Works with factory defaults
-            GpsModel::NeoM9n => true,  // Needs rate + automotive mode config
+            GpsModel::Neo6m => false, // Works with factory defaults
+            GpsModel::NeoM9n => true, // Needs rate + automotive mode config
         }
     }
 
