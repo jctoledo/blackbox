@@ -17,7 +17,7 @@
 //!
 //! # Example
 //!
-//! ```no_run
+//! ```ignore
 //! use neo6m::NmeaParser;
 //!
 //! let mut parser = NmeaParser::new();

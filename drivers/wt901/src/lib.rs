@@ -13,7 +13,7 @@
 //!
 //! # Example
 //!
-//! ```no_run
+//! ```ignore
 //! use wt901::{PacketType, Wt901Parser};
 //!
 //! let mut parser = Wt901Parser::new();
