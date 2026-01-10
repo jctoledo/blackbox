@@ -18,14 +18,14 @@ const UBX_CFG_VALSET: u8 = 0x8A; // Configuration value set (M9+)
 
 /// CFG-VALSET layers (bitfield)
 const LAYER_RAM: u8 = 0x01;
-const LAYER_BBR: u8 = 0x02;   // Battery-backed RAM
+const LAYER_BBR: u8 = 0x02; // Battery-backed RAM
 const LAYER_FLASH: u8 = 0x04; // Flash memory (persistent)
 
 /// Configuration keys for NEO-M9N (from u-blox interface description)
 /// Keys are 32-bit: [size:3][group:13][reserved:4][item:12]
 const CFG_UART1_BAUDRATE: u32 = 0x40520001; // U4: UART1 baud rate
-const CFG_RATE_MEAS: u32 = 0x30210001;      // U2: Measurement period (ms)
-const CFG_RATE_NAV: u32 = 0x30210002;       // U2: Navigation rate (cycles)
+const CFG_RATE_MEAS: u32 = 0x30210001; // U2: Measurement period (ms)
+const CFG_RATE_NAV: u32 = 0x30210002; // U2: Navigation rate (cycles)
 const CFG_NAVSPG_DYNMODEL: u32 = 0x20110021; // E1: Dynamic platform model
 
 /// Dynamic platform model
@@ -41,8 +41,8 @@ pub enum DynamicModel {
     Airborne1g = 6,
     Airborne2g = 7,
     Airborne4g = 8,
-    Wrist = 9,  // M9N specific
-    Bike = 10,  // M9N specific
+    Wrist = 9, // M9N specific
+    Bike = 10, // M9N specific
 }
 
 /// Calculate UBX checksum (Fletcher checksum)
@@ -67,7 +67,7 @@ fn build_ubx_message(class: u8, id: u8, payload: &[u8], buffer: &mut [u8]) -> us
     buffer[1] = UBX_SYNC_2;
     buffer[2] = class;
     buffer[3] = id;
-    buffer[4] = (payload_len & 0xFF) as u8;        // Length LSB
+    buffer[4] = (payload_len & 0xFF) as u8; // Length LSB
     buffer[5] = ((payload_len >> 8) & 0xFF) as u8; // Length MSB
 
     // Payload
@@ -118,7 +118,11 @@ impl UbxCommands {
     /// Number of bytes written to buffer
     pub fn cfg_valset_rate(rate_hz: u8, buffer: &mut [u8]) -> usize {
         // Measurement period in ms
-        let meas_rate_ms: u16 = if rate_hz > 0 { 1000 / rate_hz as u16 } else { 1000 };
+        let meas_rate_ms: u16 = if rate_hz > 0 {
+            1000 / rate_hz as u16
+        } else {
+            1000
+        };
 
         // CFG-VALSET payload:
         // [0]: version = 0
@@ -206,12 +210,12 @@ impl UbxCommands {
     ///
     /// # Returns
     /// Number of bytes written to buffer
-    pub fn cfg_valset_rate_and_model(
-        rate_hz: u8,
-        model: DynamicModel,
-        buffer: &mut [u8],
-    ) -> usize {
-        let meas_rate_ms: u16 = if rate_hz > 0 { 1000 / rate_hz as u16 } else { 1000 };
+    pub fn cfg_valset_rate_and_model(rate_hz: u8, model: DynamicModel, buffer: &mut [u8]) -> usize {
+        let meas_rate_ms: u16 = if rate_hz > 0 {
+            1000 / rate_hz as u16
+        } else {
+            1000
+        };
 
         // Combined payload with 3 key-value pairs:
         // - CFG-RATE-MEAS (U2)
@@ -322,7 +326,7 @@ mod tests {
 
         // Value (100ms = 10Hz) at offset 14
         assert_eq!(buffer[14], 100); // 100 LSB
-        assert_eq!(buffer[15], 0);   // 100 MSB
+        assert_eq!(buffer[15], 0); // 100 MSB
 
         assert!(len > 0);
     }

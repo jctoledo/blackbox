@@ -370,7 +370,11 @@ impl NmeaParser {
         for (i, &byte) in line.as_bytes().iter().enumerate() {
             if byte == b',' || byte == b'*' || i == line.len() - 1 {
                 if field_idx < 15 {
-                    let end = if byte == b',' || byte == b'*' { i } else { i + 1 };
+                    let end = if byte == b',' || byte == b'*' {
+                        i
+                    } else {
+                        i + 1
+                    };
                     fields[field_idx] = &line[field_start..end];
                     field_idx += 1;
                 }
@@ -461,7 +465,11 @@ impl NmeaParser {
         for (i, &byte) in line.as_bytes().iter().enumerate() {
             if byte == b',' || byte == b'*' || i == line.len() - 1 {
                 if field_idx < 18 {
-                    let end = if byte == b',' || byte == b'*' { i } else { i + 1 };
+                    let end = if byte == b',' || byte == b'*' {
+                        i
+                    } else {
+                        i + 1
+                    };
                     fields[field_idx] = &line[field_start..end];
                     field_idx += 1;
                 }

@@ -51,7 +51,9 @@ def send_command(ser, cmd, description, delay=0.1):
     print("OK")
 
 
-def try_configure_at_baud(port, baud, target_rate_cmd, target_rate_name, target_baud_cmd=None, target_baud=None):
+def try_configure_at_baud(
+    port, baud, target_rate_cmd, target_rate_name, target_baud_cmd=None, target_baud=None
+):
     """Try to configure the IMU at a specific baud rate."""
     print(f"\nTrying to connect at {baud} baud...")
 
@@ -107,7 +109,8 @@ def try_configure_at_baud(port, baud, target_rate_cmd, target_rate_name, target_
                 data = ser.read(100)
                 packet_count += data.count(0x55)
 
-            measured_hz = packet_count / 2.0 / 3  # Divide by 3 because WT901 sends 3 packet types per cycle
+            # Divide by 3 because WT901 sends 3 packet types per cycle
+            measured_hz = packet_count / 2.0 / 3
             final_baud = target_baud if target_baud else baud
             print(f"  Measured rate: ~{measured_hz:.0f} Hz at {final_baud} baud")
 

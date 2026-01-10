@@ -16,7 +16,14 @@ class TelemetryDecoder:
     FORMAT = "=BHIffffffffffffBffBH"
     SIZE = 67
 
-    MODE_NAMES = {0: "IDLE", 1: "ACCEL", 2: "BRAKE", 4: "CORNER", 5: "ACCEL+CORNER", 6: "BRAKE+CORNER"}
+    MODE_NAMES = {
+        0: "IDLE",
+        1: "ACCEL",
+        2: "BRAKE",
+        4: "CORNER",
+        5: "ACCEL+CORNER",
+        6: "BRAKE+CORNER",
+    }
 
     def __init__(self):
         self.packet_count = 0
@@ -108,11 +115,13 @@ class TelemetryDisplay:
         roll_deg = data['roll'] * 57.3
         pitch_deg = data['pitch'] * 57.3
         yaw_deg = data['yaw'] * 57.3
-        print(f"📐 Orientation: Roll: {roll_deg:+6.1f}°  Pitch: {pitch_deg:+6.1f}°  Yaw: {yaw_deg:+6.1f}°")
+        print(f"📐 Orientation: Roll: {roll_deg:+6.1f}°  Pitch: {pitch_deg:+6.1f}°")
+        print(f"                Yaw:  {yaw_deg:+6.1f}°")
 
         wz_deg = data['wz'] * 57.3
         ax, ay, az = data['ax'], data['ay'], data['az']
-        print(f"⚡ Accel:       ax={ax:+6.2f}  ay={ay:+6.2f}  az={az:+6.2f} m/s²  wz={wz_deg:+5.1f}°/s")
+        print(f"⚡ Accel:       ax={ax:+6.2f}  ay={ay:+6.2f}  az={az:+6.2f} m/s²")
+        print(f"               wz={wz_deg:+5.1f}°/s")
 
         print(f"📍 Position:    x={data['x']:8.2f}  y={data['y']:8.2f} m")
         if data["gps_valid"]:

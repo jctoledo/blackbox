@@ -21,7 +21,14 @@ class TelemetryDecoder:
     FORMAT = "<HIffffffffffffffBffBH"
     SIZE = struct.calcsize(FORMAT)  # Calculate actual size
 
-    MODE_NAMES = {0: "IDLE", 1: "ACCEL", 2: "BRAKE", 4: "CORNER", 5: "ACCEL+CORNER", 6: "BRAKE+CORNER"}
+    MODE_NAMES = {
+        0: "IDLE",
+        1: "ACCEL",
+        2: "BRAKE",
+        4: "CORNER",
+        5: "ACCEL+CORNER",
+        6: "BRAKE+CORNER",
+    }
 
     def __init__(self):
         self.packet_count = 0
@@ -56,7 +63,8 @@ class TelemetryDecoder:
         if checksum_calc != checksum_recv:
             self.error_count += 1
             print(
-                f"⚠️  Checksum mismatch: calc=0x{checksum_calc:04X} recv=0x{checksum_recv:04X} (ignoring)"
+                f"⚠️  Checksum mismatch: calc=0x{checksum_calc:04X} "
+                f"recv=0x{checksum_recv:04X} (ignoring)"
             )
             # Don't return None - continue anyway for debugging
 
@@ -182,7 +190,7 @@ def on_message(client, userdata, msg):
         # Print status messages in JSON
         try:
             print(f"\n📢 Status: {msg.payload.decode('utf-8')}")
-        except:
+        except Exception:
             pass
 
 
