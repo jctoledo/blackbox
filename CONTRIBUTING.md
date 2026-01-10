@@ -314,12 +314,12 @@ def decode_telemetry(payload: bytes) -> dict | None:
     Decode binary telemetry packet.
 
     Args:
-        payload: Raw packet bytes (66 bytes expected)
+        payload: Raw packet bytes (67 bytes expected)
 
     Returns:
         Dictionary with decoded values, or None if invalid
     """
-    if len(payload) != 66:
+    if len(payload) != 67:
         return None
     # ... decode logic
 ```

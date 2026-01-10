@@ -1,8 +1,8 @@
 #![allow(dead_code)] // API methods for future use
 
 /// Driving mode classifier
-/// Detects IDLE, ACCEL, BRAKE, and CORNER modes based on acceleration and yaw
-/// rate
+/// Detects IDLE, ACCEL, BRAKE, CORNER, ACCEL+CORNER, and BRAKE+CORNER modes
+/// based on acceleration and yaw rate
 use sensor_fusion::transforms::earth_to_car;
 
 const G: f32 = 9.80665; // m/s²

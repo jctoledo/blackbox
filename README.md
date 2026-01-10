@@ -414,17 +414,19 @@ GPS (5-25Hz)        IMU (200Hz)
 └────────────┬────────────────────┘       
              │                            
              ▼                            
-┌─────────────────────────────────┐       
-│   Mode Classifier               │       
-│   • Detect: IDLE, ACCEL,        │       
-│     BRAKE, CORNER               │       
+┌─────────────────────────────────┐
+│   Mode Classifier               │
+│   • Detect: IDLE, ACCEL, BRAKE, │
+│     CORNER, ACCEL+CORNER,       │
+│     BRAKE+CORNER                │
 └────────────┬────────────────────┘       
              │                            
              ▼                            
-┌─────────────────────────────────┐       
+┌─────────────────────────────────┐
 │   Binary Telemetry (20Hz)       │
 │   • 67 bytes with checksum      │
-│   • UDP stream                  │       
+│   • HTTP poll (AP mode)         │
+│   • UDP/TCP stream (STA mode)   │
 └─────────────────────────────────┘       
 ```
 
@@ -445,7 +447,7 @@ blackbox/
 │       │   ├── diagnostics.rs     # System health monitoring
 │       │   ├── transforms.rs      # Body↔Earth coordinate math
 │       │   ├── mode.rs            # Driving mode classifier
-│       │   ├── binary_telemetry.rs # 66-byte packet format
+│       │   ├── binary_telemetry.rs # 67-byte packet format
 │       │   ├── websocket_server.rs # Mobile dashboard & HTTP server
 │       │   ├── udp_stream.rs      # High-speed UDP client
 │       │   ├── mqtt.rs            # MQTT client for status

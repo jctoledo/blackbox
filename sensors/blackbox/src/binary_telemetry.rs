@@ -31,7 +31,7 @@ pub struct TelemetryPacket {
     pub vx: f32, // m/s
     pub vy: f32,
     pub speed_kmh: f32,
-    pub mode: u8, // 0=IDLE, 1=ACCEL, 2=BRAKE, 3=CORNER
+    pub mode: u8, // 0=IDLE, 1=ACCEL, 2=BRAKE, 4=CORNER, 5=ACCEL+CORNER, 6=BRAKE+CORNER
 
     // GPS data (9 bytes)
     pub lat: f32, // degrees (f32 for size, ~1cm accuracy)

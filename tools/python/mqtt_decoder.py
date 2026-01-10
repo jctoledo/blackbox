@@ -20,7 +20,7 @@ class TelemetryDecoder:
     FORMAT = "<HIffffffffffffffBffBH"
     SIZE = struct.calcsize(FORMAT)  # Calculate actual size
 
-    MODE_NAMES = ["IDLE", "ACCEL", "BRAKE", "CORNER"]
+    MODE_NAMES = {0: "IDLE", 1: "ACCEL", 2: "BRAKE", 4: "CORNER", 5: "ACCEL+CORNER", 6: "BRAKE+CORNER"}
 
     def __init__(self):
         self.packet_count = 0
@@ -82,7 +82,7 @@ class TelemetryDecoder:
             "vx": data[11],
             "vy": data[12],
             "speed_kmh": data[13],
-            "mode": self.MODE_NAMES[data[14]] if data[14] < 4 else "UNKNOWN",
+            "mode": self.MODE_NAMES.get(data[14], "UNKNOWN"),
             "lat": data[15],
             "lon": data[16],
             "gps_valid": bool(data[17]),

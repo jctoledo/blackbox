@@ -187,7 +187,7 @@ blackbox/
 │                │                                            │
 │                ▼                                            │
 │      binary_telemetry.rs                                   │
-│      Pack 66-byte packet                                   │
+│      Pack 67-byte packet                                   │
 │                │                                            │
 │                ▼                                            │
 │      tcp_stream.rs ──► TCP @ 20Hz                         │
@@ -318,7 +318,7 @@ Requires ALL:
 
 ### Binary Telemetry Protocol (binary_telemetry.rs)
 
-**Packet Structure (66 bytes):**
+**Packet Structure (67 bytes):**
 ```c
 struct TelemetryPacket {
     u16  header;         // 0xAA55
@@ -334,10 +334,10 @@ struct TelemetryPacket {
     f32  lat, lon;       // GPS (degrees, 0 if invalid)
     u8   gps_valid;      // 0 or 1
     u16  checksum;       // Sum of first 64 bytes
-};  // Total: 66 bytes
+};  // Total: 67 bytes
 ```
 
-**Why binary?** 66 bytes vs. ~300 bytes JSON. At 20 Hz: 1.3 KB/s vs. 6 KB/s.
+**Why binary?** 67 bytes vs. ~300 bytes JSON. At 20 Hz: 1.3 KB/s vs. 6 KB/s.
 
 **Decoder:** See `tools/python/tcp_telemetry_server.py` for reference implementation.
 
@@ -734,7 +734,7 @@ Useful for debugging without serial monitor.
 **Problem:** Adding fields breaks decoder compatibility.
 **Solution:** Binary protocol is fixed size. If adding data, either:
 - Replace existing unused field
-- Add padding to maintain 66 bytes
+- Add padding to maintain 67 bytes
 - Version the protocol (add version field, decoders check it)
 
 ### 5. GPS Origin Reset

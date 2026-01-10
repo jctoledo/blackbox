@@ -17,7 +17,7 @@ class TelemetryDecoder:
     FORMAT = "=BHIffffffffffffBffBH"
     SIZE = 67  # Changed from 66
 
-    MODE_NAMES = ["IDLE", "ACCEL", "BRAKE", "CORNER"]
+    MODE_NAMES = {0: "IDLE", 1: "ACCEL", 2: "BRAKE", 4: "CORNER", 5: "ACCEL+CORNER", 6: "BRAKE+CORNER"}
 
     def __init__(self):
         self.packet_count = 0
@@ -82,7 +82,7 @@ class TelemetryDecoder:
             "vx": data[12],
             "vy": data[13],
             "speed_kmh": data[14],
-            "mode": self.MODE_NAMES[data[15]] if data[15] < 4 else "UNKNOWN",
+            "mode": self.MODE_NAMES.get(data[15], "UNKNOWN"),
             "lat": data[16],
             "lon": data[17],
             "gps_valid": bool(data[18]),
@@ -163,7 +163,7 @@ def handle_client(conn, addr, decoder, display):
 
             # Debug: show first packet
             if not first_packet_shown:
-                print(f"First packet (hex): {chunk[:66].hex()}")
+                print(f"First packet (hex): {chunk[:decoder.SIZE].hex()}")
                 first_packet_shown = True
 
             buffer += chunk
