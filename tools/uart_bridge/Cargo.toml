@@ -1,0 +1,31 @@
+[package]
+name = "wt901-config"
+version = "0.1.0"
+edition = "2021"
+description = "ESP32-C3 tool to configure WT901 IMU for 200Hz @ 115200 baud"
+
+[workspace]
+
+[dependencies]
+esp-idf-hal = "0.45"
+esp-idf-svc = { version = "0.51", default-features = false, features = [
+    "binstart",
+    "alloc",
+    "std",
+] }
+esp-idf-sys = { version = "0.36", default-features = false }
+log = "0.4"
+
+[build-dependencies]
+embuild = "0.33"
+
+[package.metadata.esp-idf-sys]
+esp_idf_version = "v5.1.4"
+
+[profile.release]
+opt-level = "s"
+lto = "thin"
+
+[profile.dev]
+debug = true
+opt-level = "z"

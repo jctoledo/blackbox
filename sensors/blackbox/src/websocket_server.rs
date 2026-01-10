@@ -267,7 +267,7 @@ body{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0f;color:#f0
 .cfg-btn.cfg-save{background:linear-gradient(135deg,#1e3a5f,#1a2d4a);color:#60a5fa}
 </style></head>
 <body>
-<div class="hdr"><div class="logo">BLACKBOX <span style="font-size:9px;color:#333">v4</span></div><div class="hdr-r"><span class="timer" id="timer">00:00</span><div class="st"><span class="dot" id="dot"></span><span id="stxt">--</span></div></div></div>
+<div class="hdr"><div class="logo">BLACKBOX <span style="font-size:9px;color:#333">v4</span></div><div class="hdr-r"><a href="/diagnostics" style="color:#444;text-decoration:none;font-size:10px;margin-right:8px">DIAG</a><span class="timer" id="timer">00:00</span><div class="st"><span class="dot" id="dot"></span><span id="stxt">--</span></div></div></div>
 <div class="main">
 <div class="mode-box" id="modebox"><div class="mode-lbl">Mode</div><div class="mode-val m-idle" id="mode">IDLE</div><div class="mode-icon" id="icon">●</div></div>
 <div class="spd-row">
@@ -628,7 +628,7 @@ h1{font-size:18px;margin-bottom:16px;color:#60a5fa;letter-spacing:2px}
 <div class="row"><span class="label">WiFi Mode</span><span class="value" id="wifi-mode">--</span></div>
 <div class="row"><span class="label">SSID</span><span class="value" id="wifi-ssid">--</span></div>
 <div class="row"><span class="label">IP Address</span><span class="value" id="wifi-ip">--</span></div>
-<div class="row"><span class="label">Telemetry</span><span class="value" id="telem-hz">--</span></div>
+<div class="row"><span class="label">Telemetry Target</span><span class="value" id="telem-hz">--</span></div>
 <div class="row"><span class="label">GPS Model</span><span class="value" id="gps-model">--</span></div>
 <div class="row"><span class="label">Warmup Fixes</span><span class="value" id="warmup-fixes">--</span></div>
 </div>

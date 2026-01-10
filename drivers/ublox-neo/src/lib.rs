@@ -165,6 +165,92 @@ pub mod ubx {
         }
         (ck_a, ck_b)
     }
+
+    /// Dynamic platform model for UBX-CFG-NAV5
+    ///
+    /// The dynamic model affects the GPS receiver's internal Kalman filter.
+    /// Using the wrong model causes lag during acceleration/braking.
+    #[derive(Debug, Clone, Copy)]
+    #[repr(u8)]
+    pub enum DynamicModel {
+        /// Portable: low dynamics, general purpose (default on many modules)
+        Portable = 0,
+        /// Stationary: no movement expected
+        Stationary = 2,
+        /// Pedestrian: walking, low acceleration
+        Pedestrian = 3,
+        /// Automotive: car/vehicle, expects higher accelerations (recommended for vehicles)
+        Automotive = 4,
+        /// Sea: marine, low vertical acceleration
+        Sea = 5,
+        /// Airborne <1g: high altitude, low dynamics
+        Airborne1g = 6,
+        /// Airborne <2g: aircraft, moderate dynamics
+        Airborne2g = 7,
+        /// Airborne <4g: high dynamics aircraft
+        Airborne4g = 8,
+    }
+
+    /// Generate UBX CFG-NAV5 command to set dynamic platform model
+    ///
+    /// This configures the GPS receiver's Kalman filter for the expected
+    /// motion dynamics. For vehicles, use `DynamicModel::Automotive`.
+    ///
+    /// # Arguments
+    ///
+    /// * `model` - The dynamic platform model (Automotive recommended for cars)
+    ///
+    /// # Returns
+    ///
+    /// 44-byte UBX command with proper framing and checksum
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use ublox_neo::ubx::{cfg_nav5_command, DynamicModel};
+    ///
+    /// // Configure for automotive use (faster response to acceleration)
+    /// let cmd = cfg_nav5_command(DynamicModel::Automotive);
+    /// uart.write(&cmd).ok();
+    /// ```
+    pub fn cfg_nav5_command(model: DynamicModel) -> [u8; 44] {
+        let mut cmd = [
+            0xB5, 0x62, // Sync chars (μb)
+            0x06, 0x24, // CFG-NAV5 class/id
+            0x24, 0x00, // Payload length: 36 bytes
+            // Payload (36 bytes):
+            0x01, 0x00, // mask: only update dynModel (bit 0)
+            0x00, // dynModel (filled below)
+            0x03, // fixMode: auto 2D/3D
+            0x00, 0x00, 0x00, 0x00, // fixedAlt (not used)
+            0x00, 0x00, 0x00, 0x00, // fixedAltVar (not used)
+            0x05, // minElev: 5 degrees
+            0x00, // drLimit (reserved)
+            0x00, 0x00, // pDop (not used when mask bit 1 = 0)
+            0x00, 0x00, // tDop (not used)
+            0x00, 0x00, // pAcc (not used)
+            0x00, 0x00, // tAcc (not used)
+            0x00, // staticHoldThresh (not used)
+            0x00, // dgnssTimeout (not used)
+            0x00, // cnoThreshNumSVs (not used)
+            0x00, // cnoThresh (not used)
+            0x00, 0x00, // reserved
+            0x00, 0x00, // staticHoldMaxDist (not used)
+            0x00, // utcStandard (not used)
+            0x00, 0x00, 0x00, 0x00, 0x00, // reserved
+            0x00, 0x00, // Checksum (filled below)
+        ];
+
+        // Set dynamic model
+        cmd[8] = model as u8;
+
+        // Calculate Fletcher checksum over class, id, length, and payload (bytes 2-41)
+        let (ck_a, ck_b) = fletcher_checksum(&cmd[2..42]);
+        cmd[42] = ck_a;
+        cmd[43] = ck_b;
+
+        cmd
+    }
 }
 
 /// GPS fix data from GPRMC/GNRMC sentence
@@ -749,5 +835,42 @@ mod tests {
         let cmd_5hz = cfg_rate_command(200);
         assert_eq!(cmd_5hz[6], 0xC8); // 200 = 0x00C8 little-endian
         assert_eq!(cmd_5hz[7], 0x00);
+    }
+
+    #[test]
+    fn test_ubx_cfg_nav5() {
+        use ubx::{cfg_nav5_command, DynamicModel};
+
+        // Test automotive model
+        let cmd = cfg_nav5_command(DynamicModel::Automotive);
+
+        // Verify sync chars
+        assert_eq!(cmd[0], 0xB5);
+        assert_eq!(cmd[1], 0x62);
+
+        // Verify class/id (CFG-NAV5)
+        assert_eq!(cmd[2], 0x06);
+        assert_eq!(cmd[3], 0x24);
+
+        // Verify payload length (36 bytes)
+        assert_eq!(cmd[4], 0x24);
+        assert_eq!(cmd[5], 0x00);
+
+        // Verify mask: only dynModel (bit 0)
+        assert_eq!(cmd[6], 0x01);
+        assert_eq!(cmd[7], 0x00);
+
+        // Verify dynModel = 4 (Automotive)
+        assert_eq!(cmd[8], 0x04);
+
+        // Verify fixMode = 3 (auto 2D/3D)
+        assert_eq!(cmd[9], 0x03);
+
+        // Verify total length
+        assert_eq!(cmd.len(), 44); // 2 sync + 2 class/id + 2 length + 36 payload + 2 checksum
+
+        // Test pedestrian model
+        let cmd_ped = cfg_nav5_command(DynamicModel::Pedestrian);
+        assert_eq!(cmd_ped[8], 0x03); // Pedestrian = 3
     }
 }

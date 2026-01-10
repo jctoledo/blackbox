@@ -13,7 +13,7 @@ pub struct SensorRates {
     pub imu_hz: f32,
     /// Measured GPS fix rate (Hz)
     pub gps_hz: f32,
-    /// Expected IMU rate (200 Hz for WT901)
+    /// Expected IMU rate (~20 Hz for this WT901 variant at 115200 baud)
     pub imu_expected_hz: f32,
     /// Expected GPS rate (from config, 5-10 Hz)
     pub gps_expected_hz: f32,
@@ -95,7 +95,8 @@ impl Default for WifiStatus {
 /// Configuration snapshot (read-only, set at startup)
 #[derive(Debug, Clone)]
 pub struct ConfigSnapshot {
-    /// Telemetry output rate (Hz)
+    /// Target telemetry output rate (Hz) - actual rate may be lower due to
+    /// network latency
     pub telemetry_rate_hz: u32,
     /// GPS model name
     pub gps_model: &'static str,

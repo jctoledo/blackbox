@@ -354,6 +354,167 @@ impl ImuCalibrator {
     }
 }
 
+/// WT901 configuration commands for UART setup
+///
+/// The WT901 uses a simple command protocol for configuration:
+/// - Header: 0xFF 0xAA
+/// - Register address (1 byte)
+/// - Value (2 bytes, little-endian)
+///
+/// Configuration requires unlock → write → save sequence.
+///
+/// # Example
+///
+/// ```ignore
+/// use wt901::cfg;
+///
+/// // Configure WT901 for 200 Hz at 115200 baud
+/// uart.write(&cfg::unlock_command()).ok();
+/// delay_ms(10);
+/// uart.write(&cfg::cfg_baud_command(cfg::BaudRate::Baud115200)).ok();
+/// delay_ms(10);
+/// uart.write(&cfg::cfg_rate_command(cfg::OutputRate::Hz200)).ok();
+/// delay_ms(10);
+/// uart.write(&cfg::save_command()).ok();
+/// ```
+pub mod cfg {
+    /// WT901 output rate options
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    #[repr(u8)]
+    pub enum OutputRate {
+        /// 0.2 Hz
+        Hz0_2 = 0x01,
+        /// 0.5 Hz
+        Hz0_5 = 0x02,
+        /// 1 Hz
+        Hz1 = 0x03,
+        /// 2 Hz
+        Hz2 = 0x04,
+        /// 5 Hz
+        Hz5 = 0x05,
+        /// 10 Hz (default)
+        Hz10 = 0x06,
+        /// 20 Hz
+        Hz20 = 0x07,
+        /// 50 Hz
+        Hz50 = 0x08,
+        /// 100 Hz
+        Hz100 = 0x09,
+        /// 200 Hz (requires 115200 baud or higher)
+        Hz200 = 0x0B,
+    }
+
+    impl OutputRate {
+        /// Get the rate in Hz as a float
+        pub fn as_hz(&self) -> f32 {
+            match self {
+                OutputRate::Hz0_2 => 0.2,
+                OutputRate::Hz0_5 => 0.5,
+                OutputRate::Hz1 => 1.0,
+                OutputRate::Hz2 => 2.0,
+                OutputRate::Hz5 => 5.0,
+                OutputRate::Hz10 => 10.0,
+                OutputRate::Hz20 => 20.0,
+                OutputRate::Hz50 => 50.0,
+                OutputRate::Hz100 => 100.0,
+                OutputRate::Hz200 => 200.0,
+            }
+        }
+    }
+
+    /// WT901 baud rate options
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    #[repr(u8)]
+    pub enum BaudRate {
+        /// 4800 baud
+        Baud4800 = 0x01,
+        /// 9600 baud (default)
+        Baud9600 = 0x02,
+        /// 19200 baud
+        Baud19200 = 0x03,
+        /// 38400 baud
+        Baud38400 = 0x04,
+        /// 57600 baud
+        Baud57600 = 0x05,
+        /// 115200 baud (required for 200 Hz)
+        Baud115200 = 0x06,
+        /// 230400 baud
+        Baud230400 = 0x07,
+        /// 460800 baud
+        Baud460800 = 0x08,
+        /// 921600 baud
+        Baud921600 = 0x09,
+    }
+
+    impl BaudRate {
+        /// Get the baud rate as u32
+        pub fn as_u32(&self) -> u32 {
+            match self {
+                BaudRate::Baud4800 => 4800,
+                BaudRate::Baud9600 => 9600,
+                BaudRate::Baud19200 => 19200,
+                BaudRate::Baud38400 => 38400,
+                BaudRate::Baud57600 => 57600,
+                BaudRate::Baud115200 => 115200,
+                BaudRate::Baud230400 => 230400,
+                BaudRate::Baud460800 => 460800,
+                BaudRate::Baud921600 => 921600,
+            }
+        }
+    }
+
+    /// Register addresses
+    const REG_SAVE: u8 = 0x00;
+    const REG_RRATE: u8 = 0x03;
+    const REG_BAUD: u8 = 0x04;
+
+    /// Unlock command for WT901 9xx series
+    ///
+    /// Must be sent before any configuration changes.
+    /// Returns 5-byte command: `FF AA 69 88 B5`
+    pub fn unlock_command() -> [u8; 5] {
+        [0xFF, 0xAA, 0x69, 0x88, 0xB5]
+    }
+
+    /// Save command to persist settings to flash
+    ///
+    /// Must be sent after configuration changes to persist them.
+    /// Returns 5-byte command: `FF AA 00 00 00`
+    pub fn save_command() -> [u8; 5] {
+        [0xFF, 0xAA, REG_SAVE, 0x00, 0x00]
+    }
+
+    /// Generate command to set output rate
+    ///
+    /// # Arguments
+    ///
+    /// * `rate` - Desired output rate
+    ///
+    /// # Returns
+    ///
+    /// 5-byte command: `FF AA 03 [rate] 00`
+    pub fn cfg_rate_command(rate: OutputRate) -> [u8; 5] {
+        [0xFF, 0xAA, REG_RRATE, rate as u8, 0x00]
+    }
+
+    /// Generate command to set baud rate
+    ///
+    /// **Important:** After sending this command and saving, the WT901
+    /// will communicate at the new baud rate on next power cycle.
+    /// Ensure the host UART is also configured for the new rate.
+    ///
+    /// # Arguments
+    ///
+    /// * `baud` - Desired baud rate
+    ///
+    /// # Returns
+    ///
+    /// 5-byte command: `FF AA 04 [baud] 00`
+    pub fn cfg_baud_command(baud: BaudRate) -> [u8; 5] {
+        [0xFF, 0xAA, REG_BAUD, baud as u8, 0x00]
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -401,5 +562,52 @@ mod tests {
         assert!((bias.ax - 0.1).abs() < 0.01);
         assert!((bias.ay - 0.2).abs() < 0.01);
         assert!((bias.az - 0.3).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_cfg_unlock_command() {
+        let cmd = cfg::unlock_command();
+        assert_eq!(cmd, [0xFF, 0xAA, 0x69, 0x88, 0xB5]);
+    }
+
+    #[test]
+    fn test_cfg_save_command() {
+        let cmd = cfg::save_command();
+        assert_eq!(cmd, [0xFF, 0xAA, 0x00, 0x00, 0x00]);
+    }
+
+    #[test]
+    fn test_cfg_rate_command() {
+        // Test 200 Hz
+        let cmd = cfg::cfg_rate_command(cfg::OutputRate::Hz200);
+        assert_eq!(cmd, [0xFF, 0xAA, 0x03, 0x0B, 0x00]);
+
+        // Test 10 Hz (default)
+        let cmd = cfg::cfg_rate_command(cfg::OutputRate::Hz10);
+        assert_eq!(cmd, [0xFF, 0xAA, 0x03, 0x06, 0x00]);
+    }
+
+    #[test]
+    fn test_cfg_baud_command() {
+        // Test 115200 baud
+        let cmd = cfg::cfg_baud_command(cfg::BaudRate::Baud115200);
+        assert_eq!(cmd, [0xFF, 0xAA, 0x04, 0x06, 0x00]);
+
+        // Test 9600 baud (default)
+        let cmd = cfg::cfg_baud_command(cfg::BaudRate::Baud9600);
+        assert_eq!(cmd, [0xFF, 0xAA, 0x04, 0x02, 0x00]);
+    }
+
+    #[test]
+    fn test_output_rate_as_hz() {
+        assert_eq!(cfg::OutputRate::Hz200.as_hz(), 200.0);
+        assert_eq!(cfg::OutputRate::Hz10.as_hz(), 10.0);
+        assert_eq!(cfg::OutputRate::Hz0_2.as_hz(), 0.2);
+    }
+
+    #[test]
+    fn test_baud_rate_as_u32() {
+        assert_eq!(cfg::BaudRate::Baud115200.as_u32(), 115200);
+        assert_eq!(cfg::BaudRate::Baud9600.as_u32(), 9600);
     }
 }

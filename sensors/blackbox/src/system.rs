@@ -351,10 +351,18 @@ impl TelemetryPublisher {
 
         let (ekf_x, ekf_y) = estimator.ekf.position();
 
-        // Get velocity from best available source (EKF preferred, GPS fallback)
-        // Returns consistent (vx, vy, speed) tuple from same source
-        let (mut vx, mut vy, speed_ms) = sensors.get_velocity(Some(&estimator.ekf));
-        let mut display_speed_kmh = speed_ms * 3.6;
+        // Use GPS-reported speed (Doppler-based, stable) for display
+        // EKF velocity can spike when GPS position jumps at high update rates
+        let gps_speed_ms = sensors.gps_parser.last_fix().speed;
+        let mut display_speed_kmh = gps_speed_ms * 3.6;
+
+        // Get EKF velocity for vx/vy components (used by mode classifier)
+        let (mut vx, mut vy, _) = sensors.get_velocity(Some(&estimator.ekf));
+
+        // Sanity check: cap at 500 kph (GPS noise can cause huge spikes)
+        if display_speed_kmh > 500.0 {
+            display_speed_kmh = 0.0;
+        }
 
         // Zero out very low speeds to clean up display
         if display_speed_kmh < 1.0 {

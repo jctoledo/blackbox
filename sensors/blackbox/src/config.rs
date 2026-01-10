@@ -54,7 +54,7 @@ impl GpsModel {
     pub fn max_rate_hz(&self) -> u8 {
         match self {
             GpsModel::Neo6M => 5,
-            GpsModel::Neo7M => 10,
+            GpsModel::Neo7M => 5,  // Use 5 Hz for stability (18 Hz causes noisy position)
             GpsModel::Neo8M => 10, // 18 Hz possible but 10 Hz better for multi-GNSS accuracy
         }
     }

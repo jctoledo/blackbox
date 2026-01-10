@@ -218,8 +218,9 @@ fn main() {
     // Keep server alive (prevent drop)
     let _server = telemetry_server;
 
-    // Initialize UART for IMU
-    let imu_config = Config::new().baudrate(9600.into());
+    // Initialize UART for IMU at 115200 baud
+    // Note: WT901 rate commands not accepted by this variant, runs at ~20 Hz
+    let imu_config = Config::new().baudrate(115200.into());
     let imu_uart = UartDriver::new(
         peripherals.uart1,
         peripherals.pins.gpio18,
@@ -229,6 +230,7 @@ fn main() {
         &imu_config,
     )
     .unwrap();
+    info!("IMU initialized @ 115200 baud");
 
     // Initialize UART for GPS
     info!(
@@ -246,13 +248,26 @@ fn main() {
     )
     .unwrap();
 
-    // Configure GPS update rate via UBX command
-    let ubx_cmd = ublox_neo::ubx::cfg_rate_command(config.gps.model.measurement_period_ms());
-    gps_uart.write(&ubx_cmd).ok();
-    info!(
-        "GPS rate configured: {} ms period",
-        config.gps.model.measurement_period_ms()
-    );
+    // Configure GPS via UBX commands
+    // Wait for GPS module to boot, then send commands multiple times
+    FreeRtos::delay_ms(500); // Give GPS time to initialize
+
+    // 1. Set dynamic platform model to Automotive for faster response to acceleration/braking
+    // Default on many cheap modules is Pedestrian/Portable which lags during vehicle dynamics
+    let nav5_cmd = ublox_neo::ubx::cfg_nav5_command(ublox_neo::ubx::DynamicModel::Automotive);
+    for i in 0..3 {
+        gps_uart.write(&nav5_cmd).ok();
+        FreeRtos::delay_ms(100);
+        info!("GPS NAV5 command sent ({}/3): Automotive mode", i + 1);
+    }
+
+    // 2. Set update rate
+    let rate_cmd = ublox_neo::ubx::cfg_rate_command(config.gps.model.measurement_period_ms());
+    for i in 0..3 {
+        gps_uart.write(&rate_cmd).ok();
+        FreeRtos::delay_ms(100);
+        info!("GPS rate command sent ({}/3): {} ms period", i + 1, config.gps.model.measurement_period_ms());
+    }
 
     // Create sensor manager with GPS warmup from config
     let mut sensors = SensorManager::new(imu_uart, gps_uart, config.gps.warmup_fixes);
@@ -287,7 +302,9 @@ fn main() {
             d.config.gps_warmup_fixes = config.gps.warmup_fixes;
             d.gps_health.model_name = config.gps.model.name();
             d.gps_health.configured_rate_hz = config.gps.model.max_rate_hz();
-            d.sensor_rates.imu_expected_hz = 200.0;
+            // WT901 at 115200 baud - rate commands not accepted by this variant
+            // 20 Hz is still useful (provides interpolation between GPS fixes)
+            d.sensor_rates.imu_expected_hz = 20.0;
             d.sensor_rates.gps_expected_hz = config.gps.model.max_rate_hz() as f32;
         });
     }
@@ -575,8 +592,9 @@ fn main() {
 
         // Publish telemetry at configured rate
         if now_ms - last_telemetry_ms >= config.telemetry.interval_ms {
-            // Update mode classifier
-            let speed = sensors.get_speed(Some(&estimator.ekf));
+            // Update mode classifier - use GPS-reported speed to prevent
+            // false triggers from accelerometer integration when stationary
+            let speed = sensors.gps_parser.last_fix().speed;
             let (ax_corr, ay_corr, _) = sensors.imu_parser.get_accel_corrected();
             let (ax_b, ay_b, _) = remove_gravity(
                 ax_corr,

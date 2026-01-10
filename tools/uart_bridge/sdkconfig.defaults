@@ -1,0 +1,21 @@
+# ESP32-C3 configuration for WT901 config tool
+CONFIG_IDF_TARGET="esp32c3"
+
+# Use built-in large partition table (3MB app partition)
+CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y
+
+# Flash size
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="4MB"
+
+# Optimize binary size
+CONFIG_COMPILER_OPTIMIZATION_SIZE=y
+
+# Disable Bluetooth (not needed)
+CONFIG_BT_ENABLED=n
+
+# Use USB-JTAG for console output (frees UART0/UART1 for sensors)
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+
+# FreeRTOS tick rate
+CONFIG_FREERTOS_HZ=1000
