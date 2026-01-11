@@ -77,7 +77,7 @@ Any ESP32-C3 development board works. Common options:
 The current code is written for the WT901. To use a different IMU:
 - Modify `src/imu.rs` with your IMU's protocol
 - Common alternatives: MPU6050, BMI088, LSM6DSO
-- Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md)
+- Contributions welcome! See [CONTRIBUTING.md](../CONTRIBUTING.md)
 
 ### Can I use a different GPS?
 
@@ -138,7 +138,7 @@ To use it as-is: **No**
 To modify it: **Some Rust helps**
 - But the code is well-commented
 - Start with simple changes (thresholds, rates)
-- Check [CLAUDE.md](CLAUDE.md) for architecture
+- Check [CLAUDE.md](../CLAUDE.md) for architecture
 
 ### Can I use this without WiFi?
 
@@ -203,7 +203,7 @@ Without sensor fusion, you're either:
 - Stuck with 5 Hz GPS (too slow for dynamics)
 - Using raw IMU (accumulates huge errors)
 
-The math is in `src/ekf.rs`, explained in [CLAUDE.md](CLAUDE.md).
+The math is in `src/ekf.rs`, explained in [CLAUDE.md](../CLAUDE.md).
 
 ## Troubleshooting
 
@@ -335,7 +335,7 @@ Basically nothing. A 1 GB hotspot could log for 200+ hours.
 
 Yes! Active development as of January 2025.
 
-Check the [CHANGELOG.md](CHANGELOG.md) for recent updates.
+Check the [CHANGELOG.md](../CHANGELOG.md) for recent updates.
 
 ### Can I use this commercially?
 
@@ -351,7 +351,7 @@ Yes! It's MIT licensed. You can:
 
 ### How can I contribute?
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for full details.
+See [CONTRIBUTING.md](../CONTRIBUTING.md) for full details.
 
 Quick version:
 1. Fork the repo
@@ -366,7 +366,7 @@ Or help by:
 
 ### Where can I get help?
 
-1. **Documentation** - Start with [README.md](README.md) and [SUPPORT.md](SUPPORT.md)
+1. **Documentation** - Start with [README.md](../README.md) and this FAQ
 2. **Search issues** - Someone might have asked already
 3. **Open an issue** - Use templates, provide details
 4. **Community** - Help each other in issue discussions

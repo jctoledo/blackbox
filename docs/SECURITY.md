@@ -76,7 +76,7 @@ Security issues include:
 ### How to Report
 
 **DO:**
-1. Email security reports to: [INSERT SECURITY EMAIL]
+1. Use GitHub's private vulnerability reporting: go to the Security tab → "Report a vulnerability"
 2. Include detailed description of the vulnerability
 3. Provide steps to reproduce if possible
 4. Give us reasonable time to fix before public disclosure (90 days)
