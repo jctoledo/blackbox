@@ -7,10 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- Comprehensive documentation (README, CONTRIBUTING, CODE_OF_CONDUCT, SECURITY)
-- GitHub issue and PR templates
-- CLAUDE.md architecture documentation
+### Changed
+- Renamed `neo6m` driver to `ublox-gps` to reflect support for multiple u-blox GPS modules (NEO-6M, NEO-M9N, etc.)
+- Updated driver documentation with UBX protocol examples and dynamic platform models
+
+### Removed
+- Obsolete documentation files (RELEASE.md, IMPLEMENTATION_SUMMARY.md, release-notes.md)
 
 ## [0.0.2] - 2025-01-10
 
@@ -45,7 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial release of Blackbox
 - ESP32-C3 firmware for vehicle telemetry
 - WT901 IMU driver with UART parsing
-- NEO-6M GPS driver with NMEA parsing
+- u-blox GPS driver with NMEA parsing (supports NEO-6M, NEO-M9N, etc.)
 - 7-state Extended Kalman Filter for sensor fusion
   - Position, velocity, yaw, and accelerometer bias estimation
   - CTRA motion model for turning dynamics
