@@ -6,6 +6,7 @@ mod imu;
 mod mode;
 mod mqtt;
 mod rgb_led;
+mod settings;
 mod system;
 mod udp_stream;
 mod websocket_server;
@@ -68,6 +69,13 @@ fn main() {
     let peripherals = Peripherals::take().unwrap();
     let sysloop = EspSystemEventLoop::take().unwrap();
     let nvs = EspDefaultNvsPartition::take().ok();
+
+    // Load saved mode settings from NVS (before WiFi uses nvs)
+    let saved_mode_config = nvs
+        .as_ref()
+        .and_then(|p| settings::load_settings(p.clone()));
+    // Keep a clone for later saves
+    let nvs_for_settings = nvs.as_ref().cloned();
 
     // Create LED for status indication
     let led = RgbLed::new(peripherals.rmt.channel0, peripherals.pins.gpio8)
@@ -440,6 +448,13 @@ fn main() {
 
     // Create state estimator and telemetry publisher
     let mut estimator = StateEstimator::new();
+
+    // Apply saved mode settings if available
+    if let Some(cfg) = saved_mode_config {
+        info!("Applying saved mode config from NVS");
+        estimator.mode_classifier.update_config(cfg);
+    }
+
     let mut publisher = TelemetryPublisher::new(udp_stream, mqtt_opt, telemetry_state.clone());
 
     // Main loop timing
@@ -489,9 +504,15 @@ fn main() {
                     lat_thr: s.lat_thr,
                     lat_exit: s.lat_exit,
                     yaw_thr: s.yaw_thr,
-                    alpha: 0.25, // Keep default smoothing
+                    alpha: 0.35, // EMA smoothing factor
                 };
                 estimator.mode_classifier.update_config(new_config);
+
+                // Persist to NVS
+                if let Some(ref nvs) = nvs_for_settings {
+                    settings::save_settings(nvs.clone(), &new_config);
+                }
+
                 info!(
                     ">>> Mode config updated: acc={:.2}g/{:.2}g, brake={:.2}g/{:.2}g, lat={:.2}g/{:.2}g, yaw={:.3}rad/s, min_spd={:.1}m/s",
                     s.acc_thr, s.acc_exit, s.brake_thr, s.brake_exit, s.lat_thr, s.lat_exit, s.yaw_thr, s.min_speed

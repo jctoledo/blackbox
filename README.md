@@ -713,64 +713,108 @@ You can trigger recalibration from the dashboard:
 
 ## Autotune (Threshold Calibration)
 
-The **Autotune** feature learns your vehicle's characteristics from a single city drive and automatically generates optimized thresholds for all 4 driving profiles.
+The **Autotune** feature learns your vehicle's characteristics by driving in the mode you want to calibrate. Each profile (City, Canyon, Track, Highway) is calibrated independently - no arbitrary scaling. Calibrated settings persist across power cycles via NVS.
 
 ### Why Autotune?
 
-Default presets use generic thresholds, but every vehicle is different:
+Default presets use generic thresholds, but every vehicle and driver is different:
 - A sports car can pull 1.0g lateral; a minivan might max at 0.5g
-- Your driving style affects typical G-forces
-- One calibration drive personalizes ALL presets to YOUR vehicle
+- Track driving produces different g-forces than city driving
+- Calibrate each mode by actually driving in that style
 
 ### How to Use Autotune
 
 1. **Open the dashboard** at `http://192.168.71.1`
 2. **Tap "Autotune"** in the menu
-3. **Wait for GPS lock** (required before starting)
-4. **Select a scenario** (Guided, Parking Lot, or Free Drive)
-5. **Tap "Start Calibration"** and drive normally for 10-20 minutes
+3. **Select the mode to calibrate** (City, Canyon, Track, or Highway)
+4. **Wait for GPS lock** (green GPS status required)
+5. **Tap "Start Calibration"** and drive in that style for 10-20 minutes
 6. **Collect events**: accelerations, brakes, and turns
-7. **Review results** - the system generates all 4 profiles
-8. **Tap "Apply"** to save and activate
+7. **Review thresholds** - computed from YOUR driving
+8. **Tap "Apply"** to save to ESP32 (NVS) and browser
 
-### What Gets Generated
+### Mode-Specific Calibration
 
-From your city driving baseline, Autotune generates 4 vehicle-specific profiles:
+Unlike previous versions that scaled from a single baseline, each mode is now calibrated independently:
 
-| Profile | Scaling | Use Case |
-|---------|---------|----------|
-| **Track** | 2.0-3.0× baseline | Racing, track days |
-| **Canyon** | 1.5-1.8× baseline | Spirited mountain roads |
-| **City** | 1.0× (your baseline) | Daily driving |
-| **Highway** | 0.6-0.8× baseline | Highway cruising |
+| Mode | Calibration Drive Style |
+|------|------------------------|
+| **City** | Normal commute - stop lights, lane changes, parking |
+| **Canyon** | Spirited mountain roads - tighter turns, harder braking |
+| **Track** | Racing/track day - aggressive accel, hard braking, high-g turns |
+| **Highway** | Highway cruising - gentle lane changes, gradual accel/brake |
+
+**Calibrate each mode separately** by driving in that style. This eliminates guesswork from scaling factors.
+
+### Algorithm Details
+
+Autotune uses physics-informed signal processing matching `mode.rs`:
+
+**Event Detection:**
+- **EMA filtering** at α=0.85 (tuned for 25Hz polling to match 200Hz firmware)
+- **Noise floor** of 0.08g rejects road bumps and vibration
+- **Duration filter** of 200ms ensures intentional inputs
+- **Cooldown** of 400ms between events prevents double-counting
+- **Sign consistency** for turns: lateral G and yaw rate must agree
+
+**Threshold Calculation:**
+1. Collect peak G-forces from each event type (accel, brake, turn)
+2. Apply **IQR outlier rejection** (1.5× interquartile range)
+3. Compute **median (P50)** of filtered peaks
+4. Entry threshold = **70% of median**
+5. Exit threshold = **50% of entry** (hysteresis)
+
+**min_speed** is fixed at 2.0 m/s (7.2 km/h) - physics doesn't change with driving style.
+
+### NVS Persistence
+
+Calibrated settings persist in ESP32's Non-Volatile Storage:
+
+**On Apply:**
+- Thresholds sent to ESP32 via `/api/settings/set`
+- ESP32 saves to NVS namespace `bb_cfg`
+- Browser saves profile to `localStorage` for dashboard
+
+**On Boot:**
+- ESP32 reads thresholds from NVS
+- If valid, applies to mode classifier automatically
+- If NVS is empty/invalid, uses **City defaults** (acc=0.10g, brake=0.18g, lat=0.12g)
+- No manual configuration needed after calibration
+
+**Storage Keys:** `acc`, `acc_x`, `brk`, `brk_x`, `lat`, `lat_x`, `yaw`, `spd`
 
 ### Confidence Levels
 
-The more events you collect, the more accurate the thresholds:
-
 | Events | Confidence | Recommendation |
 |--------|------------|----------------|
-| 3-7 each | Low | Keep driving |
+| 3-7 each | Low | Keep driving - thresholds may be noisy |
 | 8-14 each | Medium | Good for most uses |
-| 15+ each | High | Excellent accuracy |
+| 15+ each | High | Robust outlier rejection, accurate medians |
 
 ### Export Data
 
-Autotune exports comprehensive JSON for analysis:
-- All 4 generated profiles
-- Raw event data (peaks, durations, speed changes)
-- Physics validation metrics
-- Scaling factors used
-
-This data helps evaluate calibration quality and can be used for post-analysis.
+Exports JSON with mode-specific calibration data:
+```json
+{
+  "version": 2,
+  "mode": "track",
+  "exportDate": "2024-01-15T10:30:00Z",
+  "calibrated": { "acc": 0.35, "brake": 0.50, ... },
+  "events": {
+    "accel": [{"peak": 0.45, "dur": 450, "dv": 18.3}, ...],
+    "brake": [...],
+    "turn": [...]
+  }
+}
+```
 
 ### Tips for Best Results
 
-- **Drive normally** - don't exaggerate maneuvers
+- **Drive in the style you're calibrating** - Track mode = aggressive, City = normal
+- **Calibrate each mode separately** - switch modes and recalibrate
 - **Include variety** - different turn directions, brake intensities
-- **Flat ground preferred** - inclines can affect readings
-- **More driving = better** - the progress bar is just the minimum
-- **GPS lock required** - ensures accurate speed validation
+- **More driving = better** - 15+ events each gives high confidence
+- **GPS lock required** - ensures accurate speed filtering
 
 ---
 

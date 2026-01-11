@@ -645,117 +645,128 @@ Displayed as updates per minute (rolling average), not cumulative count. Typical
 - ZUPT: 0-60/min (depends on stops)
 - Free heap: ~60KB (stable during operation)
 
+### settings.rs - NVS Settings Persistence
+
+**Purpose:**
+Persists mode detection thresholds to ESP32's Non-Volatile Storage (NVS) so they survive power cycles.
+
+**Functions:**
+- `load_settings(nvs_partition)`: Loads `ModeConfig` from NVS, returns `None` if not found
+- `save_settings(nvs_partition, config)`: Saves `ModeConfig` to NVS, returns success/failure
+
+**NVS Schema:**
+- **Namespace:** `bb_cfg`
+- **Keys (max 15 chars for NVS):**
+  - `acc` - acceleration entry threshold (f32)
+  - `acc_x` - acceleration exit threshold (f32)
+  - `brk` - brake entry threshold (f32)
+  - `brk_x` - brake exit threshold (f32)
+  - `lat` - lateral entry threshold (f32)
+  - `lat_x` - lateral exit threshold (f32)
+  - `yaw` - yaw rate threshold (f32)
+  - `spd` - minimum speed (f32)
+
+**Storage Format:**
+Values stored as raw 4-byte little-endian floats (`f32::to_le_bytes()`).
+
+**Usage in main.rs:**
+```rust
+// On boot: load saved settings
+let saved_config = nvs.as_ref().and_then(|p| settings::load_settings(p.clone()));
+if let Some(cfg) = saved_config {
+    estimator.mode_classifier.update_config(cfg);
+}
+
+// On settings change: save to NVS
+if let Some(ref nvs) = nvs_for_settings {
+    settings::save_settings(nvs.clone(), &new_config);
+}
+```
+
+**Note:** `alpha` (EMA filter) is NOT persisted - always uses mode.rs default (0.35).
+
 ### Autotune System
 
 **Overview:**
-Autotune learns vehicle-specific mode detection thresholds from a calibration drive. Instead of generic presets, thresholds are derived from actual sensor data captured during normal driving.
+Autotune learns mode detection thresholds by driving in the selected mode. Each profile (City, Canyon, Track, Highway) is calibrated independently - no scaling between profiles.
 
-**Why Autotune?**
-- Every vehicle has different suspension, tire grip, weight distribution
-- Generic thresholds may trigger too early (sensitive car) or too late (stiff car)
-- Calibration captures your specific vehicle's g-force characteristics
+**Key Design:**
+- User selects which mode to calibrate (Track/Canyon/City/Highway)
+- Drives in that style for 10-20 minutes
+- Thresholds computed directly from that driving style
+- No arbitrary scaling factors between profiles
+- Each mode calibrated by actually driving in that mode
 
 **Data Flow:**
 ```
-Telemetry → Event Detection → Categorization → Median Calculation → Scaling → All Profiles
-    │              │                │                  │                │           │
-    └─►ax,ay,wz    └─►EMA filter    └─►ACCEL/BRAKE/    └─►P50 values    └─►×scale   └─►localStorage
-                      α=0.35           CORNER bins         (robust)        factors     bb_profiles
+Select Mode → Drive → Event Detection → IQR Filter → Median → NVS + localStorage
+      │          │           │               │           │           │
+      └─►Track   └─►ax,ay,wz └─►ACCEL/BRAKE/ └─►Outlier   └─►P50×0.7  └─►bb_cfg
+                              CORNER bins      rejection              (active)
 ```
 
 **Event Detection Algorithm:**
 ```javascript
-// Detect events from telemetry stream
-const EMA_ALPHA = 0.35;          // Smoothing factor
-const EVENT_MIN_DURATION = 200;  // ms - reject transients
-const EVENT_TIMEOUT = 300;       // ms - gap to end event
+// Parameters tuned for 25Hz polling to match 200Hz mode.rs dynamics
+const EMA_ALPHA = 0.85;           // Adjusted for sample rate mismatch
+const NOISE_FLOOR = 0.08;         // 0.08g - reject road bumps
+const EVENT_MIN_DURATION = 200;   // ms - reject transients
+const EVENT_COOLDOWN = 400;       // ms - gap between events
+const MIN_SPEED_KMH = 7.2;        // 2.0 m/s
 
-// Smooth raw sensor data
-ax_ema = ax_ema * (1 - EMA_ALPHA) + raw_ax * EMA_ALPHA;
+// EMA filter matching mode.rs dynamics
+emaLonSim = (1 - EMA_ALPHA) * emaLonSim + EMA_ALPHA * lonG;
 
-// Detect event start/end based on magnitude threshold
-// Record peak values during event
-// Categorize: positive ax → ACCEL, negative ax → BRAKE, high ay+wz → CORNER
+// Event detection with noise floor
+if (emaLonSim > NOISE_FLOOR && speed > MIN_SPEED_KMH) {
+    // Start/continue ACCEL event, track peak
+}
+// BRAKE: emaLonSim < -NOISE_FLOOR
+// TURN: |emaLatSim| > NOISE_FLOOR && |emaYawSim| > 0.02 && sign consistent
 ```
 
 **Threshold Calculation:**
 ```javascript
-// For each event category (ACCEL, BRAKE, CORNER):
-const sortedPeaks = events.map(e => e.peak).sort((a,b) => a - b);
-const P50 = sortedPeaks[Math.floor(sortedPeaks.length * 0.5)];  // Median
-
-// Entry threshold: 70% of median (triggers before typical peak)
-const entry = P50 * 0.7;
-
-// Exit threshold: 50% of entry (hysteresis prevents oscillation)
-const exit = entry * 0.5;
-```
-
-**Profile Scaling System:**
-Single city calibration generates all 4 profiles using physics-based multipliers:
-
-```javascript
-const PROFILE_SCALES = {
-  track:   { acc: 2.5, brake: 2.0, lat: 3.0, yaw: 2.5, min_speed: 5.0 },
-  canyon:  { acc: 1.5, brake: 1.5, lat: 1.8, yaw: 1.6, min_speed: 3.0 },
-  city:    { acc: 1.0, brake: 1.0, lat: 1.0, yaw: 1.0, min_speed: 2.0 },
-  highway: { acc: 0.8, brake: 0.7, lat: 0.6, yaw: 0.6, min_speed: 12.0 }
-};
-
-// Scale from city baseline
-track.acc_entry = city.acc_entry * 2.5;  // Track expects 2.5× higher g-forces
-highway.lat_entry = city.lat_entry * 0.6; // Highway lane changes are gentler
-```
-
-**localStorage Data Structure:**
-```javascript
-// Stored as 'bb_profiles' in localStorage
-{
-  "track": {
-    "acc": 0.25,      // Entry threshold (g, converted to m/s²)
-    "acc_exit": 0.125,
-    "brake": 0.36,
-    "brake_exit": 0.18,
-    "lat": 0.36,
-    "lat_exit": 0.18,
-    "yaw": 0.125,
-    "min_speed": 5.0,
-    "desc": "Racing/track days"
-  },
-  "canyon": { ... },
-  "city": { ... },
-  "highway": { ... },
-  "calibrated_at": "2024-01-15T10:30:00.000Z",
-  "vehicle_id": "optional-user-label"
+// IQR outlier rejection
+function filterOutliers(arr) {
+    const q1 = percentile(arr, 25), q3 = percentile(arr, 75);
+    const iqr = q3 - q1;
+    return arr.filter(v => v >= q1 - 1.5*iqr && v <= q3 + 1.5*iqr);
 }
+
+// Compute thresholds from collected events
+const peaks = filterOutliers(events.map(e => e.peak));
+const P50 = median(peaks);
+const entry = P50 * 0.7;   // 70% of median
+const exit = entry * 0.5;  // 50% of entry (hysteresis)
 ```
 
-**Physics Validation Metrics:**
-Autotune validates calibration quality using physics cross-checks:
-- GPS↔Sensor speed correlation (should be >0.8)
-- Accel events should show speed increasing
-- Brake events should show speed decreasing
-- Lateral events should correlate with heading change
-- Centripetal validation: ay ≈ v²/r (from wz)
+**NVS + localStorage Storage:**
+```javascript
+// On Apply:
+// 1. Send to ESP32 → saves to NVS (bb_cfg namespace)
+await fetch('/api/settings/set?acc=...&brake=...');
+
+// 2. Save to browser localStorage for selected mode
+let profiles = JSON.parse(localStorage.getItem('bb_profiles') || '{}');
+profiles[selectedMode] = {...calibratedProfile, calibrated: new Date().toISOString()};
+profiles.lastMode = selectedMode;
+localStorage.setItem('bb_profiles', JSON.stringify(profiles));
+```
+
+**Boot Behavior:**
+- ESP32 reads thresholds from NVS on boot
+- If NVS has valid data → applies to mode classifier
+- If NVS empty → uses City defaults (mode.rs `ModeConfig::default()`)
 
 **Confidence Levels:**
-Based on sample count per event category:
-- HIGH: n ≥ 15 events (median very stable)
-- MEDIUM: n = 8-14 events (usable, some variance)
-- LOW: n = 3-7 events (may need more driving)
-- INSUFFICIENT: n < 3 (cannot compute reliable threshold)
-
-**Export Format:**
-JSON export includes:
-- All 4 scaled profiles with thresholds
-- Raw event data (peaks, durations, timestamps)
-- Scaling factors used
-- Validation metrics
-- Confidence per category
-- Timestamp and optional vehicle ID
+- HIGH: n ≥ 15 events per category
+- MEDIUM: n = 8-14 events
+- LOW: n = 3-7 events
+- INSUFFICIENT: n < 3
 
 **Integration with Dashboard:**
-- Preset buttons show green calibration dot when `bb_profiles` exists
+- User calibrates each mode by selecting it and driving in that style
 - Clicking preset loads calibrated values (or defaults if uncalibrated)
 - Export button downloads comprehensive JSON for analysis
 - Progress bar shows real-time event capture during calibration
