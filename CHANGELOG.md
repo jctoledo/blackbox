@@ -12,6 +12,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GitHub issue and PR templates
 - CLAUDE.md architecture documentation
 
+## [0.0.2] - 2025-01-10
+
+### Added
+- NEO-M9N GPS support with UBX protocol configuration (up to 25 Hz)
+- Loop rate, ZUPT rate, and EKF/GPS metrics in diagnostics dashboard
+- `configure_wt901.py` and `probe_wt901.py` tools for IMU configuration
+- `take_new_fix()` method in GPS parser for accurate fix counting
+
+### Changed
+- GPS rate now counts only valid RMC position fixes (excludes GGA/GSA sentences)
+- ZUPT display changed from cumulative count to rate per minute (rolling average)
+- Improved diagnostics accuracy for sensor rate monitoring
+
+### Fixed
+- GPS rate showing inflated values (~3x actual) due to counting all NMEA sentences
+- ZUPT count growing unboundedly (now shows useful rate metric)
+
+## [0.0.1] - 2025-01-XX
+
+### Added
+- Initial release with Access Point mode and mobile dashboard
+- HTTP polling-based telemetry at ~30 Hz
+- Driving presets (Track, Canyon, City, Highway, Custom)
+- G-meter with trail visualization
+- Live settings configuration
+- CSV data export
+
 ## [0.1.0] - 2025-01-XX
 
 ### Added
