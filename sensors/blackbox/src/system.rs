@@ -59,7 +59,7 @@ impl SensorManager {
     }
 
     /// Get GPS fix (convenience method)
-    pub fn gps_fix(&self) -> &neo6m::GpsFix {
+    pub fn gps_fix(&self) -> &ublox_gps::GpsFix {
         self.gps_parser.last_fix()
     }
 

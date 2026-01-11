@@ -16,13 +16,13 @@ Blackbox is designed as a **modular sensor fusion platform**. Adding a new senso
 ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
 │   ESP32 #1   │  │   ESP32 #2   │  │   ESP32 #3   │  │   ESP32 #4   │
 │              │  │              │  │              │  │              │
-│  WT901 IMU   │  │  NEO-6M GPS  │  │  Wheel Speed │  │   CAN Bus    │
+│  WT901 IMU   │  │  u-blox GPS  │  │  Wheel Speed │  │   CAN Bus    │
 │              │  │              │  │              │  │              │
 └──────┬───────┘  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘
        │                 │                 │                 │
        │ MQTT            │ MQTT            │ MQTT            │ MQTT
        │ topic:          │ topic:          │ topic:          │ topic:
-       │ imu/wt901       │ gps/neo6m       │ wheels/abs      │ can/obd2
+       │ imu/wt901       │ gps/ublox       │ wheels/abs      │ can/obd2
        │                 │                 │                 │
        └─────────────────┴─────────────────┴─────────────────┘
                                  │
@@ -423,7 +423,7 @@ mqtt.on_message(|topic, payload| {
 
 ### 3. **MQTT Topics**
 - Format: `car/sensors/<type>/<model>`
-- Examples: `car/sensors/imu/wt901`, `car/sensors/gps/neo6m`
+- Examples: `car/sensors/imu/wt901`, `car/sensors/gps/ublox`
 
 ### 4. **Error Handling**
 - Sensors should gracefully degrade
@@ -555,7 +555,7 @@ impl Sensor for TirePressureSensor {
 
 See `src/sensor_plugins.rs` for complete examples:
 - `Wt901ImuSensor` - IMU implementation
-- `Neo6mGpsSensor` - GPS implementation
+- `UbloxGpsSensor` - GPS implementation
 - `WheelSpeedSensor` - Wheel speed template
 - `CanBusSensor` - CAN bus template
 

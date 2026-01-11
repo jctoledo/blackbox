@@ -1,14 +1,15 @@
-//! NEO-6M / NEO-M9N GPS Driver
+//! u-blox GPS Driver
 //!
-//! This crate provides a pure Rust parser for NMEA sentences from u-blox GPS
-//! receivers (NEO-6M, NEO-M9N, etc.). It supports GPRMC/GNRMC/GGA/GSA sentences
-//! and provides position, velocity, satellite info, and time information.
+//! This crate provides a pure Rust driver for u-blox GPS receivers with NMEA
+//! parsing and UBX protocol support (NEO-6M, NEO-M9N, etc.). It supports
+//! GPRMC/GNRMC/GGA/GSA sentences and provides position, velocity, satellite
+//! info, and time information.
 //!
 //! # Features
 //!
 //! - Zero-allocation NMEA parsing
 //! - Supports GPRMC/GNRMC (position/velocity), GGA (satellites), GSA (DOP)
-//! - UBX protocol commands for GPS configuration
+//! - UBX protocol commands for GPS configuration (NEO-M9N)
 //! - Reference point averaging (warmup)
 //! - Local coordinate conversion (lat/lon → meters)
 //! - Position-based speed calculation
@@ -18,7 +19,7 @@
 //! # Example
 //!
 //! ```ignore
-//! use neo6m::NmeaParser;
+//! use ublox_gps::NmeaParser;
 //!
 //! let mut parser = NmeaParser::new();
 //!
