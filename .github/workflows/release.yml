@@ -86,11 +86,12 @@ jobs:
           mkdir -p ../../firmware-output
 
           # Generate merged binary that can be flashed directly
+          # Note: cargo espflash save-image builds from the project, no input binary needed
           cargo espflash save-image \
             --chip esp32c3 \
             --merge \
-            ../../firmware-output/${{ matrix.project }}.bin \
-            target/riscv32imc-esp-espidf/release/${{ matrix.project }}
+            --release \
+            ../../firmware-output/${{ matrix.project }}.bin
 
       - name: Upload firmware artifacts
         uses: actions/upload-artifact@v4
