@@ -70,11 +70,7 @@ fn main() {
     let sysloop = EspSystemEventLoop::take().unwrap();
     let nvs = EspDefaultNvsPartition::take().ok();
 
-    // Load saved mode settings from NVS (before WiFi uses nvs)
-    let saved_mode_config = nvs
-        .as_ref()
-        .and_then(|p| settings::load_settings(p.clone()));
-    // Keep a clone for later saves
+    // Keep a clone of NVS partition for settings operations
     let nvs_for_settings = nvs.as_ref().cloned();
 
     // Create LED for status indication
@@ -449,10 +445,27 @@ fn main() {
     // Create state estimator and telemetry publisher
     let mut estimator = StateEstimator::new();
 
-    // Apply saved mode settings if available
-    if let Some(cfg) = saved_mode_config {
-        info!("Applying saved mode config from NVS");
-        estimator.mode_classifier.update_config(cfg);
+    // Load active mode from NVS and apply its settings
+    let active_mode = nvs_for_settings
+        .as_ref()
+        .map(|p| settings::load_active_mode(p.clone()))
+        .unwrap_or(settings::DrivingMode::City);
+
+    let mode_config = nvs_for_settings
+        .as_ref()
+        .map(|p| settings::load_mode_settings(p.clone(), active_mode))
+        .unwrap_or_else(|| active_mode.default_config());
+
+    info!("Active mode: {} - applying settings", active_mode.name());
+    estimator.mode_classifier.update_config(mode_config);
+
+    // Update telemetry state with current mode and settings
+    if let Some(ref state) = telemetry_state {
+        state.set_current_mode(active_mode.into());
+        state.set_settings(mode_config.into());
+        // Clear any pending flags since we just loaded, not user-changed
+        let _ = state.take_settings_change();
+        let _ = state.take_mode_change();
     }
 
     let mut publisher = TelemetryPublisher::new(udp_stream, mqtt_opt, telemetry_state.clone());
@@ -508,9 +521,10 @@ fn main() {
                 };
                 estimator.mode_classifier.update_config(new_config);
 
-                // Persist to NVS
+                // Persist to NVS for current mode
                 if let Some(ref nvs) = nvs_for_settings {
-                    settings::save_settings(nvs.clone(), &new_config);
+                    let driving_mode: settings::DrivingMode = state.get_current_mode().into();
+                    settings::save_mode_settings(nvs.clone(), driving_mode, &new_config);
                 }
 
                 info!(
@@ -521,6 +535,48 @@ fn main() {
                 // Visual confirmation: 3 green-white alternating flashes
                 for _ in 0..3 {
                     status_mgr.led_mut().green().unwrap();
+                    FreeRtos::delay_ms(80);
+                    status_mgr.led_mut().white().unwrap();
+                    FreeRtos::delay_ms(80);
+                }
+                status_mgr.led_mut().set_low().unwrap();
+            }
+
+            // Check for mode change request from web UI
+            if let Some(new_mode) = state.take_mode_change() {
+                let driving_mode: settings::DrivingMode = new_mode.into();
+
+                // Load settings for the new mode from NVS
+                let new_config = if let Some(ref nvs) = nvs_for_settings {
+                    settings::load_mode_settings(nvs.clone(), driving_mode)
+                } else {
+                    driving_mode.default_config()
+                };
+
+                // Apply to mode classifier
+                estimator.mode_classifier.update_config(new_config);
+
+                // Save the new active mode to NVS
+                if let Some(ref nvs) = nvs_for_settings {
+                    settings::save_active_mode(nvs.clone(), driving_mode);
+                }
+
+                // Update telemetry state
+                state.set_current_mode(new_mode);
+                state.set_settings(new_config.into());
+
+                info!(
+                    ">>> Mode changed to {}: acc={:.2}g, brake={:.2}g, lat={:.2}g, yaw={:.3}rad/s",
+                    driving_mode.name(),
+                    new_config.acc_thr,
+                    new_config.brake_thr,
+                    new_config.lat_thr,
+                    new_config.yaw_thr
+                );
+
+                // Visual confirmation: 3 cyan-white alternating flashes
+                for _ in 0..3 {
+                    status_mgr.led_mut().cyan().unwrap();
                     FreeRtos::delay_ms(80);
                     status_mgr.led_mut().white().unwrap();
                     FreeRtos::delay_ms(80);

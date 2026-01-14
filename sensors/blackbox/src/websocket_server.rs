@@ -1,5 +1,5 @@
 use std::sync::{
-    atomic::{AtomicBool, AtomicU32, Ordering},
+    atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering},
     Arc, Mutex,
 };
 
@@ -10,6 +10,8 @@ use esp_idf_svc::io::Write;
 use log::info;
 
 use crate::diagnostics::DiagnosticsState;
+use crate::mode::ModeConfig;
+use crate::settings::DrivingMode;
 
 /// Mode detection settings (matching mode.rs ModeConfig)
 #[derive(Clone, Copy)]
@@ -22,6 +24,63 @@ pub struct ModeSettings {
     pub lat_exit: f32,   // Lateral exit threshold (g)
     pub yaw_thr: f32,    // Yaw rate threshold (rad/s)
     pub min_speed: f32,  // Minimum speed for mode detection (m/s)
+}
+
+/// Current driving mode (for API display)
+#[derive(Clone, Copy, PartialEq)]
+pub enum CurrentMode {
+    Track,
+    Canyon,
+    City,
+    Highway,
+    Custom,
+}
+
+impl CurrentMode {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            CurrentMode::Track => "track",
+            CurrentMode::Canyon => "canyon",
+            CurrentMode::City => "city",
+            CurrentMode::Highway => "highway",
+            CurrentMode::Custom => "custom",
+        }
+    }
+
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s.to_lowercase().as_str() {
+            "track" => Some(CurrentMode::Track),
+            "canyon" => Some(CurrentMode::Canyon),
+            "city" => Some(CurrentMode::City),
+            "highway" => Some(CurrentMode::Highway),
+            "custom" => Some(CurrentMode::Custom),
+            _ => None,
+        }
+    }
+}
+
+impl From<DrivingMode> for CurrentMode {
+    fn from(mode: DrivingMode) -> Self {
+        match mode {
+            DrivingMode::Track => CurrentMode::Track,
+            DrivingMode::Canyon => CurrentMode::Canyon,
+            DrivingMode::City => CurrentMode::City,
+            DrivingMode::Highway => CurrentMode::Highway,
+            DrivingMode::Custom => CurrentMode::Custom,
+        }
+    }
+}
+
+impl From<CurrentMode> for DrivingMode {
+    fn from(mode: CurrentMode) -> Self {
+        match mode {
+            CurrentMode::Track => DrivingMode::Track,
+            CurrentMode::Canyon => DrivingMode::Canyon,
+            CurrentMode::City => DrivingMode::City,
+            CurrentMode::Highway => DrivingMode::Highway,
+            CurrentMode::Custom => DrivingMode::Custom,
+        }
+    }
 }
 
 impl Default for ModeSettings {
@@ -40,6 +99,21 @@ impl Default for ModeSettings {
     }
 }
 
+impl From<ModeConfig> for ModeSettings {
+    fn from(cfg: ModeConfig) -> Self {
+        Self {
+            acc_thr: cfg.acc_thr,
+            acc_exit: cfg.acc_exit,
+            brake_thr: cfg.brake_thr,
+            brake_exit: cfg.brake_exit,
+            lat_thr: cfg.lat_thr,
+            lat_exit: cfg.lat_exit,
+            yaw_thr: cfg.yaw_thr,
+            min_speed: cfg.min_speed,
+        }
+    }
+}
+
 /// Shared state for telemetry server
 pub struct TelemetryServerState {
     /// Latest telemetry packet (raw bytes)
@@ -52,6 +126,10 @@ pub struct TelemetryServerState {
     mode_settings: Mutex<ModeSettings>,
     /// Settings changed flag
     settings_changed: AtomicBool,
+    /// Current driving mode (0=track, 1=canyon, 2=city, 3=highway, 4=custom)
+    current_mode: AtomicU8,
+    /// Mode change requested (new mode value, 255 = no change)
+    mode_change_requested: AtomicU8,
     /// Optional diagnostics state (shared with main loop)
     diagnostics_state: Option<Arc<DiagnosticsState>>,
 }
@@ -64,6 +142,8 @@ impl TelemetryServerState {
             calibration_requested: AtomicBool::new(false),
             mode_settings: Mutex::new(ModeSettings::default()),
             settings_changed: AtomicBool::new(false),
+            current_mode: AtomicU8::new(2), // Default to City
+            mode_change_requested: AtomicU8::new(255), // No change
             diagnostics_state: None,
         }
     }
@@ -76,7 +156,58 @@ impl TelemetryServerState {
             calibration_requested: AtomicBool::new(false),
             mode_settings: Mutex::new(ModeSettings::default()),
             settings_changed: AtomicBool::new(false),
+            current_mode: AtomicU8::new(2), // Default to City
+            mode_change_requested: AtomicU8::new(255), // No change
             diagnostics_state: Some(diagnostics),
+        }
+    }
+
+    /// Get current mode
+    pub fn get_current_mode(&self) -> CurrentMode {
+        match self.current_mode.load(Ordering::SeqCst) {
+            0 => CurrentMode::Track,
+            1 => CurrentMode::Canyon,
+            2 => CurrentMode::City,
+            3 => CurrentMode::Highway,
+            4 => CurrentMode::Custom,
+            _ => CurrentMode::City,
+        }
+    }
+
+    /// Set current mode (called when mode is loaded from NVS)
+    pub fn set_current_mode(&self, mode: CurrentMode) {
+        let val = match mode {
+            CurrentMode::Track => 0,
+            CurrentMode::Canyon => 1,
+            CurrentMode::City => 2,
+            CurrentMode::Highway => 3,
+            CurrentMode::Custom => 4,
+        };
+        self.current_mode.store(val, Ordering::SeqCst);
+    }
+
+    /// Request a mode change (called from API)
+    pub fn request_mode_change(&self, mode: CurrentMode) {
+        let val = match mode {
+            CurrentMode::Track => 0,
+            CurrentMode::Canyon => 1,
+            CurrentMode::City => 2,
+            CurrentMode::Highway => 3,
+            CurrentMode::Custom => 4,
+        };
+        self.mode_change_requested.store(val, Ordering::SeqCst);
+    }
+
+    /// Take mode change request (called from main loop)
+    pub fn take_mode_change(&self) -> Option<CurrentMode> {
+        let val = self.mode_change_requested.swap(255, Ordering::SeqCst);
+        match val {
+            0 => Some(CurrentMode::Track),
+            1 => Some(CurrentMode::Canyon),
+            2 => Some(CurrentMode::City),
+            3 => Some(CurrentMode::Highway),
+            4 => Some(CurrentMode::Custom),
+            _ => None,
         }
     }
 
@@ -332,46 +463,16 @@ const $=id=>document.getElementById(id);
 const cv=$('gfc'),ctx=cv.getContext('2d');
 const CX=70,CY=70,R=55,SCL=R/2;
 
-// Scaling factors: multiply city (baseline) thresholds by these for other modes
-// Based on physics: track pushes vehicle harder, highway is gentle lane changes
-// min_speed is constant (2.0 m/s) - physics of cornering doesn't change with driving style
-const MIN_SPEED_MS=2.0;
-const PROFILE_SCALES={
-track:{acc:2.5,brake:2.0,lat:3.0,yaw:2.5,desc:'Racing/track days'},
-canyon:{acc:1.5,brake:1.5,lat:1.8,yaw:1.6,desc:'Spirited mountain roads'},
-city:{acc:1.0,brake:1.0,lat:1.0,yaw:1.0,desc:'Daily street driving'},
-highway:{acc:0.8,brake:0.7,lat:0.6,yaw:0.6,desc:'Highway cruising'}
-};
-
-// Default presets (used when no calibration exists)
-// min_speed constant at 2.0 m/s - threshold scaling handles sensitivity
+// Default presets (must match settings.rs DrivingMode::default_config())
+// Each mode has independent thresholds - calibrate via Autotune page
 const DEFAULT_PRESETS={
-track:{acc:0.35,acc_exit:0.17,brake:0.55,brake_exit:0.27,lat:0.50,lat_exit:0.25,yaw:0.15,min_speed:2.0,desc:'Racing/track days'},
-canyon:{acc:0.22,acc_exit:0.11,brake:0.35,brake_exit:0.17,lat:0.28,lat_exit:0.14,yaw:0.10,min_speed:2.0,desc:'Spirited mountain roads'},
+track:{acc:0.30,acc_exit:0.15,brake:0.50,brake_exit:0.25,lat:0.50,lat_exit:0.25,yaw:0.15,min_speed:3.0,desc:'Racing/track days'},
+canyon:{acc:0.20,acc_exit:0.10,brake:0.35,brake_exit:0.17,lat:0.30,lat_exit:0.15,yaw:0.10,min_speed:2.5,desc:'Spirited mountain roads'},
 city:{acc:0.10,acc_exit:0.05,brake:0.18,brake_exit:0.09,lat:0.12,lat_exit:0.06,yaw:0.05,min_speed:2.0,desc:'Daily street driving'},
-highway:{acc:0.12,acc_exit:0.06,brake:0.22,brake_exit:0.11,lat:0.14,lat_exit:0.07,yaw:0.04,min_speed:2.0,desc:'Highway cruising'}
+highway:{acc:0.08,acc_exit:0.04,brake:0.15,brake_exit:0.07,lat:0.10,lat_exit:0.05,yaw:0.04,min_speed:4.0,desc:'Highway cruising'}
 };
 
-// Generate all profiles from city baseline thresholds
-function generateAllProfiles(cityBase){
-const profiles={};
-for(const[mode,scale]of Object.entries(PROFILE_SCALES)){
-profiles[mode]={
-acc:Math.max(0.05,cityBase.acc*scale.acc),
-acc_exit:Math.max(0.02,cityBase.acc_exit*scale.acc),
-brake:Math.max(0.08,cityBase.brake*scale.brake),
-brake_exit:Math.max(0.04,cityBase.brake_exit*scale.brake),
-lat:Math.max(0.05,cityBase.lat*scale.lat),
-lat_exit:Math.max(0.02,cityBase.lat_exit*scale.lat),
-yaw:Math.max(0.02,cityBase.yaw*scale.yaw),
-min_speed:MIN_SPEED_MS,
-desc:scale.desc
-};
-}
-return profiles;
-}
-
-// Get presets - prefer calibrated profiles, fall back to defaults
+// Get presets - prefer calibrated profiles from localStorage, fall back to defaults
 function getPresets(){
 const calib=localStorage.getItem('bb_profiles');
 if(calib){
@@ -538,7 +639,8 @@ $('s-yaw').value=p.yaw;$('v-yaw').textContent=p.yaw.toFixed(3);
 $('s-minspd').value=p.min_speed;$('v-minspd').textContent=p.min_speed.toFixed(1);
 }
 
-// Get most recent autotune profile from localStorage
+// Get calibration data from localStorage
+// Schema: { profiles: { track: {...}, city: {...}, ... }, lastMode: 'track', date: '...' }
 function getCalibrationData(){
 try{
 const data=JSON.parse(localStorage.getItem('bb_profiles')||'null');
@@ -547,7 +649,17 @@ return data;
 }
 function isCalibrated(){
 const data=getCalibrationData();
-return data&&data.profiles;
+return data&&data.profiles&&Object.keys(data.profiles).length>0;
+}
+// Get autotune profile for current preset (used by Custom mode)
+function getAutotuneProfile(){
+const data=getCalibrationData();
+if(data&&data.profiles){
+// Return last calibrated mode's profile, or first available
+const mode=data.lastMode||Object.keys(data.profiles)[0];
+return data.profiles[mode]||null;
+}
+return null;
 }
 
 // Select preset and apply
@@ -883,6 +995,7 @@ body{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0f;color:#f0
 <button class="mode-btn" data-mode="highway">🛣️ Highway</button>
 </div>
 <div id="mode-desc" style="font-size:11px;color:#666;text-align:center;margin-top:8px">Daily street driving - calibrate during normal commute</div>
+<div id="current-settings" style="display:none;font-size:10px;color:#888;text-align:center;margin-top:6px;padding:6px;background:#1a1a24;border-radius:4px"></div>
 <div class="instructions">
 <div class="instructions-title">📋 How It Works</div>
 <div class="instructions-text">
@@ -985,6 +1098,56 @@ let lastEvEnd=0;
 let accelEvents=[];  // {peak, dur, dv}
 let brakeEvents=[];  // {peak, dur, dv}
 let turnEvents=[];   // {peakLat, peakYaw, dur}
+let calibratedProfile=null;
+
+// Session persistence - survives page navigation within same browser tab
+const SESSION_KEY='bb_autotune_session';
+function saveSession(){
+    if(!recording&&accelEvents.length===0)return; // Don't save empty sessions
+    const session={
+        recording,startTime,selectedMode,
+        accelEvents,brakeEvents,turnEvents,
+        calibratedProfile,
+        savedAt:Date.now()
+    };
+    sessionStorage.setItem(SESSION_KEY,JSON.stringify(session));
+}
+function clearSession(){
+    sessionStorage.removeItem(SESSION_KEY);
+}
+function restoreSession(){
+    try{
+        const data=sessionStorage.getItem(SESSION_KEY);
+        if(!data)return false;
+        const s=JSON.parse(data);
+        // Expire sessions older than 1 hour
+        if(Date.now()-s.savedAt>3600000){clearSession();return false}
+        // Restore state
+        recording=s.recording;
+        startTime=s.startTime;
+        selectedMode=s.selectedMode;
+        accelEvents=s.accelEvents||[];
+        brakeEvents=s.brakeEvents||[];
+        turnEvents=s.turnEvents||[];
+        calibratedProfile=s.calibratedProfile;
+        // Update UI
+        document.querySelectorAll('.mode-btn').forEach(b=>{
+            b.classList.toggle('selected',b.dataset.mode===selectedMode);
+        });
+        $('mode-desc').textContent=MODE_DESC[selectedMode];
+        updateEvents();
+        if(recording){
+            $('btn-start').textContent='Stop Calibration';
+            $('btn-start').className='btn btn-start recording';
+        }
+        if(calibratedProfile){
+            $('results-card').style.display='block';
+            $('btn-apply').disabled=false;
+            $('btn-apply').className='btn btn-apply ready';
+        }
+        return true;
+    }catch(e){return false}
+}
 
 function parsePacket(buf){
     const d=new DataView(buf);
@@ -1144,6 +1307,7 @@ function updateEvents(){
     $('ev-accel').className='event'+(accelEvents.length>=5?' complete':accelEvents.length>=2?' needs-more':'');
     $('ev-brake').className='event'+(brakeEvents.length>=5?' complete':brakeEvents.length>=2?' needs-more':'');
     $('ev-turn').className='event'+(turnEvents.length>=10?' complete':turnEvents.length>=4?' needs-more':'');
+    saveSession(); // Persist state for page navigation
 }
 
 function percentile(arr,p){
@@ -1170,9 +1334,6 @@ function confBadge(n,min,good,high){
     if(n>=min)return'<span class="confidence-badge low">n='+n+'</span>';
     return'';
 }
-
-// Calibrated thresholds for selected mode
-let calibratedProfile=null;
 
 function computeSuggestions(){
     $('results-card').style.display='block';
@@ -1301,10 +1462,15 @@ async function applySettings(){
         await fetch('/api/settings/set?acc='+p.acc+'&acc_exit='+p.acc_exit+'&brake='+(0-p.brake)+'&brake_exit='+(0-p.brake_exit)+'&lat='+p.lat+'&lat_exit='+p.lat_exit+'&yaw='+p.yaw+'&min_speed='+p.min_speed);
 
         // Save to localStorage for this mode
-        let profiles=JSON.parse(localStorage.getItem('bb_profiles')||'{}');
-        profiles[selectedMode]={...p,calibrated:new Date().toISOString()};
-        profiles.lastMode=selectedMode;
-        localStorage.setItem('bb_profiles',JSON.stringify(profiles));
+        // Schema: { profiles: { track: {...}, city: {...}, ... }, lastMode: 'track', date: '...' }
+        let stored=JSON.parse(localStorage.getItem('bb_profiles')||'{}');
+        if(!stored.profiles)stored.profiles={};
+        stored.profiles[selectedMode]={...p,calibrated:new Date().toISOString()};
+        stored.lastMode=selectedMode;
+        stored.date=new Date().toISOString();
+        localStorage.setItem('bb_profiles',JSON.stringify(stored));
+
+        clearSession(); // Clear calibration session after successful save
 
         const rep=generateReport();
         $('report').textContent=rep;
@@ -1360,6 +1526,7 @@ function toggleRecording(){
         lastEvEnd=0;
         emaLonSim=0;emaLatSim=0;emaYawSim=0;
         startTime=Date.now();
+        calibratedProfile=null; // Clear previous calibration
 
         updateEvents();
         $('results-card').style.display='none';
@@ -1370,12 +1537,14 @@ function toggleRecording(){
 
         btn.textContent='Stop Calibration';
         btn.className='btn btn-start recording';
+        saveSession(); // Persist recording state
     }else{
         btn.textContent='Start Calibration';
         btn.className='btn btn-start';
         computeSuggestions();
         $('report').textContent=generateReport();
         $('report-card').style.display='block';
+        saveSession(); // Persist completed calibration
     }
 }
 
@@ -1403,9 +1572,28 @@ document.querySelectorAll('.mode-btn').forEach(btn=>{
         $('btn-apply').disabled=true;
         $('btn-apply').className='btn btn-apply';
         calibratedProfile=null;
+        saveSession(); // Persist mode change
     };
 });
 
+// Load current NVS settings for comparison
+async function loadCurrentSettings(){
+    try{
+        const r=await fetch('/api/settings');
+        const s=await r.json();
+        if(s.acc!==undefined){
+            const el=$('current-settings');
+            if(el){
+                el.innerHTML='<strong>Current NVS:</strong> acc:'+s.acc.toFixed(2)+'g brake:'+Math.abs(s.brake).toFixed(2)+'g lat:'+s.lat.toFixed(2)+'g yaw:'+s.yaw.toFixed(2)+' min_spd:'+s.min_speed.toFixed(1)+'m/s';
+                el.style.display='block';
+            }
+        }
+    }catch(e){}
+}
+
+// Initialize: restore session if exists, load current settings
+restoreSession();
+loadCurrentSettings();
 poll();
 </script></body></html>"#;
 
@@ -1562,9 +1750,10 @@ impl TelemetryServer {
         let state_get = state.clone();
         server.fn_handler("/api/settings", esp_idf_svc::http::Method::Get, move |req| -> Result<(), esp_idf_svc::io::EspIOError> {
             let s = state_get.get_settings();
+            let mode = state_get.get_current_mode();
             let json = format!(
-                r#"{{"acc":{:.2},"acc_exit":{:.2},"brake":{:.2},"brake_exit":{:.2},"lat":{:.2},"lat_exit":{:.2},"yaw":{:.3},"min_speed":{:.1}}}"#,
-                s.acc_thr, s.acc_exit, s.brake_thr, s.brake_exit, s.lat_thr, s.lat_exit, s.yaw_thr, s.min_speed
+                r#"{{"mode":"{}","acc":{:.2},"acc_exit":{:.2},"brake":{:.2},"brake_exit":{:.2},"lat":{:.2},"lat_exit":{:.2},"yaw":{:.3},"min_speed":{:.1}}}"#,
+                mode.as_str(), s.acc_thr, s.acc_exit, s.brake_thr, s.brake_exit, s.lat_thr, s.lat_exit, s.yaw_thr, s.min_speed
             );
             let content_length = json.len().to_string();
             let mut response = req.into_response(
@@ -1586,36 +1775,54 @@ impl TelemetryServer {
         server.fn_handler("/api/settings/set", esp_idf_svc::http::Method::Get, move |req| -> Result<(), esp_idf_svc::io::EspIOError> {
             let uri = req.uri();
             let mut settings = state_set.get_settings();
+            let mut mode_change: Option<CurrentMode> = None;
 
             // Parse query parameters
             if let Some(query) = uri.split('?').nth(1) {
                 for param in query.split('&') {
                     let mut parts = param.split('=');
                     if let (Some(key), Some(val)) = (parts.next(), parts.next()) {
-                        if let Ok(v) = val.parse::<f32>() {
-                            match key {
-                                "acc" => settings.acc_thr = v,
-                                "acc_exit" => settings.acc_exit = v,
-                                "brake" => settings.brake_thr = v,
-                                "brake_exit" => settings.brake_exit = v,
-                                "lat" => settings.lat_thr = v,
-                                "lat_exit" => settings.lat_exit = v,
-                                "yaw" => settings.yaw_thr = v,
-                                "min_speed" => settings.min_speed = v,
-                                _ => {}
+                        match key {
+                            "mode" => {
+                                if let Some(m) = CurrentMode::from_str(val) {
+                                    mode_change = Some(m);
+                                }
+                            }
+                            _ => {
+                                if let Ok(v) = val.parse::<f32>() {
+                                    match key {
+                                        "acc" => settings.acc_thr = v,
+                                        "acc_exit" => settings.acc_exit = v,
+                                        "brake" => settings.brake_thr = v,
+                                        "brake_exit" => settings.brake_exit = v,
+                                        "lat" => settings.lat_thr = v,
+                                        "lat_exit" => settings.lat_exit = v,
+                                        "yaw" => settings.yaw_thr = v,
+                                        "min_speed" => settings.min_speed = v,
+                                        _ => {}
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
 
-            state_set.set_settings(settings);
-            info!("Settings updated: acc={:.2}, acc_exit={:.2}, brake={:.2}, brake_exit={:.2}, lat={:.2}, lat_exit={:.2}, yaw={:.3}, min_speed={:.1}",
-                settings.acc_thr, settings.acc_exit, settings.brake_thr, settings.brake_exit, settings.lat_thr, settings.lat_exit, settings.yaw_thr, settings.min_speed);
+            // Handle mode change (main loop will load settings for new mode from NVS)
+            if let Some(new_mode) = mode_change {
+                state_set.request_mode_change(new_mode);
+                info!("Mode change requested: {}", new_mode.as_str());
+            } else {
+                // Regular settings update for current mode
+                state_set.set_settings(settings);
+                info!("Settings updated: acc={:.2}, brake={:.2}, lat={:.2}, yaw={:.3}",
+                    settings.acc_thr, settings.brake_thr, settings.lat_thr, settings.yaw_thr);
+            }
 
+            let current_mode = state_set.get_current_mode();
             let json = format!(
-                r#"{{"status":"ok","acc":{:.2},"acc_exit":{:.2},"brake":{:.2},"brake_exit":{:.2},"lat":{:.2},"lat_exit":{:.2},"yaw":{:.3},"min_speed":{:.1}}}"#,
-                settings.acc_thr, settings.acc_exit, settings.brake_thr, settings.brake_exit, settings.lat_thr, settings.lat_exit, settings.yaw_thr, settings.min_speed
+                r#"{{"status":"ok","mode":"{}","acc":{:.2},"acc_exit":{:.2},"brake":{:.2},"brake_exit":{:.2},"lat":{:.2},"lat_exit":{:.2},"yaw":{:.3},"min_speed":{:.1}}}"#,
+                current_mode.as_str(), settings.acc_thr, settings.acc_exit, settings.brake_thr, settings.brake_exit, settings.lat_thr, settings.lat_exit, settings.yaw_thr, settings.min_speed
             );
             let content_length = json.len().to_string();
             let mut response = req.into_response(
@@ -1714,5 +1921,94 @@ impl TelemetryServer {
     /// Get reference to shared state for updating telemetry
     pub fn state(&self) -> Arc<TelemetryServerState> {
         self.state.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Validates localStorage schema consistency between dashboard and autotune pages.
+    ///
+    /// Both pages MUST use the same schema for bb_profiles:
+    /// ```json
+    /// {
+    ///   "profiles": { "track": {...}, "city": {...}, ... },
+    ///   "lastMode": "track",
+    ///   "date": "2025-01-11T..."
+    /// }
+    /// ```
+    ///
+    /// This test catches the bug where autotune saved flat profiles but
+    /// dashboard expected a `.profiles` wrapper, breaking the main page.
+    #[test]
+    fn test_localstorage_schema_consistency() {
+        // Dashboard page must read from .profiles property
+        assert!(
+            DASHBOARD_HTML.contains(".profiles"),
+            "Dashboard must access .profiles property from localStorage"
+        );
+        assert!(
+            DASHBOARD_HTML.contains("getCalibrationData()"),
+            "Dashboard must use getCalibrationData() helper"
+        );
+        assert!(
+            DASHBOARD_HTML.contains("getAutotuneProfile()"),
+            "Dashboard must define getAutotuneProfile() function"
+        );
+
+        // Autotune page must save with .profiles wrapper
+        assert!(
+            AUTOTUNE_HTML.contains("stored.profiles[selectedMode]"),
+            "Autotune must save to stored.profiles[mode], not stored[mode]"
+        );
+        assert!(
+            AUTOTUNE_HTML.contains("if(!stored.profiles)stored.profiles={}"),
+            "Autotune must initialize .profiles object if missing"
+        );
+
+        // Both pages must use the same localStorage key
+        let dashboard_key_count = DASHBOARD_HTML.matches("bb_profiles").count();
+        let autotune_key_count = AUTOTUNE_HTML.matches("bb_profiles").count();
+        assert!(
+            dashboard_key_count > 0,
+            "Dashboard must use 'bb_profiles' localStorage key"
+        );
+        assert!(
+            autotune_key_count > 0,
+            "Autotune must use 'bb_profiles' localStorage key"
+        );
+
+        // Schema documentation must be present in both pages
+        assert!(
+            DASHBOARD_HTML.contains("Schema:"),
+            "Dashboard must document localStorage schema in comments"
+        );
+        assert!(
+            AUTOTUNE_HTML.contains("Schema:"),
+            "Autotune must document localStorage schema in comments"
+        );
+    }
+
+    /// Validates that required JavaScript functions are defined in dashboard
+    #[test]
+    fn test_required_js_functions_defined() {
+        // Dashboard must define these functions
+        assert!(
+            DASHBOARD_HTML.contains("function getCalibrationData()"),
+            "Dashboard must define getCalibrationData()"
+        );
+        assert!(
+            DASHBOARD_HTML.contains("function getAutotuneProfile()"),
+            "Dashboard must define getAutotuneProfile()"
+        );
+        assert!(
+            DASHBOARD_HTML.contains("function isCalibrated()"),
+            "Dashboard must define isCalibrated()"
+        );
+        assert!(
+            DASHBOARD_HTML.contains("function getPresets()"),
+            "Dashboard must define getPresets()"
+        );
     }
 }
