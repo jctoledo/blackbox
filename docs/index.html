@@ -986,6 +986,16 @@
                     </div>
                 </div>
                 <p class="comparison-note">Examples: AiM Solo 2 DL (~$1,200), Racelogic VBOX Sport (~$1,800), Motec systems ($3,000+)</p>
+
+                <div style="margin-top: 40px; padding: 24px 28px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px;">
+                    <h3 style="font-size: 15px; font-weight: 600; margin-bottom: 12px; color: var(--text-primary);">What about phone apps?</h3>
+                    <p style="font-size: 14px; color: var(--text-secondary); line-height: 1.7; margin: 0;">
+                        Apps like Harry's LapTimer use your phone's 1Hz GPS—one position per second. At 100 km/h, that's <strong style="color: var(--text-primary);">28 meters between updates</strong>. Racing lines are interpolated guesses. Lap times are ±0.3s at best. No sensor fusion, just raw GPS dots.
+                    </p>
+                    <p style="font-size: 14px; color: var(--text-secondary); line-height: 1.7; margin: 12px 0 0 0;">
+                        Blackbox with 25Hz GPS captures position every <strong style="color: var(--text-primary);">1-2 meters</strong>. The EKF fuses 200Hz IMU between GPS updates for continuous tracking—the same approach in commercial systems. Phone apps are fine for casual use. Dedicated hardware is for actual accuracy.
+                    </p>
+                </div>
             </div>
         </section>
 
