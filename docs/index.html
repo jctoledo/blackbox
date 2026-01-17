@@ -986,6 +986,16 @@
                     </div>
                 </div>
                 <p class="comparison-note">Examples: AiM Solo 2 DL (~$1,200), Racelogic VBOX Sport (~$1,800), Motec systems ($3,000+)</p>
+
+                <div style="margin-top: 40px; padding: 24px 28px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px;">
+                    <h3 style="font-size: 15px; font-weight: 600; margin-bottom: 12px; color: var(--text-primary);">What about phone apps?</h3>
+                    <p style="font-size: 14px; color: var(--text-secondary); line-height: 1.7; margin: 0;">
+                        Apps like Harry's LapTimer use your phone's 1Hz GPS—one position per second. At 100 km/h, that's <strong style="color: var(--text-primary);">28 meters between updates</strong>. Racing lines are interpolated guesses. Lap times are ±0.3s at best. No sensor fusion, just raw GPS dots.
+                    </p>
+                    <p style="font-size: 14px; color: var(--text-secondary); line-height: 1.7; margin: 12px 0 0 0;">
+                        Blackbox with 25Hz GPS captures position every <strong style="color: var(--text-primary);">1-2 meters</strong>. The EKF fuses 200Hz IMU between GPS updates for continuous tracking—the same approach in commercial systems. Phone apps are fine for casual use. Dedicated hardware is for actual accuracy.
+                    </p>
+                </div>
             </div>
         </section>
 
@@ -1066,6 +1076,21 @@
                     <div class="feature-card">
                         <div class="feature-icon">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 20V10"/>
+                                <path d="M18 20V4"/>
+                                <path d="M6 20v-4"/>
+                                <circle cx="12" cy="7" r="2"/>
+                                <circle cx="6" cy="13" r="2"/>
+                                <circle cx="18" cy="7" r="2"/>
+                            </svg>
+                        </div>
+                        <h3>Autotune</h3>
+                        <p>Learn vehicle-specific thresholds by driving in each mode. Calibrate Track, City, Canyon, and Highway independently.</p>
+                    </div>
+
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M12 2L2 7l10 5 10-5-10-5z"/>
                                 <path d="M2 17l10 5 10-5"/>
                                 <path d="M2 12l10 5 10-5"/>
@@ -1126,6 +1151,10 @@
                             <li>
                                 <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
                                 Driving presets: Track, Canyon, City, Highway, Custom
+                            </li>
+                            <li>
+                                <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+                                Autotune: calibrate thresholds to your vehicle
                             </li>
                             <li>
                                 <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>

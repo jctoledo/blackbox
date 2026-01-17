@@ -28,6 +28,13 @@ You are a seasoned embedded Rust engineer with deep expertise in:
 - Avoid over-engineering: solve the problem at hand, not hypothetical future problems
 - Keep abstractions minimal until they prove necessary
 
+**SOLID Principles:**
+- **Single Responsibility**: Each module/struct should have one reason to change. Keep sensors, protocols, and business logic separate.
+- **Open/Closed**: Design for extension without modification. Use traits to allow new sensor types or protocols without changing core code.
+- **Liskov Substitution**: Implementations of traits must be substitutable. If `GpsSensor` trait exists, any implementation should work interchangeably.
+- **Interface Segregation**: Prefer small, focused traits over large ones. Don't force implementations to depend on methods they don't use.
+- **Dependency Inversion**: High-level modules should depend on abstractions (traits), not concrete implementations. Pass dependencies via constructors or function parameters.
+
 **Testing Philosophy:**
 - Write meaningful tests that catch real bugs, not boilerplate
 - **Every test MUST have assertions** (`assert!`, `assert_eq!`, etc.) - a test without assertions proves nothing
@@ -644,6 +651,132 @@ Displayed as updates per minute (rolling average), not cumulative count. Typical
 - GPS: 5 Hz (NEO-6M) or 8-25 Hz (NEO-M9N depending on config)
 - ZUPT: 0-60/min (depends on stops)
 - Free heap: ~60KB (stable during operation)
+
+### settings.rs - NVS Settings Persistence
+
+**Purpose:**
+Persists mode detection thresholds to ESP32's Non-Volatile Storage (NVS) so they survive power cycles.
+
+**Functions:**
+- `load_settings(nvs_partition)`: Loads `ModeConfig` from NVS, returns `None` if not found
+- `save_settings(nvs_partition, config)`: Saves `ModeConfig` to NVS, returns success/failure
+
+**NVS Schema:**
+- **Namespace:** `bb_cfg`
+- **Keys (max 15 chars for NVS):**
+  - `acc` - acceleration entry threshold (f32)
+  - `acc_x` - acceleration exit threshold (f32)
+  - `brk` - brake entry threshold (f32)
+  - `brk_x` - brake exit threshold (f32)
+  - `lat` - lateral entry threshold (f32)
+  - `lat_x` - lateral exit threshold (f32)
+  - `yaw` - yaw rate threshold (f32)
+  - `spd` - minimum speed (f32)
+
+**Storage Format:**
+Values stored as raw 4-byte little-endian floats (`f32::to_le_bytes()`).
+
+**Usage in main.rs:**
+```rust
+// On boot: load saved settings
+let saved_config = nvs.as_ref().and_then(|p| settings::load_settings(p.clone()));
+if let Some(cfg) = saved_config {
+    estimator.mode_classifier.update_config(cfg);
+}
+
+// On settings change: save to NVS
+if let Some(ref nvs) = nvs_for_settings {
+    settings::save_settings(nvs.clone(), &new_config);
+}
+```
+
+**Note:** `alpha` (EMA filter) is NOT persisted - always uses mode.rs default (0.35).
+
+### Autotune System
+
+**Overview:**
+Autotune learns mode detection thresholds by driving in the selected mode. Each profile (City, Canyon, Track, Highway) is calibrated independently - no scaling between profiles.
+
+**Key Design:**
+- User selects which mode to calibrate (Track/Canyon/City/Highway)
+- Drives in that style for 10-20 minutes
+- Thresholds computed directly from that driving style
+- No arbitrary scaling factors between profiles
+- Each mode calibrated by actually driving in that mode
+
+**Data Flow:**
+```
+Select Mode → Drive → Event Detection → IQR Filter → Median → NVS + localStorage
+      │          │           │               │           │           │
+      └─►Track   └─►ax,ay,wz └─►ACCEL/BRAKE/ └─►Outlier   └─►P50×0.7  └─►bb_cfg
+                              CORNER bins      rejection              (active)
+```
+
+**Event Detection Algorithm:**
+```javascript
+// Parameters tuned for 25Hz polling to match 200Hz mode.rs dynamics
+const EMA_ALPHA = 0.85;           // Adjusted for sample rate mismatch
+const NOISE_FLOOR = 0.08;         // 0.08g - reject road bumps
+const EVENT_MIN_DURATION = 200;   // ms - reject transients
+const EVENT_COOLDOWN = 400;       // ms - gap between events
+const MIN_SPEED_KMH = 7.2;        // 2.0 m/s
+
+// EMA filter matching mode.rs dynamics
+emaLonSim = (1 - EMA_ALPHA) * emaLonSim + EMA_ALPHA * lonG;
+
+// Event detection with noise floor
+if (emaLonSim > NOISE_FLOOR && speed > MIN_SPEED_KMH) {
+    // Start/continue ACCEL event, track peak
+}
+// BRAKE: emaLonSim < -NOISE_FLOOR
+// TURN: |emaLatSim| > NOISE_FLOOR && |emaYawSim| > 0.02 && sign consistent
+```
+
+**Threshold Calculation:**
+```javascript
+// IQR outlier rejection
+function filterOutliers(arr) {
+    const q1 = percentile(arr, 25), q3 = percentile(arr, 75);
+    const iqr = q3 - q1;
+    return arr.filter(v => v >= q1 - 1.5*iqr && v <= q3 + 1.5*iqr);
+}
+
+// Compute thresholds from collected events
+const peaks = filterOutliers(events.map(e => e.peak));
+const P50 = median(peaks);
+const entry = P50 * 0.7;   // 70% of median
+const exit = entry * 0.5;  // 50% of entry (hysteresis)
+```
+
+**NVS + localStorage Storage:**
+```javascript
+// On Apply:
+// 1. Send to ESP32 → saves to NVS (bb_cfg namespace)
+await fetch('/api/settings/set?acc=...&brake=...');
+
+// 2. Save to browser localStorage for selected mode
+let profiles = JSON.parse(localStorage.getItem('bb_profiles') || '{}');
+profiles[selectedMode] = {...calibratedProfile, calibrated: new Date().toISOString()};
+profiles.lastMode = selectedMode;
+localStorage.setItem('bb_profiles', JSON.stringify(profiles));
+```
+
+**Boot Behavior:**
+- ESP32 reads thresholds from NVS on boot
+- If NVS has valid data → applies to mode classifier
+- If NVS empty → uses City defaults (mode.rs `ModeConfig::default()`)
+
+**Confidence Levels:**
+- HIGH: n ≥ 15 events per category
+- MEDIUM: n = 8-14 events
+- LOW: n = 3-7 events
+- INSUFFICIENT: n < 3
+
+**Integration with Dashboard:**
+- User calibrates each mode by selecting it and driving in that style
+- Clicking preset loads calibrated values (or defaults if uncalibrated)
+- Export button downloads comprehensive JSON for analysis
+- Progress bar shows real-time event capture during calibration
 
 ### udp_stream.rs - UDP Client (Station Mode)
 
