@@ -64,11 +64,20 @@ Blackbox is an ESP32-C3 vehicle telemetry system that performs real-time sensor 
 ## Build and Development Commands
 
 ### Firmware Development
+
+**⚠️ CRITICAL: GPS Environment Variables Required for NEO-M9N**
+This project uses a NEO-M9N GPS. You MUST set these environment variables before EVERY build/flash:
+```bash
+export GPS_MODEL="m9n"
+export GPS_RATE="25"
+```
+Without these, firmware defaults to NEO-6M (9600 baud) and GPS will show 0 Hz / No Fix.
+
 ```bash
 # Check compilation without building
 cargo check
 
-# Build firmware
+# Build firmware (ALWAYS set GPS env vars first for M9N!)
 cargo build
 cargo build --release              # Optimized for ESP32 (recommended)
 
@@ -81,17 +90,15 @@ cargo clippy -- -D warnings
 # Run tests (limited - most require hardware)
 cargo test --lib --bins
 
-# Flash to ESP32-C3 and monitor serial output
-cargo espflash flash --monitor
+# Flash to ESP32-C3 (ALWAYS set GPS env vars first!)
+export GPS_MODEL="m9n" GPS_RATE="25"
+cargo build --release && cargo espflash flash --release
+
+# Flash with serial monitor
 cargo espflash flash --release --monitor
 
 # Just monitor serial output (after flashing)
 espflash monitor
-
-# Build with NEO-M9N GPS at 25 Hz
-export GPS_MODEL="m9n"
-export GPS_RATE="25"
-cargo build --release
 ```
 
 ### Python Tools
