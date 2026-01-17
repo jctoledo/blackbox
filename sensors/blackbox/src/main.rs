@@ -1,6 +1,8 @@
 mod binary_telemetry;
 mod config;
 mod diagnostics;
+mod filter;
+mod fusion;
 mod gps;
 mod imu;
 mod mode;
@@ -15,6 +17,7 @@ use std::sync::Arc;
 
 use config::{SystemConfig, WifiModeConfig};
 use diagnostics::DiagnosticsState;
+use fusion::{FusionConfig, SensorFusion};
 use esp_idf_hal::{
     delay::FreeRtos,
     peripherals::Peripherals,
@@ -442,6 +445,37 @@ fn main() {
     let mut estimator = StateEstimator::new();
     let mut publisher = TelemetryPublisher::new(udp_stream, mqtt_opt, telemetry_state.clone());
 
+    // Create sensor fusion for hybrid acceleration (GPS + IMU blending)
+    //
+    // This provides:
+    // 1. Tilt correction - learns mounting offset when stopped (3s)
+    // 2. Gravity correction - learns while driving at steady speed
+    // 3. Vibration filtering - 2Hz Biquad removes engine/road noise
+    // 4. GPS/IMU blending - 70% GPS at 25Hz for balanced response
+    //
+    // Latency: ~80-100ms (vs ~50ms IMU-only, ~150ms with 90% GPS)
+    // Good for: city, highway, canyon. For track, increase GPS weights.
+    //
+    // NOTE: Filter runs at telemetry rate (~20Hz), not IMU rate (200Hz)
+    let telemetry_rate = 1000.0 / config.telemetry.interval_ms as f32;
+    let fusion_config = FusionConfig {
+        imu_sample_rate: telemetry_rate,
+        accel_filter_cutoff: 2.0,           // 2Hz - passes driving, blocks vibration
+        gps_high_rate: 20.0,
+        gps_medium_rate: 10.0,
+        gps_max_age: 0.2,
+        // Balanced blend for city/highway/canyon (faster than 90% GPS)
+        gps_weight_high: 0.70,              // 70% GPS / 30% IMU at 25Hz
+        gps_weight_medium: 0.50,            // 50% / 50% at 10-20Hz
+        gps_weight_low: 0.30,               // 30% GPS / 70% IMU fallback
+        tilt_learn_time: 3.0,
+        gravity_learn_time: 2.0,
+        steady_state_speed_tolerance: 0.5,
+        steady_state_yaw_tolerance: 0.087,
+        gravity_alpha: 0.02,
+    };
+    let mut sensor_fusion = SensorFusion::new(fusion_config);
+
     // Main loop timing
     let mut last_telemetry_ms = 0u32;
     let mut last_heap_check_ms = 0u32;
@@ -715,8 +749,18 @@ fn main() {
                     let speed = (vx * vx + vy * vy).sqrt();
                     estimator.update_velocity(vx, vy);
                     estimator.update_speed(speed);
+
+                    // Feed GPS speed to sensor fusion for acceleration calculation
+                    let time_s = now_ms as f32 / 1000.0;
+                    sensor_fusion.process_gps(speed, time_s);
                 }
             }
+        }
+
+        // Update GPS rate estimate periodically (every second)
+        if now_ms % 1000 < 50 {
+            let fix_count = diagnostics.gps_fix_count();
+            sensor_fusion.update_gps_rate(fix_count, now_ms as f32 / 1000.0);
         }
 
         // Update GPS status
@@ -730,9 +774,13 @@ fn main() {
 
         // Publish telemetry at configured rate
         if now_ms - last_telemetry_ms >= config.telemetry.interval_ms {
-            // Update mode classifier
+            // Get current speed and check if stationary
             let speed = sensors.get_speed(Some(&estimator.ekf));
             let (ax_corr, ay_corr, _) = sensors.imu_parser.get_accel_corrected();
+            let is_stationary =
+                sensors.is_stationary(ax_corr, ay_corr, sensors.imu_parser.data().wz);
+
+            // Transform IMU to earth frame for sensor fusion
             let (ax_b, ay_b, _) = remove_gravity(
                 ax_corr,
                 ay_corr,
@@ -748,10 +796,23 @@ fn main() {
                 sensors.imu_parser.data().pitch,
                 estimator.ekf.yaw(),
             );
-            estimator.update_mode(
+
+            // Process through sensor fusion (GPS/IMU blending, filtering, tilt correction)
+            let dt = config.telemetry.interval_ms as f32 / 1000.0;
+            let (lon_blended, lat_filtered) = sensor_fusion.process_imu(
                 ax_e,
                 ay_e,
                 estimator.ekf.yaw(),
+                speed,
+                sensors.imu_parser.data().wz,
+                dt,
+                is_stationary,
+            );
+
+            // Update mode classifier with hybrid (blended) acceleration
+            estimator.mode_classifier.update_hybrid(
+                lon_blended,
+                lat_filtered,
                 sensors.imu_parser.data().wz,
                 speed,
             );
