@@ -9,9 +9,7 @@ use esp_idf_svc::http::server::{Configuration, EspHttpServer};
 use esp_idf_svc::io::Write;
 use log::info;
 
-use crate::diagnostics::DiagnosticsState;
-use crate::mode::ModeConfig;
-use crate::settings::DrivingMode;
+use crate::{diagnostics::DiagnosticsState, mode::ModeConfig, settings::DrivingMode};
 
 /// Mode detection settings (matching mode.rs ModeConfig)
 #[derive(Clone, Copy)]
@@ -673,19 +671,19 @@ b.classList.toggle('active',b.dataset.preset===name);
 const isCustom=name==='custom';
 $('preset-summary').classList.toggle('hidden',isCustom);
 $('cfg-sliders').classList.toggle('show',isCustom);
-// If not custom, apply preset and send to ESP32
+// If not custom, apply preset and send to ESP32 (includes mode switch)
 if(!isCustom&&PRESETS[name]){
 const p=PRESETS[name];
 updateSummary(p);
 applyPresetToSliders(p);
-sendSettings(p);
+sendSettings(p,name);
 }else if(isCustom){
 // For custom, try to load from autotune profile
 const at=getAutotuneProfile();
 if(at){
 const p={acc:at.acc,acc_exit:at.acc_exit,brake:at.brake,brake_exit:at.brake_exit,lat:at.lat,lat_exit:at.lat_exit,yaw:at.yaw,min_speed:at.min_speed};
 applyPresetToSliders(p);
-sendSettings(p);
+sendSettings(p,'custom');
 }
 }
 }
@@ -700,10 +698,13 @@ applyPresetToSliders(PRESETS.city);
 }
 }
 
-// Send settings to ESP32
-async function sendSettings(p){
+// Send settings to ESP32 (includes mode change for correct NVS slot)
+async function sendSettings(p,mode){
 const brake=-Math.abs(p.brake),brake_exit=-Math.abs(p.brake_exit);
 try{
+// First switch to target mode if specified
+if(mode){await fetch('/api/settings/set?mode='+mode);await new Promise(r=>setTimeout(r,150))}
+// Then send settings
 const url='/api/settings/set?acc='+p.acc+'&acc_exit='+p.acc_exit+'&brake='+brake+'&brake_exit='+brake_exit+'&lat='+p.lat+'&lat_exit='+p.lat_exit+'&yaw='+p.yaw+'&min_speed='+p.min_speed;
 await fetch(url);
 }catch(e){console.log('Settings send failed:',e)}
@@ -715,10 +716,10 @@ var acc=parseFloat($('s-acc').value),accexit=parseFloat($('s-accexit').value),br
 if(accexit>=acc){alert('Accel Exit must be < Accel Entry');return}
 if(brakeexit>=brake){alert('Brake Exit must be < Brake Entry');return}
 if(latexit>=lat){alert('Lateral Exit must be < Lateral Entry');return}
-// Send
+// Send (with current preset mode for NVS storage)
 const p={acc,acc_exit:accexit,brake,brake_exit:brakeexit,lat,lat_exit:latexit,yaw,min_speed:minspd};
 try{
-await sendSettings(p);
+await sendSettings(p,currentPreset);
 var btn=document.querySelector('.cfg-save');
 btn.textContent='Applied';btn.style.background='#10b981';
 setTimeout(()=>{btn.textContent='Apply';btn.style.background=''},1500);
@@ -1458,7 +1459,11 @@ async function applySettings(){
 
     const p=calibratedProfile;
     try{
-        // Apply to ESP32 (saves to NVS automatically)
+        // First switch ESP32 to the target mode
+        await fetch('/api/settings/set?mode='+selectedMode);
+        // Wait for mode change to propagate to main loop
+        await new Promise(r=>setTimeout(r,150));
+        // Now send settings (will be saved to the correct mode's NVS slot)
         await fetch('/api/settings/set?acc='+p.acc+'&acc_exit='+p.acc_exit+'&brake='+(0-p.brake)+'&brake_exit='+(0-p.brake_exit)+'&lat='+p.lat+'&lat_exit='+p.lat_exit+'&yaw='+p.yaw+'&min_speed='+p.min_speed);
 
         // Save to localStorage for this mode
@@ -1928,7 +1933,8 @@ impl TelemetryServer {
 mod tests {
     use super::*;
 
-    /// Validates localStorage schema consistency between dashboard and autotune pages.
+    /// Validates localStorage schema consistency between dashboard and autotune
+    /// pages.
     ///
     /// Both pages MUST use the same schema for bb_profiles:
     /// ```json
