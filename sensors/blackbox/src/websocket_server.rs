@@ -228,6 +228,10 @@ body{
 .st{display:flex;align-items:center;gap:6px;font-size:10px;letter-spacing:1px}
 .dot{width:6px;height:6px;background:#444;border-radius:50%}
 .dot.on{background:hsl(var(--hue),100%,50%);box-shadow:0 0 10px hsl(var(--hue),100%,50%)}
+.gps-st{display:flex;align-items:center;gap:4px;font-size:9px;letter-spacing:1px;color:#556;transition:color 0.3s}
+.gps-st.ok{color:hsl(var(--hue),100%,50%)}
+.gps-st.ok .gps-dot{background:hsl(var(--hue),100%,50%);box-shadow:0 0 6px hsl(var(--hue),100%,50%)}
+.gps-dot{width:5px;height:5px;background:#444;border-radius:50%;transition:background 0.3s}
 
 /* Golden Ratio Layout */
 #telemetryLayout{display:flex;flex-direction:column;width:100%;overflow:hidden}
@@ -271,8 +275,6 @@ body{
 #boxBottom .met{padding:6px 4px;background:transparent;border:1px solid #1a2a30;text-align:center}
 #boxBottom .met-val{font-size:14px;font-weight:600;font-variant-numeric:tabular-nums;color:#7a8a8f}
 #boxBottom .met-lbl{font-weight:500;font-size:8px;color:#556}
-#boxBottom .gps-box{padding:5px;font-size:9px;font-weight:500;background:transparent;border:1px solid #1a2a30;color:#667;text-align:center}
-#boxBottom .gps-box.ok{color:#0a8}
 #boxBottom .ctrl{display:flex;padding:6px 0 0 0;gap:6px;border-top:1px solid #1a2a30}
 #boxBottom .btn{flex:1;padding:8px;font-size:9px;font-weight:600;background:transparent;border:1px solid #1a2a30;color:#667;font-family:inherit;cursor:pointer}
 #boxBottom .btn-rec.on{background:rgba(255,50,50,0.1);border-color:#4a2020;color:#c66}
@@ -283,6 +285,7 @@ body{
     <div class="hdr-r">
         <a href="/diagnostics" style="color:#334;text-decoration:none;font-size:9px;letter-spacing:1px;opacity:0.5">DIAG</a>
         <span class="timer" id="timer">00:00</span>
+        <div class="gps-st" id="gps-st"><span class="gps-dot"></span><span id="gps-hz">GPS --</span></div>
         <div class="st"><span class="dot" id="dot"></span><span id="stxt">--</span></div>
     </div>
 </div>
@@ -317,7 +320,6 @@ body{
                 <div class="met"><div class="met-val" id="yaw">0</div><div class="met-lbl">YAW</div></div>
                 <div class="met"><div class="met-val" id="hz">0</div><div class="met-lbl">HZ</div></div>
             </div>
-            <div class="gps-box" id="gpsbox"><span id="gps">GPS: --</span></div>
             <div class="ctrl">
                 <button class="btn btn-rec" id="rec">REC</button>
                 <button class="btn" id="exp">EXPORT</button>
@@ -387,7 +389,7 @@ function updateAutoZoom(gx,gy){
 
 function gForceToGrid(gx,gy){
     const col=Math.floor((gx/currentMaxG+1)*0.5*GRID_COLS);
-    const row=Math.floor((-gy/currentMaxG+1)*0.5*GRID_ROWS);
+    const row=Math.floor((gy/currentMaxG+1)*0.5*GRID_ROWS);
     return{col:Math.max(0,Math.min(GRID_COLS-1,col)),row:Math.max(0,Math.min(GRID_ROWS-1,row))};
 }
 
@@ -422,12 +424,21 @@ let speed_ema=0,sessionStart=Date.now();
 let displayedPeak=0,sessionPeak=0,lastAccelTime=0,wasAccelerating=false;
 const PEAK_UPDATE_DELAY=3000;
 
+// Time-based EMA for G-meter dot (consistent smoothing regardless of update rate)
+let emaGx=0,emaGy=0,lastProcessTime=0;
+const EMA_TAU=0.10; // 100ms time constant - tune for feel
+
+// GPS status tracking
+let gpsCount=0,lastGpsState=0;
+
 function fmtTime(ms){const s=Math.floor(ms/1000),m=Math.floor(s/60);return String(m).padStart(2,'0')+':'+String(s%60).padStart(2,'0')}
+function fmtG(v){return Math.abs(v)<0.005?'0.00':v.toFixed(2)} // Dead zone to prevent 0.00/-0.00 flicker
 
 function resetGMax(){
     maxL=maxR=maxA=maxB=0;
     $('maxL').textContent=$('maxR').textContent=$('maxA').textContent=$('maxB').textContent='0.00';
     trail=[];gridTrail=[];magnitudeHistory=[];currentMaxG=0.5;
+    emaGx=emaGy=0;lastProcessTime=0; // Reset EMA state
     displayedPeak=sessionPeak=0;$('peak-val').textContent='0';$('peak-row').classList.add('hidden');
     sessionStart=Date.now();
 }
@@ -438,9 +449,16 @@ function process(buf){
     const lat=d.getFloat32(56,1),lon=d.getFloat32(60,1),gpsOk=d.getUint8(64);
     const latg=ay/9.81,lng=-ax/9.81,yawDeg=Math.abs(wz*57.3);
 
+    // Time-based EMA for smooth G-meter (consistent at any update rate)
+    const now=Date.now();
+    const dt=lastProcessTime?Math.min((now-lastProcessTime)/1000,0.2):0.033; // Cap dt to prevent jumps
+    lastProcessTime=now;
+    const alpha=1-Math.exp(-dt/EMA_TAU);
+    emaGx=alpha*latg+(1-alpha)*emaGx;
+    emaGy=alpha*lng+(1-alpha)*emaGy;
+
     speed_ema=0.7*sp+(1-0.7)*speed_ema;
     const dspd=speed_ema<1?0:Math.round(speed_ema);
-    const now=Date.now();
     const isAccelerating=lng>0.05,isBraking=lng<-0.1;
 
     // Peak tracking
@@ -464,17 +482,16 @@ function process(buf){
     $('mode-bg').textContent=MODE_ICONS[mo]||'\u25C7';
     $('mode-bg').classList.toggle('at-peak',atPeak);
 
-    // Bottom metrics
-    $('latg').textContent=latg.toFixed(2);
-    $('lng').textContent=lng.toFixed(2);
+    // Bottom metrics (use fmtG to prevent 0.00/-0.00 flicker)
+    $('latg').textContent=fmtG(latg);
+    $('lng').textContent=fmtG(lng);
     $('yaw').textContent=yawDeg.toFixed(0);
 
-    // GPS
-    if(gpsOk){$('gps').textContent=lat.toFixed(5)+', '+lon.toFixed(5);$('gpsbox').className='gps-box ok'}
-    else{$('gps').textContent='GPS: No Fix';$('gpsbox').className='gps-box'}
+    // GPS status tracking (count valid fixes for Hz calculation)
+    if(gpsOk){gpsCount++;lastGpsState=1}else{lastGpsState=0}
 
-    // G-force tracking
-    const gx=latg,gy=lng;
+    // G-force tracking (use EMA-smoothed values for dot, raw for max tracking)
+    const gx=emaGx,gy=emaGy;
     updateAutoZoom(gx,gy);
     trail.push({x:gx,y:gy});if(trail.length>30)trail.shift();
 
@@ -535,7 +552,15 @@ $('exp').onclick=()=>{
     const b=new Blob([c],{type:'text/csv'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download='blackbox.csv';a.click();
 };
 
-setInterval(()=>{$('hz').textContent=cnt;cnt=0;$('timer').textContent=fmtTime(Date.now()-sessionStart)},1000);
+setInterval(()=>{
+    $('hz').textContent=cnt;cnt=0;
+    $('timer').textContent=fmtTime(Date.now()-sessionStart);
+    // Update GPS status in header
+    const gpsEl=$('gps-st');
+    if(lastGpsState){gpsEl.classList.add('ok');$('gps-hz').textContent='GPS '+gpsCount}
+    else{gpsEl.classList.remove('ok');$('gps-hz').textContent='GPS --'}
+    gpsCount=0;
+},1000);
 
 // Init
 applyGoldenHeights();

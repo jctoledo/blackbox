@@ -95,6 +95,10 @@ body::before {
 .dot{width:6px;height:6px;background:hsl(var(--hue), 100%, 50%);box-shadow:0 0 10px hsl(var(--hue), 100%, 50%)}
 .dot.rec{background:#ff3333;box-shadow:0 0 10px #ff3333;animation:pulse 1s infinite}
 @keyframes pulse{50%{opacity:.3}}
+.gps-st{display:flex;align-items:center;gap:4px;font-size:9px;letter-spacing:1px;color:#556;transition:color 0.3s}
+.gps-st.ok{color:hsl(var(--hue),100%,50%)}
+.gps-st.ok .gps-dot{background:hsl(var(--hue),100%,50%);box-shadow:0 0 6px hsl(var(--hue),100%,50%)}
+.gps-dot{width:5px;height:5px;background:#444;border-radius:50%;transition:background 0.3s}
 
 /* Main container */
 .main{
@@ -702,6 +706,7 @@ body::before {
 <div class="hdr">
     <div class="logo glow-text">BLACKBOX <span class="dev" id="dev-toggle">DEV</span></div>
     <div class="hdr-r">
+        <div class="gps-st ok" id="gps-st"><span class="gps-dot"></span><span id="gps-hz">GPS 30</span></div>
         <span class="timer" id="timer">00:00</span>
         <div class="st"><span class="dot" id="dot"></span><span id="stxt">SIM</span></div>
     </div>
@@ -779,7 +784,6 @@ body::before {
                 <div class="met glow-border"><div class="met-val glow-text" id="hz">0</div><div class="met-lbl">HZ</div></div>
             </div>
 
-            <div class="gps-box ok glow-border" id="gpsbox"><span id="gps">37.8199 / -122.4783</span></div>
 
             <div class="cfg-section glow-border">
                 <div class="cfg-title">// DETECTION PROFILE</div>
@@ -968,6 +972,13 @@ let trail = [], maxL = 0, maxR = 0, maxA = 0, maxB = 0;
 let speed_ema = 0, sessionStart = Date.now(), currentPreset = 'canyon';
 const $ = id => document.getElementById(id);
 
+// Time-based EMA for G-meter dot (consistent smoothing regardless of update rate)
+let emaGx = 0, emaGy = 0, lastProcessTime = 0;
+const EMA_TAU = 0.10; // 100ms time constant - tune for feel
+
+// Format G value with dead zone to prevent 0.00/-0.00 flicker
+function fmtG(v) { return Math.abs(v) < 0.005 ? '0.00' : v.toFixed(2); }
+
 // Peak speed tracking with delayed update logic
 let displayedPeak = 0;      // What's shown in the UI
 let sessionPeak = 0;        // Actual max reached this session
@@ -1094,7 +1105,7 @@ function getCellCorners(col, row, w, h) {
 function gForceToGrid(gx, gy) {
     // Map ±currentMaxG to grid edges (zoom level)
     const col = Math.floor((gx / currentMaxG + 1) * 0.5 * GRID_COLS);
-    const row = Math.floor((-gy / currentMaxG + 1) * 0.5 * GRID_ROWS); // Y inverted (brake=top)
+    const row = Math.floor((gy / currentMaxG + 1) * 0.5 * GRID_ROWS); // +gy = accel (bottom), -gy = brake (top)
     return {
         col: Math.max(0, Math.min(GRID_COLS - 1, col)),
         row: Math.max(0, Math.min(GRID_ROWS - 1, row))
@@ -1292,6 +1303,14 @@ function simulate() {
 
     // === SPEED FOCUS LOGIC ===
     const now = Date.now();
+
+    // Time-based EMA for smooth G-meter (consistent at any update rate)
+    const dt = lastProcessTime ? Math.min((now - lastProcessTime) / 1000, 0.2) : 0.033;
+    lastProcessTime = now;
+    const alpha = 1 - Math.exp(-dt / EMA_TAU);
+    emaGx = alpha * latg + (1 - alpha) * emaGx;
+    emaGy = alpha * lng + (1 - alpha) * emaGy;
+
     const isAccelerating = lng > 0.05;
     const isBraking = lng < -0.1;
 
@@ -1351,13 +1370,13 @@ function simulate() {
     modeBgEl.textContent = MODE_ICONS[mo] || '◇';
     modeBgEl.classList.toggle('at-peak', atPeak);
 
-    // Bottom box metrics
-    $('latg').textContent = latg.toFixed(2);
-    $('lng').textContent = lng.toFixed(2);
+    // Bottom box metrics (use fmtG to prevent 0.00/-0.00 flicker)
+    $('latg').textContent = fmtG(latg);
+    $('lng').textContent = fmtG(lng);
     $('yaw').textContent = yawDeg.toFixed(0);
 
-    // G-force tracking with auto-zoom
-    const gx = latg, gy = lng; // Don't clamp - let auto-zoom handle range
+    // G-force tracking with auto-zoom (use EMA-smoothed values for dot, raw for max tracking)
+    const gx = emaGx, gy = emaGy;
     updateAutoZoom(gx, gy);    // Update zoom level based on recent peak
 
     trail.push({x: gx, y: gy});
@@ -1401,7 +1420,9 @@ function simulate() {
 
 setInterval(simulate, 33);
 setInterval(() => {
-    $('hz').textContent = cnt; $('sim-hz').textContent = cnt + ' Hz'; cnt = 0;
+    $('hz').textContent = cnt; $('sim-hz').textContent = cnt + ' Hz';
+    $('gps-hz').textContent = 'GPS ' + cnt; // Simulator always has GPS
+    cnt = 0;
     $('timer').textContent = fmtTime(Date.now() - sessionStart);
 }, 1000);
 
@@ -1414,6 +1435,7 @@ function resetGMax() {
     gridTrail = [];
     magnitudeHistory = [];
     currentMaxG = 0.5; // Reset zoom to default
+    emaGx = emaGy = 0; lastProcessTime = 0; // Reset EMA state
 }
 
 function resetAll() {
