@@ -199,6 +199,12 @@ impl DiagnosticsState {
         self.zupt_count.fetch_add(1, Ordering::Relaxed);
     }
 
+    /// Get total GPS fix count (for sensor fusion rate tracking)
+    #[inline]
+    pub fn gps_fix_count(&self) -> u32 {
+        self.gps_fix_count.load(Ordering::Relaxed)
+    }
+
     /// Update sensor rates (call periodically, e.g., every second)
     pub fn update_rates(&self, now_ms: u32) {
         let last_ms = self.last_rate_check_ms.swap(now_ms, Ordering::SeqCst);

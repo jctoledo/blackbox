@@ -538,29 +538,98 @@ Result: acceleration due to motion only (no gravity component).
 
 ### mode.rs - Driving Mode Classifier
 
-**NEW: Independent Component Detection** (replaces exclusive state machine)
+**Hybrid Mode Detection** with GPS/IMU blending:
+- Longitudinal acceleration (ACCEL/BRAKE) uses **blended GPS + IMU**
+- Lateral acceleration (CORNER) uses **filtered IMU** (GPS can't sense lateral)
+- GPS-derived acceleration computed from velocity changes at 25Hz
+- Blending ratio adapts based on GPS rate and freshness
+
 ```
-Each mode component detected independently with hysteresis:
+Independent hysteresis detection:
 
-ACCEL:    entry at 0.10g → exit at 0.05g
-BRAKE:    entry at -0.18g → exit at -0.09g  (mutually exclusive with ACCEL)
-CORNER:   entry at 0.12g lat + 0.05rad/s yaw → exit at 0.06g lat or low yaw
+ACCEL:    entry at 0.10g → exit at 0.05g  (from blended lon accel)
+BRAKE:    entry at -0.18g → exit at -0.09g (from blended lon accel)
+CORNER:   entry at 0.12g lat + 0.05rad/s yaw → exit at 0.06g lat
 
-Combined states possible:
+Combined states:
 - ACCEL + CORNER = corner exit (trail throttle)
 - BRAKE + CORNER = corner entry (trail braking)
 ```
 
-**Hysteresis:** Entry threshold > exit threshold prevents oscillation.
+**Benefits of Hybrid Detection:**
+- Mounting angle independent (GPS measures actual vehicle acceleration)
+- No drift (GPS doesn't drift like IMU)
+- Graceful fallback when GPS degrades
 
 **All modes require:** speed > min_speed (2.0 m/s / 7.2 km/h)
 
-**Speed Display:**
-Uses **raw GPS speed** directly (system.rs:295-297) for responsive updates.
-- No longer uses EKF-filtered velocity (which was laggy)
-- Server sends raw GPS speed (5 Hz updates)
-- Dashboard applies light EMA smoothing (alpha=0.4) for car speedometer-like display
-- Mode detection still uses EKF velocity for stability
+### filter.rs - Biquad Low-Pass Filter
+
+2nd-order Butterworth IIR filter for vibration removal.
+
+**Purpose:**
+- Remove engine vibration (30-100 Hz)
+- Remove road texture noise (5-20 Hz)
+- Preserve driving dynamics (0-2 Hz)
+
+**Configuration:**
+- Sample rate: 20 Hz (telemetry rate)
+- Cutoff: 2 Hz
+- Q = 0.707 (critically damped, no overshoot)
+
+**Implementation:**
+```rust
+// Direct Form I biquad
+y[n] = b0*x[n] + b1*x[n-1] + b2*x[n-2] - a1*y[n-1] - a2*y[n-2]
+```
+
+### fusion.rs - Sensor Fusion Module
+
+Handles GPS/IMU blending, tilt correction, and continuous calibration.
+
+**Components:**
+
+1. **GpsAcceleration** - Computes longitudinal acceleration from GPS velocity
+   - `accel = (speed_new - speed_old) / dt`
+   - At 25Hz GPS: dt = 40ms, clean acceleration signal
+   - Tracks staleness for fallback to IMU
+
+2. **TiltEstimator** - Learns mounting offset when stopped
+   - After 3 seconds stationary, averages earth-frame acceleration
+   - This average IS the mounting error (gravity leakage from tilt)
+   - Applies correction to all future readings
+   - Relearns at every stop (adapts to device repositioning)
+
+3. **GravityEstimator** - Learns gravity offset while driving
+   - Detects "steady state": constant speed (±0.5 m/s), low yaw (±5°/s)
+   - During steady state, expected acceleration ≈ 0
+   - Slowly updates gravity estimate (α=0.02, ~50 second convergence)
+   - Essential for track/canyon driving where stops are rare
+
+4. **SensorFusion** - Main processor
+   - Applies tilt correction
+   - Applies gravity correction
+   - Low-pass filters to remove vibration
+   - Blends GPS and IMU for longitudinal acceleration
+
+**GPS/IMU Blending Ratios:**
+```
+GPS rate >= 20Hz, fresh:  90% GPS / 10% IMU  (high confidence)
+GPS rate 10-20Hz:         70% GPS / 30% IMU  (medium confidence)
+GPS rate < 10Hz:          30% GPS / 70% IMU  (low confidence)
+GPS stale (>200ms):       0% GPS / 100% IMU  (fallback)
+```
+
+**Data Flow:**
+```
+GPS (25Hz) → GpsAcceleration → lon_accel_gps
+                                    ↓
+IMU → remove_gravity → body_to_earth → TiltCorrect → GravityCorrect → Biquad Filter
+                                                                            ↓
+                                                                    lon_accel_imu
+                                                                            ↓
+                                                            Blend(gps, imu) → mode.rs
+```
 
 ### websocket_server.rs - HTTP Dashboard Server
 

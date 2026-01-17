@@ -3,6 +3,18 @@
 /// Driving mode classifier
 /// Detects IDLE, ACCEL, BRAKE, CORNER, ACCEL+CORNER, and BRAKE+CORNER modes
 /// based on acceleration and yaw rate
+///
+/// ## Hybrid Acceleration Support
+///
+/// This classifier can operate in two modes:
+/// 1. **Legacy mode**: Uses `update()` with raw earth-frame IMU accelerations
+/// 2. **Hybrid mode**: Uses `update_hybrid()` with pre-blended longitudinal acceleration
+///
+/// Hybrid mode receives longitudinal acceleration that's already blended from
+/// GPS-derived (from velocity changes) and IMU sources. This provides:
+/// - Drift-free longitudinal detection (GPS doesn't drift)
+/// - Mounting angle independence (GPS measures actual vehicle acceleration)
+/// - Graceful fallback when GPS is unavailable
 use sensor_fusion::transforms::earth_to_car;
 
 const G: f32 = 9.80665; // m/s²
@@ -279,6 +291,80 @@ impl ModeClassifier {
     /// Update configuration (e.g., from MQTT)
     pub fn update_config(&mut self, config: ModeConfig) {
         self.config = config;
+    }
+
+    /// Update mode using pre-blended hybrid acceleration
+    ///
+    /// This is the preferred method when using SensorFusion, as it receives
+    /// longitudinal acceleration that's already blended from GPS and IMU sources.
+    ///
+    /// # Arguments
+    /// * `a_lon_blended` - Blended longitudinal acceleration (m/s², vehicle frame)
+    /// * `a_lat_filtered` - Filtered lateral acceleration (m/s², vehicle frame)
+    /// * `wz` - Yaw rate (rad/s)
+    /// * `speed` - Vehicle speed (m/s)
+    pub fn update_hybrid(&mut self, a_lon_blended: f32, a_lat_filtered: f32, wz: f32, speed: f32) {
+        // Update display speed with EMA
+        self.v_disp = (1.0 - self.v_alpha) * self.v_disp + self.v_alpha * speed;
+        if self.v_disp < 3.0 / 3.6 {
+            self.v_disp = 0.0;
+        }
+
+        // Convert to g units (blended accel is already in m/s²)
+        let a_lon = a_lon_blended / G;
+        let a_lat = a_lat_filtered / G;
+
+        // Update EMA filters
+        // Note: longitudinal already filtered/blended, but still apply EMA for consistency
+        let alpha = self.config.alpha;
+        self.a_lon_ema = (1.0 - alpha) * self.a_lon_ema + alpha * a_lon;
+        self.a_lat_ema = (1.0 - alpha) * self.a_lat_ema + alpha * a_lat;
+        self.yaw_ema = (1.0 - alpha) * self.yaw_ema + alpha * wz;
+
+        // If stopped, clear all modes
+        if speed < self.config.min_speed {
+            self.mode.clear();
+            return;
+        }
+
+        // Check cornering (independent of accel/brake)
+        let cornering_active = self.a_lat_ema.abs() > self.config.lat_thr
+            && self.yaw_ema.abs() > self.config.yaw_thr
+            && (self.a_lat_ema * self.yaw_ema) > 0.0;
+
+        let cornering_exit = self.a_lat_ema.abs() < self.config.lat_exit
+            && self.yaw_ema.abs() < self.config.yaw_thr * 0.5;
+
+        if self.mode.has_corner() {
+            if cornering_exit {
+                self.mode.set_corner(false);
+            }
+        } else if cornering_active {
+            self.mode.set_corner(true);
+        }
+
+        // Check acceleration (mutually exclusive with braking)
+        if self.mode.has_accel() {
+            if self.a_lon_ema < self.config.acc_exit {
+                self.mode.set_accel(false);
+            }
+        } else if !self.mode.has_brake() && self.a_lon_ema > self.config.acc_thr {
+            self.mode.set_accel(true);
+        }
+
+        // Check braking (mutually exclusive with acceleration)
+        if self.mode.has_brake() {
+            if self.a_lon_ema > self.config.brake_exit {
+                self.mode.set_brake(false);
+            }
+        } else if !self.mode.has_accel() && self.a_lon_ema < self.config.brake_thr {
+            self.mode.set_brake(true);
+        }
+    }
+
+    /// Get EMA filtered longitudinal acceleration (for diagnostics)
+    pub fn get_a_lon_ema(&self) -> f32 {
+        self.a_lon_ema
     }
 }
 
