@@ -187,414 +187,360 @@ pub struct TelemetryServer {
     state: Arc<TelemetryServerState>,
 }
 
-/// Mobile-optimized dashboard with HTTP polling, G-meter trail and max values
+/// Tron-style dashboard with golden ratio layout, perspective G-meter, auto-zoom camera
 const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
 <html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes"><title>Blackbox</title>
 <style>
+:root {
+    --cyan: #00f0ff;
+    --amber: #ff6a00;
+    --bg: #030508;
+    --hue: 190;
+}
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0f;color:#f0f0f0;min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;-webkit-user-select:none;user-select:none}
-.hdr{background:#111;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #222}
-.logo{font-weight:700;font-size:16px;letter-spacing:2px}
-.hdr-r{display:flex;align-items:center;gap:10px}
-.timer{font-size:11px;color:#444;font-variant-numeric:tabular-nums}
-.st{display:flex;align-items:center;gap:6px;font-size:12px;color:#888}
-.dot{width:8px;height:8px;border-radius:50%;background:#444}
-.dot.on{background:#22c55e}
-.dot.ws{background:#3b82f6}
-.dot.rec{background:#ef4444;animation:pulse 1s infinite}
-@keyframes pulse{50%{opacity:.4}}
-@keyframes recPulse{0%,100%{border-color:#252530}50%{border-color:#ef4444}}
-.main{flex:1;padding:12px;display:flex;flex-direction:column;gap:10px;overflow-y:auto}
-.mode-box{background:linear-gradient(135deg,#12121a,#1a1a24);border-radius:14px;padding:16px;text-align:center;border:1px solid #252530;transition:border-color .3s}
-.mode-box.rec{animation:recPulse 1s infinite}
-.mode-lbl{font-size:10px;color:#555;text-transform:uppercase;letter-spacing:2px}
-.mode-val{font-size:38px;font-weight:700;letter-spacing:2px;margin:4px 0}
-.mode-icon{font-size:20px}
-.m-idle{color:#555}.m-accel{color:#22c55e}.m-brake{color:#ef4444}.m-corner{color:#3b82f6}
-.spd-row{display:flex;gap:10px}
-.spd-box{flex:1;background:linear-gradient(135deg,#12121a,#1a1a24);border-radius:14px;padding:14px;text-align:center;border:1px solid #252530}
-.spd-val{font-size:56px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
-.spd-unit{font-size:12px;color:#555;margin-top:2px}
-.max-spd{width:70px;background:#111;border-radius:14px;padding:10px 8px;text-align:center;border:1px solid #1a1a24;display:flex;flex-direction:column;justify-content:center}
-.max-spd-val{font-size:24px;font-weight:700;color:#f59e0b;font-variant-numeric:tabular-nums}
-.max-spd-lbl{font-size:8px;color:#555;text-transform:uppercase;letter-spacing:1px}
-.gf-box{background:#111;border-radius:12px;padding:16px 12px;display:flex;flex-direction:column;align-items:center;border:1px solid #1a1a24}
-.gf-container{position:relative;width:140px;height:140px}
-.gf-canvas{position:absolute;top:0;left:0}
-.gf-max-row{display:flex;justify-content:space-between;align-items:center;width:100%;margin-top:8px}
-.gf-max{display:flex;gap:4px;font-size:11px;color:#444;font-variant-numeric:tabular-nums;font-weight:600}
-.gf-max span{padding:3px 8px;background:#0a0a0f;border-radius:6px;border:1px solid #1a1a24}
-.gf-max .val{color:#60a5fa;font-weight:700}
-.rst-btn{background:#1a1a24;border:1px solid #252530;border-radius:4px;color:#555;font-size:8px;padding:4px 8px;cursor:pointer;text-transform:uppercase;letter-spacing:1px}
-.rst-btn:active{background:#252530;color:#888}
-.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
-.met{background:#111;border-radius:10px;padding:10px 6px;text-align:center;border:1px solid #1a1a24}
-.met-val{font-size:18px;font-weight:600;font-variant-numeric:tabular-nums}
-.met-lbl{font-size:9px;color:#444;text-transform:uppercase;margin-top:2px}
-.ctrl{display:flex;gap:8px;padding:10px 12px;background:#111;border-top:1px solid #222}
-.btn{flex:1;padding:12px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px}
-.btn-rec{background:#1e3a5f;color:#60a5fa}.btn-rec.on{background:#5f1e1e;color:#f87171}
-.btn-exp{background:#1a1a24;color:#666}
-.btn:active{opacity:.8}
-.gps-box{background:#111;border-radius:8px;padding:8px 12px;text-align:center;font-size:11px;color:#555;border:1px solid #1a1a24}
-.gps-box.ok{color:#22c55e}
-.cfg-section{background:#111;border-radius:10px;padding:12px;margin-top:10px;border:1px solid #1a1a24}
-.cfg-title{font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;text-align:center}
-.preset-row{display:flex;gap:6px;margin-bottom:12px}
-.preset-btn{flex:1;padding:10px 4px;border:1px solid #252530;border-radius:8px;background:#0a0a0f;color:#666;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;cursor:pointer;transition:all .2s}
-.preset-btn:active{transform:scale(0.97)}
-.preset-btn.active{background:linear-gradient(135deg,#1e3a5f,#1a2d4a);border-color:#3b82f6;color:#60a5fa;box-shadow:0 0 12px rgba(59,130,246,0.2)}
-.preset-btn.custom{border-style:dashed}
-.preset-btn.custom.active{border-style:solid}
-.preset-summary{background:#0a0a0f;border-radius:8px;padding:12px;border:1px solid #1a1a24;display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;font-size:11px}
-.preset-summary.hidden{display:none}
-.ps-row{display:flex;justify-content:space-between;align-items:center}
-.ps-label{color:#555;text-transform:uppercase;font-size:9px;letter-spacing:0.5px}
-.ps-value{color:#60a5fa;font-weight:600;font-variant-numeric:tabular-nums}
-.ps-value span{color:#444;font-weight:400}
-.cfg-sliders{display:none}
-.cfg-sliders.show{display:block}
-.cfg-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
-.cfg-lbl{font-size:10px;color:#666;width:50px}
-.cfg-slider{flex:1;-webkit-appearance:none;background:#1a1a24;height:6px;border-radius:3px}
-.cfg-slider::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;background:#3b82f6;border-radius:50%}
-.cfg-val{font-size:12px;color:#60a5fa;width:35px;text-align:right;font-variant-numeric:tabular-nums}
-.cfg-unit{font-size:9px;color:#444;width:22px}
-.cfg-btns{display:flex;gap:8px;margin-top:12px}
-.cfg-btn{flex:1;padding:10px;border:none;border-radius:6px;font-size:11px;font-weight:600;background:#1a1a24;color:#666;cursor:pointer;transition:all .2s}
-.cfg-btn:active{transform:scale(0.97)}
-.cfg-btn.cfg-save{background:linear-gradient(135deg,#1e3a5f,#1a2d4a);color:#60a5fa}
+body{
+    font-family:'Courier New',monospace;
+    background: var(--bg);
+    color:#fff;
+    height:100vh;
+    height:100dvh;
+    display:flex;
+    flex-direction:column;
+    -webkit-user-select:none;
+    user-select:none;
+    overflow:hidden;
+}
+
+/* Header */
+.hdr{
+    flex: 0 0 auto;
+    background: linear-gradient(180deg, rgba(0,30,40,0.95) 0%, rgba(0,20,30,0.8) 100%);
+    padding:10px 16px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    border-bottom: 1px solid hsla(var(--hue), 100%, 50%, 0.4);
+}
+.logo{font-weight:400;font-size:14px;letter-spacing:4px;text-transform:uppercase;color:hsl(var(--hue),100%,60%)}
+.hdr-r{display:flex;align-items:center;gap:12px}
+.timer{font-size:11px;opacity:0.5;font-variant-numeric:tabular-nums;letter-spacing:2px}
+.st{display:flex;align-items:center;gap:6px;font-size:10px;letter-spacing:1px}
+.dot{width:6px;height:6px;background:#444;border-radius:50%}
+.dot.on{background:hsl(var(--hue),100%,50%);box-shadow:0 0 10px hsl(var(--hue),100%,50%)}
+
+/* Golden Ratio Layout */
+#telemetryLayout{display:flex;flex-direction:column;width:100%;overflow:hidden}
+.golden-box{width:100%;overflow:hidden;display:flex;flex-direction:column;border:1px solid hsla(var(--hue),100%,50%,0.35);box-shadow:0 0 20px hsla(var(--hue),100%,50%,0.12)}
+#boxTop.at-peak{border-color:rgba(255,106,0,0.45);box-shadow:0 0 25px rgba(255,106,0,0.15)}
+.box-inner{flex:1;display:flex;flex-direction:column;gap:12px;padding:16px;overflow:hidden}
+.box-scroll{overflow-y:auto}
+
+/* Top Box: Speed Focus */
+.speed-focus{position:relative;display:flex;align-items:center;justify-content:center;padding:20px 16px;overflow:hidden;height:100%}
+.mode-bg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:clamp(260px,70vw,400px);opacity:0.14;color:hsl(var(--hue),100%,50%);pointer-events:none;transition:color 0.3s,opacity 0.3s;z-index:0;line-height:1}
+.mode-bg.at-peak{color:#ff6a00;opacity:0.18}
+.speed-stack{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.peak-row{display:flex;flex-direction:column;align-items:center;gap:4px;height:52px;margin-bottom:12px;transition:opacity 0.25s}
+.peak-row.hidden{opacity:0;pointer-events:none}
+.peak-label{font-size:10px;font-weight:500;color:#556;letter-spacing:3px;text-transform:uppercase}
+.peak-val{font-size:clamp(20px,5vw,24px);font-weight:600;color:#5a5a6a;font-variant-numeric:tabular-nums;letter-spacing:1px;line-height:1}
+.current-speed{font-size:clamp(96px,28vw,160px);font-weight:600;line-height:0.85;font-variant-numeric:tabular-nums;letter-spacing:-1px;color:hsl(var(--hue),100%,60%);transition:color 0.15s,text-shadow 0.15s}
+.current-speed.at-peak{color:#ff6a00;text-shadow:0 0 40px rgba(255,106,0,0.3)}
+.speed-unit{font-size:clamp(20px,5vw,24px);font-weight:600;letter-spacing:2px;color:#5a5a6a;margin-top:8px;margin-bottom:16px;text-transform:lowercase;font-variant-numeric:tabular-nums}
+.maneuver{font-size:clamp(20px,5vw,24px);font-weight:600;letter-spacing:3px;text-transform:uppercase;color:hsl(var(--hue),50%,50%);transition:color 0.3s}
+.maneuver.braking{color:#ff6a00}
+
+/* Middle Box: G-Force */
+#boxMiddle{position:relative;overflow:hidden;background:var(--bg)}
+.gf-canvas-full{position:absolute;top:0;left:0;width:100%;height:100%}
+.gf-clear{position:absolute;top:8px;left:10px;padding:4px 10px;font-size:9px;font-weight:500;font-family:inherit;letter-spacing:2px;color:#556;background:rgba(0,0,0,0.4);border:1px solid #334;cursor:pointer;z-index:10}
+.gf-axis{position:absolute;display:flex;flex-direction:column;align-items:center;gap:2px;z-index:5;pointer-events:none}
+.gf-axis-label{font-size:10px;font-weight:500;letter-spacing:2px;color:#667}
+.gf-axis-val{font-size:clamp(14px,3.5vw,18px);font-weight:600;font-variant-numeric:tabular-nums;color:#5a5a6a;transition:color 0.15s}
+.gf-axis-val.peak-active{color:hsl(var(--hue),100%,60%)}
+.gf-axis-top{top:8px;left:50%;transform:translateX(-50%)}
+.gf-axis-bottom{bottom:8px;left:50%;transform:translateX(-50%)}
+.gf-axis-left{left:10px;top:50%;transform:translateY(-50%);flex-direction:row;gap:6px}
+.gf-axis-right{right:10px;top:50%;transform:translateY(-50%);flex-direction:row;gap:6px}
+
+/* Bottom Box */
+#boxBottom{background:var(--bg);border:1px solid #1a2a30;box-shadow:none}
+#boxBottom .box-inner{gap:6px;padding:8px 10px}
+#boxBottom .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+#boxBottom .met{padding:6px 4px;background:transparent;border:1px solid #1a2a30;text-align:center}
+#boxBottom .met-val{font-size:14px;font-weight:600;font-variant-numeric:tabular-nums;color:#7a8a8f}
+#boxBottom .met-lbl{font-weight:500;font-size:8px;color:#556}
+#boxBottom .gps-box{padding:5px;font-size:9px;font-weight:500;background:transparent;border:1px solid #1a2a30;color:#667;text-align:center}
+#boxBottom .gps-box.ok{color:#0a8}
+#boxBottom .ctrl{display:flex;padding:6px 0 0 0;gap:6px;border-top:1px solid #1a2a30}
+#boxBottom .btn{flex:1;padding:8px;font-size:9px;font-weight:600;background:transparent;border:1px solid #1a2a30;color:#667;font-family:inherit;cursor:pointer}
+#boxBottom .btn-rec.on{background:rgba(255,50,50,0.1);border-color:#4a2020;color:#c66}
 </style></head>
 <body>
-<div class="hdr"><div class="logo">BLACKBOX <span style="font-size:9px;color:#333">v4</span></div><div class="hdr-r"><a href="/diagnostics" style="color:#333;text-decoration:none;font-size:9px;margin-right:10px;opacity:0.6">DIAG</a><span class="timer" id="timer">00:00</span><div class="st"><span class="dot" id="dot"></span><span id="stxt">--</span></div></div></div>
-<div class="main">
-<div class="mode-box" id="modebox"><div class="mode-lbl">Mode</div><div class="mode-val m-idle" id="mode">IDLE</div><div class="mode-icon" id="icon">●</div></div>
-<div class="spd-row">
-<div class="spd-box"><div class="spd-val" id="spd">0</div><div class="spd-unit">km/h</div></div>
-<div class="max-spd" id="maxspdbox"><div class="max-spd-val" id="maxspd">0</div><div class="max-spd-lbl">MAX</div></div>
+<div class="hdr">
+    <div class="logo">BLACKBOX</div>
+    <div class="hdr-r">
+        <a href="/diagnostics" style="color:#334;text-decoration:none;font-size:9px;letter-spacing:1px;opacity:0.5">DIAG</a>
+        <span class="timer" id="timer">00:00</span>
+        <div class="st"><span class="dot" id="dot"></span><span id="stxt">--</span></div>
+    </div>
 </div>
-<div class="gf-box">
-<div class="gf-container"><canvas id="gfc" class="gf-canvas" width="140" height="140"></canvas></div>
-<div class="gf-max-row">
-<div class="gf-max"><span>L <b class="val" id="maxL">0.0</b></span><span>B <b class="val" id="maxB">0.0</b></span><span>A <b class="val" id="maxA">0.0</b></span><span>R <b class="val" id="maxR">0.0</b></span></div>
-<button class="rst-btn" id="rstg">CLR</button>
-</div>
-</div>
-<div class="metrics">
-<div class="met"><div class="met-val" id="latg">0.0</div><div class="met-lbl">Lat G</div></div>
-<div class="met"><div class="met-val" id="lng">0.0</div><div class="met-lbl">Lon G</div></div>
-<div class="met"><div class="met-val" id="yaw">0</div><div class="met-lbl">Yaw°/s</div></div>
-<div class="met"><div class="met-val" id="hz">0</div><div class="met-lbl">Hz</div></div>
-</div>
-<div class="gps-box" id="gpsbox"><span id="gps">GPS: --</span></div>
-<div class="cfg-section">
-<div class="cfg-title">Driving Preset</div>
-<div class="preset-row">
-<button class="preset-btn" data-preset="track">Track</button>
-<button class="preset-btn" data-preset="canyon">Canyon</button>
-<button class="preset-btn active" data-preset="city">City</button>
-<button class="preset-btn" data-preset="highway">Hwy</button>
-<button class="preset-btn custom" data-preset="custom">Custom</button>
-</div>
-<div class="preset-summary" id="preset-summary">
-<div class="ps-row"><span class="ps-label">Accel</span><span class="ps-value" id="ps-acc">0.10<span>/0.05g</span></span></div>
-<div class="ps-row"><span class="ps-label">Brake</span><span class="ps-value" id="ps-brake">0.18<span>/0.09g</span></span></div>
-<div class="ps-row"><span class="ps-label">Lateral</span><span class="ps-value" id="ps-lat">0.12<span>/0.06g</span></span></div>
-<div class="ps-row"><span class="ps-label">Yaw</span><span class="ps-value" id="ps-yaw">0.05<span> r/s</span></span></div>
-<div class="ps-row" style="grid-column:span 2;justify-content:center;margin-top:4px;padding-top:8px;border-top:1px solid #1a1a24"><span class="ps-label">Min Speed</span><span class="ps-value" id="ps-minspd" style="margin-left:8px">2.0<span> m/s</span></span></div>
-</div>
-<div class="cfg-sliders" id="cfg-sliders">
-<div class="cfg-row"><span class="cfg-lbl">Accel</span><input type="range" min="0.05" max="0.80" step="0.01" class="cfg-slider" id="s-acc" value="0.10" oninput="updS('acc')"><span class="cfg-val" id="v-acc">0.10</span><span class="cfg-unit">g</span></div>
-<div class="cfg-row"><span class="cfg-lbl">Acc Exit</span><input type="range" min="0.02" max="0.50" step="0.01" class="cfg-slider" id="s-accexit" value="0.05" oninput="updS('accexit')"><span class="cfg-val" id="v-accexit">0.05</span><span class="cfg-unit">g</span></div>
-<div class="cfg-row"><span class="cfg-lbl">Brake</span><input type="range" min="0.10" max="1.20" step="0.01" class="cfg-slider" id="s-brake" value="0.18" oninput="updS('brake')"><span class="cfg-val" id="v-brake">0.18</span><span class="cfg-unit">g</span></div>
-<div class="cfg-row"><span class="cfg-lbl">Brk Exit</span><input type="range" min="0.05" max="0.60" step="0.01" class="cfg-slider" id="s-brakeexit" value="0.09" oninput="updS('brakeexit')"><span class="cfg-val" id="v-brakeexit">0.09</span><span class="cfg-unit">g</span></div>
-<div class="cfg-row"><span class="cfg-lbl">Lateral</span><input type="range" min="0.05" max="1.20" step="0.01" class="cfg-slider" id="s-lat" value="0.12" oninput="updS('lat')"><span class="cfg-val" id="v-lat">0.12</span><span class="cfg-unit">g</span></div>
-<div class="cfg-row"><span class="cfg-lbl">Lat Exit</span><input type="range" min="0.02" max="0.60" step="0.01" class="cfg-slider" id="s-latexit" value="0.06" oninput="updS('latexit')"><span class="cfg-val" id="v-latexit">0.06</span><span class="cfg-unit">g</span></div>
-<div class="cfg-row"><span class="cfg-lbl">Yaw</span><input type="range" min="0.02" max="0.35" step="0.005" class="cfg-slider" id="s-yaw" value="0.05" oninput="updS('yaw')"><span class="cfg-val" id="v-yaw">0.050</span><span class="cfg-unit">r/s</span></div>
-<div class="cfg-row"><span class="cfg-lbl">Min Spd</span><input type="range" min="1.0" max="10.0" step="0.5" class="cfg-slider" id="s-minspd" value="2.0" oninput="updS('minspd')"><span class="cfg-val" id="v-minspd">2.0</span><span class="cfg-unit">m/s</span></div>
-<div class="cfg-btns"><button class="cfg-btn" onclick="resetToPreset()">Reset</button><button class="cfg-btn cfg-save" onclick="saveCfg()">Apply</button></div>
-</div>
-</div>
-</div>
-<div class="ctrl">
-<button class="btn btn-rec" id="rec">● REC</button>
-<button class="btn btn-exp" id="exp">Export</button>
+<div id="telemetryLayout">
+    <div id="boxTop" class="golden-box">
+        <div class="box-inner speed-focus">
+            <div class="mode-bg" id="mode-bg">&#9671;</div>
+            <div class="speed-stack">
+                <div class="peak-row" id="peak-row">
+                    <span class="peak-label">PEAK</span>
+                    <span class="peak-val" id="peak-val">0</span>
+                </div>
+                <div class="current-speed" id="current-speed">0</div>
+                <div class="speed-unit">km/h</div>
+                <div class="maneuver" id="maneuver">Idle</div>
+            </div>
+        </div>
+    </div>
+    <div id="boxMiddle" class="golden-box">
+        <button class="gf-clear" id="rstg">CLEAR</button>
+        <div class="gf-axis gf-axis-top"><span class="gf-axis-label">BRK</span><span class="gf-axis-val" id="maxB">0.00</span></div>
+        <div class="gf-axis gf-axis-bottom"><span class="gf-axis-val" id="maxA">0.00</span><span class="gf-axis-label">ACC</span></div>
+        <div class="gf-axis gf-axis-left"><span class="gf-axis-label">L</span><span class="gf-axis-val" id="maxL">0.00</span></div>
+        <div class="gf-axis gf-axis-right"><span class="gf-axis-val" id="maxR">0.00</span><span class="gf-axis-label">R</span></div>
+        <canvas id="gfc" class="gf-canvas-full"></canvas>
+    </div>
+    <div id="boxBottom" class="golden-box">
+        <div class="box-inner box-scroll">
+            <div class="metrics">
+                <div class="met"><div class="met-val" id="latg">0.00</div><div class="met-lbl">LAT G</div></div>
+                <div class="met"><div class="met-val" id="lng">0.00</div><div class="met-lbl">LON G</div></div>
+                <div class="met"><div class="met-val" id="yaw">0</div><div class="met-lbl">YAW</div></div>
+                <div class="met"><div class="met-val" id="hz">0</div><div class="met-lbl">HZ</div></div>
+            </div>
+            <div class="gps-box" id="gpsbox"><span id="gps">GPS: --</span></div>
+            <div class="ctrl">
+                <button class="btn btn-rec" id="rec">REC</button>
+                <button class="btn" id="exp">EXPORT</button>
+            </div>
+        </div>
+    </div>
 </div>
 <script>
-const M={0:'IDLE',1:'ACCEL',2:'BRAKE',4:'CORNER',5:'ACCEL+CORNER',6:'BRAKE+CORNER'},C={0:'m-idle',1:'m-accel',2:'m-brake',4:'m-corner',5:'m-accel',6:'m-brake'},I={0:'●',1:'▲',2:'▼',4:'◆',5:'⬈',6:'⬊'};
-let rec=0,data=[],cnt=0,lastSeq=0;
-let trail=[],maxL=0,maxR=0,maxA=0,maxB=0,maxSpd=0;
-let speed_ema=0;
-let sessionStart=Date.now();
-let currentPreset='city';
+const PHI=1.6180339887;
 const $=id=>document.getElementById(id);
-const cv=$('gfc'),ctx=cv.getContext('2d');
-const CX=70,CY=70,R=55,SCL=R/2;
 
-// Preset definitions based on real-world G-forces (tested values):
-// City: gentle-normal inputs (0.10-0.20g accel, 0.15-0.30g brake, 0.10-0.25g lateral)
-// Highway: mostly cruising, higher speed threshold to filter parking maneuvers
-// Canyon: spirited driving (0.20-0.40g range)
-// Track: racing (0.35-0.80g+ range)
-const PRESETS={
-track:{acc:0.35,acc_exit:0.17,brake:0.55,brake_exit:0.27,lat:0.50,lat_exit:0.25,yaw:0.15,min_speed:4.0,desc:'Racing/track days'},
-canyon:{acc:0.22,acc_exit:0.11,brake:0.35,brake_exit:0.17,lat:0.28,lat_exit:0.14,yaw:0.10,min_speed:3.0,desc:'Spirited mountain roads'},
-city:{acc:0.10,acc_exit:0.05,brake:0.18,brake_exit:0.09,lat:0.12,lat_exit:0.06,yaw:0.05,min_speed:2.0,desc:'Daily street driving'},
-highway:{acc:0.12,acc_exit:0.06,brake:0.22,brake_exit:0.11,lat:0.14,lat_exit:0.07,yaw:0.04,min_speed:5.0,desc:'Highway cruising'}
-};
+// Layout
+function applyGoldenHeights(){
+    const hdr=document.querySelector('.hdr');
+    const hdrH=hdr?hdr.offsetHeight:50;
+    const H=window.innerHeight-hdrH;
+    const top=H/(PHI*PHI),middle=H/(PHI*PHI),bottom=H/(PHI*PHI*PHI);
+    $('telemetryLayout').style.height=H+'px';
+    $('boxTop').style.height=top+'px';
+    $('boxMiddle').style.height=middle+'px';
+    $('boxBottom').style.height=bottom+'px';
+}
+window.addEventListener('resize',()=>{applyGoldenHeights();resizeCanvas()});
+
+// Canvas
+const cv=$('gfc'),ctx=cv.getContext('2d');
+const GRID_COLS=28,GRID_ROWS=18,PERSPECTIVE_STRENGTH=0.55;
+
+function resizeCanvas(){
+    const box=$('boxMiddle');
+    if(!box)return;
+    const rect=box.getBoundingClientRect();
+    cv.width=rect.width*window.devicePixelRatio;
+    cv.height=rect.height*window.devicePixelRatio;
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.scale(window.devicePixelRatio,window.devicePixelRatio);
+}
+
+// Perspective grid
+function gridToScreen(col,row,w,h){
+    const nx=(col/GRID_COLS)*2-1,ny=(row/GRID_ROWS)*2-1;
+    const depthFactor=(ny+1)*0.5;
+    const perspectiveFactor=0.4+depthFactor*0.6;
+    const px=nx*perspectiveFactor,py=ny*0.85+(1-depthFactor)*0.1;
+    const padX=w*0.06,padY=h*0.08;
+    return{x:padX+(px+1)*0.5*(w-2*padX),y:padY+(py+1)*0.5*(h-2*padY)};
+}
+function getCellCorners(col,row,w,h){
+    return[gridToScreen(col,row,w,h),gridToScreen(col+1,row,w,h),gridToScreen(col+1,row+1,w,h),gridToScreen(col,row+1,w,h)];
+}
+
+// Auto-zoom
+let magnitudeHistory=[],currentMaxG=0.5;
+const PEAK_WINDOW_MS=800,MIN_MAX_G=0.2,MAX_MAX_G=2.0,ZOOM_OUT_RATE=0.12,ZOOM_IN_RATE=0.025,DEADBAND=0.04,SAFE_RADIUS_RATIO=2/3;
+
+function updateAutoZoom(gx,gy){
+    const now=Date.now(),magnitude=Math.sqrt(gx*gx+gy*gy);
+    magnitudeHistory.push({time:now,mag:magnitude});
+    magnitudeHistory=magnitudeHistory.filter(h=>now-h.time<PEAK_WINDOW_MS);
+    const m_peak=Math.max(...magnitudeHistory.map(h=>h.mag),0.05);
+    const targetMaxG=Math.max(m_peak/SAFE_RADIUS_RATIO,MIN_MAX_G);
+    const ratio=targetMaxG/currentMaxG;
+    if(ratio>1+DEADBAND)currentMaxG+=(targetMaxG-currentMaxG)*ZOOM_OUT_RATE;
+    else if(ratio<1-DEADBAND)currentMaxG+=(targetMaxG-currentMaxG)*ZOOM_IN_RATE;
+    currentMaxG=Math.max(MIN_MAX_G,Math.min(MAX_MAX_G,currentMaxG));
+}
+
+function gForceToGrid(gx,gy){
+    const col=Math.floor((gx/currentMaxG+1)*0.5*GRID_COLS);
+    const row=Math.floor((-gy/currentMaxG+1)*0.5*GRID_ROWS);
+    return{col:Math.max(0,Math.min(GRID_COLS-1,col)),row:Math.max(0,Math.min(GRID_ROWS-1,row))};
+}
+
+// Trail & drawing
+let gridTrail=[];
+const HUE_CYAN=190,HUE_AMBER=25;
+let currentHue=190;
+
+function drawG(){
+    const w=cv.width/window.devicePixelRatio,h=cv.height/window.devicePixelRatio;
+    ctx.clearRect(0,0,w,h);
+    ctx.strokeStyle=`hsla(${currentHue},50%,45%,0.2)`;ctx.lineWidth=1;
+    for(let col=0;col<=GRID_COLS;col++){ctx.beginPath();const t=gridToScreen(col,0,w,h),b=gridToScreen(col,GRID_ROWS,w,h);ctx.moveTo(t.x,t.y);ctx.lineTo(b.x,b.y);ctx.stroke()}
+    for(let row=0;row<=GRID_ROWS;row++){ctx.beginPath();const l=gridToScreen(0,row,w,h),r=gridToScreen(GRID_COLS,row,w,h);ctx.moveTo(l.x,l.y);ctx.lineTo(r.x,r.y);ctx.stroke()}
+    ctx.strokeStyle=`hsla(${currentHue},50%,50%,0.35)`;ctx.lineWidth=2;
+    const cCol=GRID_COLS/2,cRow=GRID_ROWS/2;
+    ctx.beginPath();const vT=gridToScreen(cCol,0,w,h),vB=gridToScreen(cCol,GRID_ROWS,w,h);ctx.moveTo(vT.x,vT.y);ctx.lineTo(vB.x,vB.y);ctx.stroke();
+    ctx.beginPath();const hL=gridToScreen(0,cRow,w,h),hR=gridToScreen(GRID_COLS,cRow,w,h);ctx.moveTo(hL.x,hL.y);ctx.lineTo(hR.x,hR.y);ctx.stroke();
+    for(let i=0;i<gridTrail.length;i++){
+        const cell=gridTrail[i],corners=getCellCorners(cell.col,cell.row,w,h),alpha=cell.intensity*0.6;
+        ctx.fillStyle=`hsla(${cell.hue},100%,55%,${alpha})`;
+        ctx.beginPath();ctx.moveTo(corners[0].x,corners[0].y);ctx.lineTo(corners[1].x,corners[1].y);ctx.lineTo(corners[2].x,corners[2].y);ctx.lineTo(corners[3].x,corners[3].y);ctx.closePath();ctx.fill();
+    }
+}
+
+// State
+const M={0:'Idle',1:'Accelerating',2:'Braking',4:'Cornering',5:'Corner Exit',6:'Trail Braking'};
+const MODE_ICONS={0:'\u25C7',1:'\u25B3',2:'\u25BD',4:'\u25C8',5:'\u2B21',6:'\u2B22'};
+let rec=0,data=[],cnt=0,lastSeq=0;
+let trail=[],maxL=0,maxR=0,maxA=0,maxB=0;
+let speed_ema=0,sessionStart=Date.now();
+let displayedPeak=0,sessionPeak=0,lastAccelTime=0,wasAccelerating=false;
+const PEAK_UPDATE_DELAY=3000;
 
 function fmtTime(ms){const s=Math.floor(ms/1000),m=Math.floor(s/60);return String(m).padStart(2,'0')+':'+String(s%60).padStart(2,'0')}
 
-function resetGMax(){maxL=maxR=maxA=maxB=0;$('maxL').textContent=$('maxR').textContent=$('maxA').textContent=$('maxB').textContent='0.0'}
-function resetAll(){
-// Just clear max values and reset timer - no calibration trigger
-resetGMax();maxSpd=0;$('maxspd').textContent='0';sessionStart=Date.now();$('timer').textContent='00:00';trail=[];
-}
-
-function drawG(){
-ctx.clearRect(0,0,140,140);
-// Outer ring with gradient
-const grd=ctx.createRadialGradient(CX,CY,0,CX,CY,R);
-grd.addColorStop(0,'#0a0a0f');grd.addColorStop(1,'#1a1a24');
-ctx.strokeStyle=grd;ctx.lineWidth=1.5;
-ctx.beginPath();ctx.arc(CX,CY,R,0,Math.PI*2);ctx.stroke();
-// Inner rings with subtle gradient
-ctx.strokeStyle='#252530';ctx.lineWidth=1;
-ctx.beginPath();ctx.arc(CX,CY,R*0.66,0,Math.PI*2);ctx.stroke();
-ctx.strokeStyle='#1a1a24';
-ctx.beginPath();ctx.arc(CX,CY,R*0.33,0,Math.PI*2);ctx.stroke();
-// Cross with tick marks
-ctx.strokeStyle='#252530';ctx.lineWidth=1;
-ctx.beginPath();ctx.moveTo(CX-R,CY);ctx.lineTo(CX+R,CY);ctx.moveTo(CX,CY-R);ctx.lineTo(CX,CY+R);ctx.stroke();
-// Tick marks at 0.5g intervals
-ctx.strokeStyle='#1a1a24';ctx.lineWidth=1;
-for(let g of[0.25,0.5,0.75,1.0]){
-const r=g*R/2;
-ctx.beginPath();ctx.moveTo(CX-3,CY-r);ctx.lineTo(CX+3,CY-r);ctx.stroke();
-ctx.beginPath();ctx.moveTo(CX-3,CY+r);ctx.lineTo(CX+3,CY+r);ctx.stroke();
-ctx.beginPath();ctx.moveTo(CX-r,CY-3);ctx.lineTo(CX-r,CY+3);ctx.stroke();
-ctx.beginPath();ctx.moveTo(CX+r,CY-3);ctx.lineTo(CX+r,CY+3);ctx.stroke();
-}
-// Labels - larger and bolder
-ctx.fillStyle='#60a5fa';ctx.font='bold 12px system-ui';ctx.textAlign='center';
-ctx.fillText('BRK',CX,11);ctx.fillText('ACC',CX,135);
-ctx.textAlign='left';ctx.fillText('L',2,CY+4);
-ctx.textAlign='right';ctx.fillText('R',138,CY+4);
-// Trail with connecting line (the tail)
-if(trail.length>1){
-ctx.strokeStyle='rgba(59,130,246,0.15)';ctx.lineWidth=2;
-ctx.beginPath();
-ctx.moveTo(CX+trail[0].x*SCL,CY-trail[0].y*SCL);
-for(let i=1;i<trail.length;i++){
-ctx.lineTo(CX+trail[i].x*SCL,CY-trail[i].y*SCL);
-}
-ctx.stroke();
-}
-// Trail dots with gradient fade
-for(let i=0;i<trail.length;i++){
-const t=trail[i],a=(i+1)/trail.length;
-const hue=200+a*20;
-ctx.fillStyle=`hsla(${hue},70%,60%,${a*0.6})`;
-ctx.shadowColor=`hsla(${hue},70%,60%,${a*0.3})`;ctx.shadowBlur=4;
-ctx.beginPath();ctx.arc(CX+t.x*SCL,CY-t.y*SCL,2+a*2,0,Math.PI*2);ctx.fill();
-}
-ctx.shadowBlur=0;
-// Current dot with enhanced glow
-if(trail.length>0){
-const c=trail[trail.length-1];
-ctx.shadowColor='#3b82f6';ctx.shadowBlur=12;
-ctx.fillStyle='#60a5fa';
-ctx.beginPath();ctx.arc(CX+c.x*SCL,CY-c.y*SCL,7,0,Math.PI*2);ctx.fill();
-ctx.shadowBlur=6;
-ctx.fillStyle='#fff';
-ctx.beginPath();ctx.arc(CX+c.x*SCL,CY-c.y*SCL,3,0,Math.PI*2);ctx.fill();
-ctx.shadowBlur=0;
-}
+function resetGMax(){
+    maxL=maxR=maxA=maxB=0;
+    $('maxL').textContent=$('maxR').textContent=$('maxA').textContent=$('maxB').textContent='0.00';
+    trail=[];gridTrail=[];magnitudeHistory=[];currentMaxG=0.5;
+    displayedPeak=sessionPeak=0;$('peak-val').textContent='0';$('peak-row').classList.add('hidden');
+    sessionStart=Date.now();
 }
 
 function process(buf){
-const d=new DataView(buf);
-const ax=d.getFloat32(7,1),ay=d.getFloat32(11,1),wz=d.getFloat32(19,1),sp=d.getFloat32(51,1),mo=d.getUint8(55);
-const lat=d.getFloat32(56,1),lon=d.getFloat32(60,1),gpsOk=d.getUint8(64);
-const latg=ay/9.81,lng=-ax/9.81,yaw=Math.abs(wz*57.3);
-// EMA filter - alpha=0.7 for responsive yet smooth display
-speed_ema=0.7*sp+(1-0.7)*speed_ema;
-const dspd=speed_ema<1?0:Math.round(speed_ema);
-$('mode').textContent=M[mo]||'IDLE';$('mode').className='mode-val '+(C[mo]||'m-idle');$('icon').textContent=I[mo]||'●';
-$('spd').textContent=dspd;$('latg').textContent=latg.toFixed(2);$('lng').textContent=lng.toFixed(2);
-$('yaw').textContent=yaw.toFixed(0);
-// Max speed
-if(dspd>maxSpd){maxSpd=dspd;$('maxspd').textContent=maxSpd}
-if(gpsOk){$('gps').textContent=lat.toFixed(6)+', '+lon.toFixed(6);$('gpsbox').className='gps-box ok'}
-else{$('gps').textContent='GPS: No Fix';$('gpsbox').className='gps-box'}
-// G-meter: x=lateral(+right), y=longitudinal(+accel)
-const gx=Math.max(-2,Math.min(2,latg)),gy=Math.max(-2,Math.min(2,lng));
-trail.push({x:gx,y:gy});if(trail.length>30)trail.shift();
-// Max G values
-if(latg<0&&Math.abs(latg)>maxL){maxL=Math.abs(latg);$('maxL').textContent=maxL.toFixed(2)}
-if(latg>0&&latg>maxR){maxR=latg;$('maxR').textContent=maxR.toFixed(2)}
-if(lng>0&&lng>maxA){maxA=lng;$('maxA').textContent=maxA.toFixed(2)}
-if(lng<0&&Math.abs(lng)>maxB){maxB=Math.abs(lng);$('maxB').textContent=maxB.toFixed(2)}
-drawG();
-cnt++;
-if(rec)data.push({t:Date.now(),sp,ax,ay,wz,mo,latg,lng,lat,lon,gpsOk});
+    const d=new DataView(buf);
+    const ax=d.getFloat32(7,1),ay=d.getFloat32(11,1),wz=d.getFloat32(19,1),sp=d.getFloat32(51,1),mo=d.getUint8(55);
+    const lat=d.getFloat32(56,1),lon=d.getFloat32(60,1),gpsOk=d.getUint8(64);
+    const latg=ay/9.81,lng=-ax/9.81,yawDeg=Math.abs(wz*57.3);
+
+    speed_ema=0.7*sp+(1-0.7)*speed_ema;
+    const dspd=speed_ema<1?0:Math.round(speed_ema);
+    const now=Date.now();
+    const isAccelerating=lng>0.05,isBraking=lng<-0.1;
+
+    // Peak tracking
+    if(isAccelerating){lastAccelTime=now;wasAccelerating=true}
+    if(dspd>sessionPeak)sessionPeak=dspd;
+    const accelStoppedLongEnough=wasAccelerating&&!isAccelerating&&(now-lastAccelTime>=PEAK_UPDATE_DELAY);
+    if(accelStoppedLongEnough||isBraking){if(sessionPeak>displayedPeak)displayedPeak=sessionPeak;wasAccelerating=false}
+    const atPeak=dspd>=displayedPeak&&dspd>0;
+
+    // Update hue based on acceleration state
+    currentHue=isAccelerating?HUE_CYAN:HUE_AMBER;
+    document.documentElement.style.setProperty('--hue',currentHue);
+
+    // Top box
+    $('current-speed').textContent=dspd;
+    $('current-speed').classList.toggle('at-peak',atPeak);
+    $('boxTop').classList.toggle('at-peak',atPeak);
+    if(displayedPeak>0&&dspd<displayedPeak){$('peak-row').classList.remove('hidden');$('peak-val').textContent=displayedPeak}else{$('peak-row').classList.add('hidden')}
+    $('maneuver').textContent=M[mo]||'Idle';
+    $('maneuver').classList.toggle('braking',isBraking);
+    $('mode-bg').textContent=MODE_ICONS[mo]||'\u25C7';
+    $('mode-bg').classList.toggle('at-peak',atPeak);
+
+    // Bottom metrics
+    $('latg').textContent=latg.toFixed(2);
+    $('lng').textContent=lng.toFixed(2);
+    $('yaw').textContent=yawDeg.toFixed(0);
+
+    // GPS
+    if(gpsOk){$('gps').textContent=lat.toFixed(5)+', '+lon.toFixed(5);$('gpsbox').className='gps-box ok'}
+    else{$('gps').textContent='GPS: No Fix';$('gpsbox').className='gps-box'}
+
+    // G-force tracking
+    const gx=latg,gy=lng;
+    updateAutoZoom(gx,gy);
+    trail.push({x:gx,y:gy});if(trail.length>30)trail.shift();
+
+    // Max G with active highlighting
+    const maxLEl=$('maxL'),maxREl=$('maxR'),maxAEl=$('maxA'),maxBEl=$('maxB');
+    maxLEl.classList.remove('peak-active');maxREl.classList.remove('peak-active');maxAEl.classList.remove('peak-active');maxBEl.classList.remove('peak-active');
+    if(latg<0&&Math.abs(latg)>maxL){maxL=Math.abs(latg);maxLEl.textContent=maxL.toFixed(2);maxLEl.classList.add('peak-active')}
+    if(latg>0&&latg>maxR){maxR=latg;maxREl.textContent=maxR.toFixed(2);maxREl.classList.add('peak-active')}
+    if(lng>0&&lng>maxA){maxA=lng;maxAEl.textContent=maxA.toFixed(2);maxAEl.classList.add('peak-active')}
+    if(lng<0&&Math.abs(lng)>maxB){maxB=Math.abs(lng);maxBEl.textContent=maxB.toFixed(2);maxBEl.classList.add('peak-active')}
+
+    // G-meter trail
+    if(trail.length>0){
+        const current=trail[trail.length-1];
+        const gridPos=gForceToGrid(current.x,current.y);
+        const indicatorHue=isAccelerating?HUE_CYAN:HUE_AMBER;
+        const lastTrail=gridTrail[gridTrail.length-1];
+        if(!lastTrail||lastTrail.col!==gridPos.col||lastTrail.row!==gridPos.row){
+            gridTrail.push({col:gridPos.col,row:gridPos.row,intensity:1.0,hue:indicatorHue});
+        }
+    }
+    for(let i=gridTrail.length-1;i>=0;i--){gridTrail[i].intensity*=0.96;if(gridTrail[i].intensity<0.03)gridTrail.splice(i,1)}
+    if(gridTrail.length>80)gridTrail.shift();
+
+    drawG();
+    cnt++;
+    if(rec)data.push({t:Date.now(),sp,ax,ay,wz,mo,latg,lng,lat,lon,gpsOk});
 }
 
-// HTTP polling - self-scheduling for maximum throughput
+// HTTP polling
 async function poll(){
-try{
-const r=await fetch('/api/telemetry');
-const j=await r.json();
-if(j.data&&j.seq!==lastSeq){
-lastSeq=j.seq;
-const b=atob(j.data),a=new Uint8Array(b.length);
-for(let i=0;i<b.length;i++)a[i]=b.charCodeAt(i);
-process(a.buffer);
-$('dot').className='dot on';$('stxt').textContent='HTTP';
+    try{
+        const r=await fetch('/api/telemetry');
+        const j=await r.json();
+        if(j.data&&j.seq!==lastSeq){
+            lastSeq=j.seq;
+            const b=atob(j.data),a=new Uint8Array(b.length);
+            for(let i=0;i<b.length;i++)a[i]=b.charCodeAt(i);
+            process(a.buffer);
+            $('dot').className='dot on';$('stxt').textContent='LIVE';
+        }
+        setTimeout(poll,33);
+    }catch(e){$('dot').className='dot';$('stxt').textContent='--';setTimeout(poll,500)}
 }
-setTimeout(poll,33); // Poll at ~30Hz to match ESP32 telemetry rate
-}catch(e){$('dot').className='dot';$('stxt').textContent='Offline';setTimeout(poll,500)} // Retry slower on error
-}
 
-// Reset button: resets G max, speed max, timer, and triggers calibration
-$('rstg').onclick=resetAll;
-$('gfc').ondblclick=resetGMax;
+// Event handlers
+$('rstg').onclick=resetGMax;
+$('rec').onclick=()=>{
+    rec=!rec;
+    if(rec){data=[];$('rec').className='btn btn-rec on';$('rec').textContent='STOP'}
+    else{$('rec').className='btn btn-rec';$('rec').textContent='REC';
+    if(data.length){const s=JSON.parse(localStorage.getItem('bb')||'[]');s.unshift({id:Date.now(),n:data.length,d:data});localStorage.setItem('bb',JSON.stringify(s.slice(0,10)));alert('Saved '+data.length+' pts')}}
+};
+$('exp').onclick=()=>{
+    const s=JSON.parse(localStorage.getItem('bb')||'[]');if(!s.length)return alert('No data');
+    let c='time,speed,ax,ay,wz,mode,lat_g,lon_g,gps_lat,gps_lon,gps_valid\n';
+    s[0].d.forEach(r=>{c+=r.t+','+r.sp+','+r.ax+','+r.ay+','+r.wz+','+r.mo+','+r.latg+','+r.lng+','+(r.lat||0)+','+(r.lon||0)+','+(r.gpsOk||0)+'\n'});
+    const b=new Blob([c],{type:'text/csv'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download='blackbox.csv';a.click();
+};
 
-// Reset max speed on tap
-$('maxspdbox').onclick=()=>{maxSpd=0;$('maxspd').textContent='0'};
-
-// Update timer and Hz display
 setInterval(()=>{$('hz').textContent=cnt;cnt=0;$('timer').textContent=fmtTime(Date.now()-sessionStart)},1000);
-drawG();
 
-$('rec').onclick=()=>{rec=!rec;if(rec){data=[];$('rec').className='btn btn-rec on';$('rec').textContent='■ STOP';$('dot').classList.add('rec');$('modebox').classList.add('rec')}
-else{$('rec').className='btn btn-rec';$('rec').textContent='● REC';$('dot').classList.remove('rec');$('modebox').classList.remove('rec');
-if(data.length){const s=JSON.parse(localStorage.getItem('bb')||'[]');s.unshift({id:Date.now(),n:data.length,d:data});
-localStorage.setItem('bb',JSON.stringify(s.slice(0,10)));alert('Saved '+data.length+' pts')}}};
-
-$('exp').onclick=()=>{const s=JSON.parse(localStorage.getItem('bb')||'[]');if(!s.length)return alert('No data');
-let c='time,speed,ax,ay,wz,mode,lat_g,lon_g,gps_lat,gps_lon,gps_valid\n';s[0].d.forEach(r=>{c+=r.t+','+r.sp+','+r.ax+','+r.ay+','+r.wz+','+r.mo+','+r.latg+','+r.lng+','+(r.lat||0)+','+(r.lon||0)+','+(r.gpsOk||0)+'\n'});
-const b=new Blob([c],{type:'text/csv'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download='blackbox.csv';a.click()};
-
-// Settings functions
-function updS(id){var s=$('s-'+id),v=$('v-'+id);if(s&&v)v.textContent=parseFloat(s.value).toFixed(id==='minspd'?1:(id==='yaw'?3:2))}
-
-// Update preset summary display
-function updateSummary(p){
-$('ps-acc').innerHTML=p.acc.toFixed(2)+'<span>/'+p.acc_exit.toFixed(2)+'g</span>';
-$('ps-brake').innerHTML=p.brake.toFixed(2)+'<span>/'+p.brake_exit.toFixed(2)+'g</span>';
-$('ps-lat').innerHTML=p.lat.toFixed(2)+'<span>/'+p.lat_exit.toFixed(2)+'g</span>';
-$('ps-yaw').innerHTML=p.yaw.toFixed(2)+'<span> r/s</span>';
-$('ps-minspd').innerHTML=p.min_speed.toFixed(1)+'<span> m/s</span>';
-}
-
-// Apply preset values to sliders
-function applyPresetToSliders(p){
-$('s-acc').value=p.acc;$('v-acc').textContent=p.acc.toFixed(2);
-$('s-accexit').value=p.acc_exit;$('v-accexit').textContent=p.acc_exit.toFixed(2);
-$('s-brake').value=p.brake;$('v-brake').textContent=p.brake.toFixed(2);
-$('s-brakeexit').value=p.brake_exit;$('v-brakeexit').textContent=p.brake_exit.toFixed(2);
-$('s-lat').value=p.lat;$('v-lat').textContent=p.lat.toFixed(2);
-$('s-latexit').value=p.lat_exit;$('v-latexit').textContent=p.lat_exit.toFixed(2);
-$('s-yaw').value=p.yaw;$('v-yaw').textContent=p.yaw.toFixed(3);
-$('s-minspd').value=p.min_speed;$('v-minspd').textContent=p.min_speed.toFixed(1);
-}
-
-// Select preset and apply
-function selectPreset(name){
-currentPreset=name;
-// Update button states
-document.querySelectorAll('.preset-btn').forEach(b=>{
-b.classList.toggle('active',b.dataset.preset===name);
-});
-// Show/hide sliders vs summary
-const isCustom=name==='custom';
-$('preset-summary').classList.toggle('hidden',isCustom);
-$('cfg-sliders').classList.toggle('show',isCustom);
-// If not custom, apply preset and send to ESP32
-if(!isCustom&&PRESETS[name]){
-const p=PRESETS[name];
-updateSummary(p);
-applyPresetToSliders(p);
-sendSettings(p);
-}
-}
-
-// Reset to current preset (for custom mode)
-function resetToPreset(){
-if(currentPreset!=='custom'&&PRESETS[currentPreset]){
-applyPresetToSliders(PRESETS[currentPreset]);
-}else{
-// Default to city if in custom
-applyPresetToSliders(PRESETS.city);
-}
-}
-
-// Send settings to ESP32
-async function sendSettings(p){
-const brake=-Math.abs(p.brake),brake_exit=-Math.abs(p.brake_exit);
-try{
-const url='/api/settings/set?acc='+p.acc+'&acc_exit='+p.acc_exit+'&brake='+brake+'&brake_exit='+brake_exit+'&lat='+p.lat+'&lat_exit='+p.lat_exit+'&yaw='+p.yaw+'&min_speed='+p.min_speed;
-await fetch(url);
-}catch(e){console.log('Settings send failed:',e)}
-}
-
-async function saveCfg(){
-var acc=parseFloat($('s-acc').value),accexit=parseFloat($('s-accexit').value),brake=parseFloat($('s-brake').value),brakeexit=parseFloat($('s-brakeexit').value),lat=parseFloat($('s-lat').value),latexit=parseFloat($('s-latexit').value),yaw=parseFloat($('s-yaw').value),minspd=parseFloat($('s-minspd').value);
-// Validation
-if(accexit>=acc){alert('Accel Exit must be < Accel Entry');return}
-if(brakeexit>=brake){alert('Brake Exit must be < Brake Entry');return}
-if(latexit>=lat){alert('Lateral Exit must be < Lateral Entry');return}
-// Send
-const p={acc,acc_exit:accexit,brake,brake_exit:brakeexit,lat,lat_exit:latexit,yaw,min_speed:minspd};
-try{
-await sendSettings(p);
-var btn=document.querySelector('.cfg-save');
-btn.textContent='Applied';btn.style.background='#10b981';
-setTimeout(()=>{btn.textContent='Apply';btn.style.background=''},1500);
-}catch(e){alert('Save failed: '+e.message)}
-}
-
-// Initialize preset buttons
-document.querySelectorAll('.preset-btn').forEach(btn=>{
-btn.onclick=()=>selectPreset(btn.dataset.preset);
-});
-
-// Load current settings from ESP32 and detect matching preset
-async function loadCfg(){
-try{
-const r=await fetch('/api/settings');
-const s=await r.json();
-if(s.acc!==undefined){
-// Check if current settings match a preset
-let matched='custom';
-for(const[name,p]of Object.entries(PRESETS)){
-if(Math.abs(s.acc-p.acc)<0.01&&Math.abs(s.lat-p.lat)<0.01&&Math.abs(s.min_speed-p.min_speed)<0.1){
-matched=name;break;
-}
-}
-currentPreset=matched;
-// Update UI
-document.querySelectorAll('.preset-btn').forEach(b=>{
-b.classList.toggle('active',b.dataset.preset===matched);
-});
-const isCustom=matched==='custom';
-$('preset-summary').classList.toggle('hidden',isCustom);
-$('cfg-sliders').classList.toggle('show',isCustom);
-// Load values
-const current={acc:s.acc,acc_exit:s.acc_exit,brake:Math.abs(s.brake),brake_exit:Math.abs(s.brake_exit),lat:s.lat,lat_exit:s.lat_exit,yaw:s.yaw,min_speed:s.min_speed};
-updateSummary(current);
-applyPresetToSliders(current);
-}
-}catch(e){
-// Default to city preset on error
-selectPreset('city');
-}
-}
-
-// Load settings, then start polling (self-scheduling for max throughput)
-loadCfg().then(()=>poll());
+// Init
+applyGoldenHeights();
+setTimeout(()=>{resizeCanvas();drawG()},50);
+poll();
 </script></body></html>"#;
 
 /// Diagnostics page HTML - auto-refreshes every second
