@@ -340,10 +340,11 @@ impl TelemetryPublisher {
         now_ms: u32,
     ) -> Result<(), SystemError> {
         // Get accelerations for display
-        // lon: GPS/IMU blended (same as mode classifier input)
-        // lat: accelerometer-based (mode uses centripetal = speed × yaw_rate)
-        let lon_blended = sensor_fusion.get_lon_blended();
-        let lat_display = sensor_fusion.get_lat_display();
+        // lon: GPS-derived when fresh (no vibration), otherwise blended with heavy smoothing
+        // lat: centripetal (speed × yaw_rate) - instant, doesn't stick after corners
+        //      Uses calibrated yaw rate to prevent drift on highway
+        let lon_display = sensor_fusion.get_lon_display();
+        let lat_display = sensor_fusion.get_lat_centripetal();
 
         // Keep raw az for reference (no tilt correction needed for vertical)
         let (_, _, az_corr) = sensors.imu_parser.get_accel_corrected();
@@ -355,7 +356,7 @@ impl TelemetryPublisher {
         // Dashboard expects: lng = -ax/9.81, latg = ay/9.81
         // So: ax = -lon (negated so dashboard shows positive for accel)
         //     ay = lat (positive = right turn on G-meter)
-        packet.ax = -lon_blended;
+        packet.ax = -lon_display;
         packet.ay = -lat_display; // Negate: fusion uses left-positive, dashboard uses right-positive
         packet.az = az_corr;
         packet.wz = sensors.imu_parser.data().wz;

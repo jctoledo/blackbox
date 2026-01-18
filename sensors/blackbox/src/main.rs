@@ -470,6 +470,9 @@ fn main() {
         steady_state_speed_tolerance: 0.5,
         steady_state_yaw_tolerance: 0.087,
         gravity_alpha: 0.02,
+        // Biquad filter for engine vibration removal (based on ArduPilot research)
+        lon_filter_cutoff: 5.0,  // 5Hz cutoff preserves driving dynamics (0-3Hz)
+        lon_sample_rate: 20.0,   // Matches telemetry rate
     };
     let mut sensor_fusion = SensorFusion::new(fusion_config);
 
@@ -750,6 +753,13 @@ fn main() {
                     // Feed GPS speed to sensor fusion for acceleration calculation
                     let time_s = now_ms as f32 / 1000.0;
                     sensor_fusion.process_gps(speed, time_s);
+
+                    // Feed GPS heading to yaw rate calibrator (only valid at speed)
+                    // Course over ground is unreliable below ~5 m/s
+                    if speed > 5.0 {
+                        let course = sensors.gps_parser.last_fix().course;
+                        sensor_fusion.process_gps_heading(course);
+                    }
                 }
             }
         }

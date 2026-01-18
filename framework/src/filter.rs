@@ -1,8 +1,13 @@
 //! Signal filtering utilities
 //!
 //! Contains Biquad IIR filter implementation for vibration removal.
-//! Note: Currently unused in production - kept for potential future use
-//! and to verify the math with unit tests.
+//! Used by SensorFusion to remove engine vibration (20-100Hz) from
+//! IMU longitudinal acceleration while preserving driving dynamics (0-3Hz).
+//!
+//! Based on research:
+//! - ArduPilot uses 10Hz low-pass on accelerometers (outer loop)
+//! - Academic papers show 1-5Hz Butterworth effective for vehicle dynamics
+//! - Physics: driving events (braking, acceleration, cornering) are < 3Hz
 
 /// Biquad IIR low-pass filter for vibration removal
 ///
