@@ -339,9 +339,10 @@ impl TelemetryPublisher {
         sensor_fusion: &crate::fusion::SensorFusion,
         now_ms: u32,
     ) -> Result<(), SystemError> {
-        // Get tilt/gravity-corrected, filtered accelerations in vehicle frame
-        // These are clean values suitable for G-meter display
-        let lon_filt = sensor_fusion.get_lon_filtered();
+        // Get accelerations matching what mode classification sees
+        // lon: GPS/IMU blended (same as mode classifier input)
+        // lat: filtered IMU (same as mode classifier input)
+        let lon_blended = sensor_fusion.get_lon_blended();
         let lat_filt = sensor_fusion.get_lat_filtered();
 
         // Keep raw az for reference (no tilt correction needed for vertical)
@@ -354,7 +355,7 @@ impl TelemetryPublisher {
         // Dashboard expects: lng = -ax/9.81, latg = ay/9.81
         // So: ax = -lon (negated so dashboard shows positive for accel)
         //     ay = lat (positive = right turn on G-meter)
-        packet.ax = -lon_filt;
+        packet.ax = -lon_blended;
         packet.ay = -lat_filt; // Negate: fusion uses left-positive, dashboard uses right-positive
         packet.az = az_corr;
         packet.wz = sensors.imu_parser.data().wz;
