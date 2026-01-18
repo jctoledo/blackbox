@@ -9,7 +9,9 @@
 //! The goal is to provide clean, drift-free acceleration for mode detection
 //! that works regardless of device mounting angle.
 
-use crate::filter::BiquadFilter;
+// Sensor fusion for GPS/IMU blending
+// Biquad filter removed from longitudinal path for ~50% faster response.
+// GPS blend provides primary smoothing, mode.rs EMA handles residual noise.
 
 /// Configuration for sensor fusion
 #[derive(Clone, Copy)]
@@ -38,11 +40,8 @@ pub struct FusionConfig {
     pub gravity_learn_time: f32,
     /// Alpha for gravity estimate update (smaller = slower, more stable)
     pub gravity_alpha: f32,
-    /// Low-pass filter cutoff for longitudinal acceleration (Hz)
-    /// Only applied in vehicle frame for longitudinal
-    pub lon_filter_cutoff: f32,
-    /// Sample rate for telemetry (Hz)
-    pub sample_rate: f32,
+    // Note: lon_filter_cutoff and sample_rate removed - no longer using Biquad filter
+    // GPS blend provides primary smoothing, mode.rs EMA handles residual noise
 }
 
 impl Default for FusionConfig {
@@ -69,8 +68,6 @@ impl Default for FusionConfig {
             steady_state_yaw_tolerance: 0.087,  // ~5 deg/s
             gravity_learn_time: 2.0,
             gravity_alpha: 0.02, // Very slow update
-            lon_filter_cutoff: 5.0, // 5Hz for longitudinal (faster than before)
-            sample_rate: 20.0,      // Telemetry rate
         }
     }
 }
@@ -409,10 +406,10 @@ pub struct SensorFusion {
     pub tilt_estimator: TiltEstimator,
     /// Gravity estimator (learns while driving)
     pub gravity_estimator: GravityEstimator,
-    /// Low-pass filter for longitudinal IMU (applied in vehicle frame)
-    filter_lon: BiquadFilter,
     /// Blended longitudinal acceleration (m/s²)
     blended_lon: f32,
+    /// Raw IMU longitudinal for display (m/s², vehicle frame)
+    lon_imu_raw: f32,
     /// Corrected lateral acceleration for display (m/s², vehicle frame)
     lat_corrected: f32,
     /// Centripetal lateral acceleration for mode detection (m/s²)
@@ -429,8 +426,8 @@ impl SensorFusion {
             gps_accel: GpsAcceleration::new(),
             tilt_estimator: TiltEstimator::new(config.tilt_learn_time),
             gravity_estimator: GravityEstimator::new(&config),
-            filter_lon: BiquadFilter::new_lowpass(config.lon_filter_cutoff, config.sample_rate),
             blended_lon: 0.0,
+            lon_imu_raw: 0.0,
             lat_corrected: 0.0,
             lat_centripetal: 0.0,
             last_gps_weight: 0.0,
@@ -474,13 +471,15 @@ impl SensorFusion {
         // Apply gravity correction (learned while driving)
         let (ax_corr, ay_corr) = self.gravity_estimator.correct(ax_tilt, ay_tilt);
 
-        // Transform to vehicle frame (NO filtering in earth frame!)
+        // Transform to vehicle frame
         let (lon_imu_raw, lat_imu_raw) = earth_to_car(ax_corr, ay_corr, yaw);
 
-        // Filter longitudinal in vehicle frame (safe, no rotation issues)
-        let lon_imu = self.filter_lon.process(lon_imu_raw);
+        // Store raw IMU longitudinal for display/fallback
+        // No Biquad filter - GPS blend provides primary smoothing,
+        // mode.rs EMA handles residual noise. This gives ~50% faster response.
+        self.lon_imu_raw = lon_imu_raw;
 
-        // Store corrected lateral for display (no Biquad filter - mode.rs EMA handles it)
+        // Store corrected lateral for display
         self.lat_corrected = lat_imu_raw;
 
         // Calculate centripetal lateral for mode detection (pro-style)
@@ -492,11 +491,6 @@ impl SensorFusion {
             // Learn tilt offset when stopped
             self.tilt_estimator
                 .update_stationary(ax_earth, ay_earth, dt);
-
-            if !self.was_stationary {
-                // Just stopped - reset filter to avoid transient
-                self.filter_lon.reset_to(0.0);
-            }
         } else {
             if self.was_stationary {
                 // Just started moving
@@ -510,13 +504,16 @@ impl SensorFusion {
         self.was_stationary = is_stationary;
 
         // Blend GPS and IMU for longitudinal acceleration
+        // GPS provides smooth, drift-free acceleration from velocity changes
+        // IMU provides fast response but has vibration noise
+        // Blending gives best of both: smooth when GPS available, fast fallback
         let gps_weight = self.compute_gps_weight();
         self.last_gps_weight = gps_weight;
 
         let lon_blended = if let Some(gps_lon) = self.gps_accel.get_accel() {
-            gps_weight * gps_lon + (1.0 - gps_weight) * lon_imu
+            gps_weight * gps_lon + (1.0 - gps_weight) * self.lon_imu_raw
         } else {
-            lon_imu
+            self.lon_imu_raw
         };
 
         self.blended_lon = lon_blended;

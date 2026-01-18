@@ -26,9 +26,9 @@ A complete ESP32-C3 firmware that fuses GPS and IMU data to track your vehicle's
 - Body-frame accelerations transformed to earth frame using current orientation
 - Zero-velocity updates eliminate IMU drift when stationary
 - Constant Turn Rate and Acceleration (CTRA) model for cornering
-- **GPS/IMU blending** for accurate mode detection independent of mounting angle
+- **GPS/IMU blending** for accurate, low-latency mode detection independent of mounting angle
 - **Automatic tilt correction** learns device mounting offset when stopped
-- **Vibration filtering** removes engine/road noise (5Hz low-pass Butterworth for longitudinal)
+- **Centripetal lateral detection** uses speed × yaw_rate for instant corner response
 
 **Why it's useful:**
 - Track day data logging without $1000+ commercial systems

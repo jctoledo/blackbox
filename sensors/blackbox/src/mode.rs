@@ -131,7 +131,7 @@ impl Default for ModeConfig {
             lat_thr: 0.12,     // 0.12g lateral - city turns
             lat_exit: 0.06,    // exit when below 0.06g
             yaw_thr: 0.05,     // ~2.9°/s yaw rate
-            alpha: 0.35,       // EMA smoothing - balanced responsiveness vs bump rejection
+            alpha: 0.50,       // EMA smoothing - faster response (τ≈72ms at 20Hz)
         }
     }
 }

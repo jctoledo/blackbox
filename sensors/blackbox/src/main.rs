@@ -1,7 +1,8 @@
 mod binary_telemetry;
 mod config;
 mod diagnostics;
-mod filter;
+#[cfg(test)]
+mod filter; // Only compiled for tests - production uses GPS blend instead of Biquad
 mod fusion;
 mod gps;
 mod imu;
@@ -453,14 +454,10 @@ fn main() {
     // 3. Vibration filtering - 2Hz Biquad removes engine/road noise
     // 4. GPS/IMU blending - 70% GPS at 25Hz for balanced response
     //
-    // Latency: ~80-100ms (vs ~50ms IMU-only, ~150ms with 90% GPS)
+    // Latency: ~100-150ms with GPS blend + mode.rs EMA
+    // (Biquad filter removed - GPS blend provides primary smoothing)
     // Good for: city, highway, canyon. For track, increase GPS weights.
-    //
-    // NOTE: Filter runs at telemetry rate (~20Hz), not IMU rate (200Hz)
-    let telemetry_rate = 1000.0 / config.telemetry.interval_ms as f32;
     let fusion_config = FusionConfig {
-        sample_rate: telemetry_rate,
-        lon_filter_cutoff: 5.0, // 5Hz - faster response for longitudinal
         gps_high_rate: 20.0,
         gps_medium_rate: 10.0,
         gps_max_age: 0.2,
