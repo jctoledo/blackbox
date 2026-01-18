@@ -553,13 +553,6 @@ impl SensorFusion {
         self.lat_corrected
     }
 
-    /// Get centripetal lateral acceleration for mode detection (m/s²)
-    /// This is speed * yaw_rate (pro-style, mount-independent)
-    #[allow(dead_code)]
-    pub fn get_lat_centripetal(&self) -> f32 {
-        self.lat_centripetal
-    }
-
     /// Compute GPS weight based on GPS rate and data freshness
     fn compute_gps_weight(&self) -> f32 {
         let rate = self.gps_accel.get_rate();
@@ -712,7 +705,7 @@ mod tests {
             let yaw_rate = 1.57; // ~90°/s
             yaw += yaw_rate * 0.05;
 
-            fusion.process_imu(
+            let (_lon, lat) = fusion.process_imu(
                 0.0,      // Earth X
                 0.0,      // Earth Y
                 yaw,      // Changing heading
@@ -725,9 +718,9 @@ mod tests {
             // During turn, lateral should be positive (speed * positive yaw_rate)
             if i > 5 {
                 assert!(
-                    fusion.get_lat_centripetal() > 10.0,
+                    lat > 10.0,
                     "During turn, lateral should be high: {}",
-                    fusion.get_lat_centripetal()
+                    lat
                 );
             }
         }
