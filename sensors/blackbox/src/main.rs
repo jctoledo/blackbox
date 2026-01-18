@@ -451,11 +451,11 @@ fn main() {
     // This provides:
     // 1. Tilt correction - learns mounting offset when stopped (3s)
     // 2. Gravity correction - learns while driving at steady speed
-    // 3. Vibration filtering - 2Hz Biquad removes engine/road noise
-    // 4. GPS/IMU blending - 70% GPS at 25Hz for balanced response
+    // 3. GPS/IMU blending - 70% GPS at 25Hz for smooth, drift-free longitudinal
+    // 4. Centripetal lateral - speed × yaw_rate for instant corner detection
     //
-    // Latency: ~100-150ms with GPS blend + mode.rs EMA
-    // (Biquad filter removed - GPS blend provides primary smoothing)
+    // Latency: ~100-150ms for ACCEL/BRAKE (GPS blend + EMA)
+    //          ~0ms for CORNER (centripetal is instant)
     // Good for: city, highway, canyon. For track, increase GPS weights.
     let fusion_config = FusionConfig {
         gps_high_rate: 20.0,
@@ -520,7 +520,7 @@ fn main() {
                     lat_thr: s.lat_thr,
                     lat_exit: s.lat_exit,
                     yaw_thr: s.yaw_thr,
-                    alpha: 0.25, // Keep default smoothing
+                    alpha: 0.50, // Fast EMA for responsive mode detection (τ≈72ms at 20Hz)
                 };
                 estimator.mode_classifier.update_config(new_config);
                 info!(

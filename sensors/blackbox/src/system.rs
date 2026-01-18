@@ -339,9 +339,9 @@ impl TelemetryPublisher {
         sensor_fusion: &crate::fusion::SensorFusion,
         now_ms: u32,
     ) -> Result<(), SystemError> {
-        // Get accelerations matching what mode classification sees
+        // Get accelerations for display
         // lon: GPS/IMU blended (same as mode classifier input)
-        // lat: filtered IMU (same as mode classifier input)
+        // lat: accelerometer-based (mode uses centripetal = speed × yaw_rate)
         let lon_blended = sensor_fusion.get_lon_blended();
         let lat_display = sensor_fusion.get_lat_display();
 
