@@ -296,23 +296,24 @@ impl ModeClassifier {
     /// Update mode using pre-blended hybrid acceleration
     ///
     /// This is the preferred method when using SensorFusion, as it receives
-    /// longitudinal acceleration that's already blended from GPS and IMU sources.
+    /// longitudinal acceleration that's already blended from GPS and IMU sources,
+    /// and centripetal lateral acceleration (speed × yaw_rate) for corner detection.
     ///
     /// # Arguments
     /// * `a_lon_blended` - Blended longitudinal acceleration (m/s², vehicle frame)
-    /// * `a_lat_filtered` - Filtered lateral acceleration (m/s², vehicle frame)
+    /// * `a_lat_centripetal` - Centripetal lateral acceleration (m/s², = speed × yaw_rate)
     /// * `wz` - Yaw rate (rad/s)
     /// * `speed` - Vehicle speed (m/s)
-    pub fn update_hybrid(&mut self, a_lon_blended: f32, a_lat_filtered: f32, wz: f32, speed: f32) {
+    pub fn update_hybrid(&mut self, a_lon_blended: f32, a_lat_centripetal: f32, wz: f32, speed: f32) {
         // Update display speed with EMA
         self.v_disp = (1.0 - self.v_alpha) * self.v_disp + self.v_alpha * speed;
         if self.v_disp < 3.0 / 3.6 {
             self.v_disp = 0.0;
         }
 
-        // Convert to g units (blended accel is already in m/s²)
+        // Convert to g units (accelerations are in m/s²)
         let a_lon = a_lon_blended / G;
-        let a_lat = a_lat_filtered / G;
+        let a_lat = a_lat_centripetal / G;
 
         // Update EMA filters
         // Note: longitudinal already filtered/blended, but still apply EMA for consistency
