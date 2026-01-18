@@ -612,13 +612,16 @@ Handles GPS/IMU blending, tilt correction, and continuous calibration.
    - Low-pass filters to remove vibration
    - Blends GPS and IMU for longitudinal acceleration
 
-**GPS/IMU Blending Ratios:**
+**GPS/IMU Blending Ratios (configurable in FusionConfig):**
 ```
-GPS rate >= 20Hz, fresh:  90% GPS / 10% IMU  (high confidence)
-GPS rate 10-20Hz:         70% GPS / 30% IMU  (medium confidence)
+GPS rate >= 20Hz, fresh:  70% GPS / 30% IMU  (high confidence)
+GPS rate 10-20Hz:         50% GPS / 50% IMU  (medium confidence)
 GPS rate < 10Hz:          30% GPS / 70% IMU  (low confidence)
 GPS stale (>200ms):       0% GPS / 100% IMU  (fallback)
 ```
+
+These ratios balance responsiveness (~80-100ms latency) with accuracy.
+For track use, consider increasing GPS weights for maximum accuracy.
 
 **Data Flow:**
 ```
@@ -628,8 +631,15 @@ IMU → remove_gravity → body_to_earth → TiltCorrect → GravityCorrect → 
                                                                             ↓
                                                                     lon_accel_imu
                                                                             ↓
-                                                            Blend(gps, imu) → mode.rs
+                                                            Blend(gps, imu) → lon_blended
+                                                                            ↓
+                                                    ┌───────────────────────┴───────────────────────┐
+                                                    ↓                                               ↓
+                                            mode.rs (classification)                    Dashboard (G-meter)
 ```
+
+**Dashboard Display:** The G-meter shows the same blended longitudinal and filtered lateral
+values that mode classification uses. What you see is what the algorithm sees.
 
 ### websocket_server.rs - HTTP Dashboard Server
 

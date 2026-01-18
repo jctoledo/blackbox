@@ -535,13 +535,16 @@ impl SensorFusion {
         self.gps_accel.update_rate(fix_count, time);
     }
 
-    /// Get filtered longitudinal acceleration (vehicle frame, m/s²)
+    /// Get blended longitudinal acceleration (vehicle frame, m/s²)
+    /// This is GPS/IMU blended - same value used by mode classification
     /// Positive = forward acceleration
-    pub fn get_lon_filtered(&self) -> f32 {
-        self.imu_lon_filtered
+    pub fn get_lon_blended(&self) -> f32 {
+        self.blended_lon
     }
 
     /// Get filtered lateral acceleration (vehicle frame, m/s²)
+    /// Pure IMU with tilt/gravity correction and low-pass filter
+    /// Same value used by mode classification (GPS can't sense lateral)
     /// Positive = left
     pub fn get_lat_filtered(&self) -> f32 {
         self.imu_lat_filtered
@@ -768,5 +771,89 @@ mod tests {
         gps.update_rate(50, 2.0);
         let rate = gps.get_rate();
         assert!(rate > 10.0 && rate < 30.0, "Rate should converge: {}", rate);
+    }
+
+    #[test]
+    fn test_display_matches_mode_classification() {
+        // Critical test: verify that get_lon_blended() and get_lat_filtered()
+        // return the exact same values that process_imu() returns.
+        // This ensures dashboard displays what mode classification sees.
+
+        let config = FusionConfig::default();
+        let mut fusion = SensorFusion::new(config);
+
+        // Setup GPS rate for blending
+        fusion.gps_accel.rate_ema = 25.0;
+        fusion.gps_accel.update(10.0, 0.0);
+        fusion.gps_accel.update(12.0, 0.04); // GPS shows acceleration
+
+        // Process IMU
+        let (lon_from_process, lat_from_process) = fusion.process_imu(
+            5.0,   // IMU earth X
+            3.0,   // IMU earth Y
+            0.0,   // Heading East
+            10.0,  // Moving
+            0.0,   // No yaw rate
+            0.05,  // dt
+            false, // Not stationary
+        );
+
+        // Get values that would be sent to dashboard
+        let lon_for_display = fusion.get_lon_blended();
+        let lat_for_display = fusion.get_lat_filtered();
+
+        // These MUST match exactly - this is what the test is verifying
+        assert_eq!(
+            lon_from_process, lon_for_display,
+            "Dashboard lon must match mode classifier input"
+        );
+        assert_eq!(
+            lat_from_process, lat_for_display,
+            "Dashboard lat must match mode classifier input"
+        );
+    }
+
+    #[test]
+    fn test_blending_affects_display() {
+        // Verify GPS/IMU blending actually works and affects the displayed value
+        let config = FusionConfig {
+            gps_weight_high: 0.70, // 70% GPS
+            ..Default::default()
+        };
+        let mut fusion = SensorFusion::new(config);
+
+        // Setup high GPS rate (25Hz) for maximum GPS weight
+        fusion.gps_accel.rate_ema = 25.0;
+
+        // GPS shows 0 acceleration (constant speed)
+        fusion.gps_accel.update(10.0, 0.0);
+        fusion.gps_accel.update(10.0, 0.04); // Same speed = 0 accel
+
+        // IMU shows 5 m/s² forward acceleration
+        // With 70% GPS (0) and 30% IMU (~5), blended should be ~1.5 m/s²
+        // (exact value depends on filter state)
+        let (lon, _lat) = fusion.process_imu(
+            5.0,   // IMU earth X (forward)
+            0.0,   // No lateral
+            0.0,   // Heading East
+            10.0,  // Moving
+            0.0,   // No yaw rate
+            0.05,  // dt
+            false, // Not stationary
+        );
+
+        // The blended value should be less than pure IMU (5.0)
+        // because GPS (showing 0) pulls it down
+        let display_lon = fusion.get_lon_blended();
+        assert_eq!(lon, display_lon, "Display must match process output");
+
+        // With 70% GPS weight showing 0, the blended value should be
+        // significantly less than the IMU value of 5.0
+        // After filter settling, expect roughly: 0.70 * 0 + 0.30 * IMU_filtered
+        assert!(
+            display_lon.abs() < 4.0,
+            "GPS blending should reduce value: got {}",
+            display_lon
+        );
     }
 }

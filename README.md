@@ -21,11 +21,14 @@ A complete ESP32-C3 firmware that fuses GPS and IMU data to track your vehicle's
 - **Built-in mobile dashboard** - view live data on your phone
 
 **How it works:**
-- 7-state Extended Kalman Filter fuses GPS (5Hz) and IMU (50Hz)
+- 7-state Extended Kalman Filter fuses GPS (5-25Hz) and IMU (200Hz)
 - Gyro integrates yaw between GPS updates to maintain heading
 - Body-frame accelerations transformed to earth frame using current orientation
 - Zero-velocity updates eliminate IMU drift when stationary
 - Constant Turn Rate and Acceleration (CTRA) model for cornering
+- **GPS/IMU blending** for accurate mode detection independent of mounting angle
+- **Automatic tilt correction** learns device mounting offset when stopped
+- **Vibration filtering** removes engine/road noise (2Hz low-pass Butterworth)
 
 **Why it's useful:**
 - Track day data logging without $1000+ commercial systems
