@@ -310,6 +310,9 @@ cargo fmt
 # Lint
 cargo clippy -- -D warnings
 
+# Run unit tests (on host, no device needed)
+cargo test -p sensor-fusion -p wt901 -p ublox-gps
+
 # Clean build (if things go wrong)
 cargo clean
 ```
@@ -437,28 +440,38 @@ GPS (5-25Hz)        IMU (200Hz)
 
 ```
 blackbox/
+├── framework/                       # sensor-fusion library crate (host-testable)
+│   └── src/
+│       ├── lib.rs                   # Crate entry point
+│       ├── ekf.rs                   # Extended Kalman Filter
+│       ├── transforms.rs            # Body↔Earth↔Vehicle coordinate math
+│       ├── mode.rs                  # Driving mode classifier
+│       ├── fusion.rs                # GPS/IMU blending, tilt correction
+│       ├── filter.rs                # Biquad filter (unused, for reference)
+│       └── velocity.rs              # Velocity source selection
+├── drivers/
+│   ├── wt901/                       # WT901 IMU driver crate
+│   └── ublox-gps/                   # u-blox GPS driver crate
 ├── sensors/
-│   └── blackbox/
+│   └── blackbox/                    # ESP32 firmware (embedded binary)
 │       ├── .cargo/
-│       │   └── config.toml       # ESP32-C3 build configuration
+│       │   └── config.toml          # ESP32-C3 build configuration
 │       ├── src/
-│       │   ├── main.rs            # Main loop and setup
-│       │   ├── config.rs          # Build-time configuration (GPS model, WiFi mode)
-│       │   ├── system.rs          # Sensor/estimator/publisher managers
-│       │   ├── imu.rs             # WT901 UART parser (auto-detect baud)
-│       │   ├── gps.rs             # NMEA/UBX parser with warmup (NEO-6M/M9N)
-│       │   ├── diagnostics.rs     # System health monitoring
-│       │   ├── transforms.rs      # Body↔Earth coordinate math
-│       │   ├── mode.rs            # Driving mode classifier
-│       │   ├── binary_telemetry.rs # 67-byte packet format
-│       │   ├── websocket_server.rs # Mobile dashboard & HTTP server
-│       │   ├── udp_stream.rs      # High-speed UDP client
-│       │   ├── mqtt.rs            # MQTT client for status
-│       │   ├── wifi.rs            # WiFi connection manager
-│       │   └── rgb_led.rs         # WS2812 status LED
-│       ├── Cargo.toml             # Rust dependencies
-│       ├── sdkconfig.defaults     # ESP-IDF configuration
-│       └── build.rs               # Build script
+│       │   ├── main.rs              # Main loop and setup
+│       │   ├── config.rs            # Build-time configuration
+│       │   ├── system.rs            # Sensor/estimator/publisher managers
+│       │   ├── imu.rs               # WT901 UART parser (auto-detect baud)
+│       │   ├── gps.rs               # NMEA/UBX parser with warmup
+│       │   ├── diagnostics.rs       # System health monitoring
+│       │   ├── binary_telemetry.rs  # 67-byte packet format
+│       │   ├── websocket_server.rs  # Mobile dashboard & HTTP server
+│       │   ├── udp_stream.rs        # High-speed UDP client
+│       │   ├── mqtt.rs              # MQTT client for status
+│       │   ├── wifi.rs              # WiFi connection manager
+│       │   └── rgb_led.rs           # WS2812 status LED
+│       ├── Cargo.toml               # Rust dependencies
+│       ├── sdkconfig.defaults       # ESP-IDF configuration
+│       └── build.rs                 # Build script
 ├── tools/
 │   └── python/
 │       ├── configure_wt901.py       # IMU configuration tool (200Hz setup)
