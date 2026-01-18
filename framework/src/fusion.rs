@@ -82,18 +82,23 @@ impl Default for FusionConfig {
             gps_max_age: 0.2, // 200ms
             // Balanced blend: 70% GPS when fresh and fast
             // Gives ~80-100ms latency instead of ~120-150ms
-            gps_weight_high: 0.70,   // 70% GPS / 30% IMU at >= 20Hz
-            gps_weight_medium: 0.50, // 50% GPS / 50% IMU at >= 10Hz
-            gps_weight_low: 0.30,    // 30% GPS / 70% IMU at < 10Hz
+            // GPS blending weights - conservative values to trust filtered IMU more
+            // GPS-derived accel is often 0 (no speed change between samples)
+            gps_weight_high: 0.40,   // 40% GPS / 60% IMU at >= 20Hz
+            gps_weight_medium: 0.30, // 30% GPS / 70% IMU at >= 10Hz
+            gps_weight_low: 0.20,    // 20% GPS / 80% IMU at < 10Hz
             tilt_learn_time: 3.0,
             steady_state_speed_tolerance: 0.5,  // 0.5 m/s = 1.8 km/h
             steady_state_yaw_tolerance: 0.087,  // ~5 deg/s
             gravity_learn_time: 2.0,
             gravity_alpha: 0.02, // Very slow update
-            // 5 Hz cutoff: passes driving dynamics (0-3Hz), removes engine vibration (20-100Hz)
-            // At 20 Hz sample rate, this gives ~40dB attenuation at 50Hz
-            lon_filter_cutoff: 5.0,
-            lon_sample_rate: 20.0, // Default telemetry rate
+            // Butterworth filter for IMU longitudinal vibration removal
+            // 15 Hz cutoff: passes driving dynamics (0-10Hz), removes engine vibration (30-100Hz)
+            // ArduPilot uses 20Hz for INS_ACCEL_FILTER; 15Hz is conservative middle ground
+            lon_filter_cutoff: 15.0,
+            // CRITICAL: Must match actual IMU sample rate, NOT telemetry rate!
+            // Filter is called in process_imu() which runs at IMU rate (200Hz)
+            lon_sample_rate: 200.0,
         }
     }
 }
@@ -722,35 +727,39 @@ impl SensorFusion {
         // GPS provides smooth, drift-free acceleration from velocity changes
         // IMU (now filtered) provides fast response with vibration removed
         // Blending gives best of both: smooth when GPS available, fast filtered fallback
-        let gps_weight = self.compute_gps_weight();
-        self.last_gps_weight = gps_weight;
+        let base_gps_weight = self.compute_gps_weight();
 
         let lon_blended = if let Some(gps_lon) = self.gps_accel.get_accel() {
+            // GPS accel validity check: if GPS shows ~0 but IMU shows signal,
+            // GPS is likely just not updating (no speed change between samples)
+            // In this case, trust filtered IMU entirely
+            const GPS_ACCEL_MIN_THRESHOLD: f32 = 0.2; // m/s² (~0.02g)
+
+            let effective_gps_weight = if gps_lon.abs() < GPS_ACCEL_MIN_THRESHOLD
+                && self.lon_imu_filtered.abs() > GPS_ACCEL_MIN_THRESHOLD
+            {
+                // GPS showing ~0 but IMU has signal → GPS unreliable, use 100% IMU
+                0.0
+            } else {
+                base_gps_weight
+            };
+
+            self.last_gps_weight = effective_gps_weight;
+
             // Blend GPS with filtered IMU (vibration removed)
-            gps_weight * gps_lon + (1.0 - gps_weight) * self.lon_imu_filtered
+            effective_gps_weight * gps_lon + (1.0 - effective_gps_weight) * self.lon_imu_filtered
         } else {
             // No GPS - use filtered IMU only (still vibration-free)
+            self.last_gps_weight = 0.0;
             self.lon_imu_filtered
         };
 
         self.blended_lon = lon_blended;
 
-        // Compute display-specific longitudinal
-        // With Butterworth filter active, blended value is already clean
-        // Use GPS directly when fresh for smoothest display, otherwise use blended
-        let lon_for_display = if let Some(gps_lon) = self.gps_accel.get_accel() {
-            if self.gps_accel.is_fresh(self.config.gps_max_age) {
-                // GPS fresh - use it directly (smoothest)
-                gps_lon
-            } else {
-                // GPS stale - use filtered blended (vibration already removed by Biquad)
-                lon_blended
-            }
-        } else {
-            // No GPS accel - use filtered blended
-            lon_blended
-        };
-        self.lon_display = lon_for_display;
+        // Display uses same blended value as mode detection
+        // GPS-only was problematic: GPS-derived accel is often 0 (no speed change between samples)
+        // With 15Hz Butterworth filter, vibration is removed and IMU is responsive
+        self.lon_display = lon_blended;
 
         // Return blended longitudinal and centripetal lateral for mode detection
         (lon_blended, self.lat_centripetal)
@@ -1135,17 +1144,17 @@ mod tests {
     #[test]
     fn test_biquad_filter_removes_engine_vibration() {
         // Simulate engine vibration at 30Hz with 0.1g amplitude (~1 m/s²)
-        // The 5Hz Butterworth filter should attenuate this by ~30dB
+        // The 15Hz Butterworth filter should attenuate this by ~12dB
         let config = FusionConfig::default();
         let mut fusion = SensorFusion::new(config);
 
         let vibration_freq = 30.0; // Hz - typical engine vibration
         let vibration_amp = 1.0;   // m/s² (~0.1g)
-        let sample_rate = 20.0;    // Hz - telemetry rate
+        let sample_rate = 200.0;   // Hz - IMU rate (must match config!)
 
         // Run for 2 seconds to let filter settle
         let mut max_output: f32 = 0.0;
-        for i in 0..40 {
+        for i in 0..400 {
             let t = i as f32 / sample_rate;
             // Simulate vibrating IMU input in earth frame
             let vibration = vibration_amp * (2.0 * core::f32::consts::PI * vibration_freq * t).sin();
@@ -1156,22 +1165,22 @@ mod tests {
                 0.0,       // yaw = 0 (heading east)
                 10.0,      // speed
                 0.0,       // yaw_rate = 0
-                0.05,      // dt = 50ms
+                0.005,     // dt = 5ms (200Hz)
                 false,     // not stationary
             );
 
-            // After settling (1 second = 20 samples), check output
-            if i > 20 {
+            // After settling (1 second = 200 samples), check output
+            if i > 200 {
                 max_output = max_output.max(lon.abs());
             }
         }
 
-        // 30Hz vibration should be attenuated by ~30dB at 5Hz cutoff
-        // That means 1 m/s² input → ~0.03 m/s² output (or less)
-        // Being conservative, check it's below 0.1 m/s² (~0.01g)
+        // 30Hz vibration should be attenuated by ~12dB at 15Hz cutoff
+        // That means 1 m/s² input → ~0.25 m/s² output (or less)
+        // Being conservative, check it's below 0.4 m/s² (~0.04g)
         assert!(
-            max_output < 0.15,
-            "30Hz vibration should be heavily attenuated: got {} m/s²",
+            max_output < 0.4,
+            "30Hz vibration should be attenuated: got {} m/s²",
             max_output
         );
     }
@@ -1179,17 +1188,17 @@ mod tests {
     #[test]
     fn test_biquad_filter_passes_driving_dynamics() {
         // Simulate a braking event at 1Hz (typical vehicle dynamics)
-        // The 5Hz filter should pass this with minimal attenuation
+        // The 15Hz filter should pass this with minimal attenuation
         let config = FusionConfig::default();
         let mut fusion = SensorFusion::new(config);
 
-        let dynamics_freq = 1.0;  // Hz - braking event
-        let dynamics_amp = 3.0;   // m/s² (~0.3g braking)
-        let sample_rate = 20.0;   // Hz
+        let dynamics_freq = 1.0;   // Hz - braking event
+        let dynamics_amp = 3.0;    // m/s² (~0.3g braking)
+        let sample_rate = 200.0;   // Hz - IMU rate (must match config!)
 
         // Run for 3 seconds
         let mut max_output: f32 = 0.0;
-        for i in 0..60 {
+        for i in 0..600 {
             let t = i as f32 / sample_rate;
             let signal = dynamics_amp * (2.0 * core::f32::consts::PI * dynamics_freq * t).sin();
 
@@ -1199,12 +1208,12 @@ mod tests {
                 0.0,
                 10.0,
                 0.0,
-                0.05,
+                0.005, // dt = 5ms (200Hz)
                 false,
             );
 
-            // After settling (1 second), check output
-            if i > 20 {
+            // After settling (1 second = 200 samples), check output
+            if i > 200 {
                 max_output = max_output.max(lon.abs());
             }
         }
@@ -1215,6 +1224,160 @@ mod tests {
             max_output > 2.5,
             "1Hz driving dynamics should pass through: got {} m/s², expected >2.5",
             max_output
+        );
+    }
+
+    #[test]
+    fn test_default_config_has_correct_filter_settings() {
+        // Verify critical configuration values
+        let config = FusionConfig::default();
+
+        // Filter must be configured for IMU rate (200Hz), NOT telemetry rate (20Hz)
+        assert_eq!(
+            config.lon_sample_rate, 200.0,
+            "lon_sample_rate must be 200Hz (IMU rate)"
+        );
+
+        // Filter cutoff should be 15Hz (ArduPilot uses 20Hz)
+        assert_eq!(
+            config.lon_filter_cutoff, 15.0,
+            "lon_filter_cutoff should be 15Hz"
+        );
+
+        // GPS weights should be conservative (trust filtered IMU more)
+        assert!(
+            config.gps_weight_high <= 0.5,
+            "GPS weight should be <=50% to trust filtered IMU"
+        );
+    }
+
+    #[test]
+    fn test_lon_display_equals_lon_blended() {
+        // Verify that lon_display uses lon_blended, not GPS-only
+        // This ensures dashboard shows same value as mode detection
+        let config = FusionConfig::default();
+        let mut fusion = SensorFusion::new(config);
+
+        // Feed GPS data
+        fusion.process_gps(10.0, 0.0);
+        fusion.process_gps(10.5, 0.1); // Creates GPS accel
+
+        // Process IMU with non-zero input
+        let (lon_blended, _lat) = fusion.process_imu(
+            2.0,   // Earth X accel
+            0.0,   // Earth Y
+            0.0,   // Heading
+            10.0,  // Speed
+            0.0,   // Yaw rate
+            0.005, // dt
+            false, // Not stationary
+        );
+
+        let lon_display = fusion.get_lon_display();
+
+        // Display should equal blended (not GPS-only)
+        assert!(
+            (lon_display - lon_blended).abs() < 0.001,
+            "lon_display ({}) should equal lon_blended ({})",
+            lon_display,
+            lon_blended
+        );
+    }
+
+    #[test]
+    fn test_sharp_braking_preserved_with_15hz_filter() {
+        // Simulate sharp braking (0.3 second event = ~3Hz component)
+        // 15Hz filter should preserve this; old 5Hz filter would attenuate
+        let config = FusionConfig::default();
+        let mut fusion = SensorFusion::new(config);
+
+        let sample_rate = 200.0;
+        let mut max_output: f32 = 0.0;
+
+        // 0.3 second braking pulse
+        for i in 0..200 {
+            let t = i as f32 / sample_rate;
+
+            // Sharp braking pulse: ramps up in 0.1s, holds 0.1s, ramps down 0.1s
+            let brake_input = if t < 0.1 {
+                5.0 * (t / 0.1) // Ramp up to 5 m/s² (0.5g)
+            } else if t < 0.2 {
+                5.0 // Hold
+            } else if t < 0.3 {
+                5.0 * (1.0 - (t - 0.2) / 0.1) // Ramp down
+            } else {
+                0.0
+            };
+
+            let (lon, _lat) = fusion.process_imu(
+                brake_input,
+                0.0,
+                0.0,
+                15.0, // 15 m/s = 54 km/h
+                0.0,
+                0.005,
+                false,
+            );
+
+            max_output = max_output.max(lon.abs());
+        }
+
+        // Should preserve at least 60% of 5 m/s² input
+        // (some attenuation due to filter, but not severe)
+        assert!(
+            max_output > 3.0,
+            "Sharp braking should be preserved: got {} m/s², expected >3.0",
+            max_output
+        );
+    }
+
+    #[test]
+    fn test_gps_accel_validity_check() {
+        // When GPS accel is ~0 but IMU shows signal, should use 100% IMU
+        // This prevents blending with "nothing" when GPS speed doesn't change
+        let config = FusionConfig::default();
+        let mut fusion = SensorFusion::new(config);
+
+        // Set up GPS with zero acceleration (no speed change)
+        fusion.process_gps(10.0, 0.0);
+        fusion.process_gps(10.0, 0.1); // Same speed = 0 accel
+
+        // Process IMU with significant acceleration (braking at 0.3g)
+        // Need to run multiple iterations for filter to settle
+        let imu_accel = 3.0; // m/s² = ~0.3g
+        let mut lon = 0.0;
+
+        for i in 0..100 {
+            let (l, _lat) = fusion.process_imu(
+                imu_accel,
+                0.0,
+                0.0,
+                10.0, // speed
+                0.0,  // yaw_rate
+                0.005,
+                false,
+            );
+            // Keep GPS "stale" by not updating it, but refresh timestamp
+            if i % 20 == 0 {
+                fusion.process_gps(10.0, 0.1 + (i as f32) * 0.005);
+            }
+            lon = l;
+        }
+
+        // GPS weight should have been set to 0 (validity check triggered)
+        // So output should be close to filtered IMU, not blended toward 0
+        // With 15Hz filter settled, expect at least 50% of input
+        assert!(
+            lon > 1.5,
+            "When GPS=0 but IMU has signal, should use IMU: got {} m/s²",
+            lon
+        );
+
+        // Verify GPS weight was reduced
+        assert!(
+            fusion.last_gps_weight < 0.1,
+            "GPS weight should be ~0 when GPS accel invalid: got {}",
+            fusion.last_gps_weight
         );
     }
 }

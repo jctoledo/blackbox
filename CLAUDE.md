@@ -563,26 +563,25 @@ Combined states:
 2nd-order Butterworth IIR filter for vibration removal from IMU longitudinal acceleration.
 
 **Problem:**
-Engine vibration (20-100 Hz) causes 0.08-0.12g noise on longitudinal G readings when
+Engine vibration (30-100 Hz) causes 0.08-0.12g noise on longitudinal G readings when
 the vehicle is running but stationary. This makes mode detection unreliable.
 
 **Solution (based on ArduPilot research):**
-- ArduPilot uses 10Hz low-pass on accelerometers for outer control loops
-- Academic research shows 1-5Hz Butterworth effective for vehicle dynamics
-- Physics: driving events (braking, acceleration, cornering) are < 3Hz
-- Engine/road vibration is 20-100Hz → easily separable from driving dynamics
+- ArduPilot uses **20Hz** for INS_ACCEL_FILTER default
+- Sharp braking events can have frequency components up to 5-10Hz
+- Engine/road vibration is 30-100Hz → separable from driving dynamics (0-10Hz)
 
 **Configuration:**
-- Sample rate: 20 Hz (telemetry rate)
-- Cutoff: 5 Hz (preserves all driving dynamics, removes vibration)
+- Sample rate: **200 Hz (IMU rate)** - CRITICAL: must match actual process_imu() call rate!
+- Cutoff: **15 Hz** (preserves driving dynamics 0-10Hz, removes vibration 30+Hz)
 - Q = 0.707 (Butterworth - maximally flat passband, no overshoot)
 
 **Frequency Response:**
 ```
-0-3 Hz:   ~100% pass (driving dynamics preserved)
-5 Hz:     -3 dB (cutoff point)
-10 Hz:    -12 dB (attenuated)
-30+ Hz:   -30+ dB (engine vibration removed)
+0-10 Hz:  ~100% pass (driving dynamics preserved)
+15 Hz:    -3 dB (cutoff point)
+30 Hz:    -12 dB (engine vibration attenuated)
+60+ Hz:   -24+ dB (engine vibration removed)
 ```
 
 **Implementation:**
@@ -623,31 +622,40 @@ Handles GPS/IMU blending, tilt correction, and continuous calibration.
 5. **SensorFusion** - Main processor
    - Applies tilt correction
    - Applies gravity correction
-   - **5 Hz Butterworth low-pass filter** removes engine vibration (see filter.rs)
+   - **15 Hz Butterworth low-pass filter** removes engine vibration (see filter.rs)
    - Blends GPS and IMU for longitudinal acceleration
    - Computes centripetal lateral (speed × calibrated_yaw_rate)
 
 **GPS/IMU Blending Ratios (configurable in FusionConfig):**
 ```
-GPS rate >= 20Hz, fresh:  70% GPS / 30% IMU  (high confidence)
-GPS rate 10-20Hz:         50% GPS / 50% IMU  (medium confidence)
-GPS rate < 10Hz:          30% GPS / 70% IMU  (low confidence)
+GPS rate >= 20Hz, fresh:  40% GPS / 60% IMU  (trust filtered IMU more)
+GPS rate 10-20Hz:         30% GPS / 70% IMU  (medium confidence)
+GPS rate < 10Hz:          20% GPS / 80% IMU  (low confidence)
 GPS stale (>200ms):       0% GPS / 100% IMU  (fallback)
+GPS accel ~0, IMU has signal: 0% GPS / 100% IMU  (validity check)
 ```
 
-These ratios balance responsiveness (~80-100ms latency) with accuracy.
-For track use, consider increasing GPS weights for maximum accuracy.
+**GPS Accel Validity Check:**
+When GPS-derived accel is near zero (< 0.2 m/s²) but filtered IMU shows signal (> 0.2 m/s²),
+the GPS value is unreliable (just means speed didn't change between GPS samples).
+In this case, GPS weight is set to 0% and 100% filtered IMU is used.
+
+**Why trust IMU more than GPS?**
+- GPS-derived accel is `(speed_new - speed_old) / dt` which is often 0 (no speed change)
+- With 15Hz Butterworth filter, IMU vibration is removed while preserving dynamics
+- Responsive G readings require high IMU contribution
+- GPS still provides drift correction and sanity check
 
 **Data Flow:**
 ```
 LONGITUDINAL:
 GPS (25Hz) → GpsAcceleration → lon_accel_gps ────┐
                                                   │
-IMU → remove_gravity → body_to_earth → Tilt → Gravity → Biquad(5Hz) → lon_accel_imu
-                                                                             │
-                                                            Blend(gps, imu) ◄┘
-                                                                   ↓
-                                                              lon_blended
+IMU (200Hz) → remove_gravity → body_to_earth → Tilt → Gravity → Biquad(15Hz) → lon_accel_imu
+                                                                                     │
+                                                                  Blend(40% gps, 60% imu) ◄┘
+                                                                           ↓
+                                                                      lon_blended
 
 LATERAL (centripetal):
 GPS heading → YawRateCalibrator → learned_bias

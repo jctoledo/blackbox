@@ -461,18 +461,21 @@ fn main() {
         gps_high_rate: 20.0,
         gps_medium_rate: 10.0,
         gps_max_age: 0.2,
-        // Balanced blend for city/highway/canyon
-        gps_weight_high: 0.70,  // 70% GPS / 30% IMU at 25Hz
-        gps_weight_medium: 0.50, // 50% / 50% at 10-20Hz
-        gps_weight_low: 0.30,   // 30% GPS / 70% IMU fallback
+        // Conservative GPS weights - GPS-derived accel often 0 (no speed change between samples)
+        // Trust filtered IMU more for responsive G readings
+        gps_weight_high: 0.40,   // 40% GPS / 60% IMU at 25Hz
+        gps_weight_medium: 0.30, // 30% GPS / 70% IMU at 10-20Hz
+        gps_weight_low: 0.20,    // 20% GPS / 80% IMU fallback
         tilt_learn_time: 3.0,
         gravity_learn_time: 2.0,
         steady_state_speed_tolerance: 0.5,
         steady_state_yaw_tolerance: 0.087,
         gravity_alpha: 0.02,
-        // Biquad filter for engine vibration removal (based on ArduPilot research)
-        lon_filter_cutoff: 5.0,  // 5Hz cutoff preserves driving dynamics (0-3Hz)
-        lon_sample_rate: 20.0,   // Matches telemetry rate
+        // Butterworth filter for vibration removal (ArduPilot uses 20Hz, we use 15Hz)
+        // 15Hz preserves driving dynamics (0-10Hz), removes engine vibration (30-100Hz)
+        lon_filter_cutoff: 15.0,
+        // CRITICAL: Must be IMU rate (200Hz), NOT telemetry rate!
+        lon_sample_rate: 200.0,
     };
     let mut sensor_fusion = SensorFusion::new(fusion_config);
 
