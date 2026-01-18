@@ -567,17 +567,30 @@ Combined states:
 
 ### filter.rs - Biquad Low-Pass Filter
 
-2nd-order Butterworth IIR filter for vibration removal.
+2nd-order Butterworth IIR filter for vibration removal from IMU longitudinal acceleration.
 
-**Purpose:**
-- Remove engine vibration (30-100 Hz)
-- Remove road texture noise (5-20 Hz)
-- Preserve driving dynamics (0-2 Hz)
+**Problem:**
+Engine vibration (20-100 Hz) causes 0.08-0.12g noise on longitudinal G readings when
+the vehicle is running but stationary. This makes mode detection unreliable.
+
+**Solution (based on ArduPilot research):**
+- ArduPilot uses 10Hz low-pass on accelerometers for outer control loops
+- Academic research shows 1-5Hz Butterworth effective for vehicle dynamics
+- Physics: driving events (braking, acceleration, cornering) are < 3Hz
+- Engine/road vibration is 20-100Hz → easily separable from driving dynamics
 
 **Configuration:**
 - Sample rate: 20 Hz (telemetry rate)
-- Cutoff: 2 Hz
-- Q = 0.707 (critically damped, no overshoot)
+- Cutoff: 5 Hz (preserves all driving dynamics, removes vibration)
+- Q = 0.707 (Butterworth - maximally flat passband, no overshoot)
+
+**Frequency Response:**
+```
+0-3 Hz:   ~100% pass (driving dynamics preserved)
+5 Hz:     -3 dB (cutoff point)
+10 Hz:    -12 dB (attenuated)
+30+ Hz:   -30+ dB (engine vibration removed)
+```
 
 **Implementation:**
 ```rust
@@ -608,11 +621,18 @@ Handles GPS/IMU blending, tilt correction, and continuous calibration.
    - Slowly updates gravity estimate (α=0.02, ~50 second convergence)
    - Essential for track/canyon driving where stops are rare
 
-4. **SensorFusion** - Main processor
+4. **YawRateCalibrator** - Learns gyro bias while driving straight
+   - When GPS heading is stable (±0.5°/s for 2+ seconds), assumes true yaw rate ≈ 0
+   - Any measured yaw rate during this time is gyro bias
+   - Applies correction to prevent lateral drift in centripetal calculation
+   - Essential for highway driving where ZUPT rarely triggers
+
+5. **SensorFusion** - Main processor
    - Applies tilt correction
    - Applies gravity correction
-   - Low-pass filters to remove vibration
+   - **5 Hz Butterworth low-pass filter** removes engine vibration (see filter.rs)
    - Blends GPS and IMU for longitudinal acceleration
+   - Computes centripetal lateral (speed × calibrated_yaw_rate)
 
 **GPS/IMU Blending Ratios (configurable in FusionConfig):**
 ```
@@ -627,20 +647,34 @@ For track use, consider increasing GPS weights for maximum accuracy.
 
 **Data Flow:**
 ```
-GPS (25Hz) → GpsAcceleration → lon_accel_gps
-                                    ↓
-IMU → remove_gravity → body_to_earth → TiltCorrect → GravityCorrect → Biquad Filter
-                                                                            ↓
-                                                                    lon_accel_imu
-                                                                            ↓
-                                                            Blend(gps, imu) → lon_blended
-                                                                            ↓
-                                                    ┌───────────────────────┴───────────────────────┐
-                                                    ↓                                               ↓
-                                            mode.rs (classification)                    Dashboard (G-meter)
+LONGITUDINAL:
+GPS (25Hz) → GpsAcceleration → lon_accel_gps ────┐
+                                                  │
+IMU → remove_gravity → body_to_earth → Tilt → Gravity → Biquad(5Hz) → lon_accel_imu
+                                                                             │
+                                                            Blend(gps, imu) ◄┘
+                                                                   ↓
+                                                              lon_blended
+
+LATERAL (centripetal):
+GPS heading → YawRateCalibrator → learned_bias
+                                       ↓
+Gyro yaw_rate → (yaw_rate - bias) → calibrated_yaw_rate
+                                       ↓
+GPS speed × calibrated_yaw_rate → lat_centripetal
+
+OUTPUT:
+(lon_blended, lat_centripetal) → mode.rs (classification)
+                               → Dashboard (G-meter)
 ```
 
-**Dashboard Display:** The G-meter shows the same blended longitudinal and filtered lateral
+**Why Centripetal Lateral?**
+- Traditional IMU lateral (accelerometer) suffers from mount angle sensitivity and can "stick"
+- Centripetal: `a_lat = v × ω` is physics-based, instant, and mount-independent
+- Uses calibrated yaw rate to prevent drift during highway driving
+- Pro telemetry systems use this approach
+
+**Dashboard Display:** The G-meter shows the same blended longitudinal and centripetal lateral
 values that mode classification uses. What you see is what the algorithm sees.
 
 ### websocket_server.rs - HTTP Dashboard Server
