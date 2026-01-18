@@ -94,6 +94,42 @@ pub struct ConfigSnapshot {
     pub gps_warmup_fixes: u8,
 }
 
+/// Sensor fusion diagnostics - filter pipeline and blending status
+#[derive(Debug, Clone, Copy, Default)]
+pub struct FusionDiagnostics {
+    // Filter pipeline (all in m/s²)
+    /// Raw IMU longitudinal acceleration (before Butterworth filter)
+    pub lon_imu_raw: f32,
+    /// Filtered IMU longitudinal (after 15Hz low-pass)
+    pub lon_imu_filtered: f32,
+    /// Final blended longitudinal (GPS/IMU mix)
+    pub lon_blended: f32,
+
+    // GPS blending status
+    /// Current GPS blend weight (0.0-0.4 typically)
+    pub gps_weight: f32,
+    /// GPS-derived acceleration (m/s²), NaN if invalid
+    pub gps_accel: f32,
+    /// GPS update rate estimate (Hz)
+    pub gps_rate: f32,
+    /// Was GPS rejected by validity check? (GPS=0 but IMU has signal)
+    pub gps_rejected: bool,
+
+    // Yaw rate calibrator
+    /// Learned gyro bias (rad/s)
+    pub yaw_bias: f32,
+    /// Is yaw calibration valid?
+    pub yaw_calibrated: bool,
+
+    // Tilt estimator (learned when stopped)
+    /// Tilt offset X (m/s²)
+    pub tilt_offset_x: f32,
+    /// Tilt offset Y (m/s²)
+    pub tilt_offset_y: f32,
+    /// Is tilt offset valid?
+    pub tilt_valid: bool,
+}
+
 /// Complete diagnostics snapshot (immutable copy for reading)
 #[derive(Debug, Clone, Default)]
 pub struct DiagnosticsSnapshot {
@@ -103,6 +139,7 @@ pub struct DiagnosticsSnapshot {
     pub system_health: SystemHealth,
     pub wifi_status: WifiStatus,
     pub config: ConfigSnapshot,
+    pub fusion: FusionDiagnostics,
 }
 
 /// Thread-safe diagnostics state container
@@ -128,6 +165,7 @@ struct DiagnosticsInner {
     system_health: SystemHealth,
     wifi_status: WifiStatus,
     config: ConfigSnapshot,
+    fusion: FusionDiagnostics,
     // For rate calculation (last known counts)
     last_imu_count: u32,
     last_gps_count: u32,
@@ -300,6 +338,14 @@ impl DiagnosticsState {
         }
     }
 
+    /// Update fusion diagnostics (filter pipeline, GPS blending, calibrators)
+    #[allow(clippy::too_many_arguments)]
+    pub fn update_fusion(&self, fusion: FusionDiagnostics) {
+        if let Ok(mut inner) = self.inner.lock() {
+            inner.fusion = fusion;
+        }
+    }
+
     /// Get a snapshot of all diagnostics (for HTTP response)
     pub fn snapshot(&self) -> DiagnosticsSnapshot {
         if let Ok(inner) = self.inner.lock() {
@@ -310,6 +356,7 @@ impl DiagnosticsState {
                 system_health: inner.system_health,
                 wifi_status: inner.wifi_status.clone(),
                 config: inner.config.clone(),
+                fusion: inner.fusion,
             }
         } else {
             DiagnosticsSnapshot::default()
