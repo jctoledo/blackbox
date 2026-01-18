@@ -80,7 +80,6 @@ pub fn remove_gravity(
 ///
 /// # Returns
 /// * `(a_lon, a_lat)` - Longitudinal and lateral acceleration (m/s²)
-#[allow(dead_code)]
 pub fn earth_to_car(ax_earth: f32, ay_earth: f32, yaw_rad: f32) -> (f32, f32) {
     let cos_yaw = yaw_rad.cos();
     let sin_yaw = yaw_rad.sin();
