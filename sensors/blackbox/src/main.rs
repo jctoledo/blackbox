@@ -520,7 +520,7 @@ fn main() {
                     lat_thr: s.lat_thr,
                     lat_exit: s.lat_exit,
                     yaw_thr: s.yaw_thr,
-                    alpha: 0.50, // Fast EMA for responsive mode detection (τ≈72ms at 20Hz)
+                    alpha: mode::DEFAULT_MODE_ALPHA, // Single source of truth
                 };
                 estimator.mode_classifier.update_config(new_config);
                 info!(

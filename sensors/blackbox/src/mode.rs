@@ -106,6 +106,11 @@ impl Default for Mode {
     }
 }
 
+/// Default EMA alpha for mode detection smoothing
+/// τ ≈ 72ms at 20Hz processing rate
+/// Used by both ModeConfig::default() and settings handler in main.rs
+pub const DEFAULT_MODE_ALPHA: f32 = 0.50;
+
 /// Configurable thresholds for mode detection
 #[derive(Debug, Clone, Copy)]
 pub struct ModeConfig {
@@ -131,7 +136,7 @@ impl Default for ModeConfig {
             lat_thr: 0.12,     // 0.12g lateral - city turns
             lat_exit: 0.06,    // exit when below 0.06g
             yaw_thr: 0.05,     // ~2.9°/s yaw rate
-            alpha: 0.50,       // EMA smoothing - faster response (τ≈72ms at 20Hz)
+            alpha: DEFAULT_MODE_ALPHA,
         }
     }
 }
@@ -585,5 +590,16 @@ mod tests {
         }
         assert!(!classifier.get_mode().has_accel(), "Should exit accel");
         assert!(classifier.get_mode().has_corner(), "Should still corner");
+    }
+
+    #[test]
+    fn test_default_alpha_uses_constant() {
+        // This test ensures ModeConfig::default() uses the shared constant
+        // Prevents bugs where alpha is hardcoded in multiple places with different values
+        let config = ModeConfig::default();
+        assert_eq!(
+            config.alpha, DEFAULT_MODE_ALPHA,
+            "ModeConfig::default() must use DEFAULT_MODE_ALPHA constant"
+        );
     }
 }
