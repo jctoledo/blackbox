@@ -112,9 +112,10 @@ mod tests {
     const SAMPLE_RATE: f32 = 200.0;
     const CUTOFF: f32 = 4.0;
 
-    // Also test with telemetry-rate parameters (20Hz sampling, 2Hz cutoff)
+    // Test with telemetry-rate parameters (20Hz sampling)
     const TELEM_RATE: f32 = 20.0;
-    const TELEM_CUTOFF: f32 = 2.0;
+    const TELEM_CUTOFF_SLOW: f32 = 2.0; // Conservative cutoff for testing
+    const TELEM_CUTOFF_FAST: f32 = 5.0; // Actual config used in fusion.rs
 
     #[test]
     fn test_filter_creation() {
@@ -297,10 +298,9 @@ mod tests {
     }
 
     #[test]
-    fn test_telemetry_rate_filter() {
-        // Test at telemetry rate (20Hz sampling, 2Hz cutoff)
-        // This is the actual configuration used in main.rs
-        let mut filter = BiquadFilter::new_lowpass(TELEM_CUTOFF, TELEM_RATE);
+    fn test_telemetry_rate_filter_conservative() {
+        // Test at telemetry rate with conservative 2Hz cutoff
+        let mut filter = BiquadFilter::new_lowpass(TELEM_CUTOFF_SLOW, TELEM_RATE);
 
         // DC should pass through
         for _ in 0..50 {
@@ -313,13 +313,12 @@ mod tests {
             dc_output
         );
 
-        // Reset and test low frequency (0.5 Hz driving input)
-        let mut filter = BiquadFilter::new_lowpass(TELEM_CUTOFF, TELEM_RATE);
+        // Test low frequency (0.5 Hz driving input)
+        let mut filter = BiquadFilter::new_lowpass(TELEM_CUTOFF_SLOW, TELEM_RATE);
         let freq = 0.5; // 0.5 Hz - typical braking/accel
         let mut max_output: f32 = 0.0;
 
         for i in 0..200 {
-            // 10 seconds at 20Hz
             let t = i as f32 / TELEM_RATE;
             let input = (2.0 * core::f32::consts::PI * freq * t).sin();
             let output = filter.process(input);
@@ -337,7 +336,7 @@ mod tests {
         );
 
         // Test high frequency rejection (8Hz - at Nyquist, should be attenuated)
-        let mut filter = BiquadFilter::new_lowpass(TELEM_CUTOFF, TELEM_RATE);
+        let mut filter = BiquadFilter::new_lowpass(TELEM_CUTOFF_SLOW, TELEM_RATE);
         let freq = 8.0;
         let mut max_output: f32 = 0.0;
 
@@ -355,6 +354,68 @@ mod tests {
         assert!(
             max_output < 0.2,
             "8Hz should be attenuated at 20Hz/2Hz filter: got {}",
+            max_output
+        );
+    }
+
+    #[test]
+    fn test_telemetry_rate_filter_actual_config() {
+        // Test with actual fusion.rs config: 20Hz sampling, 5Hz cutoff
+        // This is faster/more responsive than conservative 2Hz
+        let mut filter = BiquadFilter::new_lowpass(TELEM_CUTOFF_FAST, TELEM_RATE);
+
+        // DC should pass through
+        for _ in 0..50 {
+            filter.process(1.0);
+        }
+        let dc_output = filter.process(1.0);
+        assert!(
+            (dc_output - 1.0).abs() < 0.02,
+            "DC should pass at 5Hz cutoff: got {}",
+            dc_output
+        );
+
+        // Test driving frequency (1 Hz - typical braking/accel)
+        let mut filter = BiquadFilter::new_lowpass(TELEM_CUTOFF_FAST, TELEM_RATE);
+        let freq = 1.0;
+        let mut max_output: f32 = 0.0;
+
+        for i in 0..200 {
+            let t = i as f32 / TELEM_RATE;
+            let input = (2.0 * core::f32::consts::PI * freq * t).sin();
+            let output = filter.process(input);
+
+            if i > 100 {
+                max_output = max_output.max(output.abs());
+            }
+        }
+
+        // 1 Hz is well below 5Hz cutoff, should pass through with minimal attenuation
+        assert!(
+            max_output > 0.9,
+            "1Hz should pass at 20Hz/5Hz filter: got {}",
+            max_output
+        );
+
+        // Test vibration rejection (8Hz - should be attenuated even at 5Hz cutoff)
+        let mut filter = BiquadFilter::new_lowpass(TELEM_CUTOFF_FAST, TELEM_RATE);
+        let freq = 8.0;
+        let mut max_output: f32 = 0.0;
+
+        for i in 0..200 {
+            let t = i as f32 / TELEM_RATE;
+            let input = (2.0 * core::f32::consts::PI * freq * t).sin();
+            let output = filter.process(input);
+
+            if i > 100 {
+                max_output = max_output.max(output.abs());
+            }
+        }
+
+        // 8Hz is above 5Hz cutoff, should be attenuated (but less than at 2Hz cutoff)
+        assert!(
+            max_output < 0.5,
+            "8Hz should be attenuated at 20Hz/5Hz filter: got {}",
             max_output
         );
     }
