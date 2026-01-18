@@ -1,13 +1,13 @@
-/// Sensor Fusion Module
-///
-/// This module handles:
-/// 1. GPS-derived longitudinal acceleration (from velocity changes)
-/// 2. GPS/IMU acceleration blending with adaptive weights
-/// 3. Dynamic tilt offset learning (ZUPT enhancement)
-/// 4. Moving gravity estimation (continuous calibration while driving)
-///
-/// The goal is to provide clean, drift-free acceleration for mode detection
-/// that works regardless of device mounting angle.
+//! Sensor Fusion Module
+//!
+//! This module handles:
+//! 1. GPS-derived longitudinal acceleration (from velocity changes)
+//! 2. GPS/IMU acceleration blending with adaptive weights
+//! 3. Dynamic tilt offset learning (ZUPT enhancement)
+//! 4. Moving gravity estimation (continuous calibration while driving)
+//!
+//! The goal is to provide clean, drift-free acceleration for mode detection
+//! that works regardless of device mounting angle.
 
 use crate::filter::BiquadFilter;
 
@@ -452,6 +452,7 @@ impl SensorFusion {
     ///
     /// # Returns
     /// (lon_accel, lat_accel) - Fused accelerations in vehicle frame (m/s²)
+    #[allow(clippy::too_many_arguments)]
     pub fn process_imu(
         &mut self,
         ax_earth: f32,
@@ -532,6 +533,18 @@ impl SensorFusion {
     /// Update GPS rate estimate (call periodically, e.g., every second)
     pub fn update_gps_rate(&mut self, fix_count: u32, time: f32) {
         self.gps_accel.update_rate(fix_count, time);
+    }
+
+    /// Get filtered longitudinal acceleration (vehicle frame, m/s²)
+    /// Positive = forward acceleration
+    pub fn get_lon_filtered(&self) -> f32 {
+        self.imu_lon_filtered
+    }
+
+    /// Get filtered lateral acceleration (vehicle frame, m/s²)
+    /// Positive = left
+    pub fn get_lat_filtered(&self) -> f32 {
+        self.imu_lat_filtered
     }
 
     /// Compute GPS weight based on GPS rate and data freshness
