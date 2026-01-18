@@ -817,9 +817,9 @@ fn main() {
                 speed,
             );
 
-            // Publish telemetry
+            // Publish telemetry with tilt-corrected accelerations
             publisher
-                .publish_telemetry(&sensors, &estimator, now_ms)
+                .publish_telemetry(&sensors, &estimator, &sensor_fusion, now_ms)
                 .ok();
             last_telemetry_ms = now_ms;
         }

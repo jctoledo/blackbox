@@ -336,18 +336,26 @@ impl TelemetryPublisher {
         &mut self,
         sensors: &SensorManager,
         estimator: &StateEstimator,
+        sensor_fusion: &crate::fusion::SensorFusion,
         now_ms: u32,
     ) -> Result<(), SystemError> {
-        // Send bias-corrected accelerations (client can process further if needed)
-        let (ax_corr, ay_corr, az_corr) = sensors.imu_parser.get_accel_corrected();
+        // Get tilt/gravity-corrected, filtered accelerations in vehicle frame
+        // These are clean values suitable for G-meter display
+        let lon_filt = sensor_fusion.get_lon_filtered();
+        let lat_filt = sensor_fusion.get_lat_filtered();
+
+        // Keep raw az for reference (no tilt correction needed for vertical)
+        let (_, _, az_corr) = sensors.imu_parser.get_accel_corrected();
 
         let mut packet = binary_telemetry::TelemetryPacket::new();
         packet.timestamp_ms = now_ms;
 
-        // Send bias-corrected accelerations in body frame
-        // Client-side processing can remove gravity and transform to vehicle frame
-        packet.ax = ax_corr;
-        packet.ay = ay_corr;
+        // Send corrected vehicle-frame accelerations
+        // Dashboard expects: lng = -ax/9.81, latg = ay/9.81
+        // So: ax = -lon (negated so dashboard shows positive for accel)
+        //     ay = lat (positive = right turn on G-meter)
+        packet.ax = -lon_filt;
+        packet.ay = -lat_filt; // Negate: fusion uses left-positive, dashboard uses right-positive
         packet.az = az_corr;
         packet.wz = sensors.imu_parser.data().wz;
         packet.roll = sensors.imu_parser.data().roll.to_radians();
