@@ -343,7 +343,7 @@ impl TelemetryPublisher {
         // lon: GPS/IMU blended (same as mode classifier input)
         // lat: filtered IMU (same as mode classifier input)
         let lon_blended = sensor_fusion.get_lon_blended();
-        let lat_filt = sensor_fusion.get_lat_filtered();
+        let lat_display = sensor_fusion.get_lat_display();
 
         // Keep raw az for reference (no tilt correction needed for vertical)
         let (_, _, az_corr) = sensors.imu_parser.get_accel_corrected();
@@ -356,7 +356,7 @@ impl TelemetryPublisher {
         // So: ax = -lon (negated so dashboard shows positive for accel)
         //     ay = lat (positive = right turn on G-meter)
         packet.ax = -lon_blended;
-        packet.ay = -lat_filt; // Negate: fusion uses left-positive, dashboard uses right-positive
+        packet.ay = -lat_display; // Negate: fusion uses left-positive, dashboard uses right-positive
         packet.az = az_corr;
         packet.wz = sensors.imu_parser.data().wz;
         packet.roll = sensors.imu_parser.data().roll.to_radians();

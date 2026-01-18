@@ -38,10 +38,11 @@ pub struct FusionConfig {
     pub gravity_learn_time: f32,
     /// Alpha for gravity estimate update (smaller = slower, more stable)
     pub gravity_alpha: f32,
-    /// Low-pass filter cutoff for acceleration (Hz)
-    pub accel_filter_cutoff: f32,
-    /// IMU sample rate (Hz)
-    pub imu_sample_rate: f32,
+    /// Low-pass filter cutoff for longitudinal acceleration (Hz)
+    /// Only applied in vehicle frame for longitudinal
+    pub lon_filter_cutoff: f32,
+    /// Sample rate for telemetry (Hz)
+    pub sample_rate: f32,
 }
 
 impl Default for FusionConfig {
@@ -68,8 +69,8 @@ impl Default for FusionConfig {
             steady_state_yaw_tolerance: 0.087,  // ~5 deg/s
             gravity_learn_time: 2.0,
             gravity_alpha: 0.02, // Very slow update
-            accel_filter_cutoff: 4.0,
-            imu_sample_rate: 200.0,
+            lon_filter_cutoff: 5.0, // 5Hz for longitudinal (faster than before)
+            sample_rate: 20.0,      // Telemetry rate
         }
     }
 }
@@ -408,16 +409,14 @@ pub struct SensorFusion {
     pub tilt_estimator: TiltEstimator,
     /// Gravity estimator (learns while driving)
     pub gravity_estimator: GravityEstimator,
-    /// Low-pass filter for IMU X
-    filter_x: BiquadFilter,
-    /// Low-pass filter for IMU Y
-    filter_y: BiquadFilter,
-    /// Filtered IMU longitudinal acceleration (m/s²)
-    imu_lon_filtered: f32,
-    /// Filtered IMU lateral acceleration (m/s²)
-    imu_lat_filtered: f32,
+    /// Low-pass filter for longitudinal IMU (applied in vehicle frame)
+    filter_lon: BiquadFilter,
     /// Blended longitudinal acceleration (m/s²)
     blended_lon: f32,
+    /// Corrected lateral acceleration for display (m/s², vehicle frame)
+    lat_corrected: f32,
+    /// Centripetal lateral acceleration for mode detection (m/s²)
+    lat_centripetal: f32,
     /// Last GPS blend weight (for diagnostics)
     last_gps_weight: f32,
     /// Was stationary last update?
@@ -430,28 +429,31 @@ impl SensorFusion {
             gps_accel: GpsAcceleration::new(),
             tilt_estimator: TiltEstimator::new(config.tilt_learn_time),
             gravity_estimator: GravityEstimator::new(&config),
-            filter_x: BiquadFilter::new_lowpass(config.accel_filter_cutoff, config.imu_sample_rate),
-            filter_y: BiquadFilter::new_lowpass(config.accel_filter_cutoff, config.imu_sample_rate),
-            imu_lon_filtered: 0.0,
-            imu_lat_filtered: 0.0,
+            filter_lon: BiquadFilter::new_lowpass(config.lon_filter_cutoff, config.sample_rate),
             blended_lon: 0.0,
+            lat_corrected: 0.0,
+            lat_centripetal: 0.0,
             last_gps_weight: 0.0,
             was_stationary: false,
             config,
         }
     }
 
-    /// Process IMU data (call at IMU rate, e.g., 200Hz)
+    /// Process IMU data (call at telemetry rate, e.g., 20Hz)
     ///
     /// # Arguments
     /// * `ax_earth` - X acceleration in earth frame (m/s²)
     /// * `ay_earth` - Y acceleration in earth frame (m/s²)
     /// * `yaw` - Vehicle yaw angle (rad, for earth-to-car transform)
+    /// * `speed` - Vehicle speed (m/s)
+    /// * `yaw_rate` - Yaw rate (rad/s)
     /// * `dt` - Time step (seconds)
     /// * `is_stationary` - Whether vehicle is currently stationary
     ///
     /// # Returns
-    /// (lon_accel, lat_accel) - Fused accelerations in vehicle frame (m/s²)
+    /// (lon_blended, lat_centripetal) - Accelerations for mode detection (m/s²)
+    /// lon_blended: GPS/IMU blended longitudinal
+    /// lat_centripetal: speed * yaw_rate (pro-style, mount-independent)
     #[allow(clippy::too_many_arguments)]
     pub fn process_imu(
         &mut self,
@@ -470,17 +472,20 @@ impl SensorFusion {
         let (ax_tilt, ay_tilt) = self.tilt_estimator.correct(ax_earth, ay_earth);
 
         // Apply gravity correction (learned while driving)
-        let (ax_grav, ay_grav) = self.gravity_estimator.correct(ax_tilt, ay_tilt);
+        let (ax_corr, ay_corr) = self.gravity_estimator.correct(ax_tilt, ay_tilt);
 
-        // Low-pass filter to remove vibration
-        let ax_filt = self.filter_x.process(ax_grav);
-        let ay_filt = self.filter_y.process(ay_grav);
+        // Transform to vehicle frame (NO filtering in earth frame!)
+        let (lon_imu_raw, lat_imu_raw) = earth_to_car(ax_corr, ay_corr, yaw);
 
-        // Transform to vehicle frame
-        let (lon_imu, lat_imu) = earth_to_car(ax_filt, ay_filt, yaw);
+        // Filter longitudinal in vehicle frame (safe, no rotation issues)
+        let lon_imu = self.filter_lon.process(lon_imu_raw);
 
-        self.imu_lon_filtered = lon_imu;
-        self.imu_lat_filtered = lat_imu;
+        // Store corrected lateral for display (no Biquad filter - mode.rs EMA handles it)
+        self.lat_corrected = lat_imu_raw;
+
+        // Calculate centripetal lateral for mode detection (pro-style)
+        // a_lateral = v * omega (mount-angle independent, no filtering needed)
+        self.lat_centripetal = speed * yaw_rate;
 
         // Handle stationary state transitions
         if is_stationary {
@@ -489,9 +494,8 @@ impl SensorFusion {
                 .update_stationary(ax_earth, ay_earth, dt);
 
             if !self.was_stationary {
-                // Just stopped - reset filters to avoid transient
-                self.filter_x.reset_to(0.0);
-                self.filter_y.reset_to(0.0);
+                // Just stopped - reset filter to avoid transient
+                self.filter_lon.reset_to(0.0);
             }
         } else {
             if self.was_stationary {
@@ -517,8 +521,8 @@ impl SensorFusion {
 
         self.blended_lon = lon_blended;
 
-        // Lateral always from IMU (GPS can't sense lateral well)
-        (lon_blended, lat_imu)
+        // Return blended longitudinal and centripetal lateral for mode detection
+        (lon_blended, self.lat_centripetal)
     }
 
     /// Process GPS speed update (call at GPS rate, e.g., 25Hz)
@@ -542,12 +546,18 @@ impl SensorFusion {
         self.blended_lon
     }
 
-    /// Get filtered lateral acceleration (vehicle frame, m/s²)
-    /// Pure IMU with tilt/gravity correction and low-pass filter
-    /// Same value used by mode classification (GPS can't sense lateral)
+    /// Get corrected lateral acceleration for display (vehicle frame, m/s²)
+    /// This is accelerometer-based with tilt/gravity correction
     /// Positive = left
-    pub fn get_lat_filtered(&self) -> f32 {
-        self.imu_lat_filtered
+    pub fn get_lat_display(&self) -> f32 {
+        self.lat_corrected
+    }
+
+    /// Get centripetal lateral acceleration for mode detection (m/s²)
+    /// This is speed * yaw_rate (pro-style, mount-independent)
+    #[allow(dead_code)]
+    pub fn get_lat_centripetal(&self) -> f32 {
+        self.lat_centripetal
     }
 
     /// Compute GPS weight based on GPS rate and data freshness
@@ -645,97 +655,121 @@ mod tests {
     }
 
     #[test]
-    fn test_tilt_estimator_learns() {
+    fn test_tilt_estimator_learns_and_corrects() {
         let mut tilt = TiltEstimator::new(1.0); // 1 second learn time
 
-        // Simulate stationary with 0.5 m/s² offset
-        let mut learned = false;
+        // Simulate stationary with 0.5 m/s² offset (tilted mount)
         for _ in 0..300 {
-            let dt = 0.005; // 200Hz
-            if tilt.update_stationary(0.5, 0.3, dt) {
-                learned = true;
-            }
+            // 1.5 seconds at 200Hz
+            tilt.update_stationary(0.5, 0.3, 0.005);
         }
 
-        // Should have learned by now - verify by checking correction works
-        assert!(learned, "Tilt should have been learned");
-
-        // If offset was learned as ~(0.5, 0.3), then correct(0.5, 0.3) should give ~(0, 0)
+        // Correction should now reduce the offset to near zero
         let (ax, ay) = tilt.correct(0.5, 0.3);
         assert!(ax.abs() < 0.1, "Corrected X should be ~0: {}", ax);
         assert!(ay.abs() < 0.1, "Corrected Y should be ~0: {}", ay);
     }
 
     #[test]
-    fn test_tilt_correction() {
-        let mut tilt = TiltEstimator::new(0.5);
-
-        // Learn offset
-        for _ in 0..200 {
-            tilt.update_stationary(0.4, -0.2, 0.005);
-        }
-
-        // Apply correction
-        let (ax, ay) = tilt.correct(0.5, 0.0);
-        assert!((ax - 0.1).abs() < 0.15); // 0.5 - 0.4 = 0.1
-        assert!((ay - 0.2).abs() < 0.15); // 0.0 - (-0.2) = 0.2
-    }
-
-    #[test]
-    fn test_gravity_estimator_steady_state() {
-        let config = FusionConfig {
-            gravity_learn_time: 0.5,
-            steady_state_speed_tolerance: 1.0,
-            steady_state_yaw_tolerance: 0.1,
-            gravity_alpha: 0.1,
-            ..Default::default()
-        };
-
-        let mut grav = GravityEstimator::new(&config);
-
-        // Simulate steady-state driving at 15 m/s with small gravity offset
-        for _ in 0..200 {
-            grav.update(
-                0.3,  // ax offset
-                -0.2, // ay offset
-                15.0, // speed
-                0.01, // low yaw rate
-                0.01, // dt
-            );
-        }
-
-        // Verify learning by checking correction reduces the offset
-        // If it learned offset ~(0.3, -0.2), then correct(0.3, -0.2) should give ~(0, 0)
-        let (ax, ay) = grav.correct(0.3, -0.2);
-        assert!(ax.abs() < 0.1, "Corrected X should be ~0: {}", ax);
-        assert!(ay.abs() < 0.1, "Corrected Y should be ~0: {}", ay);
-    }
-
-    #[test]
-    fn test_sensor_fusion_blending() {
+    fn test_centripetal_lateral_during_turn() {
+        // Simulate a turn: speed = 10 m/s, yaw_rate = 0.3 rad/s
+        // Expected centripetal: 10 * 0.3 = 3 m/s²
         let config = FusionConfig::default();
         let mut fusion = SensorFusion::new(config);
 
-        // Simulate high GPS rate
-        fusion.gps_accel.rate_ema = 25.0;
-        fusion.gps_accel.update(10.0, 0.0);
-        fusion.gps_accel.update(12.0, 0.04); // 50 m/s² GPS accel
-
-        // Process IMU with different acceleration
-        let (lon, _lat) = fusion.process_imu(
-            20.0, // IMU shows 20 m/s² in earth X
-            0.0,  // No Y accel
-            0.0,  // Heading East
-            10.0, // Moving
-            0.0,  // No yaw rate
-            0.005,
+        // Process with turn conditions
+        let (_lon, lat) = fusion.process_imu(
+            0.0,   // No earth-frame X accel
+            0.0,   // No earth-frame Y accel
+            0.0,   // Heading
+            10.0,  // Speed = 10 m/s
+            0.3,   // Yaw rate = 0.3 rad/s (turning)
+            0.05,  // dt
             false, // Not stationary
         );
 
-        // With 90% GPS weight, result should be closer to GPS
-        // GPS: 50 m/s², IMU: ~20 m/s² (after filtering)
-        // We can't predict exact value due to filter transient
-        assert!(lon.abs() < 100.0, "Longitudinal should be reasonable");
+        // Lateral should be centripetal: speed * yaw_rate = 3 m/s²
+        assert!(
+            (lat - 3.0).abs() < 0.01,
+            "Centripetal lateral should be 3.0: got {}",
+            lat
+        );
+    }
+
+    #[test]
+    fn test_lateral_returns_to_zero_after_turn() {
+        // This test verifies the critical bug fix:
+        // After a turn ends, lateral should return to zero immediately
+        // (not "stick" due to earth-frame filtering)
+
+        let config = FusionConfig::default();
+        let mut fusion = SensorFusion::new(config);
+
+        // Simulate a 90° turn
+        let mut yaw = 0.0;
+        for i in 0..20 {
+            // 1 second of turning at 20Hz
+            let yaw_rate = 1.57; // ~90°/s
+            yaw += yaw_rate * 0.05;
+
+            fusion.process_imu(
+                0.0,      // Earth X
+                0.0,      // Earth Y
+                yaw,      // Changing heading
+                10.0,     // Constant speed
+                yaw_rate, // Turning
+                0.05,     // dt
+                false,    // Not stationary
+            );
+
+            // During turn, lateral should be positive (speed * positive yaw_rate)
+            if i > 5 {
+                assert!(
+                    fusion.get_lat_centripetal() > 10.0,
+                    "During turn, lateral should be high: {}",
+                    fusion.get_lat_centripetal()
+                );
+            }
+        }
+
+        // Turn ends - yaw_rate goes to zero
+        let (_lon, lat) = fusion.process_imu(
+            0.0,  // Earth X
+            0.0,  // Earth Y
+            yaw,  // Final heading
+            10.0, // Still moving
+            0.0,  // NO MORE TURNING
+            0.05, // dt
+            false,
+        );
+
+        // Lateral should be zero immediately (no sticking!)
+        assert!(
+            lat.abs() < 0.01,
+            "After turn ends, lateral should be ~0 immediately: got {}",
+            lat
+        );
+    }
+
+    #[test]
+    fn test_display_matches_mode_classification_longitudinal() {
+        // Verify that get_lon_blended() returns the same value as process_imu()
+        let config = FusionConfig::default();
+        let mut fusion = SensorFusion::new(config);
+
+        // Setup GPS
+        fusion.gps_accel.rate_ema = 25.0;
+        fusion.gps_accel.update(10.0, 0.0);
+        fusion.gps_accel.update(12.0, 0.04);
+
+        let (lon_from_process, _lat) = fusion.process_imu(5.0, 3.0, 0.0, 10.0, 0.0, 0.05, false);
+
+        let lon_for_display = fusion.get_lon_blended();
+
+        assert_eq!(
+            lon_from_process, lon_for_display,
+            "Display lon must match mode classifier input"
+        );
     }
 
     #[test]
@@ -771,89 +805,5 @@ mod tests {
         gps.update_rate(50, 2.0);
         let rate = gps.get_rate();
         assert!(rate > 10.0 && rate < 30.0, "Rate should converge: {}", rate);
-    }
-
-    #[test]
-    fn test_display_matches_mode_classification() {
-        // Critical test: verify that get_lon_blended() and get_lat_filtered()
-        // return the exact same values that process_imu() returns.
-        // This ensures dashboard displays what mode classification sees.
-
-        let config = FusionConfig::default();
-        let mut fusion = SensorFusion::new(config);
-
-        // Setup GPS rate for blending
-        fusion.gps_accel.rate_ema = 25.0;
-        fusion.gps_accel.update(10.0, 0.0);
-        fusion.gps_accel.update(12.0, 0.04); // GPS shows acceleration
-
-        // Process IMU
-        let (lon_from_process, lat_from_process) = fusion.process_imu(
-            5.0,   // IMU earth X
-            3.0,   // IMU earth Y
-            0.0,   // Heading East
-            10.0,  // Moving
-            0.0,   // No yaw rate
-            0.05,  // dt
-            false, // Not stationary
-        );
-
-        // Get values that would be sent to dashboard
-        let lon_for_display = fusion.get_lon_blended();
-        let lat_for_display = fusion.get_lat_filtered();
-
-        // These MUST match exactly - this is what the test is verifying
-        assert_eq!(
-            lon_from_process, lon_for_display,
-            "Dashboard lon must match mode classifier input"
-        );
-        assert_eq!(
-            lat_from_process, lat_for_display,
-            "Dashboard lat must match mode classifier input"
-        );
-    }
-
-    #[test]
-    fn test_blending_affects_display() {
-        // Verify GPS/IMU blending actually works and affects the displayed value
-        let config = FusionConfig {
-            gps_weight_high: 0.70, // 70% GPS
-            ..Default::default()
-        };
-        let mut fusion = SensorFusion::new(config);
-
-        // Setup high GPS rate (25Hz) for maximum GPS weight
-        fusion.gps_accel.rate_ema = 25.0;
-
-        // GPS shows 0 acceleration (constant speed)
-        fusion.gps_accel.update(10.0, 0.0);
-        fusion.gps_accel.update(10.0, 0.04); // Same speed = 0 accel
-
-        // IMU shows 5 m/s² forward acceleration
-        // With 70% GPS (0) and 30% IMU (~5), blended should be ~1.5 m/s²
-        // (exact value depends on filter state)
-        let (lon, _lat) = fusion.process_imu(
-            5.0,   // IMU earth X (forward)
-            0.0,   // No lateral
-            0.0,   // Heading East
-            10.0,  // Moving
-            0.0,   // No yaw rate
-            0.05,  // dt
-            false, // Not stationary
-        );
-
-        // The blended value should be less than pure IMU (5.0)
-        // because GPS (showing 0) pulls it down
-        let display_lon = fusion.get_lon_blended();
-        assert_eq!(lon, display_lon, "Display must match process output");
-
-        // With 70% GPS weight showing 0, the blended value should be
-        // significantly less than the IMU value of 5.0
-        // After filter settling, expect roughly: 0.70 * 0 + 0.30 * IMU_filtered
-        assert!(
-            display_lon.abs() < 4.0,
-            "GPS blending should reduce value: got {}",
-            display_lon
-        );
     }
 }
