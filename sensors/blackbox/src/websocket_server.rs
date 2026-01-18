@@ -680,6 +680,25 @@ h1{font-size:14px;margin-bottom:16px;color:var(--cyan);letter-spacing:4px;text-t
 <div class="row"><span class="label">TX Failed</span><span class="value" id="tx-fail">--</span></div>
 </div>
 </div>
+<div class="section">
+<h2>Sensor Fusion</h2>
+<div class="grid">
+<div>
+<div class="row"><span class="label">Lon Raw</span><span class="value" id="lon-raw">--</span></div>
+<div class="row"><span class="label">Lon Filtered</span><span class="value" id="lon-filt">--</span></div>
+<div class="row"><span class="label">Lon Blended</span><span class="value" id="lon-blend">--</span></div>
+<div class="row"><span class="label">GPS Weight</span><span class="value" id="gps-wt">--</span></div>
+<div class="row"><span class="label">GPS Accel</span><span class="value" id="gps-acc">--</span></div>
+<div class="row"><span class="label">GPS Rejected</span><span class="value" id="gps-rej">--</span></div>
+</div>
+<div>
+<div class="row"><span class="label">Yaw Bias</span><span class="value" id="yaw-bias">--</span></div>
+<div class="row"><span class="label">Yaw Calibrated</span><span class="value" id="yaw-cal">--</span></div>
+<div class="row"><span class="label">Tilt X/Y</span><span class="value" id="tilt-xy">--</span></div>
+<div class="row"><span class="label">Tilt Valid</span><span class="value" id="tilt-v">--</span></div>
+</div>
+</div>
+</div>
 <div class="uptime" id="uptime">Uptime: --</div>
 <script>
 const $=id=>document.getElementById(id);
@@ -729,6 +748,28 @@ async function update(){
     const s=d.system.uptime_s;
     const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;
     $('uptime').textContent='Uptime: '+h+'h '+m+'m '+sec+'s';
+    // Fusion diagnostics
+    if(d.fusion){
+      $('lon-raw').textContent=d.fusion.lon_raw.toFixed(3)+' m/s2';
+      $('lon-filt').textContent=d.fusion.lon_filtered.toFixed(3)+' m/s2';
+      $('lon-blend').textContent=d.fusion.lon_blended.toFixed(3)+' m/s2';
+      const wt=$('gps-wt');
+      wt.textContent=(d.fusion.gps_weight*100).toFixed(0)+'%';
+      wt.className='value '+(d.fusion.gps_weight>0?'ok':'warn');
+      const ga=$('gps-acc');
+      ga.textContent=isNaN(d.fusion.gps_accel)?'N/A':d.fusion.gps_accel.toFixed(3)+' m/s2';
+      const rej=$('gps-rej');
+      rej.textContent=d.fusion.gps_rejected?'YES':'No';
+      rej.className='value '+(d.fusion.gps_rejected?'warn':'ok');
+      $('yaw-bias').textContent=(d.fusion.yaw_bias*1000).toFixed(2)+' mrad/s';
+      const yc=$('yaw-cal');
+      yc.textContent=d.fusion.yaw_calibrated?'Yes':'No';
+      yc.className='value '+(d.fusion.yaw_calibrated?'ok':'warn');
+      $('tilt-xy').textContent=d.fusion.tilt_x.toFixed(3)+' / '+d.fusion.tilt_y.toFixed(3);
+      const tv=$('tilt-v');
+      tv.textContent=d.fusion.tilt_valid?'Yes':'No';
+      tv.className='value '+(d.fusion.tilt_valid?'ok':'warn');
+    }
   }catch(e){console.log('Diag fetch error:',e)}
 }
 setInterval(update,1000);
@@ -952,7 +993,8 @@ impl TelemetryServer {
                             r#""system":{{"heap_free":{},"uptime_s":{},"tx_ok":{},"tx_fail":{}}},"#,
                             r#""gps":{{"model":"{}","rate_hz":{},"fix":{},"warmup":{},"satellites":{},"hdop":{:.1}}},"#,
                             r#""wifi":{{"mode":"{}","ssid":"{}"}},"#,
-                            r#""config":{{"telemetry_hz":{},"gps_model":"{}","warmup_fixes":{}}}}}"#
+                            r#""config":{{"telemetry_hz":{},"gps_model":"{}","warmup_fixes":{}}},"#,
+                            r#""fusion":{{"lon_raw":{:.3},"lon_filtered":{:.3},"lon_blended":{:.3},"gps_weight":{:.2},"gps_accel":{:.3},"gps_rate":{:.1},"gps_rejected":{},"yaw_bias":{:.4},"yaw_calibrated":{},"tilt_x":{:.3},"tilt_y":{:.3},"tilt_valid":{}}}}}"#
                         ),
                         d.sensor_rates.imu_hz, d.sensor_rates.gps_hz, d.sensor_rates.loop_hz,
                         d.sensor_rates.imu_expected_hz, d.sensor_rates.gps_expected_hz,
@@ -965,7 +1007,12 @@ impl TelemetryServer {
                         d.gps_health.fix_valid, d.gps_health.warmup_complete,
                         d.gps_health.satellites, d.gps_health.hdop,
                         d.wifi_status.mode, d.wifi_status.ssid,
-                        d.config.telemetry_rate_hz, d.config.gps_model, d.config.gps_warmup_fixes
+                        d.config.telemetry_rate_hz, d.config.gps_model, d.config.gps_warmup_fixes,
+                        // Fusion diagnostics
+                        d.fusion.lon_imu_raw, d.fusion.lon_imu_filtered, d.fusion.lon_blended,
+                        d.fusion.gps_weight, d.fusion.gps_accel, d.fusion.gps_rate, d.fusion.gps_rejected,
+                        d.fusion.yaw_bias, d.fusion.yaw_calibrated,
+                        d.fusion.tilt_offset_x, d.fusion.tilt_offset_y, d.fusion.tilt_valid
                     )
                 } else {
                     r#"{"error":"diagnostics not available"}"#.to_string()

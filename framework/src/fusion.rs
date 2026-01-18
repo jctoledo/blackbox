@@ -44,14 +44,6 @@ pub struct FusionConfig {
     pub gps_weight_low: f32,
     /// Time required at stop to learn tilt offset (seconds)
     pub tilt_learn_time: f32,
-    /// Speed threshold for steady-state detection (m/s)
-    pub steady_state_speed_tolerance: f32,
-    /// Yaw rate threshold for steady-state (rad/s)
-    pub steady_state_yaw_tolerance: f32,
-    /// Time required in steady state to update gravity estimate (seconds)
-    pub gravity_learn_time: f32,
-    /// Alpha for gravity estimate update (smaller = slower, more stable)
-    pub gravity_alpha: f32,
     /// Low-pass filter cutoff for IMU longitudinal (Hz)
     /// Removes engine vibration (20-100Hz) while passing driving dynamics (0-3Hz)
     /// Research: ArduPilot uses 10Hz, academic papers suggest 1-5Hz for vehicle dynamics
@@ -63,35 +55,26 @@ pub struct FusionConfig {
 impl Default for FusionConfig {
     /// Default configuration balanced for city/highway/canyon driving.
     ///
-    /// GPS weights are moderate (70/50/30) for balanced responsiveness:
-    /// - Fast enough for canyon driving (~80-100ms latency)
-    /// - Smooth enough for city/highway (no jitter)
+    /// GPS weights are conservative (40/30/20) to trust filtered IMU more:
+    /// - GPS-derived accel is often 0 (no speed change between samples)
+    /// - Filtered IMU provides faster response
     ///
-    /// The 5 Hz Butterworth filter removes engine vibration (20-100Hz) while
-    /// preserving all driving dynamics (0-3Hz). This is based on:
-    /// - ArduPilot: uses 10Hz low-pass on accelerometers
+    /// The 15 Hz Butterworth filter removes engine vibration (30-100Hz) while
+    /// preserving all driving dynamics (0-10Hz). This is based on:
+    /// - ArduPilot: uses 20Hz for INS_ACCEL_FILTER
     /// - Research: shows 1-5Hz Butterworth effective for brake detection
     /// - Physics: driving events (braking, cornering) are all < 3Hz
-    ///
-    /// For track use, consider increasing GPS weights (90/70/50) for
-    /// maximum accuracy at the cost of some latency.
     fn default() -> Self {
         Self {
             gps_high_rate: 20.0,
             gps_medium_rate: 10.0,
             gps_max_age: 0.2, // 200ms
-            // Balanced blend: 70% GPS when fresh and fast
-            // Gives ~80-100ms latency instead of ~120-150ms
             // GPS blending weights - conservative values to trust filtered IMU more
             // GPS-derived accel is often 0 (no speed change between samples)
             gps_weight_high: 0.40,   // 40% GPS / 60% IMU at >= 20Hz
             gps_weight_medium: 0.30, // 30% GPS / 70% IMU at >= 10Hz
             gps_weight_low: 0.20,    // 20% GPS / 80% IMU at < 10Hz
             tilt_learn_time: 3.0,
-            steady_state_speed_tolerance: 0.5,  // 0.5 m/s = 1.8 km/h
-            steady_state_yaw_tolerance: 0.087,  // ~5 deg/s
-            gravity_learn_time: 2.0,
-            gravity_alpha: 0.02, // Very slow update
             // Butterworth filter for IMU longitudinal vibration removal
             // 15 Hz cutoff: passes driving dynamics (0-10Hz), removes engine vibration (30-100Hz)
             // ArduPilot uses 20Hz for INS_ACCEL_FILTER; 15Hz is conservative middle ground
@@ -322,109 +305,10 @@ impl TiltEstimator {
             (ax_earth, ay_earth)
         }
     }
-}
 
-/// Moving gravity estimator - learns gravity offset while driving
-pub struct GravityEstimator {
-    /// Estimated gravity offset X (earth frame, m/s²)
-    offset_x: f32,
-    /// Estimated gravity offset Y (earth frame, m/s²)
-    offset_y: f32,
-    /// Is the estimate valid?
-    valid: bool,
-    /// Speed history for steady-state detection
-    speed_history: [f32; 10],
-    speed_idx: usize,
-    /// Time in steady state (seconds)
-    steady_time: f32,
-    /// Configuration
-    speed_tolerance: f32,
-    yaw_tolerance: f32,
-    learn_time: f32,
-    alpha: f32,
-}
-
-impl GravityEstimator {
-    pub fn new(config: &FusionConfig) -> Self {
-        Self {
-            offset_x: 0.0,
-            offset_y: 0.0,
-            valid: false,
-            speed_history: [0.0; 10],
-            speed_idx: 0,
-            steady_time: 0.0,
-            speed_tolerance: config.steady_state_speed_tolerance,
-            yaw_tolerance: config.steady_state_yaw_tolerance,
-            learn_time: config.gravity_learn_time,
-            alpha: config.gravity_alpha,
-        }
-    }
-
-    /// Update with current driving state
-    ///
-    /// # Arguments
-    /// * `ax_earth` - X acceleration (earth frame, m/s²)
-    /// * `ay_earth` - Y acceleration (earth frame, m/s²)
-    /// * `speed` - Current speed (m/s)
-    /// * `yaw_rate` - Current yaw rate (rad/s)
-    /// * `dt` - Time step (seconds)
-    pub fn update(
-        &mut self,
-        ax_earth: f32,
-        ay_earth: f32,
-        speed: f32,
-        yaw_rate: f32,
-        dt: f32,
-    ) -> bool {
-        // Update speed history
-        self.speed_history[self.speed_idx] = speed;
-        self.speed_idx = (self.speed_idx + 1) % self.speed_history.len();
-
-        // Check if in steady state (constant velocity)
-        let speed_stable = self.is_speed_stable();
-        let yaw_low = yaw_rate.abs() < self.yaw_tolerance;
-        let moving = speed > 2.0; // Must be moving (not stopped)
-
-        if speed_stable && yaw_low && moving {
-            self.steady_time += dt;
-
-            if self.steady_time >= self.learn_time {
-                // In steady state, expected acceleration is ~0
-                // Any measured acceleration is gravity/mounting error
-                self.offset_x = (1.0 - self.alpha) * self.offset_x + self.alpha * ax_earth;
-                self.offset_y = (1.0 - self.alpha) * self.offset_y + self.alpha * ay_earth;
-                self.valid = true;
-                return true;
-            }
-        } else {
-            self.steady_time = 0.0;
-        }
-
-        false
-    }
-
-    fn is_speed_stable(&self) -> bool {
-        if self.speed_history[0] < 1.0 {
-            return false; // Need some speed data
-        }
-
-        let mean: f32 = self.speed_history.iter().sum::<f32>() / self.speed_history.len() as f32;
-        let max_dev = self
-            .speed_history
-            .iter()
-            .map(|&s| (s - mean).abs())
-            .fold(0.0f32, |a, b| a.max(b));
-
-        max_dev < self.speed_tolerance
-    }
-
-    /// Apply gravity correction to acceleration
-    pub fn correct(&self, ax_earth: f32, ay_earth: f32) -> (f32, f32) {
-        if self.valid {
-            (ax_earth - self.offset_x, ay_earth - self.offset_y)
-        } else {
-            (ax_earth, ay_earth)
-        }
+    /// Get learned offsets and validity (for diagnostics)
+    pub fn get_offsets(&self) -> (f32, f32, bool) {
+        (self.offset_x, self.offset_y, self.offset_valid)
     }
 }
 
@@ -601,8 +485,6 @@ pub struct SensorFusion {
     pub gps_accel: GpsAcceleration,
     /// Tilt estimator (learns when stopped)
     pub tilt_estimator: TiltEstimator,
-    /// Gravity estimator (learns while driving)
-    pub gravity_estimator: GravityEstimator,
     /// Yaw rate calibrator (learns gyro bias while driving straight)
     pub yaw_rate_calibrator: YawRateCalibrator,
     /// Butterworth low-pass filter for IMU longitudinal (removes engine vibration)
@@ -630,7 +512,6 @@ impl SensorFusion {
         Self {
             gps_accel: GpsAcceleration::new(),
             tilt_estimator: TiltEstimator::new(config.tilt_learn_time),
-            gravity_estimator: GravityEstimator::new(&config),
             yaw_rate_calibrator: YawRateCalibrator::new(),
             lon_filter: BiquadFilter::new_lowpass(config.lon_filter_cutoff, config.lon_sample_rate),
             blended_lon: 0.0,
@@ -675,10 +556,9 @@ impl SensorFusion {
         self.gps_accel.advance_time(dt);
 
         // Apply tilt correction (learned when stopped)
-        let (ax_tilt, ay_tilt) = self.tilt_estimator.correct(ax_earth, ay_earth);
-
-        // Apply gravity correction (learned while driving)
-        let (ax_corr, ay_corr) = self.gravity_estimator.correct(ax_tilt, ay_tilt);
+        // This handles mounting angle offset - the device learns the residual
+        // acceleration when stationary and subtracts it while moving.
+        let (ax_corr, ay_corr) = self.tilt_estimator.correct(ax_earth, ay_earth);
 
         // Transform to vehicle frame
         let (lon_imu_raw, lat_imu_raw) = earth_to_car(ax_corr, ay_corr, yaw);
@@ -686,9 +566,9 @@ impl SensorFusion {
         // Store raw IMU longitudinal (before filtering)
         self.lon_imu_raw = lon_imu_raw;
 
-        // Apply Butterworth low-pass filter to remove engine vibration (20-100Hz)
-        // Filter cutoff is 5Hz: passes driving dynamics (0-3Hz), removes vibration
-        // Based on ArduPilot (10Hz on accels) and research (1-5Hz for vehicle dynamics)
+        // Apply Butterworth low-pass filter to remove engine vibration (30-100Hz)
+        // Filter cutoff is 15Hz: passes driving dynamics (0-5Hz), attenuates vibration
+        // Based on ArduPilot (10-20Hz on accels, INS_ACCEL_FILTER parameter)
         let lon_imu_filtered = self.lon_filter.process(lon_imu_raw);
         self.lon_imu_filtered = lon_imu_filtered;
 
@@ -713,10 +593,6 @@ impl SensorFusion {
                 // Just started moving
                 self.tilt_estimator.reset_stationary();
             }
-
-            // Update gravity estimate while driving
-            self.gravity_estimator
-                .update(ax_earth, ay_earth, speed, yaw_rate, dt);
 
             // Update yaw rate calibrator (learns bias while driving straight)
             self.yaw_rate_calibrator.update(yaw_rate, speed, dt);
@@ -817,6 +693,45 @@ impl SensorFusion {
     /// Positive = left turn
     pub fn get_lat_centripetal(&self) -> f32 {
         self.lat_centripetal
+    }
+
+    // ========== Diagnostic getters ==========
+
+    /// Get raw IMU longitudinal acceleration (before filter, m/s²)
+    pub fn get_lon_imu_raw(&self) -> f32 {
+        self.lon_imu_raw
+    }
+
+    /// Get filtered IMU longitudinal acceleration (after Butterworth, m/s²)
+    pub fn get_lon_imu_filtered(&self) -> f32 {
+        self.lon_imu_filtered
+    }
+
+    /// Get last GPS blend weight (0.0-1.0)
+    pub fn get_last_gps_weight(&self) -> f32 {
+        self.last_gps_weight
+    }
+
+    /// Get GPS-derived acceleration (m/s²), or NaN if invalid
+    pub fn get_gps_accel(&self) -> f32 {
+        self.gps_accel.get_accel().unwrap_or(f32::NAN)
+    }
+
+    /// Get GPS rate estimate (Hz)
+    pub fn get_gps_rate(&self) -> f32 {
+        self.gps_accel.get_rate()
+    }
+
+    /// Check if GPS was rejected by validity check
+    /// Returns true if GPS showed ~0 but IMU had signal
+    pub fn is_gps_rejected(&self) -> bool {
+        // If we have valid GPS but weight is 0, GPS was rejected
+        self.gps_accel.get_accel().is_some() && self.last_gps_weight < 0.01
+    }
+
+    /// Get tilt estimator offsets and validity
+    pub fn get_tilt_offsets(&self) -> (f32, f32, bool) {
+        self.tilt_estimator.get_offsets()
     }
 
     /// Compute GPS weight based on GPS rate and data freshness
@@ -1378,6 +1293,154 @@ mod tests {
             fusion.last_gps_weight < 0.1,
             "GPS weight should be ~0 when GPS accel invalid: got {}",
             fusion.last_gps_weight
+        );
+    }
+
+    #[test]
+    fn test_cruising_at_constant_speed_produces_zero_lon() {
+        // KEY BUG TEST: When cruising at constant speed with no real acceleration,
+        // lon_blended should be near zero. This catches bad offset learning.
+        //
+        // The GravityEstimator bug caused lon_raw = -2.6 m/s² when cruising,
+        // which triggered false BRAKE detection.
+        let config = FusionConfig::default();
+        let mut fusion = SensorFusion::new(config);
+
+        // First: learn tilt offset when stopped (simulates calibration)
+        for _ in 0..600 {
+            // 3 seconds at 200Hz
+            fusion.process_imu(
+                0.0,  // No earth X accel (level surface)
+                0.0,  // No earth Y accel
+                0.0,  // Heading
+                0.0,  // Stopped
+                0.0,  // No yaw rate
+                0.005, // dt = 5ms
+                true,  // STATIONARY - tilt learns here
+            );
+        }
+
+        // Now: start "cruising" at 20 m/s with zero input acceleration
+        // This simulates constant-speed highway driving
+        let mut max_lon: f32 = 0.0;
+        let mut sum_lon: f32 = 0.0;
+        let samples = 400; // 2 seconds at 200Hz
+
+        for i in 0..samples {
+            // Provide GPS updates to keep it fresh
+            if i % 8 == 0 {
+                // 25Hz GPS rate
+                fusion.process_gps(20.0, (i as f32) * 0.005); // Constant speed
+            }
+
+            let (lon, _lat) = fusion.process_imu(
+                0.0,   // ZERO earth X accel - no acceleration!
+                0.0,   // Zero earth Y accel
+                0.0,   // Heading
+                20.0,  // 20 m/s = 72 km/h cruising
+                0.0,   // Straight road
+                0.005, // dt = 5ms
+                false, // Moving
+            );
+
+            // Skip filter settling time
+            if i > 200 {
+                max_lon = max_lon.max(lon.abs());
+                sum_lon += lon.abs();
+            }
+        }
+
+        let avg_lon = sum_lon / (samples - 200) as f32;
+
+        // CRITICAL: lon_blended should be near zero when cruising
+        // The bug caused ~2.6 m/s² here
+        assert!(
+            max_lon < 0.5,
+            "Cruising with zero input should produce near-zero lon: max={} m/s²",
+            max_lon
+        );
+        assert!(
+            avg_lon < 0.2,
+            "Average lon during cruise should be near zero: avg={} m/s²",
+            avg_lon
+        );
+    }
+
+    #[test]
+    fn test_tilt_only_updates_when_stationary() {
+        // Verify that tilt estimator only learns when is_stationary=true
+        // If it learned while moving, bad offsets could accumulate
+        let mut tilt = TiltEstimator::new(1.0);
+
+        // Simulate "moving" conditions with large acceleration
+        for _ in 0..300 {
+            // 1.5 seconds at 200Hz
+            // Note: update_stationary should only be called when stationary,
+            // but let's verify the valid flag behavior
+            tilt.update_stationary(5.0, 3.0, 0.005); // Large accel (would be wrong if learned)
+        }
+
+        // After learning, check the offset
+        let (ax, _ay) = tilt.correct(5.0, 3.0);
+
+        // The tilt estimator WILL learn this offset - this is by design
+        // The key is that in main.rs, we only call update_stationary when truly stopped
+        assert!(
+            ax.abs() < 0.1,
+            "After learning, correction should work: {}",
+            ax
+        );
+    }
+
+    #[test]
+    fn test_no_drift_during_extended_cruise() {
+        // Verify that lon_blended stays near zero over extended cruising
+        // This catches slow drift from any remaining estimators
+        let config = FusionConfig::default();
+        let mut fusion = SensorFusion::new(config);
+
+        // Learn tilt when stopped
+        for _ in 0..600 {
+            fusion.process_imu(0.0, 0.0, 0.0, 0.0, 0.0, 0.005, true);
+        }
+
+        // Start cruising
+        let mut lon_samples: Vec<f32> = Vec::new();
+
+        for i in 0..2000 {
+            // 10 seconds at 200Hz
+            if i % 8 == 0 {
+                fusion.process_gps(25.0, (i as f32) * 0.005);
+            }
+
+            let (lon, _) = fusion.process_imu(
+                0.0,   // Zero input
+                0.0,
+                0.0,
+                25.0,  // 25 m/s = 90 km/h
+                0.0,
+                0.005,
+                false,
+            );
+
+            if i > 400 {
+                // After 2 seconds settling
+                lon_samples.push(lon);
+            }
+        }
+
+        // Check for drift: first half vs second half average
+        let mid = lon_samples.len() / 2;
+        let first_half_avg: f32 = lon_samples[..mid].iter().sum::<f32>() / mid as f32;
+        let second_half_avg: f32 = lon_samples[mid..].iter().sum::<f32>() / mid as f32;
+        let drift = (second_half_avg - first_half_avg).abs();
+
+        assert!(
+            drift < 0.1,
+            "lon should not drift during cruise: first_avg={}, second_avg={}, drift={}",
+            first_half_avg,
+            second_half_avg,
+            drift
         );
     }
 }

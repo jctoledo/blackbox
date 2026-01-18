@@ -145,8 +145,7 @@ pub use mode::{Mode, ModeClassifier, ModeConfig, DEFAULT_MODE_ALPHA};
 
 // Re-export sensor fusion types
 pub use fusion::{
-    FusionConfig, GpsAcceleration, GravityEstimator, SensorFusion, TiltEstimator,
-    YawRateCalibrator,
+    FusionConfig, GpsAcceleration, SensorFusion, TiltEstimator, YawRateCalibrator,
 };
 
 // Re-export commonly used types from sensor_framework

@@ -17,7 +17,7 @@ mod wifi;
 use std::sync::Arc;
 
 use config::{SystemConfig, WifiModeConfig};
-use diagnostics::DiagnosticsState;
+use diagnostics::{DiagnosticsState, FusionDiagnostics};
 use fusion::{FusionConfig, SensorFusion};
 use esp_idf_hal::{
     delay::FreeRtos,
@@ -450,9 +450,8 @@ fn main() {
     //
     // This provides:
     // 1. Tilt correction - learns mounting offset when stopped (3s)
-    // 2. Gravity correction - learns while driving at steady speed
-    // 3. GPS/IMU blending - 70% GPS at 25Hz for smooth, drift-free longitudinal
-    // 4. Centripetal lateral - speed × yaw_rate for instant corner detection
+    // 2. GPS/IMU blending - 40% GPS at 25Hz for smooth, drift-free longitudinal
+    // 3. Centripetal lateral - speed × yaw_rate for instant corner detection
     //
     // Latency: ~100-150ms for ACCEL/BRAKE (GPS blend + EMA)
     //          ~0ms for CORNER (centripetal is instant)
@@ -467,10 +466,6 @@ fn main() {
         gps_weight_medium: 0.30, // 30% GPS / 70% IMU at 10-20Hz
         gps_weight_low: 0.20,    // 20% GPS / 80% IMU fallback
         tilt_learn_time: 3.0,
-        gravity_learn_time: 2.0,
-        steady_state_speed_tolerance: 0.5,
-        steady_state_yaw_tolerance: 0.087,
-        gravity_alpha: 0.02,
         // Butterworth filter for vibration removal (ArduPilot uses 20Hz, we use 15Hz)
         // 15Hz preserves driving dynamics (0-10Hz), removes engine vibration (30-100Hz)
         lon_filter_cutoff: 15.0,
@@ -582,6 +577,23 @@ fn main() {
                 gps_fix.hdop,
                 gps_fix.pdop,
             );
+
+            // Fusion diagnostics (filter pipeline, GPS blending, calibrators)
+            let (tilt_x, tilt_y, tilt_valid) = sensor_fusion.get_tilt_offsets();
+            diagnostics.update_fusion(FusionDiagnostics {
+                lon_imu_raw: sensor_fusion.get_lon_imu_raw(),
+                lon_imu_filtered: sensor_fusion.get_lon_imu_filtered(),
+                lon_blended: sensor_fusion.get_lon_blended(),
+                gps_weight: sensor_fusion.get_last_gps_weight(),
+                gps_accel: sensor_fusion.get_gps_accel(),
+                gps_rate: sensor_fusion.get_gps_rate(),
+                gps_rejected: sensor_fusion.is_gps_rejected(),
+                yaw_bias: sensor_fusion.yaw_rate_calibrator.get_bias(),
+                yaw_calibrated: sensor_fusion.yaw_rate_calibrator.is_valid(),
+                tilt_offset_x: tilt_x,
+                tilt_offset_y: tilt_y,
+                tilt_valid,
+            });
 
             publisher.reset_stats();
             loop_count = 0;

@@ -614,21 +614,14 @@ Handles GPS/IMU blending, tilt correction, and continuous calibration.
    - Applies correction to all future readings
    - Relearns at every stop (adapts to device repositioning)
 
-3. **GravityEstimator** - Learns gravity offset while driving
-   - Detects "steady state": constant speed (±0.5 m/s), low yaw (±5°/s)
-   - During steady state, expected acceleration ≈ 0
-   - Slowly updates gravity estimate (α=0.02, ~50 second convergence)
-   - Essential for track/canyon driving where stops are rare
-
-4. **YawRateCalibrator** - Learns gyro bias while driving straight
+3. **YawRateCalibrator** - Learns gyro bias while driving straight
    - When GPS heading is stable (±0.5°/s for 2+ seconds), assumes true yaw rate ≈ 0
    - Any measured yaw rate during this time is gyro bias
    - Applies correction to prevent lateral drift in centripetal calculation
    - Essential for highway driving where ZUPT rarely triggers
 
-5. **SensorFusion** - Main processor
-   - Applies tilt correction
-   - Applies gravity correction
+4. **SensorFusion** - Main processor
+   - Applies tilt correction (learned when stopped)
    - **15 Hz Butterworth low-pass filter** removes engine vibration (see filter.rs)
    - Blends GPS and IMU for longitudinal acceleration
    - Computes centripetal lateral (speed × calibrated_yaw_rate)
