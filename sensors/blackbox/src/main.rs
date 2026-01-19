@@ -28,7 +28,7 @@ use esp_idf_svc::{eventloop::EspSystemEventLoop, nvs::EspDefaultNvsPartition};
 use log::info;
 use mqtt::MqttClient;
 use rgb_led::RgbLed;
-use sensor_fusion::transforms::{body_to_earth, remove_gravity};
+use sensor_fusion::transforms::{body_to_earth, remove_gravity}; // Used for EKF prediction
 use system::{SensorManager, StateEstimator, StatusManager, TelemetryPublisher};
 use udp_stream::UdpTelemetryStream;
 use websocket_server::{TelemetryServer, TelemetryServerState};
@@ -446,30 +446,29 @@ fn main() {
     let mut estimator = StateEstimator::new();
     let mut publisher = TelemetryPublisher::new(udp_stream, mqtt_opt, telemetry_state.clone());
 
-    // Create sensor fusion for hybrid acceleration (GPS + IMU blending)
+    // Create sensor fusion for mode detection
     //
-    // This provides:
-    // 1. Tilt correction - learns mounting offset when stopped (3s)
-    // 2. GPS/IMU blending - 40% GPS at 25Hz for smooth, drift-free longitudinal
-    // 3. Centripetal lateral - speed × yaw_rate for instant corner detection
+    // Uses GPS-corrected orientation (ArduPilot-style approach):
+    // - OrientationCorrector learns pitch/roll errors from GPS velocity comparison
+    // - IMU orientation is corrected BEFORE gravity removal
+    // - Enables accurate 200 Hz IMU data instead of being limited to GPS rate
     //
-    // Latency: ~100-150ms for ACCEL/BRAKE (GPS blend + EMA)
-    //          ~0ms for CORNER (centripetal is instant)
-    // Good for: city, highway, canyon. For track, increase GPS weights.
+    // For longitudinal: Blends corrected IMU with GPS based on correction confidence
+    // - High confidence → trust IMU more (fast 200 Hz response)
+    // - Low confidence → rely on GPS (ground truth but slower)
+    //
+    // For lateral: centripetal (speed × yaw_rate) - mount-independent, instant
     let fusion_config = FusionConfig {
         gps_high_rate: 20.0,
         gps_medium_rate: 10.0,
-        gps_max_age: 0.2,
-        // Conservative GPS weights - GPS-derived accel often 0 (no speed change between samples)
-        // Trust filtered IMU more for responsive G readings
-        gps_weight_high: 0.40,   // 40% GPS / 60% IMU at 25Hz
-        gps_weight_medium: 0.30, // 30% GPS / 70% IMU at 10-20Hz
-        gps_weight_low: 0.20,    // 20% GPS / 80% IMU fallback
+        gps_max_age: 0.2, // GPS older than 200ms is stale → fall back to IMU
+        // GPS weights based on orientation correction confidence:
+        gps_weight_high: 0.3,   // 30% GPS when correction is very confident
+        gps_weight_medium: 0.6, // 60% GPS when moderately confident
+        gps_weight_low: 1.0,    // 100% GPS when not confident (no correction yet)
         tilt_learn_time: 3.0,
-        // Butterworth filter for vibration removal (ArduPilot uses 20Hz, we use 15Hz)
-        // 15Hz preserves driving dynamics (0-10Hz), removes engine vibration (30-100Hz)
-        lon_filter_cutoff: 15.0,
-        // CRITICAL: Must be IMU rate (200Hz), NOT telemetry rate!
+        // Butterworth filter to remove engine vibration from IMU
+        lon_filter_cutoff: 10.0,
         lon_sample_rate: 200.0,
     };
     let mut sensor_fusion = SensorFusion::new(fusion_config);
@@ -580,6 +579,8 @@ fn main() {
 
             // Fusion diagnostics (filter pipeline, GPS blending, calibrators)
             let (tilt_x, tilt_y, tilt_valid) = sensor_fusion.get_tilt_offsets();
+            let (pitch_corr, roll_corr) = sensor_fusion.get_orientation_correction();
+            let (pitch_conf, roll_conf) = sensor_fusion.get_orientation_confidence();
             diagnostics.update_fusion(FusionDiagnostics {
                 lon_imu_raw: sensor_fusion.get_lon_imu_raw(),
                 lon_imu_filtered: sensor_fusion.get_lon_imu_filtered(),
@@ -588,6 +589,10 @@ fn main() {
                 gps_accel: sensor_fusion.get_gps_accel(),
                 gps_rate: sensor_fusion.get_gps_rate(),
                 gps_rejected: sensor_fusion.is_gps_rejected(),
+                pitch_correction_deg: pitch_corr,
+                roll_correction_deg: roll_corr,
+                pitch_confidence: pitch_conf,
+                roll_confidence: roll_conf,
                 yaw_bias: sensor_fusion.yaw_rate_calibrator.get_bias(),
                 yaw_calibrated: sensor_fusion.yaw_rate_calibrator.is_valid(),
                 tilt_offset_x: tilt_x,
@@ -798,33 +803,20 @@ fn main() {
         if now_ms - last_telemetry_ms >= config.telemetry.interval_ms {
             // Get current speed and check if stationary
             let speed = sensors.get_speed(Some(&estimator.ekf));
-            let (ax_corr, ay_corr, _) = sensors.imu_parser.get_accel_corrected();
+            let (ax_corr, ay_corr, az_corr) = sensors.imu_parser.get_accel_corrected();
             let is_stationary =
                 sensors.is_stationary(ax_corr, ay_corr, sensors.imu_parser.data().wz);
 
-            // Transform IMU to earth frame for sensor fusion
-            let (ax_b, ay_b, _) = remove_gravity(
-                ax_corr,
-                ay_corr,
-                sensors.imu_parser.data().az,
-                sensors.imu_parser.data().roll,
-                sensors.imu_parser.data().pitch,
-            );
-            let (ax_e, ay_e) = body_to_earth(
-                ax_b,
-                ay_b,
-                0.0,
-                sensors.imu_parser.data().roll,
-                sensors.imu_parser.data().pitch,
-                estimator.ekf.yaw(),
-            );
-
-            // Process through sensor fusion (GPS/IMU blending, filtering, tilt correction)
+            // Process through sensor fusion (GPS-corrected orientation + blending)
+            // Pass raw body-frame IMU data - fusion handles transforms with corrected orientation
             let dt = config.telemetry.interval_ms as f32 / 1000.0;
             let (lon_blended, lat_filtered) = sensor_fusion.process_imu(
-                ax_e,
-                ay_e,
-                estimator.ekf.yaw(),
+                ax_corr,                           // Raw body-frame X accel (bias-corrected)
+                ay_corr,                           // Raw body-frame Y accel (bias-corrected)
+                az_corr,                           // Raw body-frame Z accel (gravity)
+                sensors.imu_parser.data().roll,    // AHRS roll (degrees)
+                sensors.imu_parser.data().pitch,   // AHRS pitch (degrees)
+                estimator.ekf.yaw(),               // EKF yaw (radians)
                 speed,
                 sensors.imu_parser.data().wz,
                 dt,

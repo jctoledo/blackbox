@@ -100,13 +100,13 @@ pub struct FusionDiagnostics {
     // Filter pipeline (all in m/s²)
     /// Raw IMU longitudinal acceleration (before Butterworth filter)
     pub lon_imu_raw: f32,
-    /// Filtered IMU longitudinal (after 15Hz low-pass)
+    /// Filtered IMU longitudinal (after 10Hz low-pass)
     pub lon_imu_filtered: f32,
     /// Final blended longitudinal (GPS/IMU mix)
     pub lon_blended: f32,
 
     // GPS blending status
-    /// Current GPS blend weight (0.0-0.4 typically)
+    /// Current GPS blend weight (0.0-1.0, based on orientation correction confidence)
     pub gps_weight: f32,
     /// GPS-derived acceleration (m/s²), NaN if invalid
     pub gps_accel: f32,
@@ -114,6 +114,16 @@ pub struct FusionDiagnostics {
     pub gps_rate: f32,
     /// Was GPS rejected by validity check? (GPS=0 but IMU has signal)
     pub gps_rejected: bool,
+
+    // Orientation corrector (ArduPilot-style GPS-corrected orientation)
+    /// Learned pitch correction (degrees) - corrects AHRS errors during acceleration
+    pub pitch_correction_deg: f32,
+    /// Learned roll correction (degrees) - corrects AHRS errors during cornering
+    pub roll_correction_deg: f32,
+    /// Pitch correction confidence (0.0-1.0, based on learning samples)
+    pub pitch_confidence: f32,
+    /// Roll correction confidence (0.0-1.0)
+    pub roll_confidence: f32,
 
     // Yaw rate calibrator
     /// Learned gyro bias (rad/s)

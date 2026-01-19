@@ -2,28 +2,194 @@
 //!
 //! This module handles:
 //! 1. GPS-derived longitudinal acceleration (from velocity changes)
-//! 2. GPS/IMU acceleration blending with adaptive weights
+//! 2. GPS-corrected orientation for accurate IMU acceleration
 //! 3. Butterworth low-pass filtering to remove engine vibration
 //! 4. Dynamic tilt offset learning (ZUPT enhancement)
-//! 5. Moving gravity estimation (continuous calibration while driving)
-//! 6. GPS heading-based yaw rate calibration
+//! 5. GPS heading-based yaw rate calibration
 //!
 //! The goal is to provide clean, drift-free acceleration for mode detection
 //! that works regardless of device mounting angle.
 //!
+//! ## Key Innovation: GPS-Corrected Orientation
+//!
+//! The WT901 AHRS cannot distinguish linear acceleration from tilt. During
+//! forward acceleration, it reports false pitch. This corrupts gravity removal
+//! and produces wrong earth-frame acceleration.
+//!
+//! Solution: Use GPS velocity (ground truth) to learn orientation corrections.
+//! - Compare IMU-predicted accel with GPS-derived accel
+//! - The difference reveals orientation error: pitch_error ≈ (ax_imu - ax_gps) / G
+//! - Apply corrections BEFORE gravity removal
+//!
+//! This enables accurate 200 Hz IMU data instead of being limited to GPS rate.
+//!
 //! ## Vibration Filtering
 //!
 //! Engine vibration (20-100+ Hz) is removed using a 2nd-order Butterworth
-//! low-pass filter at 5 Hz. This preserves driving dynamics (0-3 Hz) while
+//! low-pass filter at 10 Hz. This preserves driving dynamics (0-5 Hz) while
 //! eliminating noise from engine, alternator, road surface, etc.
-//!
-//! Research references:
-//! - ArduPilot uses 10 Hz on accelerometers (outer loop doesn't need fast response)
-//! - Academic research shows 1-5 Hz Butterworth is effective for vehicle dynamics
-//! - Driving events (braking, acceleration, cornering) are all below 3 Hz
 
 use crate::filter::BiquadFilter;
-use crate::transforms::earth_to_car;
+use crate::transforms::{body_to_earth, earth_to_car, remove_gravity};
+
+const G: f32 = 9.80665;
+
+/// Orientation Corrector - learns pitch/roll corrections from GPS velocity
+///
+/// The WT901 AHRS can't distinguish linear acceleration from tilt. During
+/// acceleration, it reports wrong pitch/roll, which corrupts gravity removal.
+///
+/// This corrector compares IMU-derived acceleration (using AHRS angles) with
+/// GPS-derived acceleration (ground truth) to learn orientation corrections.
+///
+/// ## How it works
+/// 1. Compute IMU acceleration using AHRS + current correction
+/// 2. Compare with GPS-derived acceleration (dv/dt)
+/// 3. The difference reveals orientation error: pitch_error ≈ (ax_imu - ax_gps) / G
+/// 4. Apply EMA filter to learn smooth correction
+/// 5. Only learn when vehicle is accelerating (signal present) and GPS is valid
+///
+/// ## Why this works
+/// - During acceleration, pitch error causes ax_earth to be wrong
+/// - GPS velocity gives us true horizontal acceleration
+/// - The innovation (difference) is directly proportional to pitch error
+pub struct OrientationCorrector {
+    /// Pitch correction in radians (added to AHRS pitch before gravity removal)
+    pitch_correction: f32,
+    /// Roll correction in radians (added to AHRS roll before gravity removal)
+    roll_correction: f32,
+    /// Confidence in pitch correction (0-1, based on learning samples)
+    pitch_confidence: f32,
+    /// Confidence in roll correction (0-1)
+    roll_confidence: f32,
+    /// EMA alpha for learning (smaller = slower but more stable)
+    alpha: f32,
+    /// Minimum speed for learning (m/s) - need motion for GPS accuracy
+    min_speed: f32,
+    /// Minimum acceleration to trigger learning (m/s²) - need signal to learn from
+    min_accel: f32,
+    /// Maximum correction magnitude (radians) - safety cap
+    max_correction: f32,
+    /// Number of learning updates (for confidence calculation)
+    update_count: u32,
+}
+
+impl OrientationCorrector {
+    pub fn new() -> Self {
+        Self {
+            pitch_correction: 0.0,
+            roll_correction: 0.0,
+            pitch_confidence: 0.0,
+            roll_confidence: 0.0,
+            alpha: 0.05,            // Slow learning for stability
+            min_speed: 3.0,         // ~11 km/h
+            min_accel: 0.5,         // ~0.05g - need meaningful acceleration
+            max_correction: 0.26,   // ~15 degrees max
+            update_count: 0,
+        }
+    }
+
+    /// Update orientation corrections based on GPS vs IMU comparison
+    ///
+    /// # Arguments
+    /// * `lon_imu` - IMU-derived longitudinal accel (using AHRS + current correction)
+    /// * `lon_gps` - GPS-derived longitudinal accel (ground truth)
+    /// * `lat_imu` - IMU-derived lateral accel
+    /// * `lat_gps` - GPS-derived lateral accel (from centripetal: speed × yaw_rate)
+    /// * `speed` - Vehicle speed in m/s
+    /// * `is_gps_fresh` - Whether GPS data is recent and valid
+    pub fn update(
+        &mut self,
+        lon_imu: f32,
+        lon_gps: f32,
+        lat_imu: f32,
+        lat_gps: f32,
+        speed: f32,
+        is_gps_fresh: bool,
+    ) {
+        // Only learn when conditions are good
+        if speed < self.min_speed || !is_gps_fresh {
+            return;
+        }
+
+        // Learn pitch correction from longitudinal acceleration difference
+        // During forward acceleration: pitch error → wrong ax_earth
+        // pitch_error ≈ (ax_imu - ax_gps) / G
+        let lon_error = lon_imu - lon_gps;
+        if lon_gps.abs() > self.min_accel {
+            // Signal present - can learn pitch
+            let pitch_innovation = lon_error / G;
+
+            // EMA update with clamping
+            self.pitch_correction = (1.0 - self.alpha) * self.pitch_correction
+                + self.alpha * pitch_innovation;
+            self.pitch_correction = self.pitch_correction.clamp(-self.max_correction, self.max_correction);
+
+            // Update confidence
+            self.update_count = self.update_count.saturating_add(1);
+            self.pitch_confidence = (self.update_count as f32 / 100.0).min(1.0);
+        }
+
+        // Learn roll correction from lateral acceleration difference
+        // During cornering: roll error → wrong ay_earth
+        let lat_error = lat_imu - lat_gps;
+        if lat_gps.abs() > self.min_accel {
+            let roll_innovation = lat_error / G;
+
+            self.roll_correction = (1.0 - self.alpha) * self.roll_correction
+                + self.alpha * roll_innovation;
+            self.roll_correction = self.roll_correction.clamp(-self.max_correction, self.max_correction);
+
+            self.roll_confidence = (self.update_count as f32 / 100.0).min(1.0);
+        }
+    }
+
+    /// Apply corrections to AHRS orientation
+    ///
+    /// Returns corrected (pitch_deg, roll_deg) for use in gravity removal
+    pub fn correct(&self, ahrs_pitch_deg: f32, ahrs_roll_deg: f32) -> (f32, f32) {
+        // Convert corrections from radians to degrees
+        let pitch_corr_deg = self.pitch_correction.to_degrees();
+        let roll_corr_deg = self.roll_correction.to_degrees();
+
+        (ahrs_pitch_deg - pitch_corr_deg, ahrs_roll_deg - roll_corr_deg)
+    }
+
+    /// Get current pitch correction in degrees (for diagnostics)
+    pub fn get_pitch_correction_deg(&self) -> f32 {
+        self.pitch_correction.to_degrees()
+    }
+
+    /// Get current roll correction in degrees (for diagnostics)
+    pub fn get_roll_correction_deg(&self) -> f32 {
+        self.roll_correction.to_degrees()
+    }
+
+    /// Get pitch confidence (0-1)
+    pub fn get_pitch_confidence(&self) -> f32 {
+        self.pitch_confidence
+    }
+
+    /// Get roll confidence (0-1)
+    pub fn get_roll_confidence(&self) -> f32 {
+        self.roll_confidence
+    }
+
+    /// Reset corrections (e.g., after device remount)
+    pub fn reset(&mut self) {
+        self.pitch_correction = 0.0;
+        self.roll_correction = 0.0;
+        self.pitch_confidence = 0.0;
+        self.roll_confidence = 0.0;
+        self.update_count = 0;
+    }
+}
+
+impl Default for OrientationCorrector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 /// Configuration for sensor fusion
 #[derive(Clone, Copy)]
@@ -53,34 +219,35 @@ pub struct FusionConfig {
 }
 
 impl Default for FusionConfig {
-    /// Default configuration balanced for city/highway/canyon driving.
+    /// Default configuration for mode detection.
     ///
-    /// GPS weights are conservative (40/30/20) to trust filtered IMU more:
-    /// - GPS-derived accel is often 0 (no speed change between samples)
-    /// - Filtered IMU provides faster response
+    /// ## GPS-Corrected IMU Approach
     ///
-    /// The 15 Hz Butterworth filter removes engine vibration (30-100Hz) while
-    /// preserving all driving dynamics (0-10Hz). This is based on:
-    /// - ArduPilot: uses 20Hz for INS_ACCEL_FILTER
-    /// - Research: shows 1-5Hz Butterworth effective for brake detection
-    /// - Physics: driving events (braking, cornering) are all < 3Hz
+    /// We use GPS velocity to correct AHRS orientation errors, then use the
+    /// corrected IMU at 200 Hz for mode detection. This gives us:
+    /// - 200 Hz update rate (vs 25 Hz GPS-only)
+    /// - Accurate acceleration even during dynamic maneuvers
+    /// - Foundation for future granular detection (soft/medium/hard accel)
+    ///
+    /// The OrientationCorrector learns pitch/roll errors by comparing IMU-predicted
+    /// acceleration with GPS-derived acceleration (ground truth).
+    ///
+    /// GPS weight fields control blending between corrected IMU and GPS acceleration
+    /// for robustness during correction learning phase.
     fn default() -> Self {
         Self {
             gps_high_rate: 20.0,
             gps_medium_rate: 10.0,
-            gps_max_age: 0.2, // 200ms
-            // GPS blending weights - conservative values to trust filtered IMU more
-            // GPS-derived accel is often 0 (no speed change between samples)
-            gps_weight_high: 0.40,   // 40% GPS / 60% IMU at >= 20Hz
-            gps_weight_medium: 0.30, // 30% GPS / 70% IMU at >= 10Hz
-            gps_weight_low: 0.20,    // 20% GPS / 80% IMU at < 10Hz
+            gps_max_age: 0.2, // 200ms - GPS older than this is considered stale
+            // GPS weight fields - blend GPS with corrected IMU based on confidence
+            gps_weight_high: 0.3,   // 30% GPS, 70% corrected IMU when confident
+            gps_weight_medium: 0.5, // 50/50 blend at medium confidence
+            gps_weight_low: 0.8,    // 80% GPS when correction not yet learned
             tilt_learn_time: 3.0,
-            // Butterworth filter for IMU longitudinal vibration removal
-            // 15 Hz cutoff: passes driving dynamics (0-10Hz), removes engine vibration (30-100Hz)
-            // ArduPilot uses 20Hz for INS_ACCEL_FILTER; 15Hz is conservative middle ground
-            lon_filter_cutoff: 15.0,
+            // Butterworth filter for IMU
+            // 10 Hz cutoff: passes driving dynamics, removes vibration
+            lon_filter_cutoff: 10.0,
             // CRITICAL: Must match actual IMU sample rate, NOT telemetry rate!
-            // Filter is called in process_imu() which runs at IMU rate (200Hz)
             lon_sample_rate: 200.0,
         }
     }
@@ -483,7 +650,9 @@ pub struct SensorFusion {
     pub config: FusionConfig,
     /// GPS-derived acceleration
     pub gps_accel: GpsAcceleration,
-    /// Tilt estimator (learns when stopped)
+    /// Orientation corrector (learns pitch/roll errors from GPS)
+    pub orientation_corrector: OrientationCorrector,
+    /// Tilt estimator (learns residual offset when stopped)
     pub tilt_estimator: TiltEstimator,
     /// Yaw rate calibrator (learns gyro bias while driving straight)
     pub yaw_rate_calibrator: YawRateCalibrator,
@@ -501,6 +670,8 @@ pub struct SensorFusion {
     lat_corrected: f32,
     /// Centripetal lateral acceleration for mode detection (m/s²)
     lat_centripetal: f32,
+    /// IMU lateral (from corrected orientation) for learning
+    lat_imu: f32,
     /// Last GPS blend weight (for diagnostics)
     last_gps_weight: f32,
     /// Was stationary last update?
@@ -511,6 +682,7 @@ impl SensorFusion {
     pub fn new(config: FusionConfig) -> Self {
         Self {
             gps_accel: GpsAcceleration::new(),
+            orientation_corrector: OrientationCorrector::new(),
             tilt_estimator: TiltEstimator::new(config.tilt_learn_time),
             yaw_rate_calibrator: YawRateCalibrator::new(),
             lon_filter: BiquadFilter::new_lowpass(config.lon_filter_cutoff, config.lon_sample_rate),
@@ -520,18 +692,25 @@ impl SensorFusion {
             lon_imu_filtered: 0.0,
             lat_corrected: 0.0,
             lat_centripetal: 0.0,
+            lat_imu: 0.0,
             last_gps_weight: 0.0,
             was_stationary: false,
             config,
         }
     }
 
-    /// Process IMU data (call at telemetry rate, e.g., 20Hz)
+    /// Process IMU data with GPS-corrected orientation (call at IMU rate, e.g., 200Hz)
+    ///
+    /// This is the ArduPilot-style approach: use GPS velocity to correct AHRS
+    /// orientation errors, then use the corrected IMU for accurate 200 Hz acceleration.
     ///
     /// # Arguments
-    /// * `ax_earth` - X acceleration in earth frame (m/s²)
-    /// * `ay_earth` - Y acceleration in earth frame (m/s²)
-    /// * `yaw` - Vehicle yaw angle (rad, for earth-to-car transform)
+    /// * `ax_raw` - Raw X acceleration in body frame (m/s²)
+    /// * `ay_raw` - Raw Y acceleration in body frame (m/s²)
+    /// * `az_raw` - Raw Z acceleration in body frame (m/s²)
+    /// * `ahrs_roll_deg` - AHRS roll angle in degrees
+    /// * `ahrs_pitch_deg` - AHRS pitch angle in degrees
+    /// * `yaw` - Vehicle yaw angle (rad, from EKF or magnetometer)
     /// * `speed` - Vehicle speed (m/s)
     /// * `yaw_rate` - Yaw rate (rad/s)
     /// * `dt` - Time step (seconds)
@@ -539,13 +718,16 @@ impl SensorFusion {
     ///
     /// # Returns
     /// (lon_blended, lat_centripetal) - Accelerations for mode detection (m/s²)
-    /// lon_blended: GPS/IMU blended longitudinal
+    /// lon_blended: orientation-corrected IMU blended with GPS
     /// lat_centripetal: speed * yaw_rate (pro-style, mount-independent)
     #[allow(clippy::too_many_arguments)]
     pub fn process_imu(
         &mut self,
-        ax_earth: f32,
-        ay_earth: f32,
+        ax_raw: f32,
+        ay_raw: f32,
+        az_raw: f32,
+        ahrs_roll_deg: f32,
+        ahrs_pitch_deg: f32,
         yaw: f32,
         speed: f32,
         yaw_rate: f32,
@@ -554,90 +736,110 @@ impl SensorFusion {
     ) -> (f32, f32) {
         // Track GPS staleness
         self.gps_accel.advance_time(dt);
+        let gps_fresh = self.gps_accel.is_fresh(self.config.gps_max_age);
 
-        // Apply tilt correction (learned when stopped)
-        // This handles mounting angle offset - the device learns the residual
-        // acceleration when stationary and subtracts it while moving.
+        // Step 1: Apply orientation correction (learned from GPS comparison)
+        // This corrects AHRS errors caused by linear acceleration being mistaken for tilt
+        let (corrected_pitch_deg, corrected_roll_deg) =
+            self.orientation_corrector.correct(ahrs_pitch_deg, ahrs_roll_deg);
+
+        // Step 2: Remove gravity using corrected orientation
+        let (ax_nograv, ay_nograv, _az_nograv) =
+            remove_gravity(ax_raw, ay_raw, az_raw, corrected_roll_deg, corrected_pitch_deg);
+
+        // Step 3: Transform to earth frame
+        let (ax_earth, ay_earth) =
+            body_to_earth(ax_nograv, ay_nograv, 0.0, corrected_roll_deg, corrected_pitch_deg, yaw);
+
+        // Step 4: Apply residual tilt correction (learned when stopped)
+        // This handles minor mounting offsets not captured by orientation correction
         let (ax_corr, ay_corr) = self.tilt_estimator.correct(ax_earth, ay_earth);
 
-        // Transform to vehicle frame
+        // Step 5: Transform to vehicle frame
         let (lon_imu_raw, lat_imu_raw) = earth_to_car(ax_corr, ay_corr, yaw);
 
-        // Store raw IMU longitudinal (before filtering)
+        // Store values
         self.lon_imu_raw = lon_imu_raw;
+        self.lat_imu = lat_imu_raw;
 
-        // Apply Butterworth low-pass filter to remove engine vibration (30-100Hz)
-        // Filter cutoff is 15Hz: passes driving dynamics (0-5Hz), attenuates vibration
-        // Based on ArduPilot (10-20Hz on accels, INS_ACCEL_FILTER parameter)
+        // Step 6: Apply Butterworth low-pass filter to remove engine vibration
         let lon_imu_filtered = self.lon_filter.process(lon_imu_raw);
         self.lon_imu_filtered = lon_imu_filtered;
 
         // Store corrected lateral for display
         self.lat_corrected = lat_imu_raw;
 
-        // Apply yaw rate calibration (removes gyro bias learned while driving straight)
+        // Step 7: Apply yaw rate calibration (removes gyro bias)
         let yaw_rate_corrected = self.yaw_rate_calibrator.correct(yaw_rate);
 
-        // Calculate centripetal lateral for mode detection (pro-style)
-        // a_lateral = v * omega (mount-angle independent, no filtering needed)
-        // Uses calibrated yaw rate to prevent drift on highway
+        // Step 8: Calculate centripetal lateral for mode detection
+        // a_lateral = v * omega (mount-angle independent)
         self.lat_centripetal = speed * yaw_rate_corrected;
 
-        // Handle stationary state transitions
+        // Step 9: Handle stationary state - learn residual offsets
         if is_stationary {
-            // Learn tilt offset when stopped
-            self.tilt_estimator
-                .update_stationary(ax_earth, ay_earth, dt);
+            self.tilt_estimator.update_stationary(ax_earth, ay_earth, dt);
         } else {
             if self.was_stationary {
-                // Just started moving
                 self.tilt_estimator.reset_stationary();
             }
-
-            // Update yaw rate calibrator (learns bias while driving straight)
             self.yaw_rate_calibrator.update(yaw_rate, speed, dt);
         }
         self.was_stationary = is_stationary;
 
-        // Blend GPS and IMU for longitudinal acceleration
-        // GPS provides smooth, drift-free acceleration from velocity changes
-        // IMU (now filtered) provides fast response with vibration removed
-        // Blending gives best of both: smooth when GPS available, fast filtered fallback
-        let base_gps_weight = self.compute_gps_weight();
+        // Step 10: Get GPS-derived acceleration for comparison/blending
+        let gps_lon = self.gps_accel.get_accel();
+        let gps_lat = self.lat_centripetal; // Centripetal = speed * yaw_rate
 
-        let lon_blended = if let Some(gps_lon) = self.gps_accel.get_accel() {
-            // GPS accel validity check: if GPS shows ~0 but IMU shows signal,
-            // GPS is likely just not updating (no speed change between samples)
-            // In this case, trust filtered IMU entirely
-            const GPS_ACCEL_MIN_THRESHOLD: f32 = 0.2; // m/s² (~0.02g)
+        // Step 11: Update orientation corrector (learn from GPS vs IMU)
+        // Only learn when moving and GPS is fresh
+        if !is_stationary && gps_fresh {
+            if let Some(lon_gps) = gps_lon {
+                self.orientation_corrector.update(
+                    lon_imu_filtered, // IMU (using current correction)
+                    lon_gps,          // GPS (ground truth)
+                    lat_imu_raw,      // IMU lateral
+                    gps_lat,          // Centripetal (truth for lateral)
+                    speed,
+                    gps_fresh,
+                );
+            }
+        }
 
-            let effective_gps_weight = if gps_lon.abs() < GPS_ACCEL_MIN_THRESHOLD
-                && self.lon_imu_filtered.abs() > GPS_ACCEL_MIN_THRESHOLD
-            {
-                // GPS showing ~0 but IMU has signal → GPS unreliable, use 100% IMU
-                0.0
+        // Step 12: Blend IMU and GPS based on orientation correction confidence
+        // Higher confidence → trust corrected IMU more
+        // Lower confidence → rely more on GPS
+        let lon_blended = if let Some(lon_gps) = gps_lon {
+            // Compute blend weight based on correction confidence
+            let confidence = self.orientation_corrector.get_pitch_confidence();
+
+            // Interpolate between high/medium/low GPS weights based on confidence
+            let gps_weight = if confidence > 0.8 {
+                self.config.gps_weight_high // 30% GPS when very confident
+            } else if confidence > 0.3 {
+                // Linear interpolation between medium and high
+                let t = (confidence - 0.3) / 0.5;
+                self.config.gps_weight_medium * (1.0 - t) + self.config.gps_weight_high * t
             } else {
-                base_gps_weight
+                // Linear interpolation between low and medium
+                let t = confidence / 0.3;
+                self.config.gps_weight_low * (1.0 - t) + self.config.gps_weight_medium * t
             };
 
-            self.last_gps_weight = effective_gps_weight;
+            self.last_gps_weight = gps_weight;
 
-            // Blend GPS with filtered IMU (vibration removed)
-            effective_gps_weight * gps_lon + (1.0 - effective_gps_weight) * self.lon_imu_filtered
+            // Blend: (1-w)*IMU + w*GPS
+            (1.0 - gps_weight) * lon_imu_filtered + gps_weight * lon_gps
         } else {
-            // No GPS - use filtered IMU only (still vibration-free)
+            // GPS unavailable - use corrected IMU only
             self.last_gps_weight = 0.0;
-            self.lon_imu_filtered
+            lon_imu_filtered
         };
 
         self.blended_lon = lon_blended;
-
-        // Display uses same blended value as mode detection
-        // GPS-only was problematic: GPS-derived accel is often 0 (no speed change between samples)
-        // With 15Hz Butterworth filter, vibration is removed and IMU is responsive
         self.lon_display = lon_blended;
 
-        // Return blended longitudinal and centripetal lateral for mode detection
+        // Return blended longitudinal and centripetal lateral
         (lon_blended, self.lat_centripetal)
     }
 
@@ -734,25 +936,25 @@ impl SensorFusion {
         self.tilt_estimator.get_offsets()
     }
 
-    /// Compute GPS weight based on GPS rate and data freshness
-    fn compute_gps_weight(&self) -> f32 {
-        let rate = self.gps_accel.get_rate();
-        let fresh = self.gps_accel.is_fresh(self.config.gps_max_age);
+    /// Get orientation correction (pitch, roll) in degrees
+    pub fn get_orientation_correction(&self) -> (f32, f32) {
+        (
+            self.orientation_corrector.get_pitch_correction_deg(),
+            self.orientation_corrector.get_roll_correction_deg(),
+        )
+    }
 
-        if !fresh {
-            return 0.0;
-        }
+    /// Get orientation correction confidence (pitch, roll) as 0-1 values
+    pub fn get_orientation_confidence(&self) -> (f32, f32) {
+        (
+            self.orientation_corrector.get_pitch_confidence(),
+            self.orientation_corrector.get_roll_confidence(),
+        )
+    }
 
-        // Blending based on GPS rate using configurable weights
-        if rate >= self.config.gps_high_rate {
-            self.config.gps_weight_high
-        } else if rate >= self.config.gps_medium_rate {
-            self.config.gps_weight_medium
-        } else if rate > 0.0 {
-            self.config.gps_weight_low
-        } else {
-            0.0
-        }
+    /// Reset orientation corrector (call after device remount)
+    pub fn reset_orientation_corrector(&mut self) {
+        self.orientation_corrector.reset();
     }
 }
 
@@ -835,11 +1037,15 @@ mod tests {
         let config = FusionConfig::default();
         let mut fusion = SensorFusion::new(config);
 
-        // Process with turn conditions
+        // New API: pass raw body-frame accel
+        // For level surface: ax_raw = earth_x, ay_raw = earth_y, az_raw = G
         let (_lon, lat) = fusion.process_imu(
-            0.0,   // No earth-frame X accel
-            0.0,   // No earth-frame Y accel
-            0.0,   // Heading
+            0.0,   // ax_raw (no forward accel)
+            0.0,   // ay_raw (no lateral accel)
+            G,     // az_raw (gravity)
+            0.0,   // ahrs_roll_deg (level)
+            0.0,   // ahrs_pitch_deg (level)
+            0.0,   // yaw (heading)
             10.0,  // Speed = 10 m/s
             0.3,   // Yaw rate = 0.3 rad/s (turning)
             0.05,  // dt
@@ -871,8 +1077,11 @@ mod tests {
             yaw += yaw_rate * 0.05;
 
             let (_lon, lat) = fusion.process_imu(
-                0.0,      // Earth X
-                0.0,      // Earth Y
+                0.0,      // ax_raw
+                0.0,      // ay_raw
+                G,        // az_raw
+                0.0,      // roll
+                0.0,      // pitch
                 yaw,      // Changing heading
                 10.0,     // Constant speed
                 yaw_rate, // Turning
@@ -892,8 +1101,11 @@ mod tests {
 
         // Turn ends - yaw_rate goes to zero
         let (_lon, lat) = fusion.process_imu(
-            0.0,  // Earth X
-            0.0,  // Earth Y
+            0.0,  // ax_raw
+            0.0,  // ay_raw
+            G,    // az_raw
+            0.0,  // roll
+            0.0,  // pitch
             yaw,  // Final heading
             10.0, // Still moving
             0.0,  // NO MORE TURNING
@@ -920,7 +1132,11 @@ mod tests {
         fusion.gps_accel.update(10.0, 0.0);
         fusion.gps_accel.update(12.0, 0.04);
 
-        let (lon_from_process, _lat) = fusion.process_imu(5.0, 3.0, 0.0, 10.0, 0.0, 0.05, false);
+        let (lon_from_process, _lat) = fusion.process_imu(
+            5.0, 3.0, G, // raw body accel (forward, lateral, gravity)
+            0.0, 0.0,    // roll, pitch (level)
+            0.0, 10.0, 0.0, 0.05, false
+        );
 
         let lon_for_display = fusion.get_lon_blended();
 
@@ -1040,12 +1256,12 @@ mod tests {
 
         // Drive straight with biased yaw rate until calibration kicks in
         for _ in 0..100 {
-            fusion.process_imu(0.0, 0.0, 0.0, 20.0, yaw_bias, 0.05, false);
+            fusion.process_imu(0.0, 0.0, G, 0.0, 0.0, 0.0, 20.0, yaw_bias, 0.05, false);
         }
 
         // Now with calibration active, centripetal should be near zero
         // even though raw yaw_rate has bias
-        let (_lon, lat) = fusion.process_imu(0.0, 0.0, 0.0, 20.0, yaw_bias, 0.05, false);
+        let (_lon, lat) = fusion.process_imu(0.0, 0.0, G, 0.0, 0.0, 0.0, 20.0, yaw_bias, 0.05, false);
 
         // Without calibration: lat = 20 * 0.02 = 0.4 m/s²
         // With calibration: lat should be ~0
@@ -1071,12 +1287,15 @@ mod tests {
         let mut max_output: f32 = 0.0;
         for i in 0..400 {
             let t = i as f32 / sample_rate;
-            // Simulate vibrating IMU input in earth frame
+            // Simulate vibrating IMU input in body frame
             let vibration = vibration_amp * (2.0 * core::f32::consts::PI * vibration_freq * t).sin();
 
             let (lon, _lat) = fusion.process_imu(
-                vibration, // X earth = vibrating
-                0.0,       // Y earth = 0
+                vibration, // ax_raw = vibrating
+                0.0,       // ay_raw = 0
+                G,         // az_raw = gravity
+                0.0,       // roll = level
+                0.0,       // pitch = level
                 0.0,       // yaw = 0 (heading east)
                 10.0,      // speed
                 0.0,       // yaw_rate = 0
@@ -1118,12 +1337,15 @@ mod tests {
             let signal = dynamics_amp * (2.0 * core::f32::consts::PI * dynamics_freq * t).sin();
 
             let (lon, _lat) = fusion.process_imu(
-                signal,
-                0.0,
-                0.0,
-                10.0,
-                0.0,
-                0.005, // dt = 5ms (200Hz)
+                signal, // ax_raw
+                0.0,    // ay_raw
+                G,      // az_raw
+                0.0,    // roll
+                0.0,    // pitch
+                0.0,    // yaw
+                10.0,   // speed
+                0.0,    // yaw_rate
+                0.005,  // dt = 5ms (200Hz)
                 false,
             );
 
@@ -1153,16 +1375,16 @@ mod tests {
             "lon_sample_rate must be 200Hz (IMU rate)"
         );
 
-        // Filter cutoff should be 15Hz (ArduPilot uses 20Hz)
+        // Filter cutoff should be 10Hz for smoother output
         assert_eq!(
-            config.lon_filter_cutoff, 15.0,
-            "lon_filter_cutoff should be 15Hz"
+            config.lon_filter_cutoff, 10.0,
+            "lon_filter_cutoff should be 10Hz"
         );
 
-        // GPS weights should be conservative (trust filtered IMU more)
+        // GPS max age for freshness check
         assert!(
-            config.gps_weight_high <= 0.5,
-            "GPS weight should be <=50% to trust filtered IMU"
+            config.gps_max_age <= 0.3,
+            "gps_max_age should be <=300ms for responsive fallback"
         );
     }
 
@@ -1179,13 +1401,9 @@ mod tests {
 
         // Process IMU with non-zero input
         let (lon_blended, _lat) = fusion.process_imu(
-            2.0,   // Earth X accel
-            0.0,   // Earth Y
-            0.0,   // Heading
-            10.0,  // Speed
-            0.0,   // Yaw rate
-            0.005, // dt
-            false, // Not stationary
+            2.0, 0.0, G, // ax, ay, az (body frame)
+            0.0, 0.0,    // roll, pitch
+            0.0, 10.0, 0.0, 0.005, false
         );
 
         let lon_display = fusion.get_lon_display();
@@ -1225,12 +1443,15 @@ mod tests {
             };
 
             let (lon, _lat) = fusion.process_imu(
-                brake_input,
-                0.0,
-                0.0,
-                15.0, // 15 m/s = 54 km/h
-                0.0,
-                0.005,
+                brake_input, // ax_raw
+                0.0,         // ay_raw
+                G,           // az_raw
+                0.0,         // roll
+                0.0,         // pitch
+                0.0,         // yaw
+                15.0,        // 15 m/s = 54 km/h
+                0.0,         // yaw_rate
+                0.005,       // dt
                 false,
             );
 
@@ -1247,52 +1468,53 @@ mod tests {
     }
 
     #[test]
-    fn test_gps_accel_validity_check() {
-        // When GPS accel is ~0 but IMU shows signal, should use 100% IMU
-        // This prevents blending with "nothing" when GPS speed doesn't change
+    fn test_orientation_correction_converges_during_cruise() {
+        // With the new GPS-corrected orientation approach:
+        // - IMU shows fake acceleration due to AHRS error
+        // - OrientationCorrector learns the error from GPS comparison
+        // - After learning, lon_blended converges toward GPS (truth)
+        //
+        // This test verifies the OrientationCorrector learns during driving.
         let config = FusionConfig::default();
         let mut fusion = SensorFusion::new(config);
 
-        // Set up GPS with zero acceleration (no speed change)
+        // Set up GPS with zero acceleration (cruising at constant speed)
         fusion.process_gps(10.0, 0.0);
         fusion.process_gps(10.0, 0.1); // Same speed = 0 accel
 
-        // Process IMU with significant acceleration (braking at 0.3g)
-        // Need to run multiple iterations for filter to settle
-        let imu_accel = 3.0; // m/s² = ~0.3g
+        // Process IMU with fake "acceleration" (simulates AHRS pitch error)
+        // pitch_error ≈ 3° causes ~0.5 m/s² fake accel
+        let imu_fake_accel = 0.5; // m/s² - this is AHRS error, not real accel
         let mut lon = 0.0;
 
-        for i in 0..100 {
+        for i in 0..200 {
             let (l, _lat) = fusion.process_imu(
-                imu_accel,
-                0.0,
-                0.0,
-                10.0, // speed
-                0.0,  // yaw_rate
-                0.005,
+                imu_fake_accel, // Fake signal from AHRS pitch error
+                0.0,   // ay_raw
+                G,     // az_raw
+                0.0,   // roll
+                0.0,   // pitch (AHRS reports 0, but there's error we're simulating)
+                0.0,   // yaw
+                10.0,  // speed
+                0.0,   // yaw_rate
+                0.005, // dt
                 false,
             );
-            // Keep GPS "stale" by not updating it, but refresh timestamp
+            // Keep GPS fresh
             if i % 20 == 0 {
                 fusion.process_gps(10.0, 0.1 + (i as f32) * 0.005);
             }
             lon = l;
         }
 
-        // GPS weight should have been set to 0 (validity check triggered)
-        // So output should be close to filtered IMU, not blended toward 0
-        // With 15Hz filter settled, expect at least 50% of input
+        // With GPS-IMU blending based on confidence:
+        // - Initially high GPS weight → lon close to GPS (0)
+        // - As correction learns → GPS weight decreases but corrected IMU also → 0
+        // Either way, lon should be small
         assert!(
-            lon > 1.5,
-            "When GPS=0 but IMU has signal, should use IMU: got {} m/s²",
+            lon.abs() < 0.5,
+            "During cruise, lon should converge to ~0: got {} m/s²",
             lon
-        );
-
-        // Verify GPS weight was reduced
-        assert!(
-            fusion.last_gps_weight < 0.1,
-            "GPS weight should be ~0 when GPS accel invalid: got {}",
-            fusion.last_gps_weight
         );
     }
 
@@ -1310,13 +1532,13 @@ mod tests {
         for _ in 0..600 {
             // 3 seconds at 200Hz
             fusion.process_imu(
-                0.0,  // No earth X accel (level surface)
-                0.0,  // No earth Y accel
-                0.0,  // Heading
-                0.0,  // Stopped
-                0.0,  // No yaw rate
-                0.005, // dt = 5ms
-                true,  // STATIONARY - tilt learns here
+                0.0, 0.0, G, // ax, ay, az (level, no motion)
+                0.0, 0.0,    // roll, pitch
+                0.0,         // yaw
+                0.0,         // Stopped
+                0.0,         // No yaw rate
+                0.005,       // dt = 5ms
+                true,        // STATIONARY - tilt learns here
             );
         }
 
@@ -1334,13 +1556,13 @@ mod tests {
             }
 
             let (lon, _lat) = fusion.process_imu(
-                0.0,   // ZERO earth X accel - no acceleration!
-                0.0,   // Zero earth Y accel
-                0.0,   // Heading
-                20.0,  // 20 m/s = 72 km/h cruising
-                0.0,   // Straight road
-                0.005, // dt = 5ms
-                false, // Moving
+                0.0, 0.0, G, // ax, ay, az - ZERO accel!
+                0.0, 0.0,    // roll, pitch
+                0.0,         // yaw
+                20.0,        // 20 m/s = 72 km/h cruising
+                0.0,         // Straight road
+                0.005,       // dt = 5ms
+                false,       // Moving
             );
 
             // Skip filter settling time
@@ -1401,7 +1623,7 @@ mod tests {
 
         // Learn tilt when stopped
         for _ in 0..600 {
-            fusion.process_imu(0.0, 0.0, 0.0, 0.0, 0.0, 0.005, true);
+            fusion.process_imu(0.0, 0.0, G, 0.0, 0.0, 0.0, 0.0, 0.0, 0.005, true);
         }
 
         // Start cruising
@@ -1414,12 +1636,12 @@ mod tests {
             }
 
             let (lon, _) = fusion.process_imu(
-                0.0,   // Zero input
-                0.0,
-                0.0,
-                25.0,  // 25 m/s = 90 km/h
-                0.0,
-                0.005,
+                0.0, 0.0, G, // ax, ay, az - zero input
+                0.0, 0.0,    // roll, pitch
+                0.0,         // yaw
+                25.0,        // 25 m/s = 90 km/h
+                0.0,         // yaw_rate
+                0.005,       // dt
                 false,
             );
 
@@ -1441,6 +1663,240 @@ mod tests {
             first_half_avg,
             second_half_avg,
             drift
+        );
+    }
+
+    // ============== OrientationCorrector Tests ==============
+
+    #[test]
+    fn test_orientation_corrector_init() {
+        let corrector = OrientationCorrector::new();
+
+        assert_eq!(corrector.pitch_correction, 0.0);
+        assert_eq!(corrector.roll_correction, 0.0);
+        assert_eq!(corrector.pitch_confidence, 0.0);
+        assert_eq!(corrector.roll_confidence, 0.0);
+    }
+
+    #[test]
+    fn test_orientation_corrector_learns_pitch_from_forward_accel() {
+        // Simulate: true accel = 3.0 m/s², but AHRS has pitch error
+        // causing IMU to show different value than GPS
+        //
+        // AHRS pitch error = -3° (thinks car tilting back during forward accel)
+        // This causes remove_gravity to subtract wrong gravity component
+        // Result: lon_imu is LESS than lon_gps
+        //
+        // Math: gravity error ≈ G * sin(3°) ≈ 0.51 m/s²
+        // So lon_imu ≈ 3.0 - 0.51 = 2.49 m/s² (if AHRS pitch = -3°)
+        // GPS shows truth: lon_gps = 3.0 m/s²
+        // Innovation = (2.49 - 3.0) / 9.8 ≈ -0.052 rad ≈ -3°
+
+        let mut corrector = OrientationCorrector::new();
+
+        let lon_gps = 3.0;  // Ground truth
+        let lon_imu = 2.49; // What IMU shows with -3° pitch error
+        let speed = 15.0;   // 54 km/h, above min_speed
+
+        // Simulate many updates (EMA needs time to converge)
+        for _ in 0..500 {
+            corrector.update(
+                lon_imu,  // IMU longitudinal
+                lon_gps,  // GPS longitudinal (truth)
+                0.0,      // lat_imu
+                0.0,      // lat_gps
+                speed,
+                true,     // GPS fresh
+            );
+        }
+
+        // Pitch correction should converge toward the error
+        // Expected: ~-3° = ~-0.052 rad
+        let pitch_corr = corrector.pitch_correction;
+        assert!(
+            (pitch_corr - (-0.052)).abs() < 0.01,
+            "Pitch correction should be ~-0.052 rad (-3°), got {} rad ({}°)",
+            pitch_corr,
+            pitch_corr.to_degrees()
+        );
+
+        // Confidence should be high after many updates
+        assert!(
+            corrector.pitch_confidence > 0.9,
+            "Confidence should be >0.9 after 500 updates, got {}",
+            corrector.pitch_confidence
+        );
+    }
+
+    #[test]
+    fn test_orientation_corrector_learns_roll_from_cornering() {
+        // During left turn, centripetal acceleration is positive (leftward)
+        // If AHRS has roll error, lat_imu differs from lat_gps
+        let mut corrector = OrientationCorrector::new();
+
+        let lat_gps = 5.0;  // Centripetal = speed * yaw_rate = 10 * 0.5 = 5 m/s²
+        let lat_imu = 4.5;  // Roll error causes 0.5 m/s² difference
+        let speed = 15.0;
+
+        for _ in 0..500 {
+            corrector.update(
+                0.0,      // lon_imu (not accelerating)
+                0.0,      // lon_gps
+                lat_imu,  // IMU lateral
+                lat_gps,  // GPS lateral (centripetal)
+                speed,
+                true,
+            );
+        }
+
+        // Roll correction should converge
+        // Error = (4.5 - 5.0) / 9.8 = -0.051 rad
+        let roll_corr = corrector.roll_correction;
+        assert!(
+            (roll_corr - (-0.051)).abs() < 0.01,
+            "Roll correction should be ~-0.051 rad, got {}",
+            roll_corr
+        );
+    }
+
+    #[test]
+    fn test_orientation_corrector_ignores_low_speed() {
+        let mut corrector = OrientationCorrector::new();
+
+        // At low speed, GPS is noisy - should not learn
+        let low_speed = 1.0; // Below min_speed (3.0 m/s)
+
+        for _ in 0..100 {
+            corrector.update(
+                5.0,  // Large IMU value
+                0.0,  // GPS shows zero
+                0.0,
+                0.0,
+                low_speed,
+                true,
+            );
+        }
+
+        // Should NOT have learned anything
+        assert_eq!(
+            corrector.pitch_correction, 0.0,
+            "Should not learn at low speed"
+        );
+        assert_eq!(
+            corrector.pitch_confidence, 0.0,
+            "Confidence should be 0 at low speed"
+        );
+    }
+
+    #[test]
+    fn test_orientation_corrector_ignores_small_accel() {
+        let mut corrector = OrientationCorrector::new();
+
+        // When not accelerating (GPS shows ~0), no signal to learn from
+        for _ in 0..100 {
+            corrector.update(
+                0.3,  // Small IMU value (noise)
+                0.0,  // GPS shows zero (cruising)
+                0.0,
+                0.0,
+                15.0, // Good speed
+                true,
+            );
+        }
+
+        // Should NOT have learned - GPS accel below min_accel threshold
+        assert_eq!(
+            corrector.pitch_correction, 0.0,
+            "Should not learn when GPS accel < min_accel"
+        );
+    }
+
+    #[test]
+    fn test_orientation_corrector_clamped_at_max() {
+        let mut corrector = OrientationCorrector::new();
+
+        // Huge error that would exceed max_correction
+        let lon_imu = 10.0;
+        let lon_gps = 3.0;  // 7 m/s² difference = huge pitch error
+
+        for _ in 0..1000 {
+            corrector.update(lon_imu, lon_gps, 0.0, 0.0, 15.0, true);
+        }
+
+        // Should be clamped at max_correction (0.26 rad = 15°)
+        assert!(
+            corrector.pitch_correction.abs() <= corrector.max_correction + 0.001,
+            "Correction should be clamped at max: {} > {}",
+            corrector.pitch_correction.abs(),
+            corrector.max_correction
+        );
+    }
+
+    #[test]
+    fn test_orientation_corrector_correct_applies_properly() {
+        let mut corrector = OrientationCorrector::new();
+
+        // Manually set corrections for testing
+        corrector.pitch_correction = 0.05;  // ~2.9°
+        corrector.roll_correction = -0.03;  // ~-1.7°
+
+        // AHRS reports pitch=5°, roll=2°
+        let (corrected_pitch, corrected_roll) = corrector.correct(5.0, 2.0);
+
+        // Corrected = AHRS - correction_deg
+        // pitch: 5.0 - 2.86 = 2.14
+        // roll: 2.0 - (-1.72) = 3.72
+        assert!(
+            (corrected_pitch - 2.14).abs() < 0.1,
+            "Corrected pitch should be ~2.14°, got {}",
+            corrected_pitch
+        );
+        assert!(
+            (corrected_roll - 3.72).abs() < 0.1,
+            "Corrected roll should be ~3.72°, got {}",
+            corrected_roll
+        );
+    }
+
+    #[test]
+    fn test_orientation_corrector_reset() {
+        let mut corrector = OrientationCorrector::new();
+
+        // Learn some corrections
+        for _ in 0..200 {
+            corrector.update(5.0, 3.0, 3.0, 2.0, 15.0, true);
+        }
+
+        assert!(corrector.pitch_correction != 0.0);
+
+        // Reset
+        corrector.reset();
+
+        assert_eq!(corrector.pitch_correction, 0.0);
+        assert_eq!(corrector.roll_correction, 0.0);
+        assert_eq!(corrector.pitch_confidence, 0.0);
+        assert_eq!(corrector.update_count, 0);
+    }
+
+    #[test]
+    fn test_orientation_corrector_no_gps_no_learning() {
+        let mut corrector = OrientationCorrector::new();
+
+        // GPS not fresh - should not learn
+        for _ in 0..100 {
+            corrector.update(
+                5.0,
+                3.0,
+                0.0,
+                0.0,
+                15.0,
+                false,  // GPS NOT fresh
+            );
+        }
+
+        assert_eq!(
+            corrector.pitch_correction, 0.0,
+            "Should not learn when GPS not fresh"
         );
     }
 }

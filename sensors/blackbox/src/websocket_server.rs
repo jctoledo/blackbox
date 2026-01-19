@@ -974,7 +974,7 @@ impl TelemetryServer {
                             r#""gps":{{"model":"{}","rate_hz":{},"fix":{},"warmup":{},"satellites":{},"hdop":{:.1}}},"#,
                             r#""wifi":{{"mode":"{}","ssid":"{}"}},"#,
                             r#""config":{{"telemetry_hz":{},"gps_model":"{}","warmup_fixes":{}}},"#,
-                            r#""fusion":{{"lon_raw":{:.3},"lon_filtered":{:.3},"lon_blended":{:.3},"gps_weight":{:.2},"gps_accel":{:.3},"gps_rate":{:.1},"gps_rejected":{},"yaw_bias":{:.4},"yaw_calibrated":{},"tilt_x":{:.3},"tilt_y":{:.3},"tilt_valid":{}}}}}"#
+                            r#""fusion":{{"lon_raw":{:.3},"lon_filtered":{:.3},"lon_blended":{:.3},"gps_weight":{:.2},"gps_accel":{:.3},"gps_rate":{:.1},"gps_rejected":{},"pitch_corr":{:.1},"roll_corr":{:.1},"pitch_conf":{:.0},"roll_conf":{:.0},"yaw_bias":{:.4},"yaw_calibrated":{},"tilt_x":{:.3},"tilt_y":{:.3},"tilt_valid":{}}}}}"#
                         ),
                         d.sensor_rates.imu_hz, d.sensor_rates.gps_hz, d.sensor_rates.loop_hz,
                         d.sensor_rates.imu_expected_hz, d.sensor_rates.gps_expected_hz,
@@ -991,6 +991,8 @@ impl TelemetryServer {
                         // Fusion diagnostics
                         d.fusion.lon_imu_raw, d.fusion.lon_imu_filtered, d.fusion.lon_blended,
                         d.fusion.gps_weight, d.fusion.gps_accel, d.fusion.gps_rate, d.fusion.gps_rejected,
+                        d.fusion.pitch_correction_deg, d.fusion.roll_correction_deg,
+                        d.fusion.pitch_confidence * 100.0, d.fusion.roll_confidence * 100.0,
                         d.fusion.yaw_bias, d.fusion.yaw_calibrated,
                         d.fusion.tilt_offset_x, d.fusion.tilt_offset_y, d.fusion.tilt_valid
                     )

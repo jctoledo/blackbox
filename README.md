@@ -26,6 +26,7 @@ A complete ESP32-C3 firmware that fuses GPS and IMU data to track your vehicle's
 - Body-frame accelerations transformed to earth frame using current orientation
 - Zero-velocity updates eliminate IMU drift when stationary
 - Constant Turn Rate and Acceleration (CTRA) model for cornering
+- **GPS-corrected orientation** (ArduPilot-style): learns and corrects AHRS pitch/roll errors by comparing IMU with GPS velocity ground truth
 - **GPS/IMU blending** for accurate, low-latency mode detection independent of mounting angle
 - **Automatic tilt correction** learns device mounting offset when stopped
 - **Centripetal lateral detection** uses speed × yaw_rate for instant corner response
