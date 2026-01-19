@@ -404,19 +404,7 @@ body::before {
 
 /* current-speed color now controlled by global --hue */
 
-/* km/h indicator - SAME SIZE as peak number */
-.speed-unit {
-    font-size: clamp(20px, 5vw, 24px);
-    font-weight: 600;
-    letter-spacing: 2px;
-    color: #9aa8b0;
-    margin-top: 8px;
-    margin-bottom: 16px;
-    text-transform: lowercase;
-    font-variant-numeric: tabular-nums;
-}
-
-/* Maneuver state - SAME SIZE as peak number */
+/* Maneuver state */
 .maneuver {
     font-size: clamp(20px, 5vw, 24px);
     font-weight: 600;
@@ -424,6 +412,19 @@ body::before {
     text-transform: uppercase;
     color: hsl(var(--hue), 50%, 50%);
     transition: color 0.3s;
+    margin-top: 8px;
+    margin-bottom: 8px;
+}
+
+/* km/h indicator - at bottom */
+.speed-unit {
+    font-size: clamp(18px, 4vw, 22px);
+    font-weight: 500;
+    letter-spacing: 2px;
+    color: #8899aa;
+    margin-top: 4px;
+    text-transform: lowercase;
+    font-variant-numeric: tabular-nums;
 }
 
 /* maneuver color now controlled by global --hue */
@@ -693,18 +694,20 @@ body::before {
 
             <!-- Speed stack -->
             <div class="speed-stack">
-                <!-- Peak speed (conditional, secondary) -->
+                <!-- Peak label + readout -->
                 <div class="peak-row" id="peak-row">
                     <span class="peak-label">PEAK</span>
                     <span class="peak-val" id="peak-val">0</span>
                 </div>
 
-                <!-- Current speed (primary, dominant) -->
+                <!-- Current speed (primary) -->
                 <div class="current-speed" id="current-speed">0</div>
-                <div class="speed-unit">km/h</div>
 
-                <!-- Maneuver state (tertiary) -->
+                <!-- Maneuver state -->
                 <div class="maneuver" id="maneuver">Idle</div>
+
+                <!-- Unit label -->
+                <div class="speed-unit">km/h</div>
             </div>
         </div>
     </div>
