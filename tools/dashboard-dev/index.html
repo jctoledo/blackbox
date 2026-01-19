@@ -545,7 +545,7 @@ body::before {
 }
 
 #boxBottom .met {
-    padding: 8px 4px;
+    padding: 12px 4px;
     background: transparent;
     border: none;
     border-right: 1px solid #1a2a30;
@@ -554,6 +554,7 @@ body::before {
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 4px;
 }
 
 #boxBottom .met:last-child {
@@ -561,18 +562,20 @@ body::before {
 }
 
 #boxBottom .met-val {
-    font-size: 14px;
+    font-size: 16px;
     font-weight: 600;
     font-variant-numeric: tabular-nums;
     color: #7a8a8f;
     text-align: center;
+    line-height: 1;
 }
 
 #boxBottom .met-lbl {
     font-weight: 500;
-    font-size: 8px;
+    font-size: 9px;
     color: #556;
     text-align: center;
+    line-height: 1;
 }
 
 /* GPS display */
@@ -598,10 +601,11 @@ body::before {
 }
 
 #boxBottom .cfg-title {
-    margin-bottom: 6px;
-    font-size: 8px;
+    margin-bottom: 8px;
+    font-size: 10px;
     font-weight: 500;
     color: #556;
+    text-align: center;
 }
 
 #boxBottom .preset-row {
@@ -612,8 +616,8 @@ body::before {
 }
 
 #boxBottom .preset-btn {
-    padding: 5px 2px;
-    font-size: 8px;
+    padding: 10px 2px;
+    font-size: 10px;
     font-weight: 600;
     background: transparent;
     border: none;
@@ -621,6 +625,10 @@ body::before {
     color: #667;
     box-shadow: none;
     text-align: center;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 #boxBottom .preset-btn:last-child {
@@ -628,8 +636,8 @@ body::before {
 }
 
 #boxBottom .preset-btn.active {
-    background: rgba(0, 180, 200, 0.08);
-    color: #8aa;
+    background: hsla(var(--hue), 100%, 50%, 0.08);
+    color: hsl(var(--hue), 60%, 65%);
 }
 
 /* Control buttons */
@@ -644,8 +652,8 @@ body::before {
 }
 
 #boxBottom .btn {
-    padding: 8px;
-    font-size: 9px;
+    padding: 12px 8px;
+    font-size: 11px;
     font-weight: 600;
     background: transparent;
     border: none;
@@ -653,6 +661,10 @@ body::before {
     color: #667;
     box-shadow: none;
     text-align: center;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 #boxBottom .btn:last-child {
@@ -838,9 +850,8 @@ function updateGlobalColor(speed, lonG, atNewMax) {
         targetH = HUE.CYAN;
     }
 
-    // Smooth transition - faster for dramatic changes
-    const hueDiff = Math.abs(targetH - currentHue);
-    const transitionSpeed = hueDiff > 100 ? 0.15 : 0.08;
+    // Fast transition - show true colors quickly
+    const transitionSpeed = 0.5; // Much faster: ~2-3 frames to reach target
 
     // Handle hue wraparound (e.g., 350 -> 10 should go through 360/0)
     let diff = targetH - currentHue;
