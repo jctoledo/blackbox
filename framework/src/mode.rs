@@ -131,11 +131,11 @@ impl Default for ModeConfig {
             min_speed: 2.0,    // ~7 km/h - must be moving for accel/brake/corner
             acc_thr: 0.10,     // 0.10g - city driving (gentle acceleration)
             acc_exit: 0.05,    // exit when below 0.05g
-            brake_thr: -0.18,  // -0.18g - city driving (normal braking)
-            brake_exit: -0.09, // exit when above -0.09g
-            lat_thr: 0.12,     // 0.12g lateral - city turns
-            lat_exit: 0.06,    // exit when below 0.06g
-            yaw_thr: 0.05,     // ~2.9°/s yaw rate
+            brake_thr: -0.25,  // -0.25g - less aggressive brake detection
+            brake_exit: -0.12, // exit when above -0.12g
+            lat_thr: 0.10,     // 0.10g lateral - more sensitive corner detection
+            lat_exit: 0.05,    // exit when below 0.05g
+            yaw_thr: 0.04,     // ~2.3°/s yaw rate - more sensitive
             alpha: DEFAULT_MODE_ALPHA,
         }
     }
@@ -474,7 +474,7 @@ mod tests {
         let mut classifier = ModeClassifier::new();
 
         // Simulate braking while cornering (corner entry)
-        let ax = -0.25 * G; // 0.25g braking
+        let ax = -0.35 * G; // 0.35g braking (above -0.25g threshold)
         let ay = -0.15 * G; // 0.15g lateral (left turn)
         let yaw = 0.0;
         let wz = -0.08; // -0.08 rad/s yaw rate (left)
