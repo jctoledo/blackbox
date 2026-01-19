@@ -62,11 +62,21 @@ pub struct OrientationCorrector {
     pitch_confidence: f32,
     /// Confidence in roll correction (0-1)
     roll_confidence: f32,
+    /// Cruise bias - offset learned when driving at constant speed (m/s²)
+    /// This catches mounting offsets that show up during cruise but not at stops
+    cruise_bias: f32,
+    /// Cruise bias accumulator for averaging
+    cruise_bias_sum: f32,
+    /// Cruise bias sample count
+    cruise_bias_count: u32,
+    /// Time spent in cruise state (seconds)
+    cruise_time: f32,
     /// EMA alpha for learning (smaller = slower but more stable)
     alpha: f32,
     /// Minimum speed for learning (m/s) - need motion for GPS accuracy
     min_speed: f32,
-    /// Minimum acceleration to trigger learning (m/s²) - need signal to learn from
+    /// Minimum acceleration to trigger pitch/roll learning (m/s²)
+    /// Below this threshold, cruise bias learning kicks in instead
     min_accel: f32,
     /// Maximum correction magnitude (radians) - safety cap
     max_correction: f32,
@@ -81,9 +91,13 @@ impl OrientationCorrector {
             roll_correction: 0.0,
             pitch_confidence: 0.0,
             roll_confidence: 0.0,
+            cruise_bias: 0.0,
+            cruise_bias_sum: 0.0,
+            cruise_bias_count: 0,
+            cruise_time: 0.0,
             alpha: 0.05,            // Slow learning for stability
             min_speed: 3.0,         // ~11 km/h
-            min_accel: 0.5,         // ~0.05g - need meaningful acceleration
+            min_accel: 0.3,         // ~0.03g - lowered to learn from more events
             max_correction: 0.26,   // ~15 degrees max
             update_count: 0,
         }
@@ -98,6 +112,8 @@ impl OrientationCorrector {
     /// * `lat_gps` - GPS-derived lateral accel (from centripetal: speed × yaw_rate)
     /// * `speed` - Vehicle speed in m/s
     /// * `is_gps_fresh` - Whether GPS data is recent and valid
+    /// * `dt` - Time step in seconds (for cruise learning timing)
+    #[allow(clippy::too_many_arguments)]
     pub fn update(
         &mut self,
         lon_imu: f32,
@@ -106,16 +122,22 @@ impl OrientationCorrector {
         lat_gps: f32,
         speed: f32,
         is_gps_fresh: bool,
+        dt: f32,
     ) {
         // Only learn when conditions are good
         if speed < self.min_speed || !is_gps_fresh {
+            self.cruise_time = 0.0; // Reset cruise accumulator
+            self.cruise_bias_sum = 0.0;
+            self.cruise_bias_count = 0;
             return;
         }
 
+        // Apply current cruise bias before comparison
+        let lon_imu_corrected = lon_imu - self.cruise_bias;
+        let lon_error = lon_imu_corrected - lon_gps;
+
         // Learn pitch correction from longitudinal acceleration difference
-        // During forward acceleration: pitch error → wrong ax_earth
-        // pitch_error ≈ (ax_imu - ax_gps) / G
-        let lon_error = lon_imu - lon_gps;
+        // During acceleration: pitch error → wrong ax_earth
         if lon_gps.abs() > self.min_accel {
             // Signal present - can learn pitch
             let pitch_innovation = lon_error / G;
@@ -128,6 +150,32 @@ impl OrientationCorrector {
             // Update confidence
             self.update_count = self.update_count.saturating_add(1);
             self.pitch_confidence = (self.update_count as f32 / 100.0).min(1.0);
+
+            // Reset cruise accumulator when accelerating
+            self.cruise_time = 0.0;
+            self.cruise_bias_sum = 0.0;
+            self.cruise_bias_count = 0;
+        } else {
+            // Cruising (lon_gps near zero) - learn cruise bias
+            // If GPS says ~0 accel but IMU shows offset, that's mounting bias
+            self.cruise_time += dt;
+            self.cruise_bias_sum += lon_imu_corrected; // Should be ~0 when cruising
+            self.cruise_bias_count += 1;
+
+            // After 2 seconds of stable cruising, update cruise bias
+            if self.cruise_time >= 2.0 && self.cruise_bias_count > 30 {
+                let measured_bias = self.cruise_bias_sum / self.cruise_bias_count as f32;
+
+                // EMA update for cruise bias (slower alpha for stability)
+                self.cruise_bias = 0.9 * self.cruise_bias + 0.1 * measured_bias;
+                // Clamp cruise bias to reasonable range (±1.5 m/s² = ±0.15g)
+                self.cruise_bias = self.cruise_bias.clamp(-1.5, 1.5);
+
+                // Reset accumulator
+                self.cruise_time = 0.0;
+                self.cruise_bias_sum = 0.0;
+                self.cruise_bias_count = 0;
+            }
         }
 
         // Learn roll correction from lateral acceleration difference
@@ -142,6 +190,11 @@ impl OrientationCorrector {
 
             self.roll_confidence = (self.update_count as f32 / 100.0).min(1.0);
         }
+    }
+
+    /// Get current cruise bias (m/s²) for diagnostics
+    pub fn get_cruise_bias(&self) -> f32 {
+        self.cruise_bias
     }
 
     /// Apply corrections to AHRS orientation
@@ -181,6 +234,10 @@ impl OrientationCorrector {
         self.roll_correction = 0.0;
         self.pitch_confidence = 0.0;
         self.roll_confidence = 0.0;
+        self.cruise_bias = 0.0;
+        self.cruise_bias_sum = 0.0;
+        self.cruise_bias_count = 0;
+        self.cruise_time = 0.0;
         self.update_count = 0;
     }
 }
@@ -214,7 +271,8 @@ pub struct FusionConfig {
     /// Removes engine vibration (20-100Hz) while passing driving dynamics (0-3Hz)
     /// Research: ArduPilot uses 10Hz, academic papers suggest 1-5Hz for vehicle dynamics
     pub lon_filter_cutoff: f32,
-    /// Sample rate for longitudinal filter (Hz) - must match telemetry rate
+    /// Sample rate for longitudinal filter (Hz) - must match ACTUAL call rate of process_imu()
+    /// CRITICAL: This is telemetry rate (~30Hz), NOT IMU rate (200Hz)!
     pub lon_sample_rate: f32,
 }
 
@@ -247,8 +305,9 @@ impl Default for FusionConfig {
             // Butterworth filter for IMU
             // 10 Hz cutoff: passes driving dynamics, removes vibration
             lon_filter_cutoff: 10.0,
-            // CRITICAL: Must match actual IMU sample rate, NOT telemetry rate!
-            lon_sample_rate: 200.0,
+            // CRITICAL: Must match actual process_imu() call rate (telemetry rate ~30Hz)
+            // NOT the IMU hardware rate (200Hz)!
+            lon_sample_rate: 30.0,
         }
     }
 }
@@ -802,6 +861,7 @@ impl SensorFusion {
                     gps_lat,          // Centripetal (truth for lateral)
                     speed,
                     gps_fresh,
+                    dt,               // Time step for cruise bias learning
                 );
             }
         }
@@ -1273,25 +1333,26 @@ mod tests {
     }
 
     #[test]
-    fn test_biquad_filter_removes_engine_vibration() {
-        // Simulate engine vibration at 30Hz with 0.1g amplitude (~1 m/s²)
-        // The 15Hz Butterworth filter should attenuate this by ~12dB
+    fn test_biquad_filter_removes_high_frequency_noise() {
+        // Simulate noise at 12Hz with 0.1g amplitude (~1 m/s²)
+        // The 10Hz cutoff Butterworth filter should attenuate this
+        // (12Hz is above 10Hz cutoff but below 15Hz Nyquist for 30Hz sample rate)
         let config = FusionConfig::default();
         let mut fusion = SensorFusion::new(config);
 
-        let vibration_freq = 30.0; // Hz - typical engine vibration
-        let vibration_amp = 1.0;   // m/s² (~0.1g)
-        let sample_rate = 200.0;   // Hz - IMU rate (must match config!)
+        let noise_freq = 12.0;     // Hz - above 10Hz cutoff, below 15Hz Nyquist
+        let noise_amp = 1.0;       // m/s² (~0.1g)
+        let sample_rate = 30.0;    // Hz - telemetry rate (matches filter config!)
 
-        // Run for 2 seconds to let filter settle
+        // Run for 3 seconds to let filter settle
         let mut max_output: f32 = 0.0;
-        for i in 0..400 {
+        for i in 0..90 {
             let t = i as f32 / sample_rate;
-            // Simulate vibrating IMU input in body frame
-            let vibration = vibration_amp * (2.0 * core::f32::consts::PI * vibration_freq * t).sin();
+            // Simulate noisy IMU input in body frame
+            let noise = noise_amp * (2.0 * core::f32::consts::PI * noise_freq * t).sin();
 
             let (lon, _lat) = fusion.process_imu(
-                vibration, // ax_raw = vibrating
+                noise,     // ax_raw = noisy
                 0.0,       // ay_raw = 0
                 G,         // az_raw = gravity
                 0.0,       // roll = level
@@ -1299,22 +1360,22 @@ mod tests {
                 0.0,       // yaw = 0 (heading east)
                 10.0,      // speed
                 0.0,       // yaw_rate = 0
-                0.005,     // dt = 5ms (200Hz)
+                0.033,     // dt = 33ms (~30Hz)
                 false,     // not stationary
             );
 
-            // After settling (1 second = 200 samples), check output
-            if i > 200 {
+            // After settling (1 second = 30 samples), check output
+            if i > 30 {
                 max_output = max_output.max(lon.abs());
             }
         }
 
-        // 30Hz vibration should be attenuated by ~12dB at 15Hz cutoff
-        // That means 1 m/s² input → ~0.25 m/s² output (or less)
-        // Being conservative, check it's below 0.4 m/s² (~0.04g)
+        // 12Hz noise should be attenuated by the 10Hz cutoff filter
+        // Expect ~6dB attenuation: 1 m/s² input → ~0.5 m/s² output
+        // Being conservative, check it's below 0.7 m/s²
         assert!(
-            max_output < 0.4,
-            "30Hz vibration should be attenuated: got {} m/s²",
+            max_output < 0.7,
+            "12Hz noise should be attenuated: got {} m/s²",
             max_output
         );
     }
@@ -1322,17 +1383,17 @@ mod tests {
     #[test]
     fn test_biquad_filter_passes_driving_dynamics() {
         // Simulate a braking event at 1Hz (typical vehicle dynamics)
-        // The 15Hz filter should pass this with minimal attenuation
+        // The 10Hz cutoff filter should pass this with minimal attenuation
         let config = FusionConfig::default();
         let mut fusion = SensorFusion::new(config);
 
         let dynamics_freq = 1.0;   // Hz - braking event
         let dynamics_amp = 3.0;    // m/s² (~0.3g braking)
-        let sample_rate = 200.0;   // Hz - IMU rate (must match config!)
+        let sample_rate = 30.0;    // Hz - telemetry rate (matches filter config!)
 
-        // Run for 3 seconds
+        // Run for 5 seconds to let filter settle
         let mut max_output: f32 = 0.0;
-        for i in 0..600 {
+        for i in 0..150 {
             let t = i as f32 / sample_rate;
             let signal = dynamics_amp * (2.0 * core::f32::consts::PI * dynamics_freq * t).sin();
 
@@ -1345,21 +1406,21 @@ mod tests {
                 0.0,    // yaw
                 10.0,   // speed
                 0.0,    // yaw_rate
-                0.005,  // dt = 5ms (200Hz)
+                0.033,  // dt = 33ms (~30Hz)
                 false,
             );
 
-            // After settling (1 second = 200 samples), check output
-            if i > 200 {
+            // After settling (1 second = 30 samples), check output
+            if i > 30 {
                 max_output = max_output.max(lon.abs());
             }
         }
 
-        // 1Hz should pass through with >90% amplitude
-        // 3 m/s² input → >2.7 m/s² output
+        // 1Hz should pass through with >80% amplitude at 10Hz cutoff
+        // 3 m/s² input → >2.4 m/s² output
         assert!(
-            max_output > 2.5,
-            "1Hz driving dynamics should pass through: got {} m/s², expected >2.5",
+            max_output > 2.4,
+            "1Hz driving dynamics should pass through: got {} m/s², expected >2.4",
             max_output
         );
     }
@@ -1369,10 +1430,11 @@ mod tests {
         // Verify critical configuration values
         let config = FusionConfig::default();
 
-        // Filter must be configured for IMU rate (200Hz), NOT telemetry rate (20Hz)
+        // Filter must be configured for TELEMETRY rate (~30Hz), not IMU hardware rate
+        // process_imu() is called at telemetry rate, not IMU sample rate!
         assert_eq!(
-            config.lon_sample_rate, 200.0,
-            "lon_sample_rate must be 200Hz (IMU rate)"
+            config.lon_sample_rate, 30.0,
+            "lon_sample_rate must be 30Hz (telemetry rate, not IMU hardware rate)"
         );
 
         // Filter cutoff should be 10Hz for smoother output
@@ -1707,6 +1769,7 @@ mod tests {
                 0.0,      // lat_gps
                 speed,
                 true,     // GPS fresh
+                0.033,    // dt (~30Hz)
             );
         }
 
@@ -1746,6 +1809,7 @@ mod tests {
                 lat_gps,  // GPS lateral (centripetal)
                 speed,
                 true,
+                0.005,    // dt = 5ms (200Hz)
             );
         }
 
@@ -1774,6 +1838,7 @@ mod tests {
                 0.0,
                 low_speed,
                 true,
+                0.005,  // dt = 5ms
             );
         }
 
@@ -1792,22 +1857,32 @@ mod tests {
     fn test_orientation_corrector_ignores_small_accel() {
         let mut corrector = OrientationCorrector::new();
 
-        // When not accelerating (GPS shows ~0), no signal to learn from
+        // When not accelerating (GPS shows ~0), no signal to learn from for pitch
+        // BUT now this should learn cruise_bias instead!
         for _ in 0..100 {
             corrector.update(
-                0.3,  // Small IMU value (noise)
+                0.3,  // Small IMU value (offset)
                 0.0,  // GPS shows zero (cruising)
                 0.0,
                 0.0,
                 15.0, // Good speed
                 true,
+                0.05, // dt = 50ms (shorter loop, 2s = 40 iterations, we do 100)
             );
         }
 
-        // Should NOT have learned - GPS accel below min_accel threshold
+        // Pitch correction should NOT have learned - GPS accel below min_accel threshold
         assert_eq!(
             corrector.pitch_correction, 0.0,
-            "Should not learn when GPS accel < min_accel"
+            "Should not learn pitch when GPS accel < min_accel"
+        );
+
+        // But cruise_bias SHOULD have been learned! (new behavior)
+        // IMU shows 0.3 m/s² offset during cruise, cruise bias should converge toward it
+        assert!(
+            corrector.cruise_bias.abs() > 0.01,
+            "Should learn cruise_bias when cruising, got {}",
+            corrector.cruise_bias
         );
     }
 
@@ -1820,7 +1895,7 @@ mod tests {
         let lon_gps = 3.0;  // 7 m/s² difference = huge pitch error
 
         for _ in 0..1000 {
-            corrector.update(lon_imu, lon_gps, 0.0, 0.0, 15.0, true);
+            corrector.update(lon_imu, lon_gps, 0.0, 0.0, 15.0, true, 0.005);
         }
 
         // Should be clamped at max_correction (0.26 rad = 15°)
@@ -1864,7 +1939,7 @@ mod tests {
 
         // Learn some corrections
         for _ in 0..200 {
-            corrector.update(5.0, 3.0, 3.0, 2.0, 15.0, true);
+            corrector.update(5.0, 3.0, 3.0, 2.0, 15.0, true, 0.005);
         }
 
         assert!(corrector.pitch_correction != 0.0);
@@ -1891,12 +1966,100 @@ mod tests {
                 0.0,
                 15.0,
                 false,  // GPS NOT fresh
+                0.005,
             );
         }
 
         assert_eq!(
             corrector.pitch_correction, 0.0,
             "Should not learn when GPS not fresh"
+        );
+    }
+
+    #[test]
+    fn test_orientation_corrector_cruise_bias_learning() {
+        // Test that cruise bias is learned during constant-speed driving
+        // when GPS shows ~0 acceleration but IMU has a consistent offset
+        let mut corrector = OrientationCorrector::new();
+
+        // Simulate 5 seconds of cruising at constant speed
+        // IMU shows 0.5 m/s² offset (mounting error), GPS shows ~0 (cruising)
+        let imu_offset = 0.5; // m/s² - consistent offset during cruise
+        let dt = 0.05;        // 50ms = 20Hz, so 2s = 40 samples
+
+        // Run for 5 seconds (100 iterations at 50ms each)
+        for _ in 0..100 {
+            corrector.update(
+                imu_offset,  // IMU shows offset
+                0.0,         // GPS shows zero (cruising)
+                0.0,
+                0.0,
+                15.0,        // 54 km/h - above min_speed
+                true,
+                dt,
+            );
+        }
+
+        // Cruise bias should have been learned
+        // With slow EMA (alpha=0.1) and 2s update cycle, after 5s we get ~2 updates
+        // First update: bias = 0 + 0.1 * 0.5 = 0.05
+        // Second update: corrected = 0.5 - 0.05 = 0.45, bias = 0.05 * 0.9 + 0.1 * 0.45 = 0.09
+        let cruise_bias = corrector.get_cruise_bias();
+        assert!(
+            cruise_bias.abs() > 0.05,
+            "Cruise bias should be learning (>0.05), got {}",
+            cruise_bias
+        );
+        assert!(
+            cruise_bias > 0.0,
+            "Cruise bias should be positive (learning toward IMU offset): got {}",
+            cruise_bias
+        );
+
+        // Pitch correction should NOT be learned (no GPS accel signal)
+        assert!(
+            corrector.pitch_correction.abs() < 0.01,
+            "Pitch should not change during cruise"
+        );
+    }
+
+    #[test]
+    fn test_orientation_corrector_cruise_bias_resets_on_accel() {
+        // Test that cruise bias accumulator resets when acceleration is detected
+        let mut corrector = OrientationCorrector::new();
+
+        // First, build up some cruise bias
+        for _ in 0..50 {
+            corrector.update(0.3, 0.0, 0.0, 0.0, 15.0, true, 0.05);
+        }
+
+        // Now accelerate - this should reset the cruise accumulator
+        // but preserve the learned cruise_bias from before
+        let bias_before = corrector.get_cruise_bias();
+
+        for _ in 0..10 {
+            corrector.update(
+                3.5,         // IMU shows acceleration
+                3.0,         // GPS also shows acceleration
+                0.0,
+                0.0,
+                15.0,
+                true,
+                0.05,
+            );
+        }
+
+        // Cruise bias should be preserved (not cleared by acceleration)
+        let bias_after = corrector.get_cruise_bias();
+        assert!(
+            (bias_after - bias_before).abs() < 0.1,
+            "Cruise bias should be preserved during acceleration"
+        );
+
+        // But pitch should now be learning
+        assert!(
+            corrector.pitch_correction.abs() > 0.001,
+            "Pitch should be learning during acceleration"
         );
     }
 }

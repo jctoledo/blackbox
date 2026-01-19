@@ -4,7 +4,10 @@ Analyze telemetry CSV files from blackbox device.
 
 Usage: python analyze_telemetry.py <csvfile>
 
-CSV format expected:
+CSV format expected (new format with fusion diagnostics):
+time,speed,ax,ay,wz,mode,lat_g,lon_g,gps_lat,gps_lon,gps_valid,lon_imu,lon_gps,gps_weight,pitch_corr,pitch_conf,roll_corr,roll_conf,tilt_x,tilt_y
+
+Also supports legacy format:
 time,speed,ax,ay,wz,mode,lat_g,lon_g,gps_lat,gps_lon,gps_valid
 """
 
@@ -22,10 +25,14 @@ def analyze_telemetry(filename):
         print("No data in file")
         return
 
+    # Detect if we have fusion columns (new format)
+    has_fusion = 'lon_imu' in rows[0] and 'lon_gps' in rows[0]
+
     print(f"{'='*60}")
     print(f"TELEMETRY ANALYSIS: {filename}")
     print(f"{'='*60}")
     print(f"Total samples: {len(rows)}")
+    print(f"Format: {'Extended (with fusion diagnostics)' if has_fusion else 'Legacy'}")
     print()
 
     # === TIMING ANALYSIS ===
@@ -81,6 +88,78 @@ def analyze_telemetry(filename):
         print(f"lon_g when speed stable: mean={statistics.mean(stable_lon):.4f}g "
               f"(bias indicator - should be ~0)")
     print()
+
+    # === FUSION DIAGNOSTICS (if available) ===
+    if has_fusion:
+        print("--- FUSION DIAGNOSTICS ---")
+
+        # IMU vs GPS acceleration comparison
+        lon_imu_vals = [float(r['lon_imu']) for r in rows]
+        lon_gps_vals = [float(r['lon_gps']) for r in rows]
+        gps_weights = [float(r['gps_weight']) for r in rows]
+
+        # Filter out samples where GPS accel is 0 (stale/unavailable)
+        valid_gps = [(imu, gps, w) for imu, gps, w in zip(lon_imu_vals, lon_gps_vals, gps_weights) if abs(gps) > 0.001]
+
+        if valid_gps:
+            imu_valid = [v[0] for v in valid_gps]
+            gps_valid = [v[1] for v in valid_gps]
+
+            print(f"lon_imu range: {min(lon_imu_vals):.3f} to {max(lon_imu_vals):.3f} m/s²")
+            print(f"lon_gps range: {min(gps_valid):.3f} to {max(gps_valid):.3f} m/s²")
+
+            # IMU vs GPS error
+            errors = [i - g for i, g in zip(imu_valid, gps_valid)]
+            mean_error = statistics.mean(errors)
+            print(f"IMU-GPS error: mean={mean_error:.3f} m/s² ({mean_error/9.81:.3f}g), "
+                  f"std={statistics.stdev(errors):.3f} m/s²")
+
+            # Correlation between IMU and GPS
+            if len(imu_valid) >= 10:
+                mean_imu = statistics.mean(imu_valid)
+                mean_gps = statistics.mean(gps_valid)
+                numerator = sum((i - mean_imu) * (g - mean_gps) for i, g in zip(imu_valid, gps_valid))
+                denom_imu = sum((i - mean_imu)**2 for i in imu_valid) ** 0.5
+                denom_gps = sum((g - mean_gps)**2 for g in gps_valid) ** 0.5
+                if denom_imu > 0 and denom_gps > 0:
+                    corr = numerator / (denom_imu * denom_gps)
+                    print(f"IMU-GPS correlation: {corr:.3f} (want >0.7)")
+
+        # GPS weight distribution
+        avg_weight = statistics.mean(gps_weights)
+        high_gps = sum(1 for w in gps_weights if w > 0.7)
+        mid_gps = sum(1 for w in gps_weights if 0.3 <= w <= 0.7)
+        low_gps = sum(1 for w in gps_weights if w < 0.3)
+        print(f"GPS weight: mean={avg_weight:.2f}, high(>0.7)={100*high_gps/len(rows):.0f}%, "
+              f"mid={100*mid_gps/len(rows):.0f}%, low(<0.3)={100*low_gps/len(rows):.0f}%")
+
+        # OrientationCorrector status
+        pitch_corrs = [float(r['pitch_corr']) for r in rows]
+        pitch_confs = [float(r['pitch_conf']) for r in rows]
+        roll_corrs = [float(r['roll_corr']) for r in rows]
+        roll_confs = [float(r['roll_conf']) for r in rows]
+
+        print(f"Pitch correction: {statistics.mean(pitch_corrs):.1f}° (range {min(pitch_corrs):.1f}° to {max(pitch_corrs):.1f}°)")
+        print(f"Pitch confidence: {statistics.mean(pitch_confs):.0f}% (range {min(pitch_confs):.0f}% to {max(pitch_confs):.0f}%)")
+        print(f"Roll correction: {statistics.mean(roll_corrs):.1f}° (range {min(roll_corrs):.1f}° to {max(roll_corrs):.1f}°)")
+        print(f"Roll confidence: {statistics.mean(roll_confs):.0f}% (range {min(roll_confs):.0f}% to {max(roll_confs):.0f}%)")
+
+        # Tilt offsets
+        tilt_x = [float(r['tilt_x']) for r in rows]
+        tilt_y = [float(r['tilt_y']) for r in rows]
+        print(f"Tilt offset: X={statistics.mean(tilt_x):.3f}, Y={statistics.mean(tilt_y):.3f} m/s²")
+        print()
+
+        # Confidence assessment
+        avg_pitch_conf = statistics.mean(pitch_confs)
+        if avg_pitch_conf < 30:
+            print("⚠️  LOW PITCH CONFIDENCE: OrientationCorrector hasn't learned enough")
+            print("    Need more acceleration/braking events for learning")
+        elif avg_pitch_conf < 70:
+            print("⚠️  MODERATE PITCH CONFIDENCE: OrientationCorrector still learning")
+        else:
+            print("✓ HIGH PITCH CONFIDENCE: OrientationCorrector well-calibrated")
+        print()
 
     # === RAW ACCELEROMETER ===
     print("--- RAW ACCELEROMETER (ax in m/s²) ---")
@@ -242,12 +321,40 @@ def analyze_telemetry(filename):
     if tp_brake + fp_brake > 0 and fp_brake / (tp_brake + fp_brake) > 0.3:
         issues.append(f"High BRAKE false positive rate: {100*fp_brake/(tp_brake+fp_brake):.0f}%")
 
+    # Check OrientationCorrector (if fusion data available)
+    if has_fusion:
+        avg_pitch_conf = statistics.mean([float(r['pitch_conf']) for r in rows])
+        if avg_pitch_conf < 30:
+            issues.append(f"Low OrientationCorrector confidence: {avg_pitch_conf:.0f}% (need more driving to learn)")
+
+        avg_gps_weight = statistics.mean([float(r['gps_weight']) for r in rows])
+        if avg_gps_weight > 0.8:
+            issues.append(f"High GPS weight: {avg_gps_weight:.0f}% (IMU correction not trusted yet)")
+
     if issues:
         print("ISSUES DETECTED:")
         for issue in issues:
             print(f"  - {issue}")
     else:
         print("No major issues detected")
+
+    # Recommendations
+    print()
+    print("--- RECOMMENDATIONS ---")
+    if has_fusion:
+        avg_pitch_conf = statistics.mean([float(r['pitch_conf']) for r in rows])
+        if avg_pitch_conf < 50:
+            print("• Drive more with varied acceleration/braking to train OrientationCorrector")
+
+        if stable_lon:
+            bias = statistics.mean(stable_lon)
+            if bias > 0.05:
+                print(f"• Consider raising ACCEL threshold by ~{bias:.2f}g to compensate for positive bias")
+                print(f"• Consider lowering BRAKE threshold by ~{bias:.2f}g to improve brake detection")
+            elif bias < -0.05:
+                print(f"• Consider lowering ACCEL threshold by ~{abs(bias):.2f}g to compensate for negative bias")
+    else:
+        print("• Re-record with latest firmware to get fusion diagnostics for detailed analysis")
 
     print(f"\n{'='*60}")
 
