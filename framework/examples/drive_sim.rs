@@ -53,8 +53,16 @@ fn main() {
         let az_noise = noise.next(0.02 * G);
 
         fusion.process_imu(
-            ax_noise, ay_noise, G + az_noise,
-            0.0, 0.0, 0.0, 0.0, 0.0, 0.005, true
+            ax_noise,
+            ay_noise,
+            G + az_noise,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.005,
+            true,
         );
         if i % 200 == 199 {
             println!("  ... {}s", (i + 1) / 200);
@@ -62,8 +70,14 @@ fn main() {
     }
     let (tilt_x, tilt_y, tilt_valid) = fusion.get_tilt_offsets();
     let (pitch_corr, roll_corr) = fusion.get_orientation_correction();
-    println!("  Tilt learned: x={:.3}, y={:.3}, valid={}", tilt_x, tilt_y, tilt_valid);
-    println!("  Orientation correction: pitch={:.1}°, roll={:.1}°\n", pitch_corr, roll_corr);
+    println!(
+        "  Tilt learned: x={:.3}, y={:.3}, valid={}",
+        tilt_x, tilt_y, tilt_valid
+    );
+    println!(
+        "  Orientation correction: pitch={:.1}°, roll={:.1}°\n",
+        pitch_corr, roll_corr
+    );
 
     // Phase 2: Acceleration (2 seconds, 0.3g)
     // CRITICAL: Simulate WT901 AHRS error - it reports false pitch during acceleration!
@@ -90,11 +104,16 @@ fn main() {
         let ay_noise = noise.next(0.05 * G);
 
         let (lon, lat) = fusion.process_imu(
-            accel + ax_noise, ay_noise, G,  // Body-frame: forward accel + gravity
-            0.0, false_pitch,                // AHRS reports false pitch!
+            accel + ax_noise,
+            ay_noise,
+            G, // Body-frame: forward accel + gravity
             0.0,
-            speed, 0.0,
-            0.005, false
+            false_pitch, // AHRS reports false pitch!
+            0.0,
+            speed,
+            0.0,
+            0.005,
+            false,
         );
         mode_classifier.update_hybrid(lon, lat, 0.0, speed);
         let mode = mode_classifier.get_mode();
@@ -127,16 +146,22 @@ fn main() {
         let ay_noise = noise.next(0.05 * G);
 
         let (lon, lat) = fusion.process_imu(
-            ax_noise, ay_noise, G,
-            0.0, 0.0,  // AHRS reports level during cruise
+            ax_noise,
+            ay_noise,
+            G,
             0.0,
-            cruise_speed, 0.0,
-            0.005, false
+            0.0, // AHRS reports level during cruise
+            0.0,
+            cruise_speed,
+            0.0,
+            0.005,
+            false,
         );
         mode_classifier.update_hybrid(lon, lat, 0.0, cruise_speed);
         let mode = mode_classifier.get_mode();
 
-        if i > 200 { // After filter settles
+        if i > 200 {
+            // After filter settles
             max_lon = max_lon.max(lon.abs());
             if mode.has_accel() {
                 accel_count += 1;
@@ -150,13 +175,22 @@ fn main() {
         if i % 200 == 199 {
             let (pitch_corr, _) = fusion.get_orientation_correction();
             let (pitch_conf, _) = fusion.get_orientation_confidence();
-            println!("  t={:.1}s: lon={:.3} m/s², mode={}, pitch_corr={:.1}°, conf={:.0}%",
-                     (i + 1) as f32 * 0.005, lon, mode_str(&mode), pitch_corr, pitch_conf * 100.0);
+            println!(
+                "  t={:.1}s: lon={:.3} m/s², mode={}, pitch_corr={:.1}°, conf={:.0}%",
+                (i + 1) as f32 * 0.005,
+                lon,
+                mode_str(&mode),
+                pitch_corr,
+                pitch_conf * 100.0
+            );
         }
     }
     println!("\n  CRUISE RESULTS:");
     println!("    Max |lon|: {:.3} m/s² (should be < 0.5)", max_lon);
-    println!("    Mode counts: IDLE={}, ACCEL={}, BRAKE={}", idle_count, accel_count, brake_count);
+    println!(
+        "    Mode counts: IDLE={}, ACCEL={}, BRAKE={}",
+        idle_count, accel_count, brake_count
+    );
     if brake_count > 0 || accel_count > 0 {
         println!("    ⚠️  WARNING: False mode detections during cruise!");
     } else {
@@ -186,11 +220,16 @@ fn main() {
         let ay_noise = noise.next(0.05 * G);
 
         let (lon, lat) = fusion.process_imu(
-            ax_noise, lat_accel + ay_noise, G,  // Lateral accel in body Y
-            false_roll, 0.0,                     // AHRS reports false roll
+            ax_noise,
+            lat_accel + ay_noise,
+            G, // Lateral accel in body Y
+            false_roll,
+            0.0, // AHRS reports false roll
             yaw,
-            cruise_speed, turn_yaw_rate,
-            0.005, false
+            cruise_speed,
+            turn_yaw_rate,
+            0.005,
+            false,
         );
         mode_classifier.update_hybrid(lon, lat, turn_yaw_rate, cruise_speed);
         let mode = mode_classifier.get_mode();
@@ -206,7 +245,10 @@ fn main() {
                      (i + 1) as f32 * 0.005, lat, mode_str(&mode), false_roll, roll_corr, roll_conf * 100.0);
         }
     }
-    println!("  CORNER detection rate: {:.0}%\n", 100.0 * corner_count as f32 / 600.0);
+    println!(
+        "  CORNER detection rate: {:.0}%\n",
+        100.0 * corner_count as f32 / 600.0
+    );
 
     // Phase 5: Braking (2 seconds, -0.4g)
     println!("Phase 5: BRAKING (2s at -0.4g = -3.92 m/s²)");
@@ -225,18 +267,29 @@ fn main() {
         let ay_noise = noise.next(0.05 * G);
 
         let (lon, lat) = fusion.process_imu(
-            accel + ax_noise, ay_noise, G,
-            0.0, false_pitch,
+            accel + ax_noise,
+            ay_noise,
+            G,
+            0.0,
+            false_pitch,
             yaw,
-            speed, 0.0,
-            0.005, false
+            speed,
+            0.0,
+            0.005,
+            false,
         );
         mode_classifier.update_hybrid(lon, lat, 0.0, speed);
         let mode = mode_classifier.get_mode();
 
         if i % 100 == 99 {
-            println!("  t={:.1}s: speed={:.1} m/s, lon={:.2} m/s², mode={}, AHRS_pitch={:.1}°",
-                     (i + 1) as f32 * 0.005, speed, lon, mode_str(&mode), false_pitch);
+            println!(
+                "  t={:.1}s: speed={:.1} m/s, lon={:.2} m/s², mode={}, AHRS_pitch={:.1}°",
+                (i + 1) as f32 * 0.005,
+                speed,
+                lon,
+                mode_str(&mode),
+                false_pitch
+            );
         }
     }
     println!();
@@ -247,13 +300,8 @@ fn main() {
         let ax_noise = noise.next(0.02 * G);
         let ay_noise = noise.next(0.02 * G);
 
-        let (lon, lat) = fusion.process_imu(
-            ax_noise, ay_noise, G,
-            0.0, 0.0,
-            yaw,
-            0.0, 0.0,
-            0.005, true
-        );
+        let (lon, lat) =
+            fusion.process_imu(ax_noise, ay_noise, G, 0.0, 0.0, yaw, 0.0, 0.0, 0.005, true);
         mode_classifier.update_hybrid(lon, lat, 0.0, 0.0);
         let mode = mode_classifier.get_mode();
 
@@ -261,14 +309,21 @@ fn main() {
             let (pitch_corr, roll_corr) = fusion.get_orientation_correction();
             let (pitch_conf, roll_conf) = fusion.get_orientation_confidence();
             println!("  Final: lon={:.3} m/s², mode={}", lon, mode_str(&mode));
-            println!("  Final orientation correction: pitch={:.1}° ({:.0}%), roll={:.1}° ({:.0}%)",
-                     pitch_corr, pitch_conf * 100.0, roll_corr, roll_conf * 100.0);
+            println!(
+                "  Final orientation correction: pitch={:.1}° ({:.0}%), roll={:.1}° ({:.0}%)",
+                pitch_corr,
+                pitch_conf * 100.0,
+                roll_corr,
+                roll_conf * 100.0
+            );
         }
     }
 
     println!("\n=== Simulation Complete ===");
     println!("\nSummary:");
-    println!("- WT901 AHRS error was simulated: false pitch during accel, false roll during cornering");
+    println!(
+        "- WT901 AHRS error was simulated: false pitch during accel, false roll during cornering"
+    );
     println!("- OrientationCorrector learned to compensate for these errors");
     println!("- Corrected IMU provides accurate 200 Hz acceleration despite AHRS errors");
     println!("- GPS is used for ground truth during learning and as confidence-based fallback");
