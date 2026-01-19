@@ -823,6 +823,22 @@ Displayed as updates per minute (rolling average), not cumulative count. Typical
 - ZUPT: 0-60/min (depends on stops)
 - Free heap: ~60KB (stable during operation)
 
+**Color-Coded Thresholds:**
+The diagnostics page displays metrics with color coding for at-a-glance health status:
+
+| Metric | Green (OK) | Yellow (Warning) | Red (Error) |
+|--------|------------|------------------|-------------|
+| Loop Rate | > 500 Hz | > 200 Hz | < 200 Hz |
+| Position σ | < 5 m | < 10 m | > 10 m |
+| Velocity σ | < 0.5 m/s | < 1.0 m/s | > 1.0 m/s |
+| Yaw σ | < 5° | < 10° | > 10° |
+| Bias X/Y | < 0.3 m/s² | < 0.5 m/s² | > 0.5 m/s² |
+| Heap | > 40 KB | > 20 KB | < 20 KB |
+| Yaw Bias | < 10 mrad/s | < 50 mrad/s | > 50 mrad/s |
+| Tilt X/Y | < 0.3 m/s² | < 0.5 m/s² | > 0.5 m/s² |
+| Pitch/Roll Corr | < 10° | - | > 10° |
+| Orient Conf | > 50% | - | < 50% |
+
 ### udp_stream.rs - UDP Client (Station Mode)
 
 **Features:**
