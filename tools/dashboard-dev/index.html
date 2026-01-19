@@ -3,24 +3,21 @@
 <meta name="apple-mobile-web-app-capable" content="yes"><title>Blackbox - Dev Mode</title>
 <style>
 :root {
-    --cyan: #00f0ff;
-    --cyan-dim: #004455;
-    --amber: #ff6a00;
-    --amber-dim: #442200;
+    /* Two colors only: neutral grey (hardcoded) and action color (--hue) */
     --bg: #030508;
     --bg-panel: rgba(0,20,30,0.6);
     --glow: 0;
-    --hue: 190;
+    --hue: 190; /* Global action color: 190=cyan, 25=amber, 330=hotpink */
 }
 *{margin:0;padding:0;box-sizing:border-box}
 
-/* Grid background */
+/* Grid background - uses neutral grey, not action color */
 body{
     font-family:'Courier New',monospace;
     background: var(--bg);
     background-image:
-        linear-gradient(rgba(0,240,255,0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(0,240,255,0.03) 1px, transparent 1px);
+        linear-gradient(rgba(100,120,130,0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(100,120,130,0.06) 1px, transparent 1px);
     background-size: 40px 40px;
     color:#fff;
     height:100vh;
@@ -74,7 +71,7 @@ body::before {
     justify-content:space-between;
     align-items:center;
     border-bottom: 1px solid hsla(var(--hue), 100%, 50%, 0.4);
-    box-shadow: 0 2px 20px rgba(0, 240, 255, 0.1);
+    box-shadow: 0 2px 20px hsla(var(--hue), 100%, 50%, 0.1);
 }
 .logo{
     font-weight:400;
@@ -86,7 +83,7 @@ body::before {
 .timer{font-size:11px;opacity:0.5;font-variant-numeric:tabular-nums;letter-spacing:2px}
 .st{display:flex;align-items:center;gap:6px;font-size:10px;letter-spacing:1px}
 .dot{width:6px;height:6px;background:hsl(var(--hue), 100%, 50%);box-shadow:0 0 10px hsl(var(--hue), 100%, 50%)}
-.dot.rec{background:#ff3333;box-shadow:0 0 10px #ff3333;animation:pulse 1s infinite}
+.dot.rec{background:hsl(var(--hue), 100%, 50%);box-shadow:0 0 10px hsl(var(--hue), 100%, 50%);animation:pulse 1s infinite}
 @keyframes pulse{50%{opacity:.3}}
 .gps-st{display:flex;align-items:center;gap:4px;font-size:9px;letter-spacing:1px;color:#556;transition:color 0.3s}
 .gps-st.ok{color:hsl(var(--hue),100%,50%)}
@@ -144,7 +141,7 @@ body::before {
     flex-direction:column;
     justify-content:center;
 }
-.max-spd-val{font-size:22px;font-weight:300;color:#ff6a00;text-shadow:0 0 10px rgba(255,106,0,0.5);font-variant-numeric:tabular-nums}
+.max-spd-val{font-size:22px;font-weight:300;color:hsl(var(--hue),100%,50%);text-shadow:0 0 10px hsla(var(--hue),100%,50%,0.5);font-variant-numeric:tabular-nums}
 .max-spd-lbl{font-size:8px;opacity:0.4;letter-spacing:2px;margin-top:2px}
 
 /* G-Force display - see .gforce-tile section */
@@ -220,7 +217,7 @@ body::before {
 .cfg-slider{
     flex:1;
     -webkit-appearance:none;
-    background:rgba(0,240,255,0.1);
+    background:hsla(var(--hue),100%,50%,0.1);
     height:2px;
     border-radius:0;
 }
@@ -275,7 +272,7 @@ body::before {
     transition:all 0.2s;
 }
 .btn-rec{color:hsl(var(--hue), 100%, 60%)}
-.btn-rec.on{background:rgba(255,50,50,0.2);border-color:#ff3333;color:#ff6666}
+.btn-rec.on{background:hsla(var(--hue),100%,50%,0.2);border-color:hsl(var(--hue),100%,50%);color:hsl(var(--hue),100%,60%)}
 .btn-exp{color:hsla(var(--hue), 100%, 60%, 0.5)}
 
 
@@ -319,10 +316,7 @@ body::before {
     transition: border-color 0.3s, box-shadow 0.3s;
 }
 
-#boxTop.at-peak {
-    border-color: rgba(255, 106, 0, 0.45);
-    box-shadow: 0 0 25px rgba(255, 106, 0, 0.15);
-}
+/* at-peak state now handled by global --hue variable */
 
 /* === TOP BOX: SPEED FOCUS === */
 .speed-focus {
@@ -350,10 +344,7 @@ body::before {
     line-height: 1;
 }
 
-.mode-bg.at-peak {
-    color: #ff6a00;
-    opacity: 0.18;
-}
+/* mode-bg color now controlled by global --hue */
 
 /* Speed stack - FIXED LAYOUT, NO SHIFT */
 .speed-stack {
@@ -411,10 +402,7 @@ body::before {
     /* Position is FIXED - only color changes */
 }
 
-.current-speed.at-peak {
-    color: #ff6a00;
-    text-shadow: 0 0 40px rgba(255, 106, 0, 0.3);
-}
+/* current-speed color now controlled by global --hue */
 
 /* km/h indicator - SAME SIZE as peak number */
 .speed-unit {
@@ -438,9 +426,7 @@ body::before {
     transition: color 0.3s;
 }
 
-.maneuver.braking {
-    color: #ff6a00;
-}
+/* maneuver color now controlled by global --hue */
 
 /* === MIDDLE BOX: G-FORCE TILE === */
 #boxMiddle {
@@ -674,8 +660,8 @@ body::before {
 }
 
 #boxBottom .btn-rec.on {
-    background: rgba(255, 50, 50, 0.1);
-    color: #c66;
+    background: hsla(var(--hue), 100%, 50%, 0.1);
+    color: hsl(var(--hue), 100%, 60%);
 }
 
 /* Remove main container styles - now using golden-box */
@@ -805,23 +791,69 @@ function applyGoldenHeights() {
 window.addEventListener('resize', applyGoldenHeights);
 window.addEventListener('DOMContentLoaded', applyGoldenHeights);
 
-// === DYNAMIC GLOW SYSTEM ===
+// === UNIFIED GLOBAL COLOR SYSTEM ===
+// Only 2 colors: neutral grey (handled by CSS) and action color (controlled by --hue)
+// Action color states: cyan (accelerating) -> amber (braking) -> hot pink (new max speed)
 let currentGlow = 0;
-let currentHue = 190; // Cyan
-const targetHue = { cyan: 190, amber: 25 };
+let currentHue = 190;
+const HUE = {
+    CYAN: 190,      // Accelerating / default
+    AMBER: 25,      // Braking
+    HOTPINK: 330    // New max speed achieved
+};
 
-function updateGlow(speed, lonG) {
+// Global color state - ALL elements read from this
+let isAtNewMax = false;
+let newMaxFlashStart = 0;
+const NEW_MAX_FLASH_DURATION = 1500; // Flash hot pink for 1.5s when hitting new max
+
+function updateGlobalColor(speed, lonG, atNewMax) {
+    const now = Date.now();
+
     // Glow intensity based on speed (0-1)
     const targetGlow = Math.min(1, speed / 120);
     currentGlow += (targetGlow - currentGlow) * 0.1;
 
-    // Hue shifts to amber when braking
-    const braking = lonG < -0.1;
-    const targetH = braking ? targetHue.amber : targetHue.cyan;
-    currentHue += (targetH - currentHue) * 0.08;
+    // Determine target hue based on state priority:
+    // 1. New max speed (hot pink) - highest priority, temporary flash
+    // 2. Braking (amber)
+    // 3. Default/accelerating (cyan)
+
+    let targetH;
+
+    // Detect new max transition
+    if (atNewMax && !isAtNewMax) {
+        newMaxFlashStart = now;
+    }
+    isAtNewMax = atNewMax;
+
+    // Check if we're in the hot pink flash window
+    const inMaxFlash = (now - newMaxFlashStart) < NEW_MAX_FLASH_DURATION && newMaxFlashStart > 0;
+
+    if (inMaxFlash) {
+        targetH = HUE.HOTPINK;
+    } else if (lonG < -0.1) {
+        targetH = HUE.AMBER;
+    } else {
+        targetH = HUE.CYAN;
+    }
+
+    // Smooth transition - faster for dramatic changes
+    const hueDiff = Math.abs(targetH - currentHue);
+    const transitionSpeed = hueDiff > 100 ? 0.15 : 0.08;
+
+    // Handle hue wraparound (e.g., 350 -> 10 should go through 360/0)
+    let diff = targetH - currentHue;
+    if (diff > 180) diff -= 360;
+    if (diff < -180) diff += 360;
+    currentHue += diff * transitionSpeed;
+    if (currentHue < 0) currentHue += 360;
+    if (currentHue >= 360) currentHue -= 360;
 
     document.documentElement.style.setProperty('--glow', currentGlow.toFixed(3));
     document.documentElement.style.setProperty('--hue', Math.round(currentHue));
+
+    return Math.round(currentHue); // Return for canvas use
 }
 
 // === MODE DETECTION ===
@@ -1022,10 +1054,7 @@ function gForceToGrid(gx, gy) {
 
 // Trail as grid cells with intensity and color
 let gridTrail = []; // [{col, row, intensity, hue}]
-
-// Two colors only: cyan (190) for faster, amber (25) for slower
-const HUE_CYAN = 190;
-const HUE_AMBER = 25;
+// Trail uses global currentHue - no local color constants needed
 
 // === AUTO-ZOOM CAMERA SYSTEM ===
 let magnitudeHistory = [];
@@ -1143,17 +1172,14 @@ function drawG() {
     }
 
     // Draw current indicator (head) - single tile, full brightness
+    // Uses global currentHue for unified color across all UI elements
     if (trail.length > 0) {
         const current = trail[trail.length - 1];
         const gridPos = gForceToGrid(current.x, current.y);
         const corners = getCellCorners(gridPos.col, gridPos.row, w, h);
 
-        // Determine color: cyan if accelerating, amber if braking/slowing
-        const isAccelerating = simLonG > 0.05;
-        const indicatorHue = isAccelerating ? HUE_CYAN : HUE_AMBER;
-
-        // Single tile - full brightness
-        ctx.fillStyle = `hsla(${indicatorHue}, 100%, 60%, 0.95)`;
+        // Use global currentHue - same color as all other UI elements
+        ctx.fillStyle = `hsla(${currentHue}, 100%, 60%, 0.95)`;
         ctx.beginPath();
         ctx.moveTo(corners[0].x, corners[0].y);
         ctx.lineTo(corners[1].x, corners[1].y);
@@ -1162,10 +1188,10 @@ function drawG() {
         ctx.closePath();
         ctx.fill();
 
-        // Add to trail if moved to new cell
+        // Add to trail if moved to new cell - store current global hue
         const lastTrail = gridTrail[gridTrail.length - 1];
         if (!lastTrail || lastTrail.col !== gridPos.col || lastTrail.row !== gridPos.row) {
-            gridTrail.push({ col: gridPos.col, row: gridPos.row, intensity: 1.0, hue: indicatorHue });
+            gridTrail.push({ col: gridPos.col, row: gridPos.row, intensity: 1.0, hue: currentHue });
         }
     }
 
@@ -1192,9 +1218,6 @@ function simulate() {
     simLonG = addNoise(auto.lonG, 0.02);
     simLatG = addNoise(auto.latG, 0.02);
     simYawDeg = addNoise(auto.yawDeg, 1);
-
-    // Update glow based on speed and braking
-    updateGlow(simSpeed, simLonG);
 
     const sp = simSpeed, latg = simLatG, lng = simLonG;
     const yawDeg = Math.abs(simYawDeg), yawRad = simYawDeg * Math.PI / 180;
@@ -1239,23 +1262,20 @@ function simulate() {
         wasAccelerating = false;
     }
 
-    // Determine if at/exceeding peak
-    const atPeak = dspd >= displayedPeak && dspd > 0;
+    // Detect if we just hit a new max speed (for hot pink flash)
+    const justHitNewMax = dspd > 0 && dspd > displayedPeak;
 
-    // Update Top Box UI
-    const boxTopEl = $('boxTop');
+    // Update unified global color system - ALL UI colors change together
+    updateGlobalColor(simSpeed, simLonG, justHitNewMax);
+
+    // Update Top Box UI (all colors controlled by global --hue)
     const currentSpeedEl = $('current-speed');
     const peakRowEl = $('peak-row');
     const peakValEl = $('peak-val');
     const maneuverEl = $('maneuver');
     const modeBgEl = $('mode-bg');
 
-    // Current speed display
     currentSpeedEl.textContent = dspd;
-    currentSpeedEl.classList.toggle('at-peak', atPeak);
-
-    // Container glow state
-    boxTopEl.classList.toggle('at-peak', atPeak);
 
     // Peak display - show only when current < displayed peak
     if (displayedPeak > 0 && dspd < displayedPeak) {
@@ -1265,13 +1285,11 @@ function simulate() {
         peakRowEl.classList.add('hidden');
     }
 
-    // Maneuver text
+    // Maneuver text (color controlled by global --hue)
     maneuverEl.textContent = MANEUVER_TEXT[mo] || 'Idle';
-    maneuverEl.classList.toggle('braking', isBraking);
 
-    // Background mode symbol
+    // Background mode symbol (color controlled by global --hue)
     modeBgEl.textContent = MODE_ICONS[mo] || '◇';
-    modeBgEl.classList.toggle('at-peak', atPeak);
 
     // Bottom box metrics (use fmtG to prevent 0.00/-0.00 flicker)
     $('latg').textContent = fmtG(latg);
@@ -1413,7 +1431,7 @@ function saveCfg() {
     const p = { acc: parseFloat($('s-acc').value), acc_exit: parseFloat($('s-accexit').value), brake: parseFloat($('s-brake').value), brake_exit: parseFloat($('s-brakeexit').value), lat: parseFloat($('s-lat').value), lat_exit: parseFloat($('s-latexit').value), yaw: parseFloat($('s-yaw').value), min_speed: parseFloat($('s-minspd').value) };
     if (p.acc_exit >= p.acc || p.brake_exit >= p.brake || p.lat_exit >= p.lat) { alert('Exit must be < Entry'); return; }
     applyConfig(p);
-    const btn = document.querySelector('.cfg-save'); btn.textContent = 'APPLIED'; btn.style.background = 'rgba(0,255,100,0.2)';
+    const btn = document.querySelector('.cfg-save'); btn.textContent = 'APPLIED'; btn.style.background = `hsla(${currentHue},100%,50%,0.2)`;
     setTimeout(() => { btn.textContent = 'APPLY'; btn.style.background = ''; }, 1500);
 }
 
