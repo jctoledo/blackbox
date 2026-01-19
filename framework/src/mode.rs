@@ -131,11 +131,11 @@ impl Default for ModeConfig {
             min_speed: 2.0,    // ~7 km/h - must be moving for accel/brake/corner
             acc_thr: 0.10,     // 0.10g - city driving (gentle acceleration)
             acc_exit: 0.05,    // exit when below 0.05g
-            brake_thr: -0.25,  // -0.25g - less aggressive brake detection
-            brake_exit: -0.12, // exit when above -0.12g
-            lat_thr: 0.10,     // 0.10g lateral - more sensitive corner detection
+            brake_thr: -0.15,  // -0.15g - sensitive brake detection (compensates for mounting bias)
+            brake_exit: -0.08, // exit when above -0.08g
+            lat_thr: 0.10,     // 0.10g lateral - sensitive corner detection
             lat_exit: 0.05,    // exit when below 0.05g
-            yaw_thr: 0.04,     // ~2.3°/s yaw rate - more sensitive
+            yaw_thr: 0.04,     // ~2.3°/s yaw rate - sensitive
             alpha: DEFAULT_MODE_ALPHA,
         }
     }

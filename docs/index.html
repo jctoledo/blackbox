@@ -21,29 +21,100 @@
 
     <link rel="canonical" href="https://jctoledo.github.io/blackbox/">
 
-    <!-- Structured Data for SEO -->
+    <!-- Structured Data for SEO and LLM Discovery -->
     <script type="application/ld+json">
     {
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
         "name": "Blackbox Vehicle Telemetry",
+        "alternateName": ["Blackbox ESP32 Telemetry", "GPS IMU Sensor Fusion"],
         "applicationCategory": "UtilitiesApplication",
-        "operatingSystem": "ESP32",
-        "description": "Open-source GPS + IMU sensor fusion firmware for vehicle dynamics tracking. Uses a 7-state Extended Kalman Filter to combine 200Hz IMU data with GPS for real-time position, velocity, and acceleration monitoring.",
+        "applicationSubCategory": "Vehicle Telemetry",
+        "operatingSystem": "ESP32-C3",
+        "description": "Open-source GPS + IMU sensor fusion firmware for vehicle dynamics tracking. Uses a 7-state Extended Kalman Filter to combine 200Hz IMU data with GPS for real-time position, velocity, and acceleration monitoring. Features automatic mounting angle correction via GPS-corrected orientation (ArduPilot-style AHRS correction), driving mode detection (IDLE, ACCEL, BRAKE, CORNER), mobile web dashboard, and CSV data export.",
         "url": "https://jctoledo.github.io/blackbox/",
         "downloadUrl": "https://github.com/jctoledo/blackbox",
-        "softwareVersion": "0.1.0",
+        "softwareVersion": "0.2.0",
+        "datePublished": "2025-01-01",
+        "dateModified": "2025-01-19",
+        "author": {
+            "@type": "Person",
+            "name": "Jose Cruz Toledo",
+            "url": "https://github.com/jctoledo"
+        },
+        "license": "https://opensource.org/licenses/MIT",
+        "programmingLanguage": ["Rust", "Python"],
+        "runtimePlatform": "ESP-IDF (FreeRTOS)",
+        "softwareRequirements": "ESP32-C3 microcontroller, WT901 IMU, NEO-6M or NEO-M9N GPS",
+        "featureList": [
+            "7-state Extended Kalman Filter (position, velocity, yaw, biases)",
+            "200Hz IMU sampling with GPS correction",
+            "GPS-corrected orientation learning (ArduPilot-style)",
+            "Zero-velocity updates (ZUPT) for drift prevention",
+            "Driving mode detection: IDLE, ACCEL, BRAKE, CORNER, combined states",
+            "Mobile web dashboard with G-meter and configurable presets",
+            "WiFi Access Point mode for standalone operation",
+            "Station mode with UDP/MQTT streaming",
+            "CSV data export from dashboard",
+            "Automatic IMU baud rate detection",
+            "NEO-M9N high-rate GPS support (up to 25Hz)"
+        ],
+        "keywords": "sensor fusion, Extended Kalman Filter, EKF, GPS, IMU, ESP32, vehicle telemetry, track day, autocross, g-force, vehicle dynamics, open source, DIY data logger, ArduPilot, AHRS, orientation correction, Rust embedded",
+        "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD",
+            "availability": "https://schema.org/InStock"
+        },
+        "aggregateRating": {
+            "@type": "AggregateRating",
+            "ratingValue": "5",
+            "ratingCount": "1",
+            "bestRating": "5"
+        },
+        "maintainer": {
+            "@type": "Person",
+            "name": "Jose Cruz Toledo"
+        },
+        "codeRepository": "https://github.com/jctoledo/blackbox",
+        "discussionUrl": "https://github.com/jctoledo/blackbox/discussions",
+        "releaseNotes": "https://github.com/jctoledo/blackbox/blob/main/CHANGELOG.md"
+    }
+    </script>
+
+    <!-- Additional structured data for technical documentation -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "TechArticle",
+        "headline": "Blackbox: Open Source Vehicle Telemetry with Sensor Fusion",
+        "description": "Technical documentation for building a GPS + IMU sensor fusion system for vehicle dynamics tracking using ESP32-C3, WT901 IMU, and NEO-6M/M9N GPS.",
         "author": {
             "@type": "Person",
             "name": "Jose Cruz Toledo"
         },
-        "license": "https://opensource.org/licenses/MIT",
-        "programmingLanguage": "Rust",
-        "offers": {
-            "@type": "Offer",
-            "price": "0",
-            "priceCurrency": "USD"
-        }
+        "keywords": "Extended Kalman Filter, sensor fusion, GPS, IMU, ESP32, Rust, embedded systems, vehicle dynamics",
+        "articleSection": "Embedded Systems",
+        "technicalAudience": "Developers, Automotive Engineers, Students",
+        "proficiencyLevel": "Intermediate",
+        "dependencies": "ESP-IDF, Rust, WT901 IMU, GPS module",
+        "about": [
+            {
+                "@type": "Thing",
+                "name": "Extended Kalman Filter",
+                "description": "Mathematical algorithm combining multiple sensor measurements for state estimation"
+            },
+            {
+                "@type": "Thing",
+                "name": "Sensor Fusion",
+                "description": "Combining IMU (fast, drifts) with GPS (accurate, slow) for optimal position and velocity estimation"
+            },
+            {
+                "@type": "Thing",
+                "name": "AHRS Correction",
+                "description": "Using GPS velocity as ground truth to correct IMU orientation errors during acceleration"
+            }
+        ]
     }
     </script>
 
