@@ -39,7 +39,7 @@ def analyze_telemetry(filename):
     # === TIMING ANALYSIS ===
     print("--- TIMING ---")
     times = [int(r['time']) for r in rows]
-    intervals = [times[i] - times[i-1] for i in range(1, len(times))]
+    intervals = [times[i] - times[i - 1] for i in range(1, len(times))]
     if intervals:
         avg_interval = statistics.mean(intervals)
         std_interval = statistics.stdev(intervals) if len(intervals) > 1 else 0
@@ -83,7 +83,7 @@ def analyze_telemetry(filename):
     # Check for bias - compare when speed is stable
     stable_lon = []
     for i in range(1, len(rows)):
-        speed_diff = abs(float(rows[i]['speed']) - float(rows[i-1]['speed']))
+        speed_diff = abs(float(rows[i]['speed']) - float(rows[i - 1]['speed']))
         if speed_diff < 0.3:  # Speed stable within 0.3 km/h
             stable_lon.append(float(rows[i]['lon_g']))
     if stable_lon:
@@ -206,9 +206,9 @@ def analyze_telemetry(filename):
     # Calculate acceleration from speed changes
     true_accels = []
     for i in range(1, len(rows)):
-        dt = (int(rows[i]['time']) - int(rows[i-1]['time'])) / 1000.0  # seconds
+        dt = (int(rows[i]['time']) - int(rows[i - 1]['time'])) / 1000.0  # seconds
         if dt > 0:
-            dv = (float(rows[i]['speed']) - float(rows[i-1]['speed'])) / 3.6  # m/s
+            dv = (float(rows[i]['speed']) - float(rows[i - 1]['speed'])) / 3.6  # m/s
             accel_g = (dv / dt) / 9.80665  # in G
             true_accels.append(accel_g)
 
@@ -237,9 +237,9 @@ def analyze_telemetry(filename):
         mode = int(float(rows[i]['mode']))
 
         # Use speed-derived acceleration as ground truth
-        dt = (int(rows[i]['time']) - int(rows[i-1]['time'])) / 1000.0
+        dt = (int(rows[i]['time']) - int(rows[i - 1]['time'])) / 1000.0
         if dt > 0:
-            dv = (float(rows[i]['speed']) - float(rows[i-1]['speed'])) / 3.6
+            dv = (float(rows[i]['speed']) - float(rows[i - 1]['speed'])) / 3.6
             true_accel_g = (dv / dt) / 9.80665
         else:
             true_accel_g = 0
