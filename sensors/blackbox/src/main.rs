@@ -18,13 +18,13 @@ use std::sync::Arc;
 
 use config::{SystemConfig, WifiModeConfig};
 use diagnostics::{DiagnosticsState, FusionDiagnostics};
-use fusion::{FusionConfig, SensorFusion};
 use esp_idf_hal::{
     delay::FreeRtos,
     peripherals::Peripherals,
     uart::{config::Config, UartDriver},
 };
 use esp_idf_svc::{eventloop::EspSystemEventLoop, nvs::EspDefaultNvsPartition};
+use fusion::{FusionConfig, SensorFusion};
 use log::info;
 use mqtt::MqttClient;
 use rgb_led::RgbLed;
@@ -453,7 +453,8 @@ fn main() {
     // - IMU orientation is corrected BEFORE gravity removal
     // - Enables accurate 200 Hz IMU data instead of being limited to GPS rate
     //
-    // For longitudinal: Blends corrected IMU with GPS based on correction confidence
+    // For longitudinal: Blends corrected IMU with GPS based on correction
+    // confidence
     // - High confidence → trust IMU more (fast 200 Hz response)
     // - Low confidence → rely on GPS (ground truth but slower)
     //
@@ -737,8 +738,9 @@ fn main() {
             }
 
             // ALWAYS feed GPS speed to sensor fusion when we have a new fix
-            // GPS acceleration only needs scalar speed - doesn't require full position validity
-            // This ensures OrientationCorrector can learn even during brief GPS hiccups
+            // GPS acceleration only needs scalar speed - doesn't require full position
+            // validity This ensures OrientationCorrector can learn even during
+            // brief GPS hiccups
             if sensors.gps_parser.is_warmed_up() && is_new_fix {
                 let gps_speed = sensors.gps_parser.last_fix().speed;
                 let time_s = now_ms as f32 / 1000.0;
@@ -752,7 +754,8 @@ fn main() {
                 }
             }
 
-            // Check if warmup complete (has reference point) AND fix is valid for EKF updates
+            // Check if warmup complete (has reference point) AND fix is valid for EKF
+            // updates
             if sensors.gps_parser.is_warmed_up() && sensors.gps_parser.last_fix().valid {
                 let (ax_corr, ay_corr, _) = sensors.imu_parser.get_accel_corrected();
 
@@ -818,15 +821,16 @@ fn main() {
                 sensors.is_stationary(ax_corr, ay_corr, sensors.imu_parser.data().wz);
 
             // Process through sensor fusion (GPS-corrected orientation + blending)
-            // Pass raw body-frame IMU data - fusion handles transforms with corrected orientation
+            // Pass raw body-frame IMU data - fusion handles transforms with corrected
+            // orientation
             let dt = config.telemetry.interval_ms as f32 / 1000.0;
             let (lon_blended, lat_filtered) = sensor_fusion.process_imu(
-                ax_corr,                           // Raw body-frame X accel (bias-corrected)
-                ay_corr,                           // Raw body-frame Y accel (bias-corrected)
-                az_corr,                           // Raw body-frame Z accel (gravity)
-                sensors.imu_parser.data().roll,    // AHRS roll (degrees)
-                sensors.imu_parser.data().pitch,   // AHRS pitch (degrees)
-                estimator.ekf.yaw(),               // EKF yaw (radians)
+                ax_corr,                         // Raw body-frame X accel (bias-corrected)
+                ay_corr,                         // Raw body-frame Y accel (bias-corrected)
+                az_corr,                         // Raw body-frame Z accel (gravity)
+                sensors.imu_parser.data().roll,  // AHRS roll (degrees)
+                sensors.imu_parser.data().pitch, // AHRS pitch (degrees)
+                estimator.ekf.yaw(),             // EKF yaw (radians)
                 speed,
                 sensors.imu_parser.data().wz,
                 dt,
