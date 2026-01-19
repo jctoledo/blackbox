@@ -428,8 +428,8 @@ const PEAK_UPDATE_DELAY=3000;
 let emaGx=0,emaGy=0,lastProcessTime=0;
 const EMA_TAU=0.10; // 100ms time constant - tune for feel
 
-// GPS status tracking
-let gpsCount=0,lastGpsState=0;
+// GPS status tracking (count actual position changes, not just gpsOk flag)
+let gpsCount=0,lastGpsState=0,lastGpsLat=0,lastGpsLon=0;
 
 // Fusion diagnostics for CSV export (fetched periodically during recording)
 let fusion={lon_imu:0,lon_gps:0,gps_wt:0,pitch_c:0,pitch_cf:0,roll_c:0,roll_cf:0,tilt_x:0,tilt_y:0};
@@ -463,7 +463,15 @@ function process(buf){
 
     speed_ema=0.7*sp+(1-0.7)*speed_ema;
     const dspd=speed_ema<1?0:Math.round(speed_ema);
-    const isAccelerating=lng>0.05,isBraking=lng<-0.1;
+
+    // Deadzone-filtered G values (used for display, color, autozoom)
+    const mag=Math.sqrt(emaGx*emaGx+emaGy*emaGy);
+    const noiseFloor=speed_ema<5?0.05:0.02; // Larger deadzone when stopped
+    const gx=mag<noiseFloor?0:emaGx;
+    const gy=mag<noiseFloor?0:emaGy;
+
+    // Use filtered values for state detection to prevent color flicker
+    const isAccelerating=gy>0.05,isBraking=gy<-0.1;
 
     // Peak tracking
     if(isAccelerating){lastAccelTime=now;wasAccelerating=true}
@@ -486,17 +494,24 @@ function process(buf){
     $('mode-bg').textContent=MODE_ICONS[mo]||'\u25C7';
     $('mode-bg').classList.toggle('at-peak',atPeak);
 
-    // Bottom metrics (use fmtG to prevent 0.00/-0.00 flicker)
-    $('latg').textContent=fmtG(latg);
-    $('lng').textContent=fmtG(lng);
+    // GPS status tracking (count actual new fixes by detecting position changes)
+    if(gpsOk){
+        lastGpsState=1;
+        if(lat!==lastGpsLat||lon!==lastGpsLon){gpsCount++;lastGpsLat=lat;lastGpsLon=lon}
+    }else{lastGpsState=0}
+
+    // Bottom metrics (use smoothed/deadzone values to prevent flickering)
+    $('latg').textContent=fmtG(gx);
+    $('lng').textContent=fmtG(gy);
     $('yaw').textContent=yawDeg.toFixed(0);
 
-    // GPS status tracking (count valid fixes for Hz calculation)
-    if(gpsOk){gpsCount++;lastGpsState=1}else{lastGpsState=0}
-
-    // G-force tracking (use EMA-smoothed values for dot, raw for max tracking)
-    const gx=emaGx,gy=emaGy;
-    updateAutoZoom(gx,gy);
+    // Only autozoom when moving; freeze G-meter when stopped
+    if(speed_ema>=2){
+        updateAutoZoom(gx,gy);
+    }else{
+        magnitudeHistory=[];
+        currentMaxG=MIN_MAX_G; // Reset to default 0.2g scale
+    }
     trail.push({x:gx,y:gy});if(trail.length>30)trail.shift();
 
     // Max G with active highlighting
