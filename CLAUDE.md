@@ -311,10 +311,10 @@ After 5 consecutive stationary detections:
 
 | Preset | Accel | Brake | Lateral | Yaw | Min Speed | Use Case |
 |--------|-------|-------|---------|-----|-----------|----------|
-| Track | 0.30g | 0.50g | 0.50g | 0.15 rad/s | 3.0 m/s | Racing, autocross |
-| Canyon | 0.20g | 0.35g | 0.30g | 0.10 rad/s | 2.5 m/s | Spirited twisty roads |
-| City (default) | 0.10g | 0.18g | 0.12g | 0.05 rad/s | 2.0 m/s | Daily driving |
-| Highway | 0.08g | 0.15g | 0.10g | 0.04 rad/s | 4.0 m/s | Cruise, subtle inputs |
+| Track | 0.35g | 0.35g | 0.50g | 0.15 rad/s | 4.0 m/s | Racing, autocross |
+| Canyon | 0.22g | 0.22g | 0.28g | 0.10 rad/s | 3.0 m/s | Spirited twisty roads |
+| City (default) | 0.10g | 0.15g | 0.10g | 0.04 rad/s | 2.0 m/s | Daily driving |
+| Highway | 0.12g | 0.15g | 0.12g | 0.04 rad/s | 5.0 m/s | Cruise, subtle inputs |
 | Custom | User-defined | | | | | Fine-tuning via sliders |
 
 Exit thresholds are 50% of entry values for hysteresis (prevents oscillation).
@@ -550,8 +550,8 @@ Result: acceleration due to motion only (no gravity component).
 Independent hysteresis detection:
 
 ACCEL:    entry at 0.10g → exit at 0.05g  (from blended lon accel)
-BRAKE:    entry at -0.18g → exit at -0.09g (from blended lon accel)
-CORNER:   entry at 0.12g lat + 0.05rad/s yaw → exit at 0.06g lat
+BRAKE:    entry at -0.15g → exit at -0.08g (from blended lon accel)
+CORNER:   entry at 0.10g lat + 0.04rad/s yaw → exit at 0.05g lat
 
 Combined states:
 - ACCEL + CORNER = corner exit (trail throttle)

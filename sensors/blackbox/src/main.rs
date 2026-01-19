@@ -461,15 +461,18 @@ fn main() {
     let fusion_config = FusionConfig {
         gps_high_rate: 20.0,
         gps_medium_rate: 10.0,
-        gps_max_age: 0.2, // GPS older than 200ms is stale → fall back to IMU
+        // GPS staleness threshold - must be > GPS interval + processing delay
+        // At 5Hz GPS (200ms) with ~20Hz telemetry, 400ms gives safe margin
+        gps_max_age: 0.4,
         // GPS weights based on orientation correction confidence:
         gps_weight_high: 0.3,   // 30% GPS when correction is very confident
         gps_weight_medium: 0.6, // 60% GPS when moderately confident
         gps_weight_low: 1.0,    // 100% GPS when not confident (no correction yet)
         tilt_learn_time: 3.0,
         // Butterworth filter to remove engine vibration from IMU
+        // Sample rate must match ACTUAL process_imu() call rate (telemetry rate)
         lon_filter_cutoff: 10.0,
-        lon_sample_rate: 200.0,
+        lon_sample_rate: 30.0, // 33ms telemetry interval = ~30Hz (from TelemetryConfig::default)
     };
     let mut sensor_fusion = SensorFusion::new(fusion_config);
 
@@ -728,11 +731,28 @@ fn main() {
         if sensors.poll_gps() {
             // Count GPS rate only when a NEW valid RMC fix is received
             // (not on every GGA/GSA sentence while last_fix.valid is still true)
-            if sensors.gps_parser.take_new_fix() {
+            let is_new_fix = sensors.gps_parser.take_new_fix();
+            if is_new_fix {
                 diagnostics.record_gps_fix();
             }
 
-            // Check if warmup complete (has reference point) AND fix is valid
+            // ALWAYS feed GPS speed to sensor fusion when we have a new fix
+            // GPS acceleration only needs scalar speed - doesn't require full position validity
+            // This ensures OrientationCorrector can learn even during brief GPS hiccups
+            if sensors.gps_parser.is_warmed_up() && is_new_fix {
+                let gps_speed = sensors.gps_parser.last_fix().speed;
+                let time_s = now_ms as f32 / 1000.0;
+                sensor_fusion.process_gps(gps_speed, time_s);
+
+                // Feed GPS heading to yaw rate calibrator (only valid at speed)
+                // Course over ground is unreliable below ~5 m/s
+                if gps_speed > 5.0 {
+                    let course = sensors.gps_parser.last_fix().course;
+                    sensor_fusion.process_gps_heading(course);
+                }
+            }
+
+            // Check if warmup complete (has reference point) AND fix is valid for EKF updates
             if sensors.gps_parser.is_warmed_up() && sensors.gps_parser.last_fix().valid {
                 let (ax_corr, ay_corr, _) = sensors.imu_parser.get_accel_corrected();
 
@@ -765,21 +785,11 @@ fn main() {
                     estimator.reset_speed();
                 }
 
+                // Update EKF with velocity components (requires full validity)
                 if let Some((vx, vy)) = sensors.gps_parser.get_velocity_enu() {
                     let speed = (vx * vx + vy * vy).sqrt();
                     estimator.update_velocity(vx, vy);
                     estimator.update_speed(speed);
-
-                    // Feed GPS speed to sensor fusion for acceleration calculation
-                    let time_s = now_ms as f32 / 1000.0;
-                    sensor_fusion.process_gps(speed, time_s);
-
-                    // Feed GPS heading to yaw rate calibrator (only valid at speed)
-                    // Course over ground is unreliable below ~5 m/s
-                    if speed > 5.0 {
-                        let course = sensors.gps_parser.last_fix().course;
-                        sensor_fusion.process_gps_heading(course);
-                    }
                 }
             }
         }
