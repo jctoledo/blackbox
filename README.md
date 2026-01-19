@@ -314,6 +314,9 @@ cargo clippy -- -D warnings
 # Run unit tests (on host, no device needed)
 cargo test -p sensor-fusion -p wt901 -p ublox-gps
 
+# Run driving simulation (demonstrates GPS-corrected orientation)
+cargo run -p sensor-fusion --example drive_sim
+
 # Clean build (if things go wrong)
 cargo clean
 ```
@@ -899,6 +902,23 @@ mosquitto_sub -h localhost -t 'car/#' -v
 python3 probe_wt901.py /dev/ttyUSB0
 ```
 Useful for verifying IMU is working before flashing, or determining what baud rate it's configured to.
+
+**Analyze Telemetry CSV (works with both modes):**
+```bash
+# Export CSV from dashboard, then analyze on your computer
+python3 analyze_telemetry.py recorded_session.csv
+```
+Analyzes a CSV export from the dashboard and provides:
+- **Timing analysis**: Sample rate, duration
+- **Speed distribution**: Time in speed bands
+- **Acceleration analysis**: lon_g range, mean, bias detection
+- **Mode distribution**: Time spent in IDLE/ACCEL/BRAKE/CORNER
+- **Ground truth comparison**: Compares lon_g with GPS-derived acceleration
+- **Mode detection accuracy**: Precision and recall for ACCEL/BRAKE modes
+- **Correlation**: How well lon_g matches actual acceleration (want >0.7)
+- **Diagnostic summary**: Identifies potential issues like bias or high false positive rates
+
+This is useful for validating that the orientation correction is working properly after a test drive.
 
 ### Choosing a Mode
 
