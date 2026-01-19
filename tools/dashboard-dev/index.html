@@ -552,16 +552,26 @@ body::before {
     padding: 8px 10px;
 }
 
-/* Compact metrics row */
+/* Compact metrics row - collapsed borders */
 #boxBottom .metrics {
-    gap: 4px;
+    gap: 0;
+    border: 1px solid #1a2a30;
 }
 
 #boxBottom .met {
-    padding: 6px 4px;
+    padding: 8px 4px;
     background: transparent;
-    border: 1px solid #1a2a30;
+    border: none;
+    border-right: 1px solid #1a2a30;
     box-shadow: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+#boxBottom .met:last-child {
+    border-right: none;
 }
 
 #boxBottom .met-val {
@@ -569,12 +579,14 @@ body::before {
     font-weight: 600;
     font-variant-numeric: tabular-nums;
     color: #7a8a8f;
+    text-align: center;
 }
 
 #boxBottom .met-lbl {
     font-weight: 500;
     font-size: 8px;
     color: #556;
+    text-align: center;
 }
 
 /* GPS display */
@@ -584,8 +596,10 @@ body::before {
     font-weight: 500;
     background: transparent;
     border: 1px solid #1a2a30;
+    border-top: none;
     box-shadow: none;
     color: #667;
+    text-align: center;
 }
 
 /* Config section */
@@ -593,6 +607,7 @@ body::before {
     padding: 8px;
     background: transparent;
     border: 1px solid #1a2a30;
+    border-top: none;
     box-shadow: none;
 }
 
@@ -605,7 +620,9 @@ body::before {
 
 #boxBottom .preset-row {
     margin-bottom: 6px;
-    gap: 4px;
+    gap: 0;
+    display: flex;
+    border: 1px solid #1a2a30;
 }
 
 #boxBottom .preset-btn {
@@ -613,24 +630,31 @@ body::before {
     font-size: 8px;
     font-weight: 600;
     background: transparent;
-    border: 1px solid #1a2a30;
+    border: none;
+    border-right: 1px solid #1a2a30;
     color: #667;
     box-shadow: none;
+    text-align: center;
+}
+
+#boxBottom .preset-btn:last-child {
+    border-right: none;
 }
 
 #boxBottom .preset-btn.active {
     background: rgba(0, 180, 200, 0.08);
-    border-color: #2a4a50;
     color: #8aa;
 }
 
 /* Control buttons */
 #boxBottom .ctrl {
-    padding: 6px 0 0 0;
-    gap: 6px;
+    padding: 0;
+    gap: 0;
     background: transparent;
     border: none;
     border-top: 1px solid #1a2a30;
+    margin-top: 6px;
+    display: flex;
 }
 
 #boxBottom .btn {
@@ -638,14 +662,19 @@ body::before {
     font-size: 9px;
     font-weight: 600;
     background: transparent;
-    border: 1px solid #1a2a30;
+    border: none;
+    border-right: 1px solid #1a2a30;
     color: #667;
     box-shadow: none;
+    text-align: center;
+}
+
+#boxBottom .btn:last-child {
+    border-right: none;
 }
 
 #boxBottom .btn-rec.on {
     background: rgba(255, 50, 50, 0.1);
-    border-color: #4a2020;
     color: #c66;
 }
 
