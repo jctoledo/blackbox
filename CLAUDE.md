@@ -599,63 +599,105 @@ y[n] = b0*x[n] + b1*x[n-1] + b2*x[n-2] - a1*y[n-1] - a2*y[n-2]
 
 ### fusion.rs - Sensor Fusion Module
 
-Handles GPS/IMU blending, tilt correction, and continuous calibration.
+Handles GPS-corrected orientation, GPS/IMU blending, and continuous calibration.
+Uses an **ArduPilot-style approach**: GPS velocity provides ground truth to correct AHRS
+orientation errors, enabling accurate 200 Hz IMU data for mode detection.
+
+**The Core Problem:**
+The WT901 AHRS cannot distinguish linear acceleration from tilt. During forward
+acceleration, it reports false pitch (thinks device is tilting backward). This corrupts
+gravity removal and produces wrong earth-frame acceleration. Without correction,
+measured correlation with ground truth was only 0.32 (garbage).
+
+**Solution: GPS-Corrected Orientation**
+Compare IMU-predicted acceleration (using AHRS angles) with GPS-derived acceleration
+(ground truth). The difference reveals orientation error:
+```
+pitch_error ≈ (ax_imu - ax_gps) / G
+```
 
 **Components:**
 
-1. **GpsAcceleration** - Computes longitudinal acceleration from GPS velocity
+1. **OrientationCorrector** - Learns pitch/roll corrections from GPS velocity (NEW)
+   - Compares IMU-derived acceleration with GPS ground truth
+   - Learns pitch correction during acceleration (forward/backward)
+   - Learns roll correction during cornering (left/right)
+   - Applies corrections BEFORE gravity removal
+   - Confidence increases with learning samples (0-100%)
+   - Max correction capped at ±15° for safety
+   - Enables accurate 200 Hz IMU instead of being limited to GPS rate
+
+2. **GpsAcceleration** - Computes longitudinal acceleration from GPS velocity
    - `accel = (speed_new - speed_old) / dt`
    - At 25Hz GPS: dt = 40ms, clean acceleration signal
    - Tracks staleness for fallback to IMU
+   - Provides ground truth for OrientationCorrector learning
 
-2. **TiltEstimator** - Learns mounting offset when stopped
+3. **TiltEstimator** - Learns residual mounting offset when stopped
    - After 3 seconds stationary, averages earth-frame acceleration
-   - This average IS the mounting error (gravity leakage from tilt)
-   - Applies correction to all future readings
+   - Handles minor offsets not captured by OrientationCorrector
    - Relearns at every stop (adapts to device repositioning)
 
-3. **YawRateCalibrator** - Learns gyro bias while driving straight
-   - When GPS heading is stable (±0.5°/s for 2+ seconds), assumes true yaw rate ≈ 0
+4. **YawRateCalibrator** - Learns gyro bias while driving straight
+   - When GPS heading is stable (±2° for 3+ seconds), assumes true yaw rate ≈ 0
    - Any measured yaw rate during this time is gyro bias
    - Applies correction to prevent lateral drift in centripetal calculation
    - Essential for highway driving where ZUPT rarely triggers
 
-4. **SensorFusion** - Main processor
-   - Applies tilt correction (learned when stopped)
-   - **15 Hz Butterworth low-pass filter** removes engine vibration (see filter.rs)
-   - Blends GPS and IMU for longitudinal acceleration
+5. **SensorFusion** - Main processor
+   - Takes raw body-frame IMU + AHRS angles (NEW API)
+   - Applies orientation correction (learned from GPS comparison)
+   - Removes gravity using corrected orientation
+   - Applies residual tilt correction (learned when stopped)
+   - **10 Hz Butterworth low-pass filter** removes engine vibration
+   - Blends corrected IMU with GPS based on correction confidence
    - Computes centripetal lateral (speed × calibrated_yaw_rate)
 
-**GPS/IMU Blending Ratios (configurable in FusionConfig):**
+**GPS/IMU Blending Ratios (based on OrientationCorrector confidence):**
 ```
-GPS rate >= 20Hz, fresh:  40% GPS / 60% IMU  (trust filtered IMU more)
-GPS rate 10-20Hz:         30% GPS / 70% IMU  (medium confidence)
-GPS rate < 10Hz:          20% GPS / 80% IMU  (low confidence)
-GPS stale (>200ms):       0% GPS / 100% IMU  (fallback)
-GPS accel ~0, IMU has signal: 0% GPS / 100% IMU  (validity check)
+Confidence > 80%:   30% GPS / 70% corrected IMU  (trust corrected IMU)
+Confidence 30-80%:  50% GPS / 50% corrected IMU  (moderate confidence, interpolated)
+Confidence < 30%:   80% GPS / 20% corrected IMU  (not confident yet, interpolated)
+GPS stale (>200ms): 0% GPS / 100% corrected IMU  (fallback)
 ```
+Note: GPS blending IS still necessary even after OrientationCorrector learns because:
+1. Cold start needs GPS until correction converges (first 1-2 minutes)
+2. Provides continuous sanity check / measurement diversity
+3. Graceful degradation if correction diverges
 
-**GPS Accel Validity Check:**
-When GPS-derived accel is near zero (< 0.2 m/s²) but filtered IMU shows signal (> 0.2 m/s²),
-the GPS value is unreliable (just means speed didn't change between GPS samples).
-In this case, GPS weight is set to 0% and 100% filtered IMU is used.
-
-**Why trust IMU more than GPS?**
-- GPS-derived accel is `(speed_new - speed_old) / dt` which is often 0 (no speed change)
-- With 15Hz Butterworth filter, IMU vibration is removed while preserving dynamics
-- Responsive G readings require high IMU contribution
-- GPS still provides drift correction and sanity check
+**process_imu() API (NEW):**
+```rust
+pub fn process_imu(
+    &mut self,
+    ax_raw: f32,         // Raw body-frame X accel (m/s²)
+    ay_raw: f32,         // Raw body-frame Y accel (m/s²)
+    az_raw: f32,         // Raw body-frame Z accel (gravity on Z)
+    ahrs_roll_deg: f32,  // AHRS roll angle (degrees)
+    ahrs_pitch_deg: f32, // AHRS pitch angle (degrees)
+    yaw: f32,            // Vehicle yaw (radians, from EKF)
+    speed: f32,          // Speed (m/s)
+    yaw_rate: f32,       // Yaw rate (rad/s)
+    dt: f32,             // Time step (seconds)
+    is_stationary: bool, // Whether vehicle is stopped
+) -> (f32, f32)          // Returns (lon_blended, lat_centripetal)
+```
 
 **Data Flow:**
 ```
-LONGITUDINAL:
-GPS (25Hz) → GpsAcceleration → lon_accel_gps ────┐
-                                                  │
-IMU (200Hz) → remove_gravity → body_to_earth → Tilt → Gravity → Biquad(15Hz) → lon_accel_imu
-                                                                                     │
-                                                                  Blend(40% gps, 60% imu) ◄┘
-                                                                           ↓
-                                                                      lon_blended
+LONGITUDINAL (GPS-Corrected Orientation):
+GPS (25Hz) → GpsAcceleration → lon_accel_gps ──────────────────────────┐
+                                      │                                  │
+                                      └──► OrientationCorrector learns   │
+                                                    ↓                    │
+IMU raw (200Hz) → OrientationCorrector.correct(pitch, roll)             │
+                           ↓                                             │
+                    Corrected orientation                                │
+                           ↓                                             │
+                    remove_gravity → body_to_earth → Tilt → Biquad(10Hz)│
+                           ↓                                             │
+                    lon_imu_corrected ─────────────► Blend ◄────────────┘
+                                                       ↓         (based on confidence)
+                                                  lon_blended
 
 LATERAL (centripetal):
 GPS heading → YawRateCalibrator → learned_bias
@@ -668,6 +710,19 @@ OUTPUT:
 (lon_blended, lat_centripetal) → mode.rs (classification)
                                → Dashboard (G-meter)
 ```
+
+**Why This Works (ArduPilot Insight):**
+- During acceleration, pitch error causes ax_earth to be wrong
+- GPS velocity gives us true horizontal acceleration (dv/dt = ground truth)
+- The innovation (IMU - GPS difference) is directly proportional to pitch error
+- Learning is continuous while driving, adapts to any mount angle
+- Once learned, enables accurate 200 Hz IMU instead of 25 Hz GPS rate
+
+**Diagnostics (NEW):**
+- `pitch_correction_deg`: Learned pitch correction (degrees)
+- `roll_correction_deg`: Learned roll correction (degrees)
+- `pitch_confidence`: Correction confidence (0-100%)
+- `roll_confidence`: Correction confidence (0-100%)
 
 **Why Centripetal Lateral?**
 - Traditional IMU lateral (accelerometer) suffers from mount angle sensitivity and can "stick"

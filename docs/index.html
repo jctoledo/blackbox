@@ -1005,7 +1005,7 @@
                             </svg>
                         </div>
                         <h3>Sensor Fusion</h3>
-                        <p>7-state EKF fuses 200Hz IMU with 5Hz GPS for drift-free position estimates.</p>
+                        <p>7-state EKF fuses 200Hz IMU with GPS. ArduPilot-style orientation correction learns and compensates for AHRS errors.</p>
                     </div>
 
                     <div class="feature-card">
@@ -1061,6 +1061,19 @@
                         </div>
                         <h3>ZUPT</h3>
                         <p>Zero-velocity updates prevent drift. Bias continuously estimated when stationary.</p>
+                    </div>
+
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 22v-6"/>
+                                <path d="M9 8V2"/>
+                                <path d="M15 8V2"/>
+                                <path d="M18 8v5a6 6 0 01-6 6v0a6 6 0 01-6-6V8z"/>
+                            </svg>
+                        </div>
+                        <h3>Orientation Correction</h3>
+                        <p>GPS velocity provides ground truth to learn and correct AHRS pitch/roll errors during acceleration. Mount anywhere.</p>
                     </div>
 
                     <div class="feature-card">
