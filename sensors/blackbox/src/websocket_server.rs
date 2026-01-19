@@ -431,6 +431,10 @@ const EMA_TAU=0.10; // 100ms time constant - tune for feel
 // GPS status tracking
 let gpsCount=0,lastGpsState=0;
 
+// Fusion diagnostics for CSV export (fetched periodically during recording)
+let fusion={lon_imu:0,lon_gps:0,gps_wt:0,pitch_c:0,pitch_cf:0,roll_c:0,roll_cf:0,tilt_x:0,tilt_y:0};
+let fusionPoll=0;
+
 function fmtTime(ms){const s=Math.floor(ms/1000),m=Math.floor(s/60);return String(m).padStart(2,'0')+':'+String(s%60).padStart(2,'0')}
 function fmtG(v){return Math.abs(v)<0.005?'0.00':v.toFixed(2)} // Dead zone to prevent 0.00/-0.00 flicker
 
@@ -518,7 +522,7 @@ function process(buf){
 
     drawG();
     cnt++;
-    if(rec)data.push({t:Date.now(),sp,ax,ay,wz,mo,latg,lng,lat,lon,gpsOk});
+    if(rec)data.push({t:Date.now(),sp,ax,ay,wz,mo,latg,lng,lat,lon,gpsOk,...fusion});
 }
 
 // HTTP polling
@@ -532,9 +536,30 @@ async function poll(){
             for(let i=0;i<b.length;i++)a[i]=b.charCodeAt(i);
             process(a.buffer);
             $('dot').className='dot on';$('stxt').textContent='LIVE';
+            // Fetch fusion diagnostics every 5th poll (~6Hz) during recording
+            if(rec&&++fusionPoll>=5){fusionPoll=0;fetchFusion()}
         }
         setTimeout(poll,33);
     }catch(e){$('dot').className='dot';$('stxt').textContent='--';setTimeout(poll,500)}
+}
+
+// Fetch fusion diagnostics for CSV export (non-blocking)
+async function fetchFusion(){
+try{
+const r=await fetch('/api/diagnostics');
+const d=await r.json();
+if(d.fusion){
+fusion.lon_imu=d.fusion.lon_filtered||0;
+fusion.lon_gps=d.fusion.gps_accel||0;
+fusion.gps_wt=d.fusion.gps_weight||0;
+fusion.pitch_c=d.fusion.pitch_corr||0;
+fusion.pitch_cf=d.fusion.pitch_conf||0;
+fusion.roll_c=d.fusion.roll_corr||0;
+fusion.roll_cf=d.fusion.roll_conf||0;
+fusion.tilt_x=d.fusion.tilt_x||0;
+fusion.tilt_y=d.fusion.tilt_y||0;
+}
+}catch(e){}
 }
 
 // Event handlers
@@ -547,8 +572,8 @@ $('rec').onclick=()=>{
 };
 $('exp').onclick=()=>{
     const s=JSON.parse(localStorage.getItem('bb')||'[]');if(!s.length)return alert('No data');
-    let c='time,speed,ax,ay,wz,mode,lat_g,lon_g,gps_lat,gps_lon,gps_valid\n';
-    s[0].d.forEach(r=>{c+=r.t+','+r.sp+','+r.ax+','+r.ay+','+r.wz+','+r.mo+','+r.latg+','+r.lng+','+(r.lat||0)+','+(r.lon||0)+','+(r.gpsOk||0)+'\n'});
+    let c='time,speed,ax,ay,wz,mode,lat_g,lon_g,gps_lat,gps_lon,gps_valid,lon_imu,lon_gps,gps_weight,pitch_corr,pitch_conf,roll_corr,roll_conf,tilt_x,tilt_y\n';
+    s[0].d.forEach(r=>{c+=r.t+','+r.sp+','+r.ax+','+r.ay+','+r.wz+','+r.mo+','+r.latg+','+r.lng+','+(r.lat||0)+','+(r.lon||0)+','+(r.gpsOk||0)+','+(r.lon_imu||0).toFixed(4)+','+(r.lon_gps||0).toFixed(4)+','+(r.gps_wt||0).toFixed(2)+','+(r.pitch_c||0).toFixed(2)+','+(r.pitch_cf||0).toFixed(1)+','+(r.roll_c||0).toFixed(2)+','+(r.roll_cf||0).toFixed(1)+','+(r.tilt_x||0).toFixed(4)+','+(r.tilt_y||0).toFixed(4)+'\n'});
     const b=new Blob([c],{type:'text/csv'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download='blackbox.csv';a.click();
 };
 
@@ -573,26 +598,27 @@ const DIAGNOSTICS_HTML: &str = r#"<!DOCTYPE html>
 <html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Blackbox Diagnostics</title>
 <style>
+:root{--cyan:#00f0ff;--amber:#ff6a00;--bg:#030508}
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,system-ui,monospace;background:#0a0a0f;color:#e0e0e0;padding:16px;font-size:14px}
-h1{font-size:18px;margin-bottom:16px;color:#60a5fa;letter-spacing:2px}
-.section{background:#111;border:1px solid #252530;border-radius:8px;padding:12px;margin-bottom:12px}
-.section h2{font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
+body{font-family:'Courier New',monospace;background:var(--bg);color:#e0e0e0;padding:16px;font-size:13px}
+h1{font-size:14px;margin-bottom:16px;color:var(--cyan);letter-spacing:4px;text-transform:uppercase;font-weight:400}
+.section{background:rgba(0,20,30,0.6);border:1px solid hsla(190,100%,50%,0.25);padding:12px;margin-bottom:8px}
+.section h2{font-size:10px;color:#556;text-transform:uppercase;letter-spacing:2px;margin-bottom:8px;font-weight:500}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.row{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #1a1a24}
+.row{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid hsla(190,50%,20%,0.3)}
 .row:last-child{border-bottom:none}
-.label{color:#888}
-.value{color:#60a5fa;font-weight:600}
+.label{color:#667;font-size:11px}
+.value{color:var(--cyan);font-weight:600;font-size:12px}
 .ok{color:#22c55e}
-.warn{color:#f59e0b}
+.warn{color:var(--amber)}
 .err{color:#ef4444}
-.back{display:inline-block;margin-bottom:16px;color:#60a5fa;text-decoration:none;font-size:12px}
-.back:hover{text-decoration:underline}
-.uptime{color:#555;font-size:11px;margin-top:12px;text-align:center}
+.back{display:inline-block;margin-bottom:16px;color:var(--cyan);text-decoration:none;font-size:11px;letter-spacing:2px;opacity:0.7}
+.back:hover{opacity:1}
+.uptime{color:#445;font-size:10px;margin-top:12px;text-align:center;letter-spacing:1px}
 </style></head>
 <body>
-<a href="/" class="back">&larr; Back to Dashboard</a>
-<h1>BLACKBOX DIAGNOSTICS</h1>
+<a href="/" class="back">&larr; DASHBOARD</a>
+<h1>DIAGNOSTICS</h1>
 <div class="grid">
 <div class="section">
 <h2>Configuration</h2>
@@ -624,6 +650,29 @@ h1{font-size:18px;margin-bottom:16px;color:#60a5fa;letter-spacing:2px}
 <div class="row"><span class="label">Bias X</span><span class="value" id="bias-x">--</span></div>
 <div class="row"><span class="label">Bias Y</span><span class="value" id="bias-y">--</span></div>
 </div>
+</div>
+<div class="grid">
+<div class="section">
+<h2>Sensor Fusion</h2>
+<div class="row"><span class="label">Lon Raw</span><span class="value" id="lon-raw">--</span></div>
+<div class="row"><span class="label">Lon Filtered</span><span class="value" id="lon-filt">--</span></div>
+<div class="row"><span class="label">Lon Blended</span><span class="value" id="lon-blend">--</span></div>
+<div class="row"><span class="label">GPS Weight</span><span class="value" id="gps-wt">--</span></div>
+<div class="row"><span class="label">GPS Accel</span><span class="value" id="gps-accel">--</span></div>
+<div class="row"><span class="label">GPS Rejected</span><span class="value" id="gps-rej">--</span></div>
+</div>
+<div class="section">
+<h2>Orientation Correction</h2>
+<div class="row"><span class="label">Pitch Corr</span><span class="value" id="pitch-corr">--</span></div>
+<div class="row"><span class="label">Roll Corr</span><span class="value" id="roll-corr">--</span></div>
+<div class="row"><span class="label">Confidence</span><span class="value" id="orient-conf">--</span></div>
+<div class="row"><span class="label">Yaw Bias</span><span class="value" id="yaw-bias">--</span></div>
+<div class="row"><span class="label">Yaw Calibrated</span><span class="value" id="yaw-cal">--</span></div>
+<div class="row"><span class="label">Tilt X/Y</span><span class="value" id="tilt-xy">--</span></div>
+<div class="row"><span class="label">Tilt Valid</span><span class="value" id="tilt-valid">--</span></div>
+</div>
+</div>
+<div class="grid">
 <div class="section">
 <h2>System</h2>
 <div class="row"><span class="label">Heap Free</span><span class="value" id="heap">--</span></div>

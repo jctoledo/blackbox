@@ -82,13 +82,6 @@ body::before {
     letter-spacing:4px;
     text-transform:uppercase;
 }
-.logo .dev{
-    font-size:9px;
-    color:#ff6a00;
-    cursor:pointer;
-    margin-left:8px;
-    opacity:0.7;
-}
 .hdr-r{display:flex;align-items:center;gap:12px}
 .timer{font-size:11px;opacity:0.5;font-variant-numeric:tabular-nums;letter-spacing:2px}
 .st{display:flex;align-items:center;gap:6px;font-size:10px;letter-spacing:1px}
@@ -285,48 +278,6 @@ body::before {
 .btn-rec.on{background:rgba(255,50,50,0.2);border-color:#ff3333;color:#ff6666}
 .btn-exp{color:hsla(var(--hue), 100%, 60%, 0.5)}
 
-/* Simulator panel */
-.sim-panel{
-    background:rgba(40,20,0,0.4);
-    border:1px solid rgba(255,106,0,0.4);
-    padding:12px;
-    margin-bottom:10px;
-    display:none;
-}
-.sim-panel.show{display:block}
-.sim-title{font-size:9px;color:#ff6a00;letter-spacing:2px;margin-bottom:10px;display:flex;justify-content:space-between}
-.sim-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
-.sim-lbl{font-size:9px;opacity:0.6;width:70px}
-.sim-slider{
-    flex:1;
-    -webkit-appearance:none;
-    background:rgba(255,106,0,0.2);
-    height:2px;
-}
-.sim-slider::-webkit-slider-thumb{
-    -webkit-appearance:none;
-    width:12px;height:12px;
-    background:#ff6a00;
-    box-shadow:0 0 10px #ff6a00;
-}
-.sim-val{font-size:10px;color:#ff6a00;width:55px;text-align:right}
-.sim-check{display:flex;align-items:center;gap:6px;font-size:9px;opacity:0.6;margin-top:10px}
-.sim-check input{accent-color:#ff6a00}
-.sim-btns{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
-.sim-btn{
-    padding:6px 10px;
-    border:1px solid rgba(255,106,0,0.4);
-    background:transparent;
-    color:#ff6a00;
-    font-size:9px;
-    cursor:pointer;
-    font-family:inherit;
-}
-.sim-btn:active{background:rgba(255,106,0,0.2)}
-.sim-help{font-size:8px;opacity:0.4;margin-top:10px;line-height:1.5}
-.sim-help kbd{background:rgba(255,255,255,0.1);padding:2px 5px}
-.sim-progress{height:2px;background:rgba(255,106,0,0.2);margin-top:10px}
-.sim-progress-bar{height:100%;background:#ff6a00;box-shadow:0 0 10px #ff6a00}
 
 /* Golden Ratio Layout */
 #telemetryLayout {
@@ -704,7 +655,7 @@ body::before {
 <body>
 <!-- Header at very top -->
 <div class="hdr">
-    <div class="logo glow-text">BLACKBOX <span class="dev" id="dev-toggle">DEV</span></div>
+    <div class="logo glow-text">BLACKBOX</div>
     <div class="hdr-r">
         <div class="gps-st ok" id="gps-st"><span class="gps-dot"></span><span id="gps-hz">GPS 30</span></div>
         <span class="timer" id="timer">00:00</span>
@@ -757,26 +708,6 @@ body::before {
     <!-- BOTTOM BOX: Everything Else (~23.6% height) -->
     <div id="boxBottom" class="golden-box">
         <div class="box-inner box-scroll">
-            <!-- Simulator Controls -->
-            <div class="sim-panel" id="sim-panel">
-                <div class="sim-title"><span>// SIMULATOR OVERRIDE</span><span id="sim-hz">30 Hz</span></div>
-                <div class="sim-row"><span class="sim-lbl">SPEED</span><input type="range" min="0" max="200" step="1" class="sim-slider" id="sim-speed" value="0"><span class="sim-val" id="sim-speed-val">0 km/h</span></div>
-                <div class="sim-row"><span class="sim-lbl">LON G</span><input type="range" min="-1.5" max="1.5" step="0.01" class="sim-slider" id="sim-lon" value="0"><span class="sim-val" id="sim-lon-val">0.00 g</span></div>
-                <div class="sim-row"><span class="sim-lbl">LAT G</span><input type="range" min="-1.5" max="1.5" step="0.01" class="sim-slider" id="sim-lat" value="0"><span class="sim-val" id="sim-lat-val">0.00 g</span></div>
-                <div class="sim-row"><span class="sim-lbl">YAW</span><input type="range" min="-90" max="90" step="1" class="sim-slider" id="sim-yaw" value="0"><span class="sim-val" id="sim-yaw-val">0 °/s</span></div>
-                <div class="sim-check"><input type="checkbox" id="sim-auto" checked><label for="sim-auto">AUTO-DRIVE SEQUENCE</label></div>
-                <div class="sim-progress"><div class="sim-progress-bar" id="sim-progress-bar"></div></div>
-                <div class="sim-btns">
-                    <button class="sim-btn" id="btn-idle">IDLE</button>
-                    <button class="sim-btn" id="btn-cruise">CRUISE</button>
-                    <button class="sim-btn" id="btn-accel">ACCEL</button>
-                    <button class="sim-btn" id="btn-brake">BRAKE</button>
-                    <button class="sim-btn" id="btn-left">LEFT</button>
-                    <button class="sim-btn" id="btn-right">RIGHT</button>
-                </div>
-                <div class="sim-help">LONG-PRESS [DEV] TO HIDE | W/S/A/D MANUAL | SPACE RESET</div>
-            </div>
-
             <div class="metrics">
                 <div class="met glow-border"><div class="met-val glow-text" id="latg">0.00</div><div class="met-lbl">LAT G</div></div>
                 <div class="met glow-border"><div class="met-val glow-text" id="lng">0.00</div><div class="met-lbl">LON G</div></div>
@@ -966,7 +897,7 @@ function addNoise(val, amount) { return val + (Math.random() - 0.5) * amount * 0
 
 // === STATE ===
 let simSpeed = 0, simLonG = 0, simLatG = 0, simYawDeg = 0;
-let manualOverride = false, loopStartTime = Date.now();
+let loopStartTime = Date.now();
 let rec = 0, data = [], cnt = 0;
 let trail = [], maxL = 0, maxR = 0, maxA = 0, maxB = 0;
 let speed_ema = 0, sessionStart = Date.now(), currentPreset = 'canyon';
@@ -1011,58 +942,6 @@ function resizeCanvas() {
 }
 resizeCanvas();
 window.addEventListener('resize', () => { resizeCanvas(); applyGoldenHeights(); });
-
-// Long press DEV toggle
-let pressTimer = null;
-$('dev-toggle').addEventListener('mousedown', e => { e.preventDefault(); pressTimer = setTimeout(() => $('sim-panel').classList.toggle('show'), 500); });
-$('dev-toggle').addEventListener('touchstart', e => { e.preventDefault(); pressTimer = setTimeout(() => $('sim-panel').classList.toggle('show'), 500); });
-['mouseup','mouseleave','touchend'].forEach(ev => $('dev-toggle').addEventListener(ev, () => clearTimeout(pressTimer)));
-
-// Slider updates
-function updateSliderDisplay() {
-    $('sim-speed').value = simSpeed; $('sim-speed-val').textContent = Math.round(simSpeed) + ' km/h';
-    $('sim-lon').value = simLonG; $('sim-lon-val').textContent = simLonG.toFixed(2) + ' g';
-    $('sim-lat').value = simLatG; $('sim-lat-val').textContent = simLatG.toFixed(2) + ' g';
-    $('sim-yaw').value = simYawDeg; $('sim-yaw-val').textContent = Math.round(simYawDeg) + ' °/s';
-}
-
-$('sim-speed').oninput = () => { manualOverride = true; $('sim-auto').checked = false; simSpeed = parseFloat($('sim-speed').value); $('sim-speed-val').textContent = Math.round(simSpeed) + ' km/h'; };
-$('sim-lon').oninput = () => { manualOverride = true; $('sim-auto').checked = false; simLonG = parseFloat($('sim-lon').value); $('sim-lon-val').textContent = simLonG.toFixed(2) + ' g'; };
-$('sim-lat').oninput = () => { manualOverride = true; $('sim-auto').checked = false; simLatG = parseFloat($('sim-lat').value); $('sim-lat-val').textContent = simLatG.toFixed(2) + ' g'; };
-$('sim-yaw').oninput = () => { manualOverride = true; $('sim-auto').checked = false; simYawDeg = parseFloat($('sim-yaw').value); $('sim-yaw-val').textContent = Math.round(simYawDeg) + ' °/s'; };
-$('sim-auto').onchange = () => { manualOverride = !$('sim-auto').checked; if (!manualOverride) loopStartTime = Date.now(); };
-
-function setSimState(speed, lon, lat, yaw) {
-    manualOverride = true; $('sim-auto').checked = false;
-    simSpeed = speed; simLonG = lon; simLatG = lat; simYawDeg = yaw;
-    updateSliderDisplay();
-}
-
-$('btn-idle').onclick = () => setSimState(0, 0, 0, 0);
-$('btn-cruise').onclick = () => setSimState(60, 0, 0, 0);
-$('btn-accel').onclick = () => setSimState(80, 0.4, 0, 0);
-$('btn-brake').onclick = () => setSimState(60, -0.6, 0, 0);
-$('btn-left').onclick = () => setSimState(50, 0, 0.35, 25);
-$('btn-right').onclick = () => setSimState(50, 0, -0.35, -25);
-
-// Keyboard
-const keys = {};
-document.addEventListener('keydown', e => {
-    if (e.target.tagName === 'INPUT') return;
-    keys[e.key.toLowerCase()] = true;
-    if (e.key === ' ') { e.preventDefault(); manualOverride = true; $('sim-auto').checked = false; setSimState(simSpeed, 0, 0, 0); }
-});
-document.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
-
-function handleKeyboardInput() {
-    if (!keys['w'] && !keys['s'] && !keys['a'] && !keys['d']) return;
-    manualOverride = true; $('sim-auto').checked = false;
-    if (keys['w']) simLonG = 0.4;
-    if (keys['s']) simLonG = -0.6;
-    if (keys['a']) { simLatG = 0.35; simYawDeg = 25; }
-    if (keys['d']) { simLatG = -0.35; simYawDeg = -25; }
-    updateSliderDisplay();
-}
 
 // === G-FORCE DISPLAY: PERSPECTIVE GRID ===
 
@@ -1277,18 +1156,13 @@ function drawG() {
 
 // === MAIN LOOP ===
 function simulate() {
-    handleKeyboardInput();
-
-    if (!manualOverride && $('sim-auto').checked) {
-        const elapsed = Date.now() - loopStartTime;
-        const auto = getAutoValues(elapsed);
-        simSpeed = addNoise(auto.speed, 2);
-        simLonG = addNoise(auto.lonG, 0.02);
-        simLatG = addNoise(auto.latG, 0.02);
-        simYawDeg = addNoise(auto.yawDeg, 1);
-        updateSliderDisplay();
-        $('sim-progress-bar').style.width = (auto.progress * 100) + '%';
-    }
+    // Auto-drive: 30-second canyon drive loop
+    const elapsed = Date.now() - loopStartTime;
+    const auto = getAutoValues(elapsed);
+    simSpeed = addNoise(auto.speed, 2);
+    simLonG = addNoise(auto.lonG, 0.02);
+    simLatG = addNoise(auto.latG, 0.02);
+    simYawDeg = addNoise(auto.yawDeg, 1);
 
     // Update glow based on speed and braking
     updateGlow(simSpeed, simLonG);
@@ -1420,7 +1294,7 @@ function simulate() {
 
 setInterval(simulate, 33);
 setInterval(() => {
-    $('hz').textContent = cnt; $('sim-hz').textContent = cnt + ' Hz';
+    $('hz').textContent = cnt;
     $('gps-hz').textContent = 'GPS ' + cnt; // Simulator always has GPS
     cnt = 0;
     $('timer').textContent = fmtTime(Date.now() - sessionStart);
