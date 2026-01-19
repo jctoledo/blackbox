@@ -4,7 +4,49 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Blackbox - Open Source Vehicle Telemetry</title>
-    <meta name="description" content="Open-source GPS + IMU sensor fusion for vehicle dynamics. Track position, velocity, and g-forces in real-time. Built for track days and automotive research.">
+    <meta name="description" content="Open-source GPS + IMU sensor fusion for vehicle dynamics. Track position, velocity, and g-forces in real-time using a 7-state Extended Kalman Filter. Built for track days, autocross, and automotive research. $50-100 in parts.">
+    <meta name="keywords" content="vehicle telemetry, sensor fusion, Extended Kalman Filter, EKF, GPS, IMU, ESP32, track day, autocross, g-force, vehicle dynamics, open source, DIY data logger">
+
+    <!-- Open Graph / Social Sharing -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Blackbox - Open Source Vehicle Telemetry">
+    <meta property="og:description" content="GPS + IMU sensor fusion for vehicle dynamics. 7-state Kalman Filter, 200Hz sampling, $50-100 hardware. MIT licensed.">
+    <meta property="og:url" content="https://jctoledo.github.io/blackbox/">
+    <meta property="og:image" content="https://jctoledo.github.io/blackbox/dashboard-screenshot.jpg">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Blackbox - Open Source Vehicle Telemetry">
+    <meta name="twitter:description" content="GPS + IMU sensor fusion for track days and automotive research. $50-100 DIY data logger.">
+
+    <link rel="canonical" href="https://jctoledo.github.io/blackbox/">
+
+    <!-- Structured Data for SEO -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Blackbox Vehicle Telemetry",
+        "applicationCategory": "UtilitiesApplication",
+        "operatingSystem": "ESP32",
+        "description": "Open-source GPS + IMU sensor fusion firmware for vehicle dynamics tracking. Uses a 7-state Extended Kalman Filter to combine 200Hz IMU data with GPS for real-time position, velocity, and acceleration monitoring.",
+        "url": "https://jctoledo.github.io/blackbox/",
+        "downloadUrl": "https://github.com/jctoledo/blackbox",
+        "softwareVersion": "0.1.0",
+        "author": {
+            "@type": "Person",
+            "name": "Jose Toledo"
+        },
+        "license": "https://opensource.org/licenses/MIT",
+        "programmingLanguage": "Rust",
+        "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+        }
+    }
+    </script>
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -840,7 +882,7 @@
                 <div class="nav-links">
                     <a href="#about">About</a>
                     <a href="#features">Features</a>
-                    <a href="#dashboard">Dashboard</a>
+                    <a href="#how-it-works">How It Works</a>
                     <a href="#hardware">Hardware</a>
                     <a href="https://github.com/jctoledo/blackbox" target="_blank">GitHub</a>
                     <a href="#flash" class="nav-cta">Flash Firmware</a>
@@ -880,19 +922,19 @@
             </div>
 
             <div class="hero-stats">
-                <div class="stat">
+                <div class="stat" title="WiFi telemetry updates 20 times per second">
                     <div class="stat-value">20Hz</div>
-                    <div class="stat-label">Telemetry</div>
+                    <div class="stat-label">Telemetry Rate</div>
                 </div>
-                <div class="stat">
+                <div class="stat" title="Inertial Measurement Unit samples 200 times per second">
                     <div class="stat-value">200Hz</div>
                     <div class="stat-label">IMU Sampling</div>
                 </div>
-                <div class="stat">
+                <div class="stat" title="Tracks: position (x,y), heading, velocity (vx,vy), and sensor biases">
                     <div class="stat-value">7-State</div>
                     <div class="stat-label">Kalman Filter</div>
                 </div>
-                <div class="stat">
+                <div class="stat" title="ESP32 + IMU + GPS + LED">
                     <div class="stat-value highlight">$50-100</div>
                     <div class="stat-label">Hardware Cost</div>
                 </div>
@@ -1005,7 +1047,7 @@
                             </svg>
                         </div>
                         <h3>Sensor Fusion</h3>
-                        <p>7-state EKF fuses 200Hz IMU with GPS. ArduPilot-style orientation correction learns and compensates for AHRS errors.</p>
+                        <p>7-state Extended Kalman Filter combines fast IMU (200Hz) with accurate GPS. Orientation correction automatically learns mounting angle errors.</p>
                     </div>
 
                     <div class="feature-card">
@@ -1059,8 +1101,8 @@
                                 <path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/>
                             </svg>
                         </div>
-                        <h3>ZUPT</h3>
-                        <p>Zero-velocity updates prevent drift. Bias continuously estimated when stationary.</p>
+                        <h3>Zero-Velocity Updates</h3>
+                        <p>When stopped, the system knows velocity is exactly zero. This prevents position drift that would otherwise accumulate over time.</p>
                     </div>
 
                     <div class="feature-card">
@@ -1072,8 +1114,8 @@
                                 <path d="M18 8v5a6 6 0 01-6 6v0a6 6 0 01-6-6V8z"/>
                             </svg>
                         </div>
-                        <h3>Orientation Correction</h3>
-                        <p>GPS velocity provides ground truth to learn and correct AHRS pitch/roll errors during acceleration. Mount anywhere.</p>
+                        <h3>Auto Mounting Correction</h3>
+                        <p>Device can be mounted at any angle (within 15&deg;). GPS provides ground truth to automatically learn and correct orientation errors.</p>
                     </div>
 
                     <div class="feature-card">
@@ -1086,6 +1128,84 @@
                         </div>
                         <h3>Open Source</h3>
                         <p>MIT licensed Rust firmware. Python receivers included. Modify freely.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="section" id="how-it-works">
+            <div class="section-inner">
+                <div class="section-header">
+                    <h2>How It Works</h2>
+                    <p>Understanding the 7-state Extended Kalman Filter and sensor fusion</p>
+                </div>
+
+                <!-- EKF State Explanation -->
+                <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 32px; margin-bottom: 32px;">
+                    <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 20px;">The 7 States Explained</h3>
+                    <p style="color: var(--text-secondary); margin-bottom: 24px; line-height: 1.7;">
+                        The Extended Kalman Filter (EKF) tracks 7 values that describe your vehicle's motion. These are continuously estimated and refined as new sensor data arrives:
+                    </p>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+                        <div style="background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; padding: 16px;">
+                            <div style="font-family: 'JetBrains Mono', monospace; font-size: 14px; color: var(--accent); margin-bottom: 4px;">x, y</div>
+                            <div style="font-weight: 600; margin-bottom: 4px;">Position</div>
+                            <div style="font-size: 13px; color: var(--text-muted);">Location in meters relative to where GPS first locked. X is east-west, Y is north-south.</div>
+                        </div>
+                        <div style="background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; padding: 16px;">
+                            <div style="font-family: 'JetBrains Mono', monospace; font-size: 14px; color: var(--accent); margin-bottom: 4px;">&psi; (psi)</div>
+                            <div style="font-weight: 600; margin-bottom: 4px;">Yaw / Heading</div>
+                            <div style="font-size: 13px; color: var(--text-muted);">Which direction the vehicle is pointing, in radians. 0 = East, &pi;/2 = North.</div>
+                        </div>
+                        <div style="background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; padding: 16px;">
+                            <div style="font-family: 'JetBrains Mono', monospace; font-size: 14px; color: var(--accent); margin-bottom: 4px;">v<sub>x</sub>, v<sub>y</sub></div>
+                            <div style="font-weight: 600; margin-bottom: 4px;">Velocity</div>
+                            <div style="font-size: 13px; color: var(--text-muted);">Speed broken into east-west and north-south components, in meters per second.</div>
+                        </div>
+                        <div style="background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; padding: 16px;">
+                            <div style="font-family: 'JetBrains Mono', monospace; font-size: 14px; color: var(--accent); margin-bottom: 4px;">b<sub>ax</sub>, b<sub>ay</sub></div>
+                            <div style="font-weight: 600; margin-bottom: 4px;">Accelerometer Bias</div>
+                            <div style="font-size: 13px; color: var(--text-muted);">Sensor error offsets that slowly drift. Learned when stationary and subtracted from readings.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Glossary -->
+                <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 32px;">
+                    <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 20px;">Glossary of Terms</h3>
+                    <div style="display: grid; gap: 16px;">
+                        <div style="display: grid; grid-template-columns: 140px 1fr; gap: 12px; padding-bottom: 16px; border-bottom: 1px solid var(--border);">
+                            <div style="font-weight: 600; color: var(--accent);">EKF</div>
+                            <div style="color: var(--text-secondary); font-size: 14px;"><strong>Extended Kalman Filter</strong> &mdash; A mathematical algorithm that combines multiple sensor measurements to estimate state (position, velocity, etc.) more accurately than any single sensor alone.</div>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 140px 1fr; gap: 12px; padding-bottom: 16px; border-bottom: 1px solid var(--border);">
+                            <div style="font-weight: 600; color: var(--accent);">IMU</div>
+                            <div style="color: var(--text-secondary); font-size: 14px;"><strong>Inertial Measurement Unit</strong> &mdash; A sensor that measures acceleration (how fast you're speeding up/slowing down) and rotation (how fast you're turning). The WT901 used here samples at 200 times per second.</div>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 140px 1fr; gap: 12px; padding-bottom: 16px; border-bottom: 1px solid var(--border);">
+                            <div style="font-weight: 600; color: var(--accent);">GPS</div>
+                            <div style="color: var(--text-secondary); font-size: 14px;"><strong>Global Positioning System</strong> &mdash; Satellite-based positioning. Provides accurate position and velocity but only updates 5-25 times per second. The EKF fills the gaps using IMU data.</div>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 140px 1fr; gap: 12px; padding-bottom: 16px; border-bottom: 1px solid var(--border);">
+                            <div style="font-weight: 600; color: var(--accent);">AHRS</div>
+                            <div style="color: var(--text-secondary); font-size: 14px;"><strong>Attitude and Heading Reference System</strong> &mdash; The WT901's built-in processor that estimates orientation (pitch, roll, yaw) by combining accelerometer, gyroscope, and magnetometer data.</div>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 140px 1fr; gap: 12px; padding-bottom: 16px; border-bottom: 1px solid var(--border);">
+                            <div style="font-weight: 600; color: var(--accent);">ZUPT</div>
+                            <div style="color: var(--text-secondary); font-size: 14px;"><strong>Zero-Velocity Update</strong> &mdash; When the vehicle is stopped, we know velocity is exactly zero. This constraint prevents position errors from accumulating (drifting) over time.</div>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 140px 1fr; gap: 12px; padding-bottom: 16px; border-bottom: 1px solid var(--border);">
+                            <div style="font-weight: 600; color: var(--accent);">Sensor Fusion</div>
+                            <div style="color: var(--text-secondary); font-size: 14px;">Combining data from multiple sensors (IMU + GPS) to get a better estimate than either sensor alone. The IMU is fast but drifts; GPS is accurate but slow. Together they give fast AND accurate data.</div>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 140px 1fr; gap: 12px; padding-bottom: 16px; border-bottom: 1px solid var(--border);">
+                            <div style="font-weight: 600; color: var(--accent);">G-Force</div>
+                            <div style="color: var(--text-secondary); font-size: 14px;">Acceleration measured in multiples of gravity (9.8 m/s&sup2;). 1g = gravity. Hard braking might be 0.8-1.0g. Cornering in a sports car might reach 1.2g.</div>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 140px 1fr; gap: 12px;">
+                            <div style="font-weight: 600; color: var(--accent);">WiFi AP</div>
+                            <div style="color: var(--text-secondary); font-size: 14px;"><strong>WiFi Access Point</strong> &mdash; The ESP32 creates its own wireless network that your phone connects to directly. No router or internet required.</div>
+                        </div>
                     </div>
                 </div>
             </div>
