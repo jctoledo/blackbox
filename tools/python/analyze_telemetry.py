@@ -5,7 +5,8 @@ Analyze telemetry CSV files from blackbox device.
 Usage: python analyze_telemetry.py <csvfile>
 
 CSV format expected (new format with fusion diagnostics):
-time,speed,ax,ay,wz,mode,lat_g,lon_g,gps_lat,gps_lon,gps_valid,lon_imu,lon_gps,gps_weight,pitch_corr,pitch_conf,roll_corr,roll_conf,tilt_x,tilt_y
+time,speed,ax,ay,wz,mode,lat_g,lon_g,gps_lat,gps_lon,gps_valid,
+lon_imu,lon_gps,gps_weight,pitch_corr,pitch_conf,roll_corr,roll_conf,tilt_x,tilt_y
 
 Also supports legacy format:
 time,speed,ax,ay,wz,mode,lat_g,lon_g,gps_lat,gps_lon,gps_valid
@@ -99,7 +100,11 @@ def analyze_telemetry(filename):
         gps_weights = [float(r['gps_weight']) for r in rows]
 
         # Filter out samples where GPS accel is 0 (stale/unavailable)
-        valid_gps = [(imu, gps, w) for imu, gps, w in zip(lon_imu_vals, lon_gps_vals, gps_weights) if abs(gps) > 0.001]
+        valid_gps = [
+            (imu, gps, w)
+            for imu, gps, w in zip(lon_imu_vals, lon_gps_vals, gps_weights)
+            if abs(gps) > 0.001
+        ]
 
         if valid_gps:
             imu_valid = [v[0] for v in valid_gps]
@@ -111,16 +116,20 @@ def analyze_telemetry(filename):
             # IMU vs GPS error
             errors = [i - g for i, g in zip(imu_valid, gps_valid)]
             mean_error = statistics.mean(errors)
+            std_error = statistics.stdev(errors)
             print(f"IMU-GPS error: mean={mean_error:.3f} m/s² ({mean_error/9.81:.3f}g), "
-                  f"std={statistics.stdev(errors):.3f} m/s²")
+                  f"std={std_error:.3f} m/s²")
 
             # Correlation between IMU and GPS
             if len(imu_valid) >= 10:
                 mean_imu = statistics.mean(imu_valid)
                 mean_gps = statistics.mean(gps_valid)
-                numerator = sum((i - mean_imu) * (g - mean_gps) for i, g in zip(imu_valid, gps_valid))
-                denom_imu = sum((i - mean_imu)**2 for i in imu_valid) ** 0.5
-                denom_gps = sum((g - mean_gps)**2 for g in gps_valid) ** 0.5
+                numerator = sum(
+                    (i - mean_imu) * (g - mean_gps)
+                    for i, g in zip(imu_valid, gps_valid)
+                )
+                denom_imu = sum((i - mean_imu) ** 2 for i in imu_valid) ** 0.5
+                denom_gps = sum((g - mean_gps) ** 2 for g in gps_valid) ** 0.5
                 if denom_imu > 0 and denom_gps > 0:
                     corr = numerator / (denom_imu * denom_gps)
                     print(f"IMU-GPS correlation: {corr:.3f} (want >0.7)")
@@ -130,8 +139,9 @@ def analyze_telemetry(filename):
         high_gps = sum(1 for w in gps_weights if w > 0.7)
         mid_gps = sum(1 for w in gps_weights if 0.3 <= w <= 0.7)
         low_gps = sum(1 for w in gps_weights if w < 0.3)
-        print(f"GPS weight: mean={avg_weight:.2f}, high(>0.7)={100*high_gps/len(rows):.0f}%, "
-              f"mid={100*mid_gps/len(rows):.0f}%, low(<0.3)={100*low_gps/len(rows):.0f}%")
+        n = len(rows)
+        print(f"GPS weight: mean={avg_weight:.2f}, high(>0.7)={100*high_gps/n:.0f}%, "
+              f"mid={100*mid_gps/n:.0f}%, low(<0.3)={100*low_gps/n:.0f}%")
 
         # OrientationCorrector status
         pitch_corrs = [float(r['pitch_corr']) for r in rows]
@@ -209,9 +219,10 @@ def analyze_telemetry(filename):
     # === MODE ACCURACY ANALYSIS ===
     print("--- MODE DETECTION ACCURACY ---")
 
-    # Use lon_g thresholds (City defaults: 0.10g accel, 0.18g brake)
-    ACCEL_THRESH = 0.10
-    BRAKE_THRESH = 0.18
+    # Ground truth thresholds for determining "truly accelerating/braking"
+    # (independent of mode detection thresholds)
+    TRUE_ACCEL_THRESH = 0.05  # 0.05g from speed changes = real acceleration
+    TRUE_BRAKE_THRESH = 0.05  # 0.05g from speed changes = real braking
 
     tp_accel = fp_accel = fn_accel = 0
     tp_brake = fp_brake = fn_brake = 0
@@ -230,8 +241,8 @@ def analyze_telemetry(filename):
 
         is_accel_mode = mode in [1, 5]
         is_brake_mode = mode in [2, 6]
-        truly_accelerating = true_accel_g > 0.05
-        truly_braking = true_accel_g < -0.05
+        truly_accelerating = true_accel_g > TRUE_ACCEL_THRESH
+        truly_braking = true_accel_g < -TRUE_BRAKE_THRESH
 
         # ACCEL accuracy
         if is_accel_mode and truly_accelerating:
@@ -282,19 +293,21 @@ def analyze_telemetry(filename):
             mean_lon = statistics.mean(lon_g_shifted)
             mean_true = statistics.mean(true_accels)
 
-            numerator = sum((l - mean_lon) * (t - mean_true)
-                          for l, t in zip(lon_g_shifted, true_accels))
-            denom_lon = sum((l - mean_lon)**2 for l in lon_g_shifted) ** 0.5
-            denom_true = sum((t - mean_true)**2 for t in true_accels) ** 0.5
+            numerator = sum(
+                (lon - mean_lon) * (true - mean_true)
+                for lon, true in zip(lon_g_shifted, true_accels)
+            )
+            denom_lon = sum((lon - mean_lon) ** 2 for lon in lon_g_shifted) ** 0.5
+            denom_true = sum((t - mean_true) ** 2 for t in true_accels) ** 0.5
 
             if denom_lon > 0 and denom_true > 0:
                 correlation = numerator / (denom_lon * denom_true)
                 print(f"Correlation coefficient: {correlation:.3f} (want >0.7)")
 
             # Calculate error
-            errors = [l - t for l, t in zip(lon_g_shifted, true_accels)]
+            errors = [lon - t for lon, t in zip(lon_g_shifted, true_accels)]
             mean_error = statistics.mean(errors)
-            rmse = (sum(e**2 for e in errors) / len(errors)) ** 0.5
+            rmse = (sum(e ** 2 for e in errors) / len(errors)) ** 0.5
             print(f"Mean error (lon_g - true): {mean_error:.4f}g (bias)")
             print(f"RMSE: {rmse:.4f}g")
     print()
