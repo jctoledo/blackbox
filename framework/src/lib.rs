@@ -132,10 +132,22 @@
 
 // Core framework modules
 pub mod ekf;
+pub mod filter;
+pub mod fusion;
+pub mod mode;
 pub mod sensor_framework;
 pub mod sensors;
 pub mod transforms;
 pub mod velocity;
+
+// Re-export mode detection types
+pub use mode::{Mode, ModeClassifier, ModeConfig, DEFAULT_MODE_ALPHA};
+
+// Re-export sensor fusion types
+pub use fusion::{
+    FusionConfig, GpsAcceleration, OrientationCorrector, SensorFusion, TiltEstimator,
+    YawRateCalibrator,
+};
 
 // Re-export commonly used types from sensor_framework
 // Re-export EKF

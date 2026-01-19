@@ -94,6 +94,55 @@ pub struct ConfigSnapshot {
     pub gps_warmup_fixes: u8,
 }
 
+/// Sensor fusion diagnostics - filter pipeline and blending status
+#[derive(Debug, Clone, Copy, Default)]
+pub struct FusionDiagnostics {
+    // Filter pipeline (all in m/s²)
+    /// Raw IMU longitudinal acceleration (before Butterworth filter)
+    pub lon_imu_raw: f32,
+    /// Filtered IMU longitudinal (after 10Hz low-pass)
+    pub lon_imu_filtered: f32,
+    /// Final blended longitudinal (GPS/IMU mix)
+    pub lon_blended: f32,
+
+    // GPS blending status
+    /// Current GPS blend weight (0.0-1.0, based on orientation correction
+    /// confidence)
+    pub gps_weight: f32,
+    /// GPS-derived acceleration (m/s²), NaN if invalid
+    pub gps_accel: f32,
+    /// GPS update rate estimate (Hz)
+    pub gps_rate: f32,
+    /// Was GPS rejected by validity check? (GPS=0 but IMU has signal)
+    pub gps_rejected: bool,
+
+    // Orientation corrector (ArduPilot-style GPS-corrected orientation)
+    /// Learned pitch correction (degrees) - corrects AHRS errors during
+    /// acceleration
+    pub pitch_correction_deg: f32,
+    /// Learned roll correction (degrees) - corrects AHRS errors during
+    /// cornering
+    pub roll_correction_deg: f32,
+    /// Pitch correction confidence (0.0-1.0, based on learning samples)
+    pub pitch_confidence: f32,
+    /// Roll correction confidence (0.0-1.0)
+    pub roll_confidence: f32,
+
+    // Yaw rate calibrator
+    /// Learned gyro bias (rad/s)
+    pub yaw_bias: f32,
+    /// Is yaw calibration valid?
+    pub yaw_calibrated: bool,
+
+    // Tilt estimator (learned when stopped)
+    /// Tilt offset X (m/s²)
+    pub tilt_offset_x: f32,
+    /// Tilt offset Y (m/s²)
+    pub tilt_offset_y: f32,
+    /// Is tilt offset valid?
+    pub tilt_valid: bool,
+}
+
 /// Complete diagnostics snapshot (immutable copy for reading)
 #[derive(Debug, Clone, Default)]
 pub struct DiagnosticsSnapshot {
@@ -103,6 +152,7 @@ pub struct DiagnosticsSnapshot {
     pub system_health: SystemHealth,
     pub wifi_status: WifiStatus,
     pub config: ConfigSnapshot,
+    pub fusion: FusionDiagnostics,
 }
 
 /// Thread-safe diagnostics state container
@@ -128,6 +178,7 @@ struct DiagnosticsInner {
     system_health: SystemHealth,
     wifi_status: WifiStatus,
     config: ConfigSnapshot,
+    fusion: FusionDiagnostics,
     // For rate calculation (last known counts)
     last_imu_count: u32,
     last_gps_count: u32,
@@ -197,6 +248,12 @@ impl DiagnosticsState {
     #[inline]
     pub fn record_zupt(&self) {
         self.zupt_count.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Get total GPS fix count (for sensor fusion rate tracking)
+    #[inline]
+    pub fn gps_fix_count(&self) -> u32 {
+        self.gps_fix_count.load(Ordering::Relaxed)
     }
 
     /// Update sensor rates (call periodically, e.g., every second)
@@ -294,6 +351,14 @@ impl DiagnosticsState {
         }
     }
 
+    /// Update fusion diagnostics (filter pipeline, GPS blending, calibrators)
+    #[allow(clippy::too_many_arguments)]
+    pub fn update_fusion(&self, fusion: FusionDiagnostics) {
+        if let Ok(mut inner) = self.inner.lock() {
+            inner.fusion = fusion;
+        }
+    }
+
     /// Get a snapshot of all diagnostics (for HTTP response)
     pub fn snapshot(&self) -> DiagnosticsSnapshot {
         if let Ok(inner) = self.inner.lock() {
@@ -304,6 +369,7 @@ impl DiagnosticsState {
                 system_health: inner.system_health,
                 wifi_status: inner.wifi_status.clone(),
                 config: inner.config.clone(),
+                fusion: inner.fusion,
             }
         } else {
             DiagnosticsSnapshot::default()

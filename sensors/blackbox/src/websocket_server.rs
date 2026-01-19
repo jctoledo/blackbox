@@ -26,15 +26,15 @@ pub struct ModeSettings {
 
 impl Default for ModeSettings {
     fn default() -> Self {
-        // Matches city preset - sensitive defaults for street driving
+        // Matches city preset - must stay in sync with mode.rs ModeConfig::default()
         Self {
             acc_thr: 0.10,     // 0.10g - city driving (gentle acceleration)
             acc_exit: 0.05,    // Exit threshold
-            brake_thr: -0.18,  // -0.18g - city driving (normal braking)
-            brake_exit: -0.09, // Exit threshold
-            lat_thr: 0.12,     // 0.12g - city turns
-            lat_exit: 0.06,    // Exit threshold
-            yaw_thr: 0.05,     // ~2.9°/s yaw rate
+            brake_thr: -0.15,  // -0.15g - sensitive brake detection (compensates for mounting bias)
+            brake_exit: -0.08, // Exit threshold
+            lat_thr: 0.10,     // 0.10g - sensitive corner detection
+            lat_exit: 0.05,    // Exit threshold
+            yaw_thr: 0.04,     // ~2.3°/s yaw rate
             min_speed: 2.0,    // ~7 km/h
         }
     }
@@ -299,20 +299,20 @@ body{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0f;color:#f0
 </div>
 <div class="preset-summary" id="preset-summary">
 <div class="ps-row"><span class="ps-label">Accel</span><span class="ps-value" id="ps-acc">0.10<span>/0.05g</span></span></div>
-<div class="ps-row"><span class="ps-label">Brake</span><span class="ps-value" id="ps-brake">0.18<span>/0.09g</span></span></div>
-<div class="ps-row"><span class="ps-label">Lateral</span><span class="ps-value" id="ps-lat">0.12<span>/0.06g</span></span></div>
-<div class="ps-row"><span class="ps-label">Yaw</span><span class="ps-value" id="ps-yaw">0.05<span> r/s</span></span></div>
+<div class="ps-row"><span class="ps-label">Brake</span><span class="ps-value" id="ps-brake">0.15<span>/0.08g</span></span></div>
+<div class="ps-row"><span class="ps-label">Lateral</span><span class="ps-value" id="ps-lat">0.10<span>/0.05g</span></span></div>
+<div class="ps-row"><span class="ps-label">Yaw</span><span class="ps-value" id="ps-yaw">0.04<span> r/s</span></span></div>
 <div class="ps-row" style="grid-column:span 2;justify-content:center;margin-top:4px;padding-top:8px;border-top:1px solid #1a1a24"><span class="ps-label">Min Speed</span><span class="ps-value" id="ps-minspd" style="margin-left:8px">2.0<span> m/s</span></span></div>
 </div>
 <div class="cfg-sliders" id="cfg-sliders">
-<div class="cfg-row"><span class="cfg-lbl">Accel</span><input type="range" min="0.05" max="0.80" step="0.01" class="cfg-slider" id="s-acc" value="0.10" oninput="updS('acc')"><span class="cfg-val" id="v-acc">0.10</span><span class="cfg-unit">g</span></div>
-<div class="cfg-row"><span class="cfg-lbl">Acc Exit</span><input type="range" min="0.02" max="0.50" step="0.01" class="cfg-slider" id="s-accexit" value="0.05" oninput="updS('accexit')"><span class="cfg-val" id="v-accexit">0.05</span><span class="cfg-unit">g</span></div>
-<div class="cfg-row"><span class="cfg-lbl">Brake</span><input type="range" min="0.10" max="1.20" step="0.01" class="cfg-slider" id="s-brake" value="0.18" oninput="updS('brake')"><span class="cfg-val" id="v-brake">0.18</span><span class="cfg-unit">g</span></div>
-<div class="cfg-row"><span class="cfg-lbl">Brk Exit</span><input type="range" min="0.05" max="0.60" step="0.01" class="cfg-slider" id="s-brakeexit" value="0.09" oninput="updS('brakeexit')"><span class="cfg-val" id="v-brakeexit">0.09</span><span class="cfg-unit">g</span></div>
-<div class="cfg-row"><span class="cfg-lbl">Lateral</span><input type="range" min="0.05" max="1.20" step="0.01" class="cfg-slider" id="s-lat" value="0.12" oninput="updS('lat')"><span class="cfg-val" id="v-lat">0.12</span><span class="cfg-unit">g</span></div>
-<div class="cfg-row"><span class="cfg-lbl">Lat Exit</span><input type="range" min="0.02" max="0.60" step="0.01" class="cfg-slider" id="s-latexit" value="0.06" oninput="updS('latexit')"><span class="cfg-val" id="v-latexit">0.06</span><span class="cfg-unit">g</span></div>
-<div class="cfg-row"><span class="cfg-lbl">Yaw</span><input type="range" min="0.02" max="0.35" step="0.005" class="cfg-slider" id="s-yaw" value="0.05" oninput="updS('yaw')"><span class="cfg-val" id="v-yaw">0.050</span><span class="cfg-unit">r/s</span></div>
-<div class="cfg-row"><span class="cfg-lbl">Min Spd</span><input type="range" min="1.0" max="10.0" step="0.5" class="cfg-slider" id="s-minspd" value="2.0" oninput="updS('minspd')"><span class="cfg-val" id="v-minspd">2.0</span><span class="cfg-unit">m/s</span></div>
+<div class="cfg-row"><span class="cfg-lbl">Accel</span><input type="range" min="0.05" max="0.40" step="0.02" class="cfg-slider" id="s-acc" value="0.10" oninput="updS('acc')"><span class="cfg-val" id="v-acc">0.10</span><span class="cfg-unit">g</span></div>
+<div class="cfg-row"><span class="cfg-lbl">Acc Exit</span><input type="range" min="0.02" max="0.20" step="0.01" class="cfg-slider" id="s-accexit" value="0.05" oninput="updS('accexit')"><span class="cfg-val" id="v-accexit">0.05</span><span class="cfg-unit">g</span></div>
+<div class="cfg-row"><span class="cfg-lbl">Brake</span><input type="range" min="0.08" max="0.60" step="0.02" class="cfg-slider" id="s-brake" value="0.15" oninput="updS('brake')"><span class="cfg-val" id="v-brake">0.15</span><span class="cfg-unit">g</span></div>
+<div class="cfg-row"><span class="cfg-lbl">Brk Exit</span><input type="range" min="0.04" max="0.30" step="0.01" class="cfg-slider" id="s-brakeexit" value="0.08" oninput="updS('brakeexit')"><span class="cfg-val" id="v-brakeexit">0.08</span><span class="cfg-unit">g</span></div>
+<div class="cfg-row"><span class="cfg-lbl">Lateral</span><input type="range" min="0.05" max="0.60" step="0.02" class="cfg-slider" id="s-lat" value="0.10" oninput="updS('lat')"><span class="cfg-val" id="v-lat">0.10</span><span class="cfg-unit">g</span></div>
+<div class="cfg-row"><span class="cfg-lbl">Lat Exit</span><input type="range" min="0.02" max="0.30" step="0.01" class="cfg-slider" id="s-latexit" value="0.05" oninput="updS('latexit')"><span class="cfg-val" id="v-latexit">0.05</span><span class="cfg-unit">g</span></div>
+<div class="cfg-row"><span class="cfg-lbl">Yaw</span><input type="range" min="0.02" max="0.20" step="0.01" class="cfg-slider" id="s-yaw" value="0.04" oninput="updS('yaw')"><span class="cfg-val" id="v-yaw">0.040</span><span class="cfg-unit">r/s</span></div>
+<div class="cfg-row"><span class="cfg-lbl">Min Spd</span><input type="range" min="1.0" max="6.0" step="0.5" class="cfg-slider" id="s-minspd" value="2.0" oninput="updS('minspd')"><span class="cfg-val" id="v-minspd">2.0</span><span class="cfg-unit">m/s</span></div>
 <div class="cfg-btns"><button class="cfg-btn" onclick="resetToPreset()">Reset</button><button class="cfg-btn cfg-save" onclick="saveCfg()">Apply</button></div>
 </div>
 </div>
@@ -328,6 +328,9 @@ let trail=[],maxL=0,maxR=0,maxA=0,maxB=0,maxSpd=0;
 let speed_ema=0;
 let sessionStart=Date.now();
 let currentPreset='city';
+// Fusion diagnostics for CSV export (fetched periodically during recording)
+let fusion={lon_imu:0,lon_gps:0,gps_wt:0,pitch_c:0,pitch_cf:0,roll_c:0,roll_cf:0,tilt_x:0,tilt_y:0};
+let fusionPoll=0;
 const $=id=>document.getElementById(id);
 const cv=$('gfc'),ctx=cv.getContext('2d');
 const CX=70,CY=70,R=55,SCL=R/2;
@@ -338,10 +341,10 @@ const CX=70,CY=70,R=55,SCL=R/2;
 // Canyon: spirited driving (0.20-0.40g range)
 // Track: racing (0.35-0.80g+ range)
 const PRESETS={
-track:{acc:0.35,acc_exit:0.17,brake:0.55,brake_exit:0.27,lat:0.50,lat_exit:0.25,yaw:0.15,min_speed:4.0,desc:'Racing/track days'},
-canyon:{acc:0.22,acc_exit:0.11,brake:0.35,brake_exit:0.17,lat:0.28,lat_exit:0.14,yaw:0.10,min_speed:3.0,desc:'Spirited mountain roads'},
-city:{acc:0.10,acc_exit:0.05,brake:0.18,brake_exit:0.09,lat:0.12,lat_exit:0.06,yaw:0.05,min_speed:2.0,desc:'Daily street driving'},
-highway:{acc:0.12,acc_exit:0.06,brake:0.22,brake_exit:0.11,lat:0.14,lat_exit:0.07,yaw:0.04,min_speed:5.0,desc:'Highway cruising'}
+track:{acc:0.35,acc_exit:0.17,brake:0.35,brake_exit:0.17,lat:0.50,lat_exit:0.25,yaw:0.15,min_speed:4.0,desc:'Racing/track days'},
+canyon:{acc:0.22,acc_exit:0.11,brake:0.22,brake_exit:0.11,lat:0.28,lat_exit:0.14,yaw:0.10,min_speed:3.0,desc:'Spirited mountain roads'},
+city:{acc:0.10,acc_exit:0.05,brake:0.15,brake_exit:0.08,lat:0.10,lat_exit:0.05,yaw:0.04,min_speed:2.0,desc:'Daily street driving'},
+highway:{acc:0.12,acc_exit:0.06,brake:0.15,brake_exit:0.08,lat:0.12,lat_exit:0.06,yaw:0.04,min_speed:5.0,desc:'Highway cruising'}
 };
 
 function fmtTime(ms){const s=Math.floor(ms/1000),m=Math.floor(s/60);return String(m).padStart(2,'0')+':'+String(s%60).padStart(2,'0')}
@@ -438,7 +441,7 @@ if(lng>0&&lng>maxA){maxA=lng;$('maxA').textContent=maxA.toFixed(2)}
 if(lng<0&&Math.abs(lng)>maxB){maxB=Math.abs(lng);$('maxB').textContent=maxB.toFixed(2)}
 drawG();
 cnt++;
-if(rec)data.push({t:Date.now(),sp,ax,ay,wz,mo,latg,lng,lat,lon,gpsOk});
+if(rec)data.push({t:Date.now(),sp,ax,ay,wz,mo,latg,lng,lat,lon,gpsOk,...fusion});
 }
 
 // HTTP polling - self-scheduling for maximum throughput
@@ -452,9 +455,30 @@ const b=atob(j.data),a=new Uint8Array(b.length);
 for(let i=0;i<b.length;i++)a[i]=b.charCodeAt(i);
 process(a.buffer);
 $('dot').className='dot on';$('stxt').textContent='HTTP';
+// Fetch fusion diagnostics every 5th poll (~6Hz) during recording for CSV export
+if(rec&&++fusionPoll>=5){fusionPoll=0;fetchFusion()}
 }
 setTimeout(poll,33); // Poll at ~30Hz to match ESP32 telemetry rate
 }catch(e){$('dot').className='dot';$('stxt').textContent='Offline';setTimeout(poll,500)} // Retry slower on error
+}
+
+// Fetch fusion diagnostics for CSV export (non-blocking)
+async function fetchFusion(){
+try{
+const r=await fetch('/api/diagnostics');
+const d=await r.json();
+if(d.fusion){
+fusion.lon_imu=d.fusion.lon_filtered||0;
+fusion.lon_gps=d.fusion.gps_accel||0;
+fusion.gps_wt=d.fusion.gps_weight||0;
+fusion.pitch_c=d.fusion.pitch_corr||0;
+fusion.pitch_cf=d.fusion.pitch_conf||0;
+fusion.roll_c=d.fusion.roll_corr||0;
+fusion.roll_cf=d.fusion.roll_conf||0;
+fusion.tilt_x=d.fusion.tilt_x||0;
+fusion.tilt_y=d.fusion.tilt_y||0;
+}
+}catch(e){}
 }
 
 // Reset button: resets G max, speed max, timer, and triggers calibration
@@ -474,7 +498,7 @@ if(data.length){const s=JSON.parse(localStorage.getItem('bb')||'[]');s.unshift({
 localStorage.setItem('bb',JSON.stringify(s.slice(0,10)));alert('Saved '+data.length+' pts')}}};
 
 $('exp').onclick=()=>{const s=JSON.parse(localStorage.getItem('bb')||'[]');if(!s.length)return alert('No data');
-let c='time,speed,ax,ay,wz,mode,lat_g,lon_g,gps_lat,gps_lon,gps_valid\n';s[0].d.forEach(r=>{c+=r.t+','+r.sp+','+r.ax+','+r.ay+','+r.wz+','+r.mo+','+r.latg+','+r.lng+','+(r.lat||0)+','+(r.lon||0)+','+(r.gpsOk||0)+'\n'});
+let c='time,speed,ax,ay,wz,mode,lat_g,lon_g,gps_lat,gps_lon,gps_valid,lon_imu,lon_gps,gps_weight,pitch_corr,pitch_conf,roll_corr,roll_conf,tilt_x,tilt_y\n';s[0].d.forEach(r=>{c+=r.t+','+r.sp+','+r.ax+','+r.ay+','+r.wz+','+r.mo+','+r.latg+','+r.lng+','+(r.lat||0)+','+(r.lon||0)+','+(r.gpsOk||0)+','+(r.lon_imu||0).toFixed(4)+','+(r.lon_gps||0).toFixed(4)+','+(r.gps_wt||0).toFixed(2)+','+(r.pitch_c||0).toFixed(2)+','+(r.pitch_cf||0).toFixed(1)+','+(r.roll_c||0).toFixed(2)+','+(r.roll_cf||0).toFixed(1)+','+(r.tilt_x||0).toFixed(4)+','+(r.tilt_y||0).toFixed(4)+'\n'});
 const b=new Blob([c],{type:'text/csv'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download='blackbox.csv';a.click()};
 
 // Settings functions
@@ -660,6 +684,28 @@ h1{font-size:18px;margin-bottom:16px;color:#60a5fa;letter-spacing:2px}
 <div class="row"><span class="label">TX Failed</span><span class="value" id="tx-fail">--</span></div>
 </div>
 </div>
+<div class="section">
+<h2>Sensor Fusion</h2>
+<div class="grid">
+<div>
+<div class="row"><span class="label">Lon Raw</span><span class="value" id="lon-raw">--</span></div>
+<div class="row"><span class="label">Lon Filtered</span><span class="value" id="lon-filt">--</span></div>
+<div class="row"><span class="label">Lon Blended</span><span class="value" id="lon-blend">--</span></div>
+<div class="row"><span class="label">GPS Weight</span><span class="value" id="gps-wt">--</span></div>
+<div class="row"><span class="label">GPS Accel</span><span class="value" id="gps-acc">--</span></div>
+<div class="row"><span class="label">GPS Rejected</span><span class="value" id="gps-rej">--</span></div>
+</div>
+<div>
+<div class="row"><span class="label">Pitch Corr</span><span class="value" id="pitch-corr">--</span></div>
+<div class="row"><span class="label">Roll Corr</span><span class="value" id="roll-corr">--</span></div>
+<div class="row"><span class="label">Orient Conf</span><span class="value" id="orient-conf">--</span></div>
+<div class="row"><span class="label">Yaw Bias</span><span class="value" id="yaw-bias">--</span></div>
+<div class="row"><span class="label">Yaw Calibrated</span><span class="value" id="yaw-cal">--</span></div>
+<div class="row"><span class="label">Tilt X/Y</span><span class="value" id="tilt-xy">--</span></div>
+<div class="row"><span class="label">Tilt Valid</span><span class="value" id="tilt-v">--</span></div>
+</div>
+</div>
+</div>
 <div class="uptime" id="uptime">Uptime: --</div>
 <script>
 const $=id=>document.getElementById(id);
@@ -685,7 +731,9 @@ async function update(){
     const gpsEl=$('gps-rate');
     gpsEl.textContent=d.sensor_rates.gps_hz.toFixed(1)+' / '+d.sensor_rates.gps_expected.toFixed(0)+' Hz';
     gpsEl.className='value '+rateClass(d.sensor_rates.gps_hz,d.sensor_rates.gps_expected);
-    $('loop-rate').textContent=d.sensor_rates.loop_hz.toFixed(0)+' Hz';
+    const lr=$('loop-rate');
+    lr.textContent=d.sensor_rates.loop_hz.toFixed(0)+' Hz';
+    lr.className='value '+(d.sensor_rates.loop_hz>500?'ok':(d.sensor_rates.loop_hz>200?'warn':'err'));
     $('zupt-rate').textContent=d.sensor_rates.zupt_per_min.toFixed(1)+'/min';
     $('ekf-per-gps').textContent=d.sensor_rates.ekf_per_gps.toFixed(1);
     $('gps-fix').textContent=d.gps.fix?'Valid':'No Fix';
@@ -696,12 +744,24 @@ async function update(){
     $('gps-hdop').className='value '+(d.gps.hdop<2?'ok':(d.gps.hdop<5?'warn':'err'));
     $('gps-warmup').textContent=d.gps.warmup?'Complete':'Warming up...';
     $('gps-warmup').className='value '+(d.gps.warmup?'ok':'warn');
-    $('pos-sigma').textContent=d.ekf.pos_sigma.toFixed(2)+' m';
-    $('vel-sigma').textContent=d.ekf.vel_sigma.toFixed(2)+' m/s';
-    $('yaw-sigma').textContent=d.ekf.yaw_sigma_deg.toFixed(1)+'deg';
-    $('bias-x').textContent=d.ekf.bias_x.toFixed(4)+' m/s2';
-    $('bias-y').textContent=d.ekf.bias_y.toFixed(4)+' m/s2';
-    $('heap').textContent=(d.system.heap_free/1024).toFixed(0)+' KB';
+    const ps=$('pos-sigma');
+    ps.textContent=d.ekf.pos_sigma.toFixed(2)+' m';
+    ps.className='value '+(d.ekf.pos_sigma<5?'ok':(d.ekf.pos_sigma<10?'warn':'err'));
+    const vs=$('vel-sigma');
+    vs.textContent=d.ekf.vel_sigma.toFixed(2)+' m/s';
+    vs.className='value '+(d.ekf.vel_sigma<0.5?'ok':(d.ekf.vel_sigma<1.0?'warn':'err'));
+    const ys=$('yaw-sigma');
+    ys.textContent=d.ekf.yaw_sigma_deg.toFixed(1)+'deg';
+    ys.className='value '+(d.ekf.yaw_sigma_deg<5?'ok':(d.ekf.yaw_sigma_deg<10?'warn':'err'));
+    const bx=$('bias-x');
+    bx.textContent=d.ekf.bias_x.toFixed(4)+' m/s2';
+    bx.className='value '+(Math.abs(d.ekf.bias_x)<0.3?'ok':(Math.abs(d.ekf.bias_x)<0.5?'warn':'err'));
+    const by=$('bias-y');
+    by.textContent=d.ekf.bias_y.toFixed(4)+' m/s2';
+    by.className='value '+(Math.abs(d.ekf.bias_y)<0.3?'ok':(Math.abs(d.ekf.bias_y)<0.5?'warn':'err'));
+    const hp=$('heap');
+    hp.textContent=(d.system.heap_free/1024).toFixed(0)+' KB';
+    hp.className='value '+(d.system.heap_free>40000?'ok':(d.system.heap_free>20000?'warn':'err'));
     $('tx-ok').textContent=d.system.tx_ok.toLocaleString();
     const txf=$('tx-fail');
     txf.textContent=d.system.tx_fail;
@@ -709,6 +769,44 @@ async function update(){
     const s=d.system.uptime_s;
     const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;
     $('uptime').textContent='Uptime: '+h+'h '+m+'m '+sec+'s';
+    // Fusion diagnostics
+    if(d.fusion){
+      $('lon-raw').textContent=d.fusion.lon_raw.toFixed(3)+' m/s2';
+      $('lon-filt').textContent=d.fusion.lon_filtered.toFixed(3)+' m/s2';
+      $('lon-blend').textContent=d.fusion.lon_blended.toFixed(3)+' m/s2';
+      const wt=$('gps-wt');
+      wt.textContent=(d.fusion.gps_weight*100).toFixed(0)+'%';
+      wt.className='value '+(d.fusion.gps_weight>0?'ok':'warn');
+      const ga=$('gps-acc');
+      ga.textContent=isNaN(d.fusion.gps_accel)?'N/A':d.fusion.gps_accel.toFixed(3)+' m/s2';
+      const rej=$('gps-rej');
+      rej.textContent=d.fusion.gps_rejected?'YES':'No';
+      rej.className='value '+(d.fusion.gps_rejected?'warn':'ok');
+      // OrientationCorrector (GPS-corrected AHRS)
+      const pc=$('pitch-corr');
+      pc.textContent=d.fusion.pitch_corr.toFixed(1)+'deg';
+      pc.className='value '+(Math.abs(d.fusion.pitch_corr)<10?'ok':'warn');
+      const rc=$('roll-corr');
+      rc.textContent=d.fusion.roll_corr.toFixed(1)+'deg';
+      rc.className='value '+(Math.abs(d.fusion.roll_corr)<10?'ok':'warn');
+      const oc=$('orient-conf');
+      oc.textContent=d.fusion.pitch_conf.toFixed(0)+'% / '+d.fusion.roll_conf.toFixed(0)+'%';
+      oc.className='value '+(d.fusion.pitch_conf>50?'ok':(d.fusion.pitch_conf>10?'warn':'err'));
+      const yb=$('yaw-bias');
+      const ybVal=Math.abs(d.fusion.yaw_bias*1000);
+      yb.textContent=ybVal.toFixed(2)+' mrad/s';
+      yb.className='value '+(ybVal<10?'ok':(ybVal<50?'warn':'err'));
+      const yc=$('yaw-cal');
+      yc.textContent=d.fusion.yaw_calibrated?'Yes':'No';
+      yc.className='value '+(d.fusion.yaw_calibrated?'ok':'warn');
+      const txy=$('tilt-xy');
+      const tiltMax=Math.max(Math.abs(d.fusion.tilt_x),Math.abs(d.fusion.tilt_y));
+      txy.textContent=d.fusion.tilt_x.toFixed(3)+' / '+d.fusion.tilt_y.toFixed(3);
+      txy.className='value '+(tiltMax<0.3?'ok':(tiltMax<0.5?'warn':'err'));
+      const tv=$('tilt-v');
+      tv.textContent=d.fusion.tilt_valid?'Yes':'No';
+      tv.className='value '+(d.fusion.tilt_valid?'ok':'warn');
+    }
   }catch(e){console.log('Diag fetch error:',e)}
 }
 setInterval(update,1000);
@@ -932,7 +1030,8 @@ impl TelemetryServer {
                             r#""system":{{"heap_free":{},"uptime_s":{},"tx_ok":{},"tx_fail":{}}},"#,
                             r#""gps":{{"model":"{}","rate_hz":{},"fix":{},"warmup":{},"satellites":{},"hdop":{:.1}}},"#,
                             r#""wifi":{{"mode":"{}","ssid":"{}"}},"#,
-                            r#""config":{{"telemetry_hz":{},"gps_model":"{}","warmup_fixes":{}}}}}"#
+                            r#""config":{{"telemetry_hz":{},"gps_model":"{}","warmup_fixes":{}}},"#,
+                            r#""fusion":{{"lon_raw":{:.3},"lon_filtered":{:.3},"lon_blended":{:.3},"gps_weight":{:.2},"gps_accel":{:.3},"gps_rate":{:.1},"gps_rejected":{},"pitch_corr":{:.1},"roll_corr":{:.1},"pitch_conf":{:.0},"roll_conf":{:.0},"yaw_bias":{:.4},"yaw_calibrated":{},"tilt_x":{:.3},"tilt_y":{:.3},"tilt_valid":{}}}}}"#
                         ),
                         d.sensor_rates.imu_hz, d.sensor_rates.gps_hz, d.sensor_rates.loop_hz,
                         d.sensor_rates.imu_expected_hz, d.sensor_rates.gps_expected_hz,
@@ -945,7 +1044,14 @@ impl TelemetryServer {
                         d.gps_health.fix_valid, d.gps_health.warmup_complete,
                         d.gps_health.satellites, d.gps_health.hdop,
                         d.wifi_status.mode, d.wifi_status.ssid,
-                        d.config.telemetry_rate_hz, d.config.gps_model, d.config.gps_warmup_fixes
+                        d.config.telemetry_rate_hz, d.config.gps_model, d.config.gps_warmup_fixes,
+                        // Fusion diagnostics
+                        d.fusion.lon_imu_raw, d.fusion.lon_imu_filtered, d.fusion.lon_blended,
+                        d.fusion.gps_weight, d.fusion.gps_accel, d.fusion.gps_rate, d.fusion.gps_rejected,
+                        d.fusion.pitch_correction_deg, d.fusion.roll_correction_deg,
+                        d.fusion.pitch_confidence * 100.0, d.fusion.roll_confidence * 100.0,
+                        d.fusion.yaw_bias, d.fusion.yaw_calibrated,
+                        d.fusion.tilt_offset_x, d.fusion.tilt_offset_y, d.fusion.tilt_valid
                     )
                 } else {
                     r#"{"error":"diagnostics not available"}"#.to_string()

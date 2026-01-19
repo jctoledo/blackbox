@@ -27,6 +27,8 @@ You are a seasoned embedded Rust engineer with deep expertise in:
 - Efficient binary protocols (fixed-size packets, checksums)
 - Avoid over-engineering: solve the problem at hand, not hypothetical future problems
 - Keep abstractions minimal until they prove necessary
+- **Never use `#[allow(dead_code)]`** - dead code must be removed or used, not silenced
+- **Never duplicate constants** - use a single `const` and reference it everywhere. Add a unit test to verify defaults use the constant.
 
 **Testing Philosophy:**
 - Write meaningful tests that catch real bugs, not boilerplate
@@ -302,10 +304,10 @@ After 5 consecutive stationary detections:
 
 | Preset | Accel | Brake | Lateral | Yaw | Min Speed | Use Case |
 |--------|-------|-------|---------|-----|-----------|----------|
-| Track | 0.30g | 0.50g | 0.50g | 0.15 rad/s | 3.0 m/s | Racing, autocross |
-| Canyon | 0.20g | 0.35g | 0.30g | 0.10 rad/s | 2.5 m/s | Spirited twisty roads |
-| City (default) | 0.10g | 0.18g | 0.12g | 0.05 rad/s | 2.0 m/s | Daily driving |
-| Highway | 0.08g | 0.15g | 0.10g | 0.04 rad/s | 4.0 m/s | Cruise, subtle inputs |
+| Track | 0.35g | 0.35g | 0.50g | 0.15 rad/s | 4.0 m/s | Racing, autocross |
+| Canyon | 0.22g | 0.22g | 0.28g | 0.10 rad/s | 3.0 m/s | Spirited twisty roads |
+| City (default) | 0.10g | 0.15g | 0.10g | 0.04 rad/s | 2.0 m/s | Daily driving |
+| Highway | 0.12g | 0.15g | 0.12g | 0.04 rad/s | 5.0 m/s | Cruise, subtle inputs |
 | Custom | User-defined | | | | | Fine-tuning via sliders |
 
 Exit thresholds are 50% of entry values for hysteresis (prevents oscillation).
@@ -531,29 +533,198 @@ Result: acceleration due to motion only (no gravity component).
 
 ### mode.rs - Driving Mode Classifier
 
-**NEW: Independent Component Detection** (replaces exclusive state machine)
+**Hybrid Mode Detection** with GPS/IMU blending:
+- Longitudinal acceleration (ACCEL/BRAKE) uses **blended GPS + IMU**
+- Lateral acceleration (CORNER) uses **filtered IMU** (GPS can't sense lateral)
+- GPS-derived acceleration computed from velocity changes at 25Hz
+- Blending ratio adapts based on GPS rate and freshness
+
 ```
-Each mode component detected independently with hysteresis:
+Independent hysteresis detection:
 
-ACCEL:    entry at 0.10g → exit at 0.05g
-BRAKE:    entry at -0.18g → exit at -0.09g  (mutually exclusive with ACCEL)
-CORNER:   entry at 0.12g lat + 0.05rad/s yaw → exit at 0.06g lat or low yaw
+ACCEL:    entry at 0.10g → exit at 0.05g  (from blended lon accel)
+BRAKE:    entry at -0.15g → exit at -0.08g (from blended lon accel)
+CORNER:   entry at 0.10g lat + 0.04rad/s yaw → exit at 0.05g lat
 
-Combined states possible:
+Combined states:
 - ACCEL + CORNER = corner exit (trail throttle)
 - BRAKE + CORNER = corner entry (trail braking)
 ```
 
-**Hysteresis:** Entry threshold > exit threshold prevents oscillation.
+**Benefits of Hybrid Detection:**
+- Mounting angle independent (GPS measures actual vehicle acceleration)
+- No drift (GPS doesn't drift like IMU)
+- Graceful fallback when GPS degrades
 
 **All modes require:** speed > min_speed (2.0 m/s / 7.2 km/h)
 
-**Speed Display:**
-Uses **raw GPS speed** directly (system.rs:295-297) for responsive updates.
-- No longer uses EKF-filtered velocity (which was laggy)
-- Server sends raw GPS speed (5 Hz updates)
-- Dashboard applies light EMA smoothing (alpha=0.4) for car speedometer-like display
-- Mode detection still uses EKF velocity for stability
+### filter.rs - Biquad Low-Pass Filter
+
+2nd-order Butterworth IIR filter for vibration removal from IMU longitudinal acceleration.
+
+**Problem:**
+Engine vibration (30-100 Hz) causes 0.08-0.12g noise on longitudinal G readings when
+the vehicle is running but stationary. This makes mode detection unreliable.
+
+**Solution (based on ArduPilot research):**
+- ArduPilot uses **20Hz** for INS_ACCEL_FILTER default
+- Sharp braking events can have frequency components up to 5-10Hz
+- Engine/road vibration is 30-100Hz → separable from driving dynamics (0-10Hz)
+
+**Configuration:**
+- Sample rate: **200 Hz (IMU rate)** - CRITICAL: must match actual process_imu() call rate!
+- Cutoff: **15 Hz** (preserves driving dynamics 0-10Hz, removes vibration 30+Hz)
+- Q = 0.707 (Butterworth - maximally flat passband, no overshoot)
+
+**Frequency Response:**
+```
+0-10 Hz:  ~100% pass (driving dynamics preserved)
+15 Hz:    -3 dB (cutoff point)
+30 Hz:    -12 dB (engine vibration attenuated)
+60+ Hz:   -24+ dB (engine vibration removed)
+```
+
+**Implementation:**
+```rust
+// Direct Form I biquad
+y[n] = b0*x[n] + b1*x[n-1] + b2*x[n-2] - a1*y[n-1] - a2*y[n-2]
+```
+
+### fusion.rs - Sensor Fusion Module
+
+Handles GPS-corrected orientation, GPS/IMU blending, and continuous calibration.
+Uses an **ArduPilot-style approach**: GPS velocity provides ground truth to correct AHRS
+orientation errors, enabling accurate 200 Hz IMU data for mode detection.
+
+**The Core Problem:**
+The WT901 AHRS cannot distinguish linear acceleration from tilt. During forward
+acceleration, it reports false pitch (thinks device is tilting backward). This corrupts
+gravity removal and produces wrong earth-frame acceleration. Without correction,
+measured correlation with ground truth was only 0.32 (garbage).
+
+**Solution: GPS-Corrected Orientation**
+Compare IMU-predicted acceleration (using AHRS angles) with GPS-derived acceleration
+(ground truth). The difference reveals orientation error:
+```
+pitch_error ≈ (ax_imu - ax_gps) / G
+```
+
+**Components:**
+
+1. **OrientationCorrector** - Learns pitch/roll corrections from GPS velocity (NEW)
+   - Compares IMU-derived acceleration with GPS ground truth
+   - Learns pitch correction during acceleration (forward/backward)
+   - Learns roll correction during cornering (left/right)
+   - Applies corrections BEFORE gravity removal
+   - Confidence increases with learning samples (0-100%)
+   - Max correction capped at ±15° for safety
+   - Enables accurate 200 Hz IMU instead of being limited to GPS rate
+
+2. **GpsAcceleration** - Computes longitudinal acceleration from GPS velocity
+   - `accel = (speed_new - speed_old) / dt`
+   - At 25Hz GPS: dt = 40ms, clean acceleration signal
+   - Tracks staleness for fallback to IMU
+   - Provides ground truth for OrientationCorrector learning
+
+3. **TiltEstimator** - Learns residual mounting offset when stopped
+   - After 3 seconds stationary, averages earth-frame acceleration
+   - Handles minor offsets not captured by OrientationCorrector
+   - Relearns at every stop (adapts to device repositioning)
+
+4. **YawRateCalibrator** - Learns gyro bias while driving straight
+   - When GPS heading is stable (±2° for 3+ seconds), assumes true yaw rate ≈ 0
+   - Any measured yaw rate during this time is gyro bias
+   - Applies correction to prevent lateral drift in centripetal calculation
+   - Essential for highway driving where ZUPT rarely triggers
+
+5. **SensorFusion** - Main processor
+   - Takes raw body-frame IMU + AHRS angles (NEW API)
+   - Applies orientation correction (learned from GPS comparison)
+   - Removes gravity using corrected orientation
+   - Applies residual tilt correction (learned when stopped)
+   - **10 Hz Butterworth low-pass filter** removes engine vibration
+   - Blends corrected IMU with GPS based on correction confidence
+   - Computes centripetal lateral (speed × calibrated_yaw_rate)
+
+**GPS/IMU Blending Ratios (based on OrientationCorrector confidence):**
+```
+Confidence > 80%:   30% GPS / 70% corrected IMU  (trust corrected IMU)
+Confidence 30-80%:  50% GPS / 50% corrected IMU  (moderate confidence, interpolated)
+Confidence < 30%:   80% GPS / 20% corrected IMU  (not confident yet, interpolated)
+GPS stale (>200ms): 0% GPS / 100% corrected IMU  (fallback)
+```
+Note: GPS blending IS still necessary even after OrientationCorrector learns because:
+1. Cold start needs GPS until correction converges (first 1-2 minutes)
+2. Provides continuous sanity check / measurement diversity
+3. Graceful degradation if correction diverges
+
+**process_imu() API (NEW):**
+```rust
+pub fn process_imu(
+    &mut self,
+    ax_raw: f32,         // Raw body-frame X accel (m/s²)
+    ay_raw: f32,         // Raw body-frame Y accel (m/s²)
+    az_raw: f32,         // Raw body-frame Z accel (gravity on Z)
+    ahrs_roll_deg: f32,  // AHRS roll angle (degrees)
+    ahrs_pitch_deg: f32, // AHRS pitch angle (degrees)
+    yaw: f32,            // Vehicle yaw (radians, from EKF)
+    speed: f32,          // Speed (m/s)
+    yaw_rate: f32,       // Yaw rate (rad/s)
+    dt: f32,             // Time step (seconds)
+    is_stationary: bool, // Whether vehicle is stopped
+) -> (f32, f32)          // Returns (lon_blended, lat_centripetal)
+```
+
+**Data Flow:**
+```
+LONGITUDINAL (GPS-Corrected Orientation):
+GPS (25Hz) → GpsAcceleration → lon_accel_gps ──────────────────────────┐
+                                      │                                  │
+                                      └──► OrientationCorrector learns   │
+                                                    ↓                    │
+IMU raw (200Hz) → OrientationCorrector.correct(pitch, roll)             │
+                           ↓                                             │
+                    Corrected orientation                                │
+                           ↓                                             │
+                    remove_gravity → body_to_earth → Tilt → Biquad(10Hz)│
+                           ↓                                             │
+                    lon_imu_corrected ─────────────► Blend ◄────────────┘
+                                                       ↓         (based on confidence)
+                                                  lon_blended
+
+LATERAL (centripetal):
+GPS heading → YawRateCalibrator → learned_bias
+                                       ↓
+Gyro yaw_rate → (yaw_rate - bias) → calibrated_yaw_rate
+                                       ↓
+GPS speed × calibrated_yaw_rate → lat_centripetal
+
+OUTPUT:
+(lon_blended, lat_centripetal) → mode.rs (classification)
+                               → Dashboard (G-meter)
+```
+
+**Why This Works (ArduPilot Insight):**
+- During acceleration, pitch error causes ax_earth to be wrong
+- GPS velocity gives us true horizontal acceleration (dv/dt = ground truth)
+- The innovation (IMU - GPS difference) is directly proportional to pitch error
+- Learning is continuous while driving, adapts to any mount angle
+- Once learned, enables accurate 200 Hz IMU instead of 25 Hz GPS rate
+
+**Diagnostics (NEW):**
+- `pitch_correction_deg`: Learned pitch correction (degrees)
+- `roll_correction_deg`: Learned roll correction (degrees)
+- `pitch_confidence`: Correction confidence (0-100%)
+- `roll_confidence`: Correction confidence (0-100%)
+
+**Why Centripetal Lateral?**
+- Traditional IMU lateral (accelerometer) suffers from mount angle sensitivity and can "stick"
+- Centripetal: `a_lat = v × ω` is physics-based, instant, and mount-independent
+- Uses calibrated yaw rate to prevent drift during highway driving
+- Pro telemetry systems use this approach
+
+**Dashboard Display:** The G-meter shows the same blended longitudinal and centripetal lateral
+values that mode classification uses. What you see is what the algorithm sees.
 
 ### websocket_server.rs - HTTP Dashboard Server
 
@@ -644,6 +815,22 @@ Displayed as updates per minute (rolling average), not cumulative count. Typical
 - GPS: 5 Hz (NEO-6M) or 8-25 Hz (NEO-M9N depending on config)
 - ZUPT: 0-60/min (depends on stops)
 - Free heap: ~60KB (stable during operation)
+
+**Color-Coded Thresholds:**
+The diagnostics page displays metrics with color coding for at-a-glance health status:
+
+| Metric | Green (OK) | Yellow (Warning) | Red (Error) |
+|--------|------------|------------------|-------------|
+| Loop Rate | > 500 Hz | > 200 Hz | < 200 Hz |
+| Position σ | < 5 m | < 10 m | > 10 m |
+| Velocity σ | < 0.5 m/s | < 1.0 m/s | > 1.0 m/s |
+| Yaw σ | < 5° | < 10° | > 10° |
+| Bias X/Y | < 0.3 m/s² | < 0.5 m/s² | > 0.5 m/s² |
+| Heap | > 40 KB | > 20 KB | < 20 KB |
+| Yaw Bias | < 10 mrad/s | < 50 mrad/s | > 50 mrad/s |
+| Tilt X/Y | < 0.3 m/s² | < 0.5 m/s² | > 0.5 m/s² |
+| Pitch/Roll Corr | < 10° | - | > 10° |
+| Orient Conf | > 50% | - | < 50% |
 
 ### udp_stream.rs - UDP Client (Station Mode)
 

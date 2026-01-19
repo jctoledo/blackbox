@@ -336,18 +336,29 @@ impl TelemetryPublisher {
         &mut self,
         sensors: &SensorManager,
         estimator: &StateEstimator,
+        sensor_fusion: &crate::fusion::SensorFusion,
         now_ms: u32,
     ) -> Result<(), SystemError> {
-        // Send bias-corrected accelerations (client can process further if needed)
-        let (ax_corr, ay_corr, az_corr) = sensors.imu_parser.get_accel_corrected();
+        // Get accelerations for display
+        // lon: GPS-derived when fresh (no vibration), otherwise blended with heavy
+        // smoothing lat: centripetal (speed × yaw_rate) - instant, doesn't
+        // stick after corners      Uses calibrated yaw rate to prevent drift on
+        // highway
+        let lon_display = sensor_fusion.get_lon_display();
+        let lat_display = sensor_fusion.get_lat_centripetal();
+
+        // Keep raw az for reference (no tilt correction needed for vertical)
+        let (_, _, az_corr) = sensors.imu_parser.get_accel_corrected();
 
         let mut packet = binary_telemetry::TelemetryPacket::new();
         packet.timestamp_ms = now_ms;
 
-        // Send bias-corrected accelerations in body frame
-        // Client-side processing can remove gravity and transform to vehicle frame
-        packet.ax = ax_corr;
-        packet.ay = ay_corr;
+        // Send corrected vehicle-frame accelerations
+        // Dashboard expects: lng = -ax/9.81, latg = ay/9.81
+        // So: ax = -lon (negated so dashboard shows positive for accel)
+        //     ay = lat (positive = right turn on G-meter)
+        packet.ax = -lon_display;
+        packet.ay = -lat_display; // Negate: fusion uses left-positive, dashboard uses right-positive
         packet.az = az_corr;
         packet.wz = sensors.imu_parser.data().wz;
         packet.roll = sensors.imu_parser.data().roll.to_radians();

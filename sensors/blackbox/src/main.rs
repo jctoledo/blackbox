@@ -1,6 +1,9 @@
 mod binary_telemetry;
 mod config;
 mod diagnostics;
+#[cfg(test)]
+mod filter; // Only compiled for tests - production uses GPS blend instead of Biquad
+mod fusion;
 mod gps;
 mod imu;
 mod mode;
@@ -14,17 +17,18 @@ mod wifi;
 use std::sync::Arc;
 
 use config::{SystemConfig, WifiModeConfig};
-use diagnostics::DiagnosticsState;
+use diagnostics::{DiagnosticsState, FusionDiagnostics};
 use esp_idf_hal::{
     delay::FreeRtos,
     peripherals::Peripherals,
     uart::{config::Config, UartDriver},
 };
 use esp_idf_svc::{eventloop::EspSystemEventLoop, nvs::EspDefaultNvsPartition};
+use fusion::{FusionConfig, SensorFusion};
 use log::info;
 use mqtt::MqttClient;
 use rgb_led::RgbLed;
-use sensor_fusion::transforms::{body_to_earth, remove_gravity};
+use sensor_fusion::transforms::{body_to_earth, remove_gravity}; // Used for EKF prediction
 use system::{SensorManager, StateEstimator, StatusManager, TelemetryPublisher};
 use udp_stream::UdpTelemetryStream;
 use websocket_server::{TelemetryServer, TelemetryServerState};
@@ -442,6 +446,37 @@ fn main() {
     let mut estimator = StateEstimator::new();
     let mut publisher = TelemetryPublisher::new(udp_stream, mqtt_opt, telemetry_state.clone());
 
+    // Create sensor fusion for mode detection
+    //
+    // Uses GPS-corrected orientation (ArduPilot-style approach):
+    // - OrientationCorrector learns pitch/roll errors from GPS velocity comparison
+    // - IMU orientation is corrected BEFORE gravity removal
+    // - Enables accurate 200 Hz IMU data instead of being limited to GPS rate
+    //
+    // For longitudinal: Blends corrected IMU with GPS based on correction
+    // confidence
+    // - High confidence → trust IMU more (fast 200 Hz response)
+    // - Low confidence → rely on GPS (ground truth but slower)
+    //
+    // For lateral: centripetal (speed × yaw_rate) - mount-independent, instant
+    let fusion_config = FusionConfig {
+        gps_high_rate: 20.0,
+        gps_medium_rate: 10.0,
+        // GPS staleness threshold - must be > GPS interval + processing delay
+        // At 5Hz GPS (200ms) with ~20Hz telemetry, 400ms gives safe margin
+        gps_max_age: 0.4,
+        // GPS weights based on orientation correction confidence:
+        gps_weight_high: 0.3,   // 30% GPS when correction is very confident
+        gps_weight_medium: 0.6, // 60% GPS when moderately confident
+        gps_weight_low: 1.0,    // 100% GPS when not confident (no correction yet)
+        tilt_learn_time: 3.0,
+        // Butterworth filter to remove engine vibration from IMU
+        // Sample rate must match ACTUAL process_imu() call rate (telemetry rate)
+        lon_filter_cutoff: 10.0,
+        lon_sample_rate: 30.0, // 33ms telemetry interval = ~30Hz (from TelemetryConfig::default)
+    };
+    let mut sensor_fusion = SensorFusion::new(fusion_config);
+
     // Main loop timing
     let mut last_telemetry_ms = 0u32;
     let mut last_heap_check_ms = 0u32;
@@ -489,7 +524,7 @@ fn main() {
                     lat_thr: s.lat_thr,
                     lat_exit: s.lat_exit,
                     yaw_thr: s.yaw_thr,
-                    alpha: 0.25, // Keep default smoothing
+                    alpha: mode::DEFAULT_MODE_ALPHA, // Single source of truth
                 };
                 estimator.mode_classifier.update_config(new_config);
                 info!(
@@ -545,6 +580,29 @@ fn main() {
                 gps_fix.hdop,
                 gps_fix.pdop,
             );
+
+            // Fusion diagnostics (filter pipeline, GPS blending, calibrators)
+            let (tilt_x, tilt_y, tilt_valid) = sensor_fusion.get_tilt_offsets();
+            let (pitch_corr, roll_corr) = sensor_fusion.get_orientation_correction();
+            let (pitch_conf, roll_conf) = sensor_fusion.get_orientation_confidence();
+            diagnostics.update_fusion(FusionDiagnostics {
+                lon_imu_raw: sensor_fusion.get_lon_imu_raw(),
+                lon_imu_filtered: sensor_fusion.get_lon_imu_filtered(),
+                lon_blended: sensor_fusion.get_lon_blended(),
+                gps_weight: sensor_fusion.get_last_gps_weight(),
+                gps_accel: sensor_fusion.get_gps_accel(),
+                gps_rate: sensor_fusion.get_gps_rate(),
+                gps_rejected: sensor_fusion.is_gps_rejected(),
+                pitch_correction_deg: pitch_corr,
+                roll_correction_deg: roll_corr,
+                pitch_confidence: pitch_conf,
+                roll_confidence: roll_conf,
+                yaw_bias: sensor_fusion.yaw_rate_calibrator.get_bias(),
+                yaw_calibrated: sensor_fusion.yaw_rate_calibrator.is_valid(),
+                tilt_offset_x: tilt_x,
+                tilt_offset_y: tilt_y,
+                tilt_valid,
+            });
 
             publisher.reset_stats();
             loop_count = 0;
@@ -674,11 +732,30 @@ fn main() {
         if sensors.poll_gps() {
             // Count GPS rate only when a NEW valid RMC fix is received
             // (not on every GGA/GSA sentence while last_fix.valid is still true)
-            if sensors.gps_parser.take_new_fix() {
+            let is_new_fix = sensors.gps_parser.take_new_fix();
+            if is_new_fix {
                 diagnostics.record_gps_fix();
             }
 
-            // Check if warmup complete (has reference point) AND fix is valid
+            // ALWAYS feed GPS speed to sensor fusion when we have a new fix
+            // GPS acceleration only needs scalar speed - doesn't require full position
+            // validity This ensures OrientationCorrector can learn even during
+            // brief GPS hiccups
+            if sensors.gps_parser.is_warmed_up() && is_new_fix {
+                let gps_speed = sensors.gps_parser.last_fix().speed;
+                let time_s = now_ms as f32 / 1000.0;
+                sensor_fusion.process_gps(gps_speed, time_s);
+
+                // Feed GPS heading to yaw rate calibrator (only valid at speed)
+                // Course over ground is unreliable below ~5 m/s
+                if gps_speed > 5.0 {
+                    let course = sensors.gps_parser.last_fix().course;
+                    sensor_fusion.process_gps_heading(course);
+                }
+            }
+
+            // Check if warmup complete (has reference point) AND fix is valid for EKF
+            // updates
             if sensors.gps_parser.is_warmed_up() && sensors.gps_parser.last_fix().valid {
                 let (ax_corr, ay_corr, _) = sensors.imu_parser.get_accel_corrected();
 
@@ -711,12 +788,19 @@ fn main() {
                     estimator.reset_speed();
                 }
 
+                // Update EKF with velocity components (requires full validity)
                 if let Some((vx, vy)) = sensors.gps_parser.get_velocity_enu() {
                     let speed = (vx * vx + vy * vy).sqrt();
                     estimator.update_velocity(vx, vy);
                     estimator.update_speed(speed);
                 }
             }
+        }
+
+        // Update GPS rate estimate periodically (every second)
+        if now_ms % 1000 < 50 {
+            let fix_count = diagnostics.gps_fix_count();
+            sensor_fusion.update_gps_rate(fix_count, now_ms as f32 / 1000.0);
         }
 
         // Update GPS status
@@ -730,35 +814,40 @@ fn main() {
 
         // Publish telemetry at configured rate
         if now_ms - last_telemetry_ms >= config.telemetry.interval_ms {
-            // Update mode classifier
+            // Get current speed and check if stationary
             let speed = sensors.get_speed(Some(&estimator.ekf));
-            let (ax_corr, ay_corr, _) = sensors.imu_parser.get_accel_corrected();
-            let (ax_b, ay_b, _) = remove_gravity(
-                ax_corr,
-                ay_corr,
-                sensors.imu_parser.data().az,
-                sensors.imu_parser.data().roll,
-                sensors.imu_parser.data().pitch,
+            let (ax_corr, ay_corr, az_corr) = sensors.imu_parser.get_accel_corrected();
+            let is_stationary =
+                sensors.is_stationary(ax_corr, ay_corr, sensors.imu_parser.data().wz);
+
+            // Process through sensor fusion (GPS-corrected orientation + blending)
+            // Pass raw body-frame IMU data - fusion handles transforms with corrected
+            // orientation
+            let dt = config.telemetry.interval_ms as f32 / 1000.0;
+            let (lon_blended, lat_filtered) = sensor_fusion.process_imu(
+                ax_corr,                         // Raw body-frame X accel (bias-corrected)
+                ay_corr,                         // Raw body-frame Y accel (bias-corrected)
+                az_corr,                         // Raw body-frame Z accel (gravity)
+                sensors.imu_parser.data().roll,  // AHRS roll (degrees)
+                sensors.imu_parser.data().pitch, // AHRS pitch (degrees)
+                estimator.ekf.yaw(),             // EKF yaw (radians)
+                speed,
+                sensors.imu_parser.data().wz,
+                dt,
+                is_stationary,
             );
-            let (ax_e, ay_e) = body_to_earth(
-                ax_b,
-                ay_b,
-                0.0,
-                sensors.imu_parser.data().roll,
-                sensors.imu_parser.data().pitch,
-                estimator.ekf.yaw(),
-            );
-            estimator.update_mode(
-                ax_e,
-                ay_e,
-                estimator.ekf.yaw(),
+
+            // Update mode classifier with hybrid (blended) acceleration
+            estimator.mode_classifier.update_hybrid(
+                lon_blended,
+                lat_filtered,
                 sensors.imu_parser.data().wz,
                 speed,
             );
 
-            // Publish telemetry
+            // Publish telemetry with tilt-corrected accelerations
             publisher
-                .publish_telemetry(&sensors, &estimator, now_ms)
+                .publish_telemetry(&sensors, &estimator, &sensor_fusion, now_ms)
                 .ok();
             last_telemetry_ms = now_ms;
         }

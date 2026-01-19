@@ -4,13 +4,7 @@
 [![Rust](https://img.shields.io/badge/rust-1.75%2B-orange.svg)](https://www.rust-lang.org/)
 [![ESP32-C3](https://img.shields.io/badge/platform-ESP32--C3-blue.svg)](https://www.espressif.com/)
 
-**Real-time vehicle dynamics tracking using GPS+IMU sensor fusion.** Professional-grade algorithms on $50 hardware.
-
----
-
-## What Is This?
-
-A complete ESP32-C3 firmware that fuses GPS and IMU data to track your vehicle's position, velocity, and acceleration in real-time. Built for track day logging, vehicle dynamics research, and DIY automotive projects.
+A complete ESP32-C3 firmware that fuses GPS and IMU data to track your vehicle's position, velocity, and acceleration in real-time. Built for track day logging, vehicle dynamics research, and DIY automotive projects. Professional-grade algorithms on $50 hardware.
 
 **What it does:**
 - Tracks position (±1m accuracy between GPS updates)
@@ -20,19 +14,47 @@ A complete ESP32-C3 firmware that fuses GPS and IMU data to track your vehicle's
 - Streams telemetry at 20-30Hz over WiFi
 - **Built-in mobile dashboard** - view live data on your phone
 
-**How it works:**
-- 7-state Extended Kalman Filter fuses GPS (5Hz) and IMU (50Hz)
-- Gyro integrates yaw between GPS updates to maintain heading
-- Body-frame accelerations transformed to earth frame using current orientation
-- Zero-velocity updates eliminate IMU drift when stationary
-- Constant Turn Rate and Acceleration (CTRA) model for cornering
-
-**Why it's useful:**
+**Why build this instead of buying?**
 - Track day data logging without $1000+ commercial systems
 - Vehicle dynamics research and education
 - DIY EV/kit car development
 - Test suspension, brakes, and aerodynamics
 - Learn sensor fusion practically
+
+---
+
+## Table of Contents
+
+- [Hardware Requirements](#hardware-requirements)
+- [Quick Start](#quick-start)
+  - [Option A: Web Flasher](#option-a-web-flasher-easiest)
+  - [Option B: Build from Source](#option-b-build-from-source)
+- [Building From Source](#building-from-source)
+  - [Prerequisites](#prerequisites)
+  - [Build Commands](#build-commands)
+  - [Common Build Issues](#common-build-issues)
+- [System Architecture](#system-architecture)
+  - [Data Flow](#data-flow)
+  - [File Structure](#file-structure)
+  - [Key Algorithms](#key-algorithms)
+- [Telemetry Format](#telemetry-format)
+- [Configuration](#configuration)
+  - [WiFi and Network](#wifi-and-network)
+  - [EKF Tuning](#ekf-tuning)
+  - [EKF Health Metrics](#ekf-health-metrics)
+  - [Mode Detection Thresholds](#mode-detection-thresholds)
+- [Performance](#performance)
+- [LED Status Codes](#led-status-codes)
+- [Calibration](#calibration)
+- [Mobile Dashboard](#mobile-dashboard)
+  - [Dashboard Features](#dashboard-features)
+  - [Diagnostics Page](#diagnostics-page)
+  - [WiFi Modes](#wifi-modes)
+  - [Using Python Tools](#using-python-tools-station-mode-only)
+- [How It Works](#how-it-works)
+- [Future Enhancements](#future-enhancements)
+- [Contributing](#contributing)
+- [License](#license)
 
 ---
 
@@ -307,6 +329,12 @@ cargo fmt
 # Lint
 cargo clippy -- -D warnings
 
+# Run unit tests (on host, no device needed)
+cargo test -p sensor-fusion -p wt901 -p ublox-gps
+
+# Run driving simulation (demonstrates GPS-corrected orientation)
+cargo run -p sensor-fusion --example drive_sim
+
 # Clean build (if things go wrong)
 cargo clean
 ```
@@ -434,28 +462,38 @@ GPS (5-25Hz)        IMU (200Hz)
 
 ```
 blackbox/
+├── framework/                       # sensor-fusion library crate (host-testable)
+│   └── src/
+│       ├── lib.rs                   # Crate entry point
+│       ├── ekf.rs                   # Extended Kalman Filter
+│       ├── transforms.rs            # Body↔Earth↔Vehicle coordinate math
+│       ├── mode.rs                  # Driving mode classifier
+│       ├── fusion.rs                # GPS/IMU blending, tilt correction
+│       ├── filter.rs                # Biquad filter (unused, for reference)
+│       └── velocity.rs              # Velocity source selection
+├── drivers/
+│   ├── wt901/                       # WT901 IMU driver crate
+│   └── ublox-gps/                   # u-blox GPS driver crate
 ├── sensors/
-│   └── blackbox/
+│   └── blackbox/                    # ESP32 firmware (embedded binary)
 │       ├── .cargo/
-│       │   └── config.toml       # ESP32-C3 build configuration
+│       │   └── config.toml          # ESP32-C3 build configuration
 │       ├── src/
-│       │   ├── main.rs            # Main loop and setup
-│       │   ├── config.rs          # Build-time configuration (GPS model, WiFi mode)
-│       │   ├── system.rs          # Sensor/estimator/publisher managers
-│       │   ├── imu.rs             # WT901 UART parser (auto-detect baud)
-│       │   ├── gps.rs             # NMEA/UBX parser with warmup (NEO-6M/M9N)
-│       │   ├── diagnostics.rs     # System health monitoring
-│       │   ├── transforms.rs      # Body↔Earth coordinate math
-│       │   ├── mode.rs            # Driving mode classifier
-│       │   ├── binary_telemetry.rs # 67-byte packet format
-│       │   ├── websocket_server.rs # Mobile dashboard & HTTP server
-│       │   ├── udp_stream.rs      # High-speed UDP client
-│       │   ├── mqtt.rs            # MQTT client for status
-│       │   ├── wifi.rs            # WiFi connection manager
-│       │   └── rgb_led.rs         # WS2812 status LED
-│       ├── Cargo.toml             # Rust dependencies
-│       ├── sdkconfig.defaults     # ESP-IDF configuration
-│       └── build.rs               # Build script
+│       │   ├── main.rs              # Main loop and setup
+│       │   ├── config.rs            # Build-time configuration
+│       │   ├── system.rs            # Sensor/estimator/publisher managers
+│       │   ├── imu.rs               # WT901 UART parser (auto-detect baud)
+│       │   ├── gps.rs               # NMEA/UBX parser with warmup
+│       │   ├── diagnostics.rs       # System health monitoring
+│       │   ├── binary_telemetry.rs  # 67-byte packet format
+│       │   ├── websocket_server.rs  # Mobile dashboard & HTTP server
+│       │   ├── udp_stream.rs        # High-speed UDP client
+│       │   ├── mqtt.rs              # MQTT client for status
+│       │   ├── wifi.rs              # WiFi connection manager
+│       │   └── rgb_led.rs           # WS2812 status LED
+│       ├── Cargo.toml               # Rust dependencies
+│       ├── sdkconfig.defaults       # ESP-IDF configuration
+│       └── build.rs                 # Build script
 ├── tools/
 │   └── python/
 │       ├── configure_wt901.py       # IMU configuration tool (200Hz setup)
@@ -883,6 +921,23 @@ python3 probe_wt901.py /dev/ttyUSB0
 ```
 Useful for verifying IMU is working before flashing, or determining what baud rate it's configured to.
 
+**Analyze Telemetry CSV (works with both modes):**
+```bash
+# Export CSV from dashboard, then analyze on your computer
+python3 analyze_telemetry.py recorded_session.csv
+```
+Analyzes a CSV export from the dashboard and provides:
+- **Timing analysis**: Sample rate, duration
+- **Speed distribution**: Time in speed bands
+- **Acceleration analysis**: lon_g range, mean, bias detection
+- **Mode distribution**: Time spent in IDLE/ACCEL/BRAKE/CORNER
+- **Ground truth comparison**: Compares lon_g with GPS-derived acceleration
+- **Mode detection accuracy**: Precision and recall for ACCEL/BRAKE modes
+- **Correlation**: How well lon_g matches actual acceleration (want >0.7)
+- **Diagnostic summary**: Identifies potential issues like bias or high false positive rates
+
+This is useful for validating that the orientation correction is working properly after a test drive.
+
 ### Choosing a Mode
 
 | Feature | Access Point | Station |
@@ -893,6 +948,45 @@ Useful for verifying IMU is working before flashing, or determining what baud ra
 | Range | ~30m | Network dependent |
 | Multiple receivers | ❌ No | ✅ Yes |
 | Data logging to laptop | ❌ No | ✅ Yes |
+
+---
+
+## How It Works
+
+The system uses sensor fusion to combine fast but drifty IMU measurements with slow but accurate GPS updates. Here's what happens under the hood:
+
+**7-State Extended Kalman Filter**
+- Tracks: position (x, y), heading (yaw), velocity (vx, vy), and accelerometer biases (bax, bay)
+- Predicts state 200 times per second using IMU accelerations
+- Corrects drift 5-25 times per second using GPS position and velocity
+- Learns accelerometer biases during stops (Zero-Velocity Update / ZUPT)
+
+**Coordinate Transformations**
+- Raw IMU measures in "body frame" (sensor orientation)
+- Gravity is removed using roll/pitch angles
+- Accelerations rotated to "earth frame" (horizontal plane)
+- Then rotated to "vehicle frame" (car forward/left) for mode detection
+
+**GPS-Corrected Orientation (ArduPilot-style)**
+- Problem: AHRS can't distinguish tilt from acceleration (reports false pitch when accelerating)
+- Solution: Compare IMU-derived acceleration with GPS velocity ground truth
+- Learn and correct pitch/roll errors over time
+- Enables accurate 200Hz acceleration despite AHRS limitations
+
+**Tilt Correction**
+- When stopped, the device learns its mounting offset automatically
+- Works regardless of mounting angle (within reason)
+- Re-learns if you move the device
+
+**Motion Models**
+- CTRA (Constant Turn Rate and Acceleration): Used when speed >2 m/s and turning
+- CA (Constant Acceleration): Used when going straight or slow
+
+**Why this matters for track days:**
+- High-rate IMU gives responsive g-force readings (200 Hz)
+- GPS prevents drift over time
+- Mode detection works reliably regardless of mounting angle
+- ZUPT eliminates accumulated errors at every stop
 
 ---
 
