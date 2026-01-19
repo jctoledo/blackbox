@@ -672,6 +672,9 @@ h1{font-size:18px;margin-bottom:16px;color:#60a5fa;letter-spacing:2px}
 <div class="row"><span class="label">GPS Rejected</span><span class="value" id="gps-rej">--</span></div>
 </div>
 <div>
+<div class="row"><span class="label">Pitch Corr</span><span class="value" id="pitch-corr">--</span></div>
+<div class="row"><span class="label">Roll Corr</span><span class="value" id="roll-corr">--</span></div>
+<div class="row"><span class="label">Orient Conf</span><span class="value" id="orient-conf">--</span></div>
 <div class="row"><span class="label">Yaw Bias</span><span class="value" id="yaw-bias">--</span></div>
 <div class="row"><span class="label">Yaw Calibrated</span><span class="value" id="yaw-cal">--</span></div>
 <div class="row"><span class="label">Tilt X/Y</span><span class="value" id="tilt-xy">--</span></div>
@@ -741,6 +744,16 @@ async function update(){
       const rej=$('gps-rej');
       rej.textContent=d.fusion.gps_rejected?'YES':'No';
       rej.className='value '+(d.fusion.gps_rejected?'warn':'ok');
+      // OrientationCorrector (GPS-corrected AHRS)
+      const pc=$('pitch-corr');
+      pc.textContent=d.fusion.pitch_corr.toFixed(1)+'deg';
+      pc.className='value '+(Math.abs(d.fusion.pitch_corr)<10?'ok':'warn');
+      const rc=$('roll-corr');
+      rc.textContent=d.fusion.roll_corr.toFixed(1)+'deg';
+      rc.className='value '+(Math.abs(d.fusion.roll_corr)<10?'ok':'warn');
+      const oc=$('orient-conf');
+      oc.textContent=d.fusion.pitch_conf.toFixed(0)+'% / '+d.fusion.roll_conf.toFixed(0)+'%';
+      oc.className='value '+(d.fusion.pitch_conf>50?'ok':(d.fusion.pitch_conf>10?'warn':'err'));
       $('yaw-bias').textContent=(d.fusion.yaw_bias*1000).toFixed(2)+' mrad/s';
       const yc=$('yaw-cal');
       yc.textContent=d.fusion.yaw_calibrated?'Yes':'No';
