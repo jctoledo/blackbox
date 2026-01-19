@@ -65,13 +65,13 @@ body::before {
 /* Header */
 .hdr{
     flex: 0 0 auto;
-    background: linear-gradient(180deg, rgba(0,30,40,0.95) 0%, rgba(0,20,30,0.8) 100%);
+    background: transparent;
     padding:12px 16px;
     display:flex;
     justify-content:space-between;
     align-items:center;
-    border-bottom: 1px solid hsla(var(--hue), 100%, 50%, 0.4);
-    box-shadow: 0 2px 20px hsla(var(--hue), 100%, 50%, 0.1);
+    border-bottom: none;
+    box-shadow: none;
 }
 .logo{
     font-weight:400;
@@ -80,12 +80,12 @@ body::before {
     text-transform:uppercase;
 }
 .hdr-r{display:flex;align-items:center;gap:12px}
-.timer{font-size:11px;opacity:0.5;font-variant-numeric:tabular-nums;letter-spacing:2px}
-.st{display:flex;align-items:center;gap:6px;font-size:10px;letter-spacing:1px}
+.timer{font-size:12px;color:#8899aa;font-variant-numeric:tabular-nums;letter-spacing:2px}
+.st{display:flex;align-items:center;gap:6px;font-size:11px;letter-spacing:1px;color:#8899aa}
 .dot{width:6px;height:6px;background:hsl(var(--hue), 100%, 50%);box-shadow:0 0 10px hsl(var(--hue), 100%, 50%)}
 .dot.rec{background:hsl(var(--hue), 100%, 50%);box-shadow:0 0 10px hsl(var(--hue), 100%, 50%);animation:pulse 1s infinite}
 @keyframes pulse{50%{opacity:.3}}
-.gps-st{display:flex;align-items:center;gap:4px;font-size:9px;letter-spacing:1px;color:#556;transition:color 0.3s}
+.gps-st{display:flex;align-items:center;gap:4px;font-size:10px;letter-spacing:1px;color:#8899aa;transition:color 0.3s}
 .gps-st.ok{color:hsl(var(--hue),100%,50%)}
 .gps-st.ok .gps-dot{background:hsl(var(--hue),100%,50%);box-shadow:0 0 6px hsl(var(--hue),100%,50%)}
 .gps-dot{width:5px;height:5px;background:#444;border-radius:50%;transition:background 0.3s}
@@ -310,10 +310,10 @@ body::before {
 }
 
 /* === UNIFIED BOX SYSTEM === */
+/* Outer borders removed for more breathing room */
 .golden-box {
-    border: 1px solid hsla(var(--hue), 100%, 50%, 0.35);
-    box-shadow: 0 0 20px hsla(var(--hue), 100%, 50%, 0.12);
-    transition: border-color 0.3s, box-shadow 0.3s;
+    border: none;
+    box-shadow: none;
 }
 
 /* at-peak state now handled by global --hue variable */
@@ -374,9 +374,9 @@ body::before {
 }
 
 .peak-label {
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 500;
-    color: #556;
+    color: #8899aa;
     letter-spacing: 3px;
     text-transform: uppercase;
 }
@@ -384,7 +384,7 @@ body::before {
 .peak-val {
     font-size: clamp(20px, 5vw, 24px);
     font-weight: 600;
-    color: #5a5a6a;
+    color: #9aa8b0;
     font-variant-numeric: tabular-nums;
     letter-spacing: 1px;
     line-height: 1;
@@ -409,7 +409,7 @@ body::before {
     font-size: clamp(20px, 5vw, 24px);
     font-weight: 600;
     letter-spacing: 2px;
-    color: #5a5a6a;
+    color: #9aa8b0;
     margin-top: 8px;
     margin-bottom: 16px;
     text-transform: lowercase;
@@ -449,22 +449,22 @@ body::before {
     position: absolute;
     top: 8px;
     left: 10px;
-    padding: 4px 10px;
-    font-size: 9px;
+    padding: 6px 12px;
+    font-size: 10px;
     font-weight: 500;
     font-family: inherit;
     letter-spacing: 2px;
-    color: #556;
-    background: rgba(0,0,0,0.4);
-    border: 1px solid #334;
+    color: #8899aa;
+    background: rgba(0,0,0,0.5);
+    border: 1px solid #445566;
     cursor: pointer;
     transition: border-color 0.2s, color 0.2s;
     z-index: 10;
 }
 
 .gf-clear:hover {
-    border-color: #667;
-    color: #889;
+    border-color: #8899aa;
+    color: #aabbcc;
 }
 
 /* Axis labels - positioned at box edges */
@@ -479,17 +479,17 @@ body::before {
 }
 
 .gf-axis-label {
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 500;
     letter-spacing: 2px;
-    color: #667;
+    color: #8899aa;
 }
 
 .gf-axis-val {
     font-size: clamp(14px, 3.5vw, 18px);
     font-weight: 600;
     font-variant-numeric: tabular-nums;
-    color: #5a5a6a;
+    color: #9aa8b0;
     transition: color 0.15s;
 }
 
@@ -529,32 +529,32 @@ body::before {
 /* === BOTTOM BOX: CONTROLS === */
 #boxBottom {
     background: var(--bg);
-    border: 1px solid #1a2a30;
+    border: none;
     box-shadow: none;
 }
 
 #boxBottom .box-inner {
-    gap: 6px;
-    padding: 8px 10px;
+    gap: 12px;
+    padding: 12px 16px;
 }
 
-/* Compact metrics row - collapsed borders */
+/* Metrics row - no outer border, subtle dividers */
 #boxBottom .metrics {
     gap: 0;
-    border: 1px solid #1a2a30;
+    border: none;
 }
 
 #boxBottom .met {
-    padding: 12px 4px;
+    padding: 12px 8px;
     background: transparent;
     border: none;
-    border-right: 1px solid #1a2a30;
+    border-right: 1px solid #2a3a40;
     box-shadow: none;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 4px;
+    gap: 6px;
 }
 
 #boxBottom .met:last-child {
@@ -562,67 +562,58 @@ body::before {
 }
 
 #boxBottom .met-val {
-    font-size: 16px;
+    font-size: 18px;
     font-weight: 600;
     font-variant-numeric: tabular-nums;
-    color: #7a8a8f;
+    color: #9aa8b0;
     text-align: center;
     line-height: 1;
 }
 
 #boxBottom .met-lbl {
     font-weight: 500;
-    font-size: 9px;
-    color: #556;
+    font-size: 10px;
+    color: #8899aa;
     text-align: center;
     line-height: 1;
 }
 
-/* GPS display */
+/* GPS display - hidden, not needed in dev mode */
 #boxBottom .gps-box {
-    padding: 5px;
-    font-size: 9px;
-    font-weight: 500;
-    background: transparent;
-    border: 1px solid #1a2a30;
-    border-top: none;
-    box-shadow: none;
-    color: #667;
-    text-align: center;
+    display: none;
 }
 
 /* Config section */
 #boxBottom .cfg-section {
-    padding: 8px;
+    padding: 0;
     background: transparent;
-    border: 1px solid #1a2a30;
-    border-top: none;
+    border: none;
     box-shadow: none;
 }
 
 #boxBottom .cfg-title {
-    margin-bottom: 8px;
-    font-size: 10px;
+    margin-bottom: 10px;
+    font-size: 11px;
     font-weight: 500;
-    color: #556;
+    color: #8899aa;
     text-align: center;
 }
 
 #boxBottom .preset-row {
-    margin-bottom: 6px;
+    margin-bottom: 8px;
     gap: 0;
     display: flex;
-    border: 1px solid #1a2a30;
+    border: none;
 }
 
 #boxBottom .preset-btn {
-    padding: 10px 2px;
-    font-size: 10px;
+    padding: 12px 4px;
+    font-size: 11px;
     font-weight: 600;
     background: transparent;
     border: none;
-    border-right: 1px solid #1a2a30;
-    color: #667;
+    border-right: 1px solid #2a3a40;
+    color: #8899aa;
     box-shadow: none;
     text-align: center;
     line-height: 1;
@@ -637,7 +628,7 @@ body::before {
 
 #boxBottom .preset-btn.active {
     background: hsla(var(--hue), 100%, 50%, 0.08);
-    color: hsl(var(--hue), 60%, 65%);
+    color: hsl(var(--hue), 80%, 70%);
 }
 
 /* Control buttons */
@@ -646,19 +637,20 @@ body::before {
     gap: 0;
     background: transparent;
     border: none;
-    border-top: 1px solid #1a2a30;
-    margin-top: 6px;
+    border-top: 1px solid #2a3a40;
+    margin-top: 8px;
+    padding-top: 8px;
     display: flex;
 }
 
 #boxBottom .btn {
-    padding: 12px 8px;
-    font-size: 11px;
+    padding: 14px 8px;
+    font-size: 12px;
     font-weight: 600;
     background: transparent;
     border: none;
-    border-right: 1px solid #1a2a30;
-    color: #667;
+    border-right: 1px solid #2a3a40;
+    color: #8899aa;
     box-shadow: none;
     text-align: center;
     line-height: 1;
@@ -1018,23 +1010,29 @@ window.addEventListener('resize', () => { resizeCanvas(); applyGoldenHeights(); 
 // === G-FORCE DISPLAY: PERSPECTIVE GRID ===
 
 // Transform grid coordinates to perspective screen coordinates
+// True 1-point perspective: both width AND depth foreshorten toward horizon
 function gridToScreen(col, row, w, h) {
     // Normalize to -1 to 1
     const nx = (col / GRID_COLS) * 2 - 1;
     const ny = (row / GRID_ROWS) * 2 - 1;
 
-    // Apply 1-point perspective (top recedes dramatically)
-    // Top row is much narrower than bottom row
-    const depthFactor = (ny + 1) * 0.5; // 0 at top, 1 at bottom
-    const perspectiveFactor = 0.4 + depthFactor * 0.6; // Top is 40% width, bottom is 100%
-    const px = nx * perspectiveFactor;
+    // Depth factor: 0 at top (far/horizon), 1 at bottom (near/viewer)
+    const depthFactor = (ny + 1) * 0.5;
 
-    // Compress vertical spacing toward top (foreshortening)
-    const py = ny * 0.85 + (1 - depthFactor) * 0.1;
+    // Width perspective: top rows are narrower (recede to vanishing point)
+    const widthScale = 0.35 + depthFactor * 0.65; // Top is 35% width, bottom is 100%
+    const px = nx * widthScale;
 
-    // Map to screen with minimal padding
-    const padX = w * 0.06;
-    const padY = h * 0.08;
+    // Depth perspective: apply non-linear vertical scaling
+    // Rows near top are compressed (closer together), rows near bottom spread out
+    // Use power function for natural perspective falloff
+    const depthPower = 1.8; // Higher = more dramatic depth compression
+    const normalizedDepth = Math.pow(depthFactor, 1 / depthPower);
+    const py = normalizedDepth * 2 - 1; // Map back to -1 to 1
+
+    // Map to screen with padding
+    const padX = w * 0.08;
+    const padY = h * 0.10;
     const screenX = padX + (px + 1) * 0.5 * (w - 2 * padX);
     const screenY = padY + (py + 1) * 0.5 * (h - 2 * padY);
 
