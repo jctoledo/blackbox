@@ -58,10 +58,11 @@ def analyze_telemetry(filename):
     slow = sum(1 for s in speeds if 2 <= s < 20)
     medium = sum(1 for s in speeds if 20 <= s < 50)
     fast = sum(1 for s in speeds if s >= 50)
-    print(f"Time distribution: stopped(<2)={100*stopped/len(rows):.0f}%, "
-          f"slow(2-20)={100*slow/len(rows):.0f}%, "
-          f"medium(20-50)={100*medium/len(rows):.0f}%, "
-          f"fast(>50)={100*fast/len(rows):.0f}%")
+    n = len(rows)
+    print(f"Time distribution: stopped(<2)={100 * stopped / n:.0f}%, "
+          f"slow(2-20)={100 * slow / n:.0f}%, "
+          f"medium(20-50)={100 * medium / n:.0f}%, "
+          f"fast(>50)={100 * fast / n:.0f}%")
     print()
 
     # === ACCELERATION ANALYSIS ===
@@ -140,8 +141,8 @@ def analyze_telemetry(filename):
         mid_gps = sum(1 for w in gps_weights if 0.3 <= w <= 0.7)
         low_gps = sum(1 for w in gps_weights if w < 0.3)
         n = len(rows)
-        print(f"GPS weight: mean={avg_weight:.2f}, high(>0.7)={100*high_gps/n:.0f}%, "
-              f"mid={100*mid_gps/n:.0f}%, low(<0.3)={100*low_gps/n:.0f}%")
+        print(f"GPS weight: mean={avg_weight:.2f}, high(>0.7)={100 * high_gps / n:.0f}%, "
+              f"mid={100 * mid_gps / n:.0f}%, low(<0.3)={100 * low_gps / n:.0f}%")
 
         # OrientationCorrector status
         pitch_corrs = [float(r['pitch_corr']) for r in rows]
@@ -149,10 +150,14 @@ def analyze_telemetry(filename):
         roll_corrs = [float(r['roll_corr']) for r in rows]
         roll_confs = [float(r['roll_conf']) for r in rows]
 
-        print(f"Pitch correction: {statistics.mean(pitch_corrs):.1f}° (range {min(pitch_corrs):.1f}° to {max(pitch_corrs):.1f}°)")
-        print(f"Pitch confidence: {statistics.mean(pitch_confs):.0f}% (range {min(pitch_confs):.0f}% to {max(pitch_confs):.0f}%)")
-        print(f"Roll correction: {statistics.mean(roll_corrs):.1f}° (range {min(roll_corrs):.1f}° to {max(roll_corrs):.1f}°)")
-        print(f"Roll confidence: {statistics.mean(roll_confs):.0f}% (range {min(roll_confs):.0f}% to {max(roll_confs):.0f}%)")
+        pc_mean, pc_min, pc_max = statistics.mean(pitch_corrs), min(pitch_corrs), max(pitch_corrs)
+        print(f"Pitch correction: {pc_mean:.1f}° (range {pc_min:.1f}° to {pc_max:.1f}°)")
+        pcf_mean, pcf_min, pcf_max = statistics.mean(pitch_confs), min(pitch_confs), max(pitch_confs)
+        print(f"Pitch confidence: {pcf_mean:.0f}% (range {pcf_min:.0f}% to {pcf_max:.0f}%)")
+        rc_mean, rc_min, rc_max = statistics.mean(roll_corrs), min(roll_corrs), max(roll_corrs)
+        print(f"Roll correction: {rc_mean:.1f}° (range {rc_min:.1f}° to {rc_max:.1f}°)")
+        rcf_mean, rcf_min, rcf_max = statistics.mean(roll_confs), min(roll_confs), max(roll_confs)
+        print(f"Roll confidence: {rcf_mean:.0f}% (range {rcf_min:.0f}% to {rcf_max:.0f}%)")
 
         # Tilt offsets
         tilt_x = [float(r['tilt_x']) for r in rows]
@@ -183,14 +188,15 @@ def analyze_telemetry(filename):
     modes = Counter(int(float(r['mode'])) for r in rows)
     mode_names = {0: 'IDLE', 1: 'ACCEL', 2: 'BRAKE', 4: 'CORNER',
                   5: 'ACCEL+CORNER', 6: 'BRAKE+CORNER'}
+    total = len(rows)
     for mode, count in sorted(modes.items()):
         name = mode_names.get(mode, f'UNKNOWN({mode})')
-        print(f"  {name:15} {count:5} ({100*count/len(rows):5.1f}%)")
+        print(f"  {name:15} {count:5} ({100 * count / total:5.1f}%)")
 
     total_accel = modes.get(1, 0) + modes.get(5, 0)
     total_brake = modes.get(2, 0) + modes.get(6, 0)
-    print(f"\n  Total ACCEL modes: {total_accel} ({100*total_accel/len(rows):.1f}%)")
-    print(f"  Total BRAKE modes: {total_brake} ({100*total_brake/len(rows):.1f}%)")
+    print(f"\n  Total ACCEL modes: {total_accel} ({100 * total_accel / total:.1f}%)")
+    print(f"  Total BRAKE modes: {total_brake} ({100 * total_brake / total:.1f}%)")
     print(f"  Ratio ACCEL/BRAKE: {total_accel/max(total_brake,1):.1f}x (should be ~1x for balanced driving)")
     print()
 
@@ -229,7 +235,6 @@ def analyze_telemetry(filename):
 
     for i in range(1, len(rows)):
         mode = int(float(rows[i]['mode']))
-        lon_g = float(rows[i]['lon_g'])
 
         # Use speed-derived acceleration as ground truth
         dt = (int(rows[i]['time']) - int(rows[i-1]['time'])) / 1000.0
@@ -266,10 +271,10 @@ def analyze_telemetry(filename):
     print(f"  False Negatives: {fn_accel:5} (accelerating but mode!=ACCEL)")
     if tp_accel + fp_accel > 0:
         precision = tp_accel / (tp_accel + fp_accel)
-        print(f"  Precision: {100*precision:.1f}% (want >80%)")
+        print(f"  Precision: {100 * precision:.1f}% (want >80%)")
     if tp_accel + fn_accel > 0:
         recall = tp_accel / (tp_accel + fn_accel)
-        print(f"  Recall: {100*recall:.1f}%")
+        print(f"  Recall: {100 * recall:.1f}%")
 
     print(f"\nBRAKE detection:")
     print(f"  True Positives:  {tp_brake:5}")
@@ -277,10 +282,10 @@ def analyze_telemetry(filename):
     print(f"  False Negatives: {fn_brake:5} (braking but mode!=BRAKE)")
     if tp_brake + fp_brake > 0:
         precision = tp_brake / (tp_brake + fp_brake)
-        print(f"  Precision: {100*precision:.1f}% (want >80%)")
+        print(f"  Precision: {100 * precision:.1f}% (want >80%)")
     if tp_brake + fn_brake > 0:
         recall = tp_brake / (tp_brake + fn_brake)
-        print(f"  Recall: {100*recall:.1f}%")
+        print(f"  Recall: {100 * recall:.1f}%")
     print()
 
     # === lon_g vs TRUE ACCEL CORRELATION ===
