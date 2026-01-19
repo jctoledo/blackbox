@@ -11,14 +11,10 @@
 }
 *{margin:0;padding:0;box-sizing:border-box}
 
-/* Grid background - uses neutral grey, not action color */
+/* Clean background - no grid */
 body{
     font-family:'Courier New',monospace;
     background: var(--bg);
-    background-image:
-        linear-gradient(rgba(100,120,130,0.06) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(100,120,130,0.06) 1px, transparent 1px);
-    background-size: 40px 40px;
     color:#fff;
     height:100vh;
     height:100dvh;
@@ -416,17 +412,6 @@ body::before {
     margin-bottom: 8px;
 }
 
-/* km/h indicator - at bottom */
-.speed-unit {
-    font-size: clamp(18px, 4vw, 22px);
-    font-weight: 500;
-    letter-spacing: 2px;
-    color: #8899aa;
-    margin-top: 4px;
-    text-transform: lowercase;
-    font-variant-numeric: tabular-nums;
-}
-
 /* maneuver color now controlled by global --hue */
 
 /* === MIDDLE BOX: G-FORCE TILE === */
@@ -696,7 +681,7 @@ body::before {
             <div class="speed-stack">
                 <!-- Peak label + readout -->
                 <div class="peak-row" id="peak-row">
-                    <span class="peak-label">PEAK</span>
+                    <span class="peak-label">PEAK KM/H</span>
                     <span class="peak-val" id="peak-val">0</span>
                 </div>
 
@@ -705,9 +690,6 @@ body::before {
 
                 <!-- Maneuver state -->
                 <div class="maneuver" id="maneuver">Idle</div>
-
-                <!-- Unit label -->
-                <div class="speed-unit">km/h</div>
             </div>
         </div>
     </div>
@@ -1012,32 +994,17 @@ window.addEventListener('resize', () => { resizeCanvas(); applyGoldenHeights(); 
 
 // === G-FORCE DISPLAY: PERSPECTIVE GRID ===
 
-// Transform grid coordinates to perspective screen coordinates
-// True 1-point perspective: both width AND depth foreshorten toward horizon
+// Transform grid coordinates to screen coordinates
+// Flat, clean, perfectly square grid - no perspective
 function gridToScreen(col, row, w, h) {
-    // Normalize to -1 to 1
-    const nx = (col / GRID_COLS) * 2 - 1;
-    const ny = (row / GRID_ROWS) * 2 - 1;
+    // Calculate square size (use smaller dimension)
+    const size = Math.min(w, h) * 0.85;
+    const offsetX = (w - size) / 2;
+    const offsetY = (h - size) / 2;
 
-    // Depth factor: 0 at top (far/horizon), 1 at bottom (near/viewer)
-    const depthFactor = (ny + 1) * 0.5;
-
-    // Width perspective: top rows are narrower (recede to vanishing point)
-    const widthScale = 0.35 + depthFactor * 0.65; // Top is 35% width, bottom is 100%
-    const px = nx * widthScale;
-
-    // Depth perspective: apply non-linear vertical scaling
-    // Rows near top are compressed (closer together), rows near bottom spread out
-    // Use power function for natural perspective falloff
-    const depthPower = 1.8; // Higher = more dramatic depth compression
-    const normalizedDepth = Math.pow(depthFactor, 1 / depthPower);
-    const py = normalizedDepth * 2 - 1; // Map back to -1 to 1
-
-    // Map to screen with padding
-    const padX = w * 0.08;
-    const padY = h * 0.10;
-    const screenX = padX + (px + 1) * 0.5 * (w - 2 * padX);
-    const screenY = padY + (py + 1) * 0.5 * (h - 2 * padY);
+    // Simple linear mapping to square
+    const screenX = offsetX + (col / GRID_COLS) * size;
+    const screenY = offsetY + (row / GRID_ROWS) * size;
 
     return { x: screenX, y: screenY };
 }
