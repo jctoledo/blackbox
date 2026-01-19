@@ -995,16 +995,34 @@ window.addEventListener('resize', () => { resizeCanvas(); applyGoldenHeights(); 
 // === G-FORCE DISPLAY: PERSPECTIVE GRID ===
 
 // Transform grid coordinates to screen coordinates
-// Flat, clean, perfectly square grid - no perspective
+// True perspective: grid tilts away like a floor receding into distance
 function gridToScreen(col, row, w, h) {
-    // Calculate square size (use smaller dimension)
-    const size = Math.min(w, h) * 0.85;
-    const offsetX = (w - size) / 2;
-    const offsetY = (h - size) / 2;
+    // Normalize grid position to -1 to 1
+    const nx = (col / GRID_COLS) * 2 - 1;
+    const ny = (row / GRID_ROWS) * 2 - 1;
 
-    // Simple linear mapping to square
-    const screenX = offsetX + (col / GRID_COLS) * size;
-    const screenY = offsetY + (row / GRID_ROWS) * size;
+    // Perspective parameters
+    const horizon = -0.3;      // Where the horizon sits (-1 = top, 1 = bottom)
+    const fov = 2.2;           // Field of view (higher = more dramatic)
+
+    // Calculate depth (0 at horizon, 1 at bottom)
+    const depth = (ny - horizon) / (1 - horizon);
+    const clampedDepth = Math.max(0.1, Math.min(1, depth));
+
+    // Perspective division - closer rows are wider
+    const perspectiveScale = 1 / (fov - clampedDepth * (fov - 1));
+
+    // Apply perspective to X (width narrows toward horizon)
+    const px = nx * perspectiveScale;
+
+    // Apply perspective to Y (rows compress toward horizon)
+    const py = horizon + (1 - horizon) * (1 - Math.pow(1 - clampedDepth, 0.7));
+
+    // Map to screen with padding
+    const padX = w * 0.12;
+    const padY = h * 0.08;
+    const screenX = padX + (px + 1) * 0.5 * (w - 2 * padX);
+    const screenY = padY + (py + 1) * 0.5 * (h - 2 * padY);
 
     return { x: screenX, y: screenY };
 }
