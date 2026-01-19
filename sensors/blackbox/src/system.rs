@@ -340,9 +340,10 @@ impl TelemetryPublisher {
         now_ms: u32,
     ) -> Result<(), SystemError> {
         // Get accelerations for display
-        // lon: GPS-derived when fresh (no vibration), otherwise blended with heavy smoothing
-        // lat: centripetal (speed × yaw_rate) - instant, doesn't stick after corners
-        //      Uses calibrated yaw rate to prevent drift on highway
+        // lon: GPS-derived when fresh (no vibration), otherwise blended with heavy
+        // smoothing lat: centripetal (speed × yaw_rate) - instant, doesn't
+        // stick after corners      Uses calibrated yaw rate to prevent drift on
+        // highway
         let lon_display = sensor_fusion.get_lon_display();
         let lat_display = sensor_fusion.get_lat_centripetal();
 

@@ -106,7 +106,8 @@ pub struct FusionDiagnostics {
     pub lon_blended: f32,
 
     // GPS blending status
-    /// Current GPS blend weight (0.0-1.0, based on orientation correction confidence)
+    /// Current GPS blend weight (0.0-1.0, based on orientation correction
+    /// confidence)
     pub gps_weight: f32,
     /// GPS-derived acceleration (m/s²), NaN if invalid
     pub gps_accel: f32,
@@ -116,9 +117,11 @@ pub struct FusionDiagnostics {
     pub gps_rejected: bool,
 
     // Orientation corrector (ArduPilot-style GPS-corrected orientation)
-    /// Learned pitch correction (degrees) - corrects AHRS errors during acceleration
+    /// Learned pitch correction (degrees) - corrects AHRS errors during
+    /// acceleration
     pub pitch_correction_deg: f32,
-    /// Learned roll correction (degrees) - corrects AHRS errors during cornering
+    /// Learned roll correction (degrees) - corrects AHRS errors during
+    /// cornering
     pub roll_correction_deg: f32,
     /// Pitch correction confidence (0.0-1.0, based on learning samples)
     pub pitch_confidence: f32,
