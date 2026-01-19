@@ -309,7 +309,13 @@ impl ModeClassifier {
     /// * `a_lat_centripetal` - Centripetal lateral acceleration (m/s², = speed × yaw_rate)
     /// * `wz` - Yaw rate (rad/s)
     /// * `speed` - Vehicle speed (m/s)
-    pub fn update_hybrid(&mut self, a_lon_blended: f32, a_lat_centripetal: f32, wz: f32, speed: f32) {
+    pub fn update_hybrid(
+        &mut self,
+        a_lon_blended: f32,
+        a_lat_centripetal: f32,
+        wz: f32,
+        speed: f32,
+    ) {
         // Update display speed with EMA
         self.v_disp = (1.0 - self.v_alpha) * self.v_disp + self.v_alpha * speed;
         if self.v_disp < 3.0 / 3.6 {
