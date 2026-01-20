@@ -135,6 +135,16 @@ def analyze_telemetry(filename):
                     corr = numerator / (denom_imu * denom_gps)
                     print(f"IMU-GPS correlation: {corr:.3f} (want >0.7)")
 
+            # Sign agreement analysis
+            sign_agree = sum(1 for i, g in zip(imu_valid, gps_valid)
+                           if (i > 0.1 and g > 0.1) or (i < -0.1 and g < -0.1))
+            sign_disagree = sum(1 for i, g in zip(imu_valid, gps_valid)
+                              if (i > 0.1 and g < -0.1) or (i < -0.1 and g > 0.1))
+            if sign_agree + sign_disagree > 0:
+                sign_rate = sign_agree / (sign_agree + sign_disagree)
+                print(f"Sign agreement: {100*sign_rate:.0f}% ({sign_agree}/{sign_agree+sign_disagree} "
+                      f"samples where both |val|>0.1 m/s²)")
+
         # GPS weight distribution
         avg_weight = statistics.mean(gps_weights)
         high_gps = sum(1 for w in gps_weights if w > 0.7)
@@ -316,6 +326,119 @@ def analyze_telemetry(filename):
             print(f"Mean error (lon_g - true): {mean_error:.4f}g (bias)")
             print(f"RMSE: {rmse:.4f}g")
     print()
+
+    # === INDIVIDUAL SOURCE CORRELATIONS WITH GROUND TRUTH ===
+    if has_fusion and len(true_accels) >= 10:
+        print("--- INDIVIDUAL SOURCE vs GROUND TRUTH ---")
+        print("(Helps diagnose why IMU-GPS correlation might be low)")
+        print()
+
+        # Convert ground truth to m/s² for comparison
+        true_accels_ms2 = [t * 9.80665 for t in true_accels]
+
+        # Align arrays (true_accels is 1 shorter due to differencing)
+        lon_imu_shifted = lon_imu_vals[1:]
+        lon_gps_shifted = lon_gps_vals[1:]
+
+        def calc_correlation(a, b):
+            """Calculate Pearson correlation between two lists."""
+            if len(a) != len(b) or len(a) < 10:
+                return None
+            mean_a, mean_b = statistics.mean(a), statistics.mean(b)
+            num = sum((x - mean_a) * (y - mean_b) for x, y in zip(a, b))
+            den_a = sum((x - mean_a) ** 2 for x in a) ** 0.5
+            den_b = sum((y - mean_b) ** 2 for y in b) ** 0.5
+            if den_a > 0 and den_b > 0:
+                return num / (den_a * den_b)
+            return None
+
+        # Correlation of each source with ground truth
+        corr_imu_gt = calc_correlation(lon_imu_shifted, true_accels_ms2)
+        corr_gps_gt = calc_correlation(lon_gps_shifted, true_accels_ms2)
+
+        if corr_imu_gt is not None:
+            print(f"lon_imu vs ground_truth: {corr_imu_gt:.3f}")
+        if corr_gps_gt is not None:
+            print(f"lon_gps vs ground_truth: {corr_gps_gt:.3f}")
+
+        # Analysis of what this means
+        if corr_imu_gt is not None and corr_gps_gt is not None:
+            print()
+            if corr_imu_gt > 0.5 and corr_gps_gt > 0.5:
+                print("Both sources correlate with ground truth - blending should help")
+            elif corr_imu_gt > 0.5 > corr_gps_gt:
+                print("IMU correlates better - GPS might be noisy or delayed")
+            elif corr_gps_gt > 0.5 > corr_imu_gt:
+                print("GPS correlates better - IMU orientation correction may need work")
+            else:
+                print("Neither source correlates well - fundamental issue to investigate")
+
+        # Phase lag analysis using cross-correlation
+        print()
+        print("--- PHASE LAG ANALYSIS ---")
+        print("(Checking if IMU and GPS are time-shifted)")
+
+        # Simple lag detection: try shifting one signal
+        best_lag = 0
+        best_corr = corr_imu_gt if corr_imu_gt else 0
+
+        for lag in range(-10, 11):  # Check lags from -10 to +10 samples
+            if lag == 0:
+                continue
+            if lag > 0:
+                imu_lagged = lon_imu_shifted[lag:]
+                gt_lagged = true_accels_ms2[:-lag]
+            else:
+                imu_lagged = lon_imu_shifted[:lag]
+                gt_lagged = true_accels_ms2[-lag:]
+
+            if len(imu_lagged) < 10:
+                continue
+
+            corr = calc_correlation(imu_lagged, gt_lagged)
+            if corr and corr > best_corr:
+                best_corr = corr
+                best_lag = lag
+
+        if best_lag != 0:
+            # Calculate lag in ms based on sample rate
+            if intervals:
+                lag_ms = best_lag * statistics.mean(intervals)
+                print(f"IMU appears shifted by {best_lag} samples ({lag_ms:.0f}ms)")
+                print(f"Correlation improves from {corr_imu_gt:.3f} to {best_corr:.3f} with lag correction")
+                if abs(lag_ms) > 50:
+                    print("⚠️  Significant timing offset detected - check filtering/buffering")
+        else:
+            print(f"No significant phase lag detected (IMU-GT correlation: {corr_imu_gt:.3f})")
+
+        # Same for GPS
+        best_lag_gps = 0
+        best_corr_gps = corr_gps_gt if corr_gps_gt else 0
+
+        for lag in range(-10, 11):
+            if lag == 0:
+                continue
+            if lag > 0:
+                gps_lagged = lon_gps_shifted[lag:]
+                gt_lagged = true_accels_ms2[:-lag]
+            else:
+                gps_lagged = lon_gps_shifted[:lag]
+                gt_lagged = true_accels_ms2[-lag:]
+
+            if len(gps_lagged) < 10:
+                continue
+
+            corr = calc_correlation(gps_lagged, gt_lagged)
+            if corr and corr > best_corr_gps:
+                best_corr_gps = corr
+                best_lag_gps = lag
+
+        if best_lag_gps != 0 and intervals:
+            lag_ms = best_lag_gps * statistics.mean(intervals)
+            print(f"GPS appears shifted by {best_lag_gps} samples ({lag_ms:.0f}ms)")
+            print(f"Correlation improves from {corr_gps_gt:.3f} to {best_corr_gps:.3f} with lag correction")
+
+        print()
 
     # === DIAGNOSTIC SUMMARY ===
     print("--- DIAGNOSTIC SUMMARY ---")
