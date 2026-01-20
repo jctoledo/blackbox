@@ -974,10 +974,9 @@ const MANEUVER_TEXT = {0:'Idle', 1:'Accelerating', 2:'Braking', 4:'Cornering', 5
 const cv = $('gfc');
 const ctx = cv.getContext('2d');
 
-// Grid configuration
-const GRID_COLS = 28;
-const GRID_ROWS = 18;
-const PERSPECTIVE_STRENGTH = 0.55; // Steeper perspective
+// Grid configuration - square grid for clean perspective
+const GRID_COLS = 20;
+const GRID_ROWS = 20;
 
 // Resize canvas to fill entire box
 function resizeCanvas() {
@@ -995,36 +994,43 @@ window.addEventListener('resize', () => { resizeCanvas(); applyGoldenHeights(); 
 // === G-FORCE DISPLAY: PERSPECTIVE GRID ===
 
 // Transform grid coordinates to screen coordinates
-// True perspective: grid tilts away like a floor receding into distance
+// Mathematically correct 1-point perspective projection
+// Models a flat plane tilted away from the viewer (like a floor)
 function gridToScreen(col, row, w, h) {
-    // Normalize grid position to -1 to 1
-    const nx = (col / GRID_COLS) * 2 - 1;
-    const ny = (row / GRID_ROWS) * 2 - 1;
+    // Normalize to 0-1 range
+    // u: 0=left, 1=right
+    // v: 0=top (far from viewer), 1=bottom (near viewer)
+    const u = col / GRID_COLS;
+    const v = row / GRID_ROWS;
 
-    // Perspective parameters
-    const horizon = -0.3;      // Where the horizon sits (-1 = top, 1 = bottom)
-    const fov = 2.2;           // Field of view (higher = more dramatic)
+    // Perspective ratio: width_at_top / width_at_bottom
+    // Lower values = more dramatic perspective
+    // 0.4 means the far edge is 40% the width of the near edge
+    const ratio = 0.4;
 
-    // Calculate depth (0 at horizon, 1 at bottom)
-    const depth = (ny - horizon) / (1 - horizon);
-    const clampedDepth = Math.max(0.1, Math.min(1, depth));
+    // The math: for a tilted plane, depth z varies linearly with v
+    // z(v) = z_far * (1 - v * (1 - ratio))
+    // Screen position = world position / z (perspective division)
+    const denom = 1 - v * (1 - ratio);
 
-    // Perspective division - closer rows are wider
-    const perspectiveScale = 1 / (fov - clampedDepth * (fov - 1));
+    // Y position: rows compress toward the top (far edge)
+    // This is the key perspective foreshortening
+    const yNorm = v * ratio / denom;
 
-    // Apply perspective to X (width narrows toward horizon)
-    const px = nx * perspectiveScale;
+    // X position: width scales with depth (narrower at top)
+    // Also centered at 0.5
+    const widthScale = ratio / denom;
+    const xNorm = 0.5 + (u - 0.5) * widthScale;
 
-    // Apply perspective to Y (rows compress toward horizon)
-    const py = horizon + (1 - horizon) * (1 - Math.pow(1 - clampedDepth, 0.7));
+    // Map to screen with margin, keeping grid centered
+    const margin = 0.06;
+    const screenW = w * (1 - 2 * margin);
+    const screenH = h * (1 - 2 * margin);
 
-    // Map to screen with padding
-    const padX = w * 0.12;
-    const padY = h * 0.08;
-    const screenX = padX + (px + 1) * 0.5 * (w - 2 * padX);
-    const screenY = padY + (py + 1) * 0.5 * (h - 2 * padY);
-
-    return { x: screenX, y: screenY };
+    return {
+        x: w * margin + xNorm * screenW,
+        y: h * margin + yNorm * screenH
+    };
 }
 
 // Get the four corners of a grid cell in screen space
