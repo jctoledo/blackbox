@@ -552,7 +552,7 @@ async function poll(){
             process(a.buffer);
             $('dot').className='dot on';$('stxt').textContent='LIVE';
             // Fetch fusion diagnostics every 5th poll (~6Hz) during recording
-            if(rec&&++fusionPoll>=5){fusionPoll=0;fetchFusion()}
+            if(rec&&++fusionPoll>=1){fusionPoll=0;fetchFusion()} // Fetch every sample for accurate CSV data
         }
         setTimeout(poll,33);
     }catch(e){$('dot').className='dot';$('stxt').textContent='--';setTimeout(poll,500)}
