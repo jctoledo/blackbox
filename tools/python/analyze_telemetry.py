@@ -438,6 +438,147 @@ def analyze_telemetry(filename):
             print(f"GPS appears shifted by {best_lag_gps} samples ({lag_ms:.0f}ms)")
             print(f"Correlation improves from {corr_gps_gt:.3f} to {best_corr_gps:.3f} with lag correction")
 
+        # Extended lag search if we hit the boundary
+        if abs(best_lag) >= 9 or abs(best_lag_gps) >= 9:
+            print()
+            print("--- EXTENDED LAG SEARCH (boundary hit) ---")
+            for lag in range(-50, 51, 5):
+                if lag == 0:
+                    continue
+                if lag > 0:
+                    imu_lagged = lon_imu_shifted[lag:]
+                    gt_lagged = true_accels_ms2[:-lag]
+                else:
+                    imu_lagged = lon_imu_shifted[:lag]
+                    gt_lagged = true_accels_ms2[-lag:]
+                if len(imu_lagged) < 10:
+                    continue
+                corr = calc_correlation(imu_lagged, gt_lagged)
+                if corr and abs(lag) <= 50:
+                    lag_ms = lag * statistics.mean(intervals) if intervals else 0
+                    if corr > 0.3:  # Only show promising lags
+                        print(f"  lag={lag:+3d} ({lag_ms:+5.0f}ms): IMU corr={corr:.3f}")
+
+        print()
+
+        # === SANITY CHECK: lon_gps vs speed derivative ===
+        print("--- SANITY CHECK: lon_gps vs CSV speed derivative ---")
+        print("(These SHOULD be nearly identical if derived from same GPS data)")
+
+        # The script's ground truth is dv/dt from CSV speed column
+        # lon_gps is the firmware's GPS acceleration
+        # If they differ, something is wrong with data flow
+
+        # Direct comparison
+        if len(lon_gps_shifted) == len(true_accels_ms2):
+            errors = [g - t for g, t in zip(lon_gps_shifted, true_accels_ms2)]
+            mean_diff = statistics.mean(errors)
+            std_diff = statistics.stdev(errors)
+            max_diff = max(abs(e) for e in errors)
+            print(f"lon_gps - ground_truth: mean={mean_diff:.3f}, std={std_diff:.3f}, max={max_diff:.3f} m/s²")
+
+            if std_diff > 1.0:
+                print("⚠️  Large variance suggests lon_gps and speed column are from different sources/times")
+            elif abs(mean_diff) > 0.5:
+                print("⚠️  Systematic offset suggests calibration or sign issue")
+
+        print()
+
+        # === ROLLING CORRELATION (does it improve after warmup?) ===
+        print("--- ROLLING CORRELATION (IMU vs Ground Truth) ---")
+        print("(Checking if correlation improves over time)")
+
+        window_size = len(lon_imu_shifted) // 5  # 5 windows
+        if window_size >= 20:
+            for i in range(5):
+                start = i * window_size
+                end = start + window_size
+                window_imu = lon_imu_shifted[start:end]
+                window_gt = true_accels_ms2[start:end]
+                corr = calc_correlation(window_imu, window_gt)
+                time_start = (start * statistics.mean(intervals)) / 1000 if intervals else 0
+                time_end = (end * statistics.mean(intervals)) / 1000 if intervals else 0
+                if corr:
+                    print(f"  {time_start:5.0f}s - {time_end:5.0f}s: corr={corr:+.3f}")
+
+        print()
+
+        # === MAGNITUDE ANALYSIS ===
+        print("--- MAGNITUDE ANALYSIS ---")
+        print("(Are the signals the right scale?)")
+
+        imu_std = statistics.stdev(lon_imu_shifted)
+        gps_std = statistics.stdev(lon_gps_shifted)
+        gt_std = statistics.stdev(true_accels_ms2)
+
+        print(f"Std dev: lon_imu={imu_std:.3f}, lon_gps={gps_std:.3f}, ground_truth={gt_std:.3f} m/s²")
+
+        imu_rms = (sum(x**2 for x in lon_imu_shifted) / len(lon_imu_shifted)) ** 0.5
+        gps_rms = (sum(x**2 for x in lon_gps_shifted) / len(lon_gps_shifted)) ** 0.5
+        gt_rms = (sum(x**2 for x in true_accels_ms2) / len(true_accels_ms2)) ** 0.5
+
+        print(f"RMS:     lon_imu={imu_rms:.3f}, lon_gps={gps_rms:.3f}, ground_truth={gt_rms:.3f} m/s²")
+
+        if imu_std > 0 and gt_std > 0:
+            scale_ratio = imu_std / gt_std
+            print(f"Scale ratio (IMU/GT): {scale_ratio:.2f}x (should be ~1.0)")
+            if scale_ratio > 2 or scale_ratio < 0.5:
+                print("⚠️  Scale mismatch - IMU may have wrong units or gain")
+
+        print()
+
+        # === CORRELATION vs PITCH CORRECTION ===
+        print("--- CORRELATION vs PITCH CORRECTION ---")
+        print("(Checking if sign-flipping correlates with OrientationCorrector state)")
+
+        pitch_corrs_shifted = pitch_corrs[1:]  # Align with derivatives
+        window_size = len(lon_imu_shifted) // 10  # 10 windows for finer resolution
+
+        if window_size >= 10:
+            print(f"{'Window':>12} {'Corr':>8} {'Pitch':>8} {'PitchΔ':>8}")
+            print("-" * 40)
+            prev_pitch = None
+            for i in range(10):
+                start = i * window_size
+                end = start + window_size
+                window_imu = lon_imu_shifted[start:end]
+                window_gt = true_accels_ms2[start:end]
+                window_pitch = pitch_corrs_shifted[start:end]
+
+                corr = calc_correlation(window_imu, window_gt)
+                avg_pitch = statistics.mean(window_pitch)
+                pitch_change = avg_pitch - prev_pitch if prev_pitch is not None else 0
+                prev_pitch = avg_pitch
+
+                time_start = (start * statistics.mean(intervals)) / 1000 if intervals else 0
+                time_end = (end * statistics.mean(intervals)) / 1000 if intervals else 0
+
+                if corr:
+                    flag = " <<<" if corr < 0 else ""
+                    print(f"{time_start:5.0f}-{time_end:5.0f}s {corr:+.3f}   {avg_pitch:+.1f}°   {pitch_change:+.1f}°{flag}")
+
+        # Check for systematic relationship
+        print()
+        print("Analysis: If negative correlation windows have different pitch than positive,")
+        print("the OrientationCorrector may be overcorrecting or oscillating.")
+
+        print()
+
+        # === SAMPLE-LEVEL COMPARISON ===
+        print("--- SAMPLE COMPARISON (first 20 where both active) ---")
+        print(f"{'#':>4} {'lon_imu':>8} {'lon_gps':>8} {'GT':>8} {'IMU-GT':>8} {'Sign':>6}")
+        print("-" * 50)
+
+        count = 0
+        for i, (imu, gps, gt) in enumerate(zip(lon_imu_shifted, lon_gps_shifted, true_accels_ms2)):
+            if abs(gt) > 0.5:  # Only look at significant accelerations
+                diff = imu - gt
+                sign_match = "✓" if (imu > 0) == (gt > 0) else "✗"
+                print(f"{i:4d} {imu:+8.2f} {gps:+8.2f} {gt:+8.2f} {diff:+8.2f} {sign_match:>6}")
+                count += 1
+                if count >= 20:
+                    break
+
         print()
 
     # === DIAGNOSTIC SUMMARY ===
