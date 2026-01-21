@@ -581,28 +581,8 @@ fn main() {
                 gps_fix.pdop,
             );
 
-            // Fusion diagnostics (filter pipeline, GPS blending, calibrators)
-            let (tilt_x, tilt_y, tilt_valid) = sensor_fusion.get_tilt_offsets();
-            let (pitch_corr, roll_corr) = sensor_fusion.get_orientation_correction();
-            let (pitch_conf, roll_conf) = sensor_fusion.get_orientation_confidence();
-            diagnostics.update_fusion(FusionDiagnostics {
-                lon_imu_raw: sensor_fusion.get_lon_imu_raw(),
-                lon_imu_filtered: sensor_fusion.get_lon_imu_filtered(),
-                lon_blended: sensor_fusion.get_lon_blended(),
-                gps_weight: sensor_fusion.get_last_gps_weight(),
-                gps_accel: sensor_fusion.get_gps_accel(),
-                gps_rate: sensor_fusion.get_gps_rate(),
-                gps_rejected: sensor_fusion.is_gps_rejected(),
-                pitch_correction_deg: pitch_corr,
-                roll_correction_deg: roll_corr,
-                pitch_confidence: pitch_conf,
-                roll_confidence: roll_conf,
-                yaw_bias: sensor_fusion.yaw_rate_calibrator.get_bias(),
-                yaw_calibrated: sensor_fusion.yaw_rate_calibrator.is_valid(),
-                tilt_offset_x: tilt_x,
-                tilt_offset_y: tilt_y,
-                tilt_valid,
-            });
+            // Note: Fusion diagnostics now updated at telemetry rate (see telemetry block)
+            // for synchronized CSV export data
 
             publisher.reset_stats();
             loop_count = 0;
@@ -849,6 +829,31 @@ fn main() {
             publisher
                 .publish_telemetry(&sensors, &estimator, &sensor_fusion, now_ms)
                 .ok();
+
+            // Update fusion diagnostics at telemetry rate for synchronized CSV export
+            // This ensures fusion data (lon_imu, lon_gps, etc.) matches the telemetry packet
+            let (tilt_x, tilt_y, tilt_valid) = sensor_fusion.get_tilt_offsets();
+            let (pitch_corr, roll_corr) = sensor_fusion.get_orientation_correction();
+            let (pitch_conf, roll_conf) = sensor_fusion.get_orientation_confidence();
+            diagnostics.update_fusion(FusionDiagnostics {
+                lon_imu_raw: sensor_fusion.get_lon_imu_raw(),
+                lon_imu_filtered: sensor_fusion.get_lon_imu_filtered(),
+                lon_blended: sensor_fusion.get_lon_blended(),
+                gps_weight: sensor_fusion.get_last_gps_weight(),
+                gps_accel: sensor_fusion.get_gps_accel(),
+                gps_rate: sensor_fusion.get_gps_rate(),
+                gps_rejected: sensor_fusion.is_gps_rejected(),
+                pitch_correction_deg: pitch_corr,
+                roll_correction_deg: roll_corr,
+                pitch_confidence: pitch_conf,
+                roll_confidence: roll_conf,
+                yaw_bias: sensor_fusion.yaw_rate_calibrator.get_bias(),
+                yaw_calibrated: sensor_fusion.yaw_rate_calibrator.is_valid(),
+                tilt_offset_x: tilt_x,
+                tilt_offset_y: tilt_y,
+                tilt_valid,
+            });
+
             last_telemetry_ms = now_ms;
         }
 

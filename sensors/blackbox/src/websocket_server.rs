@@ -431,9 +431,8 @@ const EMA_TAU=0.10; // 100ms time constant - tune for feel
 // GPS status tracking (count actual position changes, not just gpsOk flag)
 let gpsCount=0,lastGpsState=0,lastGpsLat=0,lastGpsLon=0;
 
-// Fusion diagnostics for CSV export (fetched periodically during recording)
+// Fusion diagnostics for CSV export (inline with telemetry for perfect sync)
 let fusion={lon_imu:0,lon_gps:0,gps_wt:0,pitch_c:0,pitch_cf:0,roll_c:0,roll_cf:0,tilt_x:0,tilt_y:0};
-let fusionPoll=0;
 
 function fmtTime(ms){const s=Math.floor(ms/1000),m=Math.floor(s/60);return String(m).padStart(2,'0')+':'+String(s%60).padStart(2,'0')}
 function fmtG(v){return Math.abs(v)<0.005?'0.00':v.toFixed(2)} // Dead zone to prevent 0.00/-0.00 flicker
@@ -540,41 +539,32 @@ function process(buf){
     if(rec)data.push({t:Date.now(),sp,ax,ay,wz,mo,latg,lng,lat,lon,gpsOk,...fusion});
 }
 
-// HTTP polling
+// HTTP polling - fusion data is inline in response (no separate fetch needed)
 async function poll(){
     try{
         const r=await fetch('/api/telemetry');
         const j=await r.json();
         if(j.data&&j.seq!==lastSeq){
             lastSeq=j.seq;
+            // Extract inline fusion BEFORE process() so recorded data has matching fusion
+            if(j.f){
+                fusion.lon_imu=j.f.li||0;
+                fusion.lon_gps=j.f.lg||0;
+                fusion.gps_wt=j.f.gw||0;
+                fusion.pitch_c=j.f.pc||0;
+                fusion.pitch_cf=j.f.pf||0;
+                fusion.roll_c=j.f.rc||0;
+                fusion.roll_cf=j.f.rf||0;
+                fusion.tilt_x=j.f.tx||0;
+                fusion.tilt_y=j.f.ty||0;
+            }
             const b=atob(j.data),a=new Uint8Array(b.length);
             for(let i=0;i<b.length;i++)a[i]=b.charCodeAt(i);
             process(a.buffer);
             $('dot').className='dot on';$('stxt').textContent='LIVE';
-            // Fetch fusion diagnostics every 5th poll (~6Hz) during recording
-            if(rec&&++fusionPoll>=1){fusionPoll=0;fetchFusion()} // Fetch every sample for accurate CSV data
         }
         setTimeout(poll,33);
     }catch(e){$('dot').className='dot';$('stxt').textContent='--';setTimeout(poll,500)}
-}
-
-// Fetch fusion diagnostics for CSV export (non-blocking)
-async function fetchFusion(){
-try{
-const r=await fetch('/api/diagnostics');
-const d=await r.json();
-if(d.fusion){
-fusion.lon_imu=d.fusion.lon_filtered||0;
-fusion.lon_gps=d.fusion.gps_accel||0;
-fusion.gps_wt=d.fusion.gps_weight||0;
-fusion.pitch_c=d.fusion.pitch_corr||0;
-fusion.pitch_cf=d.fusion.pitch_conf||0;
-fusion.roll_c=d.fusion.roll_corr||0;
-fusion.roll_cf=d.fusion.roll_conf||0;
-fusion.tilt_x=d.fusion.tilt_x||0;
-fusion.tilt_y=d.fusion.tilt_y||0;
-}
-}catch(e){}
 }
 
 // Event handlers
@@ -876,18 +866,40 @@ impl TelemetryServer {
         // WebSocket removed - using HTTP polling for reliability and to eliminate
         // thread blocking
 
-        // HTTP polling fallback endpoint
+        // HTTP polling endpoint - includes fusion data for synchronized CSV export
         let state_poll = state.clone();
         server.fn_handler(
             "/api/telemetry",
             esp_idf_svc::http::Method::Get,
             move |req| -> Result<(), esp_idf_svc::io::EspIOError> {
                 let json = if let Some(data) = state_poll.get_telemetry_base64() {
-                    format!(
-                        r#"{{"seq":{},"data":"{}"}}"#,
-                        state_poll.packet_count(),
-                        data
-                    )
+                    // Include fusion diagnostics inline for perfect synchronization
+                    if let Some(diag_state) = state_poll.diagnostics() {
+                        let f = diag_state.snapshot().fusion;
+                        format!(
+                            concat!(
+                                r#"{{"seq":{},"data":"{}","#,
+                                r#""f":{{"li":{:.4},"lg":{:.4},"gw":{:.2},"pc":{:.1},"pf":{:.0},"rc":{:.1},"rf":{:.0},"tx":{:.4},"ty":{:.4}}}}}"#
+                            ),
+                            state_poll.packet_count(),
+                            data,
+                            f.lon_imu_filtered,
+                            f.gps_accel,
+                            f.gps_weight,
+                            f.pitch_correction_deg,
+                            f.pitch_confidence * 100.0,
+                            f.roll_correction_deg,
+                            f.roll_confidence * 100.0,
+                            f.tilt_offset_x,
+                            f.tilt_offset_y,
+                        )
+                    } else {
+                        format!(
+                            r#"{{"seq":{},"data":"{}"}}"#,
+                            state_poll.packet_count(),
+                            data
+                        )
+                    }
                 } else {
                     r#"{"seq":0,"data":null}"#.to_string()
                 };
