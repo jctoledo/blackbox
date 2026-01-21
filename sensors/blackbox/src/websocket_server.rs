@@ -187,22 +187,30 @@ pub struct TelemetryServer {
     state: Arc<TelemetryServerState>,
 }
 
-/// Tron-style dashboard with golden ratio layout, perspective G-meter, auto-zoom camera
+/// Apple-style neumorphism dashboard with circular G-meter
 const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
 <html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes"><title>Blackbox</title>
 <style>
 :root {
-    --cyan: #00f0ff;
-    --amber: #ff6a00;
-    --bg: #030508;
-    --hue: 190;
+    --bg: #e8ecef;
+    --surface: #e8ecef;
+    --shadow-dark: #c5c9cc;
+    --shadow-light: #ffffff;
+    --text-primary: #2c3e50;
+    --text-secondary: #7f8c8d;
+    --text-muted: #a0aab0;
+    --accent: #3498db;
+    --accent-warn: #e74c3c;
+    --radius: 24px;
+    --radius-sm: 16px;
+    --radius-pill: 50px;
 }
 *{margin:0;padding:0;box-sizing:border-box}
 body{
-    font-family:'Courier New',monospace;
-    background: var(--bg);
-    color:#fff;
+    font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Segoe UI',system-ui,sans-serif;
+    background:var(--bg);
+    color:var(--text-primary);
     height:100vh;
     height:100dvh;
     display:flex;
@@ -210,143 +218,153 @@ body{
     -webkit-user-select:none;
     user-select:none;
     overflow:hidden;
+    padding:20px;
+    gap:16px;
 }
+
+/* Neumorphic shadows */
+.neu-raised{background:var(--surface);border-radius:var(--radius);box-shadow:8px 8px 16px var(--shadow-dark),-8px -8px 16px var(--shadow-light)}
+.neu-inset{background:var(--surface);border-radius:var(--radius);box-shadow:inset 6px 6px 12px var(--shadow-dark),inset -6px -6px 12px var(--shadow-light)}
+.neu-flat{background:linear-gradient(145deg,#f0f4f7,#dce0e3);border-radius:var(--radius);box-shadow:6px 6px 12px var(--shadow-dark),-6px -6px 12px var(--shadow-light)}
+.neu-btn{background:linear-gradient(145deg,#f0f4f7,#dce0e3);border-radius:var(--radius-pill);box-shadow:4px 4px 8px var(--shadow-dark),-4px -4px 8px var(--shadow-light);border:none;cursor:pointer;transition:all 0.15s ease}
+.neu-btn:active{box-shadow:inset 3px 3px 6px var(--shadow-dark),inset -3px -3px 6px var(--shadow-light)}
 
 /* Header */
-.hdr{
-    flex: 0 0 auto;
-    background: linear-gradient(180deg, rgba(0,30,40,0.95) 0%, rgba(0,20,30,0.8) 100%);
-    padding:10px 16px;
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    border-bottom: 1px solid hsla(var(--hue), 100%, 50%, 0.4);
-}
-.logo{font-weight:400;font-size:14px;letter-spacing:4px;text-transform:uppercase;color:hsl(var(--hue),100%,60%)}
-.hdr-r{display:flex;align-items:center;gap:12px}
-.timer{font-size:11px;opacity:0.5;font-variant-numeric:tabular-nums;letter-spacing:2px}
-.st{display:flex;align-items:center;gap:6px;font-size:10px;letter-spacing:1px}
-.dot{width:6px;height:6px;background:#444;border-radius:50%}
-.dot.on{background:hsl(var(--hue),100%,50%);box-shadow:0 0 10px hsl(var(--hue),100%,50%)}
-.gps-st{display:flex;align-items:center;gap:4px;font-size:9px;letter-spacing:1px;color:#556;transition:color 0.3s}
-.gps-st.ok{color:hsl(var(--hue),100%,50%)}
-.gps-st.ok .gps-dot{background:hsl(var(--hue),100%,50%);box-shadow:0 0 6px hsl(var(--hue),100%,50%)}
-.gps-dot{width:5px;height:5px;background:#444;border-radius:50%;transition:background 0.3s}
+.header{display:flex;justify-content:space-between;align-items:center;padding:0 4px;flex-shrink:0}
+.logo{font-size:13px;font-weight:600;letter-spacing:3px;color:var(--text-muted);text-transform:uppercase}
+.status-row{display:flex;align-items:center;gap:12px}
+.status-pill{display:flex;align-items:center;gap:8px;padding:8px 14px;font-size:11px;font-weight:500;color:var(--text-secondary);background:linear-gradient(145deg,#f0f4f7,#dce0e3);border-radius:var(--radius-pill);box-shadow:3px 3px 6px var(--shadow-dark),-3px -3px 6px var(--shadow-light)}
+.status-dot{width:8px;height:8px;border-radius:50%;background:#bbb;transition:all 0.3s}
+.status-dot.on{background:var(--accent);box-shadow:0 0 8px var(--accent)}
+.gps-pill{color:var(--text-muted);transition:color 0.3s}
+.gps-pill.ok{color:var(--accent)}
+.gps-pill.ok .status-dot{background:var(--accent);box-shadow:0 0 6px var(--accent)}
+.diag-link{color:var(--text-muted);text-decoration:none;font-size:10px;font-weight:500;letter-spacing:1px;opacity:0.6;transition:opacity 0.2s}
+.diag-link:hover{opacity:1}
 
-/* Golden Ratio Layout */
-#telemetryLayout{display:flex;flex-direction:column;width:100%;overflow:hidden}
-.golden-box{width:100%;overflow:hidden;display:flex;flex-direction:column;border:1px solid hsla(var(--hue),100%,50%,0.35);box-shadow:0 0 20px hsla(var(--hue),100%,50%,0.12)}
-#boxTop.at-peak{border-color:rgba(255,106,0,0.45);box-shadow:0 0 25px rgba(255,106,0,0.15)}
-.box-inner{flex:1;display:flex;flex-direction:column;gap:12px;padding:16px;overflow:hidden}
-.box-scroll{overflow-y:auto}
+/* Main content */
+.main-content{flex:1;display:flex;flex-direction:column;gap:16px;overflow:hidden}
 
-/* Top Box: Speed Focus */
-.speed-focus{position:relative;display:flex;align-items:center;justify-content:center;padding:20px 16px;overflow:hidden;height:100%}
-.mode-bg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:clamp(260px,70vw,400px);opacity:0.14;color:hsl(var(--hue),100%,50%);pointer-events:none;transition:color 0.3s,opacity 0.3s;z-index:0;line-height:1}
-.mode-bg.at-peak{color:#ff6a00;opacity:0.18}
-.speed-stack{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center}
-.peak-row{display:flex;flex-direction:column;align-items:center;gap:4px;height:52px;margin-bottom:12px;transition:opacity 0.25s}
-.peak-row.hidden{opacity:0;pointer-events:none}
-.peak-label{font-size:10px;font-weight:500;color:#556;letter-spacing:3px;text-transform:uppercase}
-.peak-val{font-size:clamp(20px,5vw,24px);font-weight:600;color:#5a5a6a;font-variant-numeric:tabular-nums;letter-spacing:1px;line-height:1}
-.current-speed{font-size:clamp(96px,28vw,160px);font-weight:600;line-height:0.85;font-variant-numeric:tabular-nums;letter-spacing:-1px;color:hsl(var(--hue),100%,60%);transition:color 0.15s,text-shadow 0.15s}
-.current-speed.at-peak{color:#ff6a00;text-shadow:0 0 40px rgba(255,106,0,0.3)}
-.speed-unit{font-size:clamp(20px,5vw,24px);font-weight:600;letter-spacing:2px;color:#5a5a6a;margin-top:8px;margin-bottom:16px;text-transform:lowercase;font-variant-numeric:tabular-nums}
-.maneuver{font-size:clamp(20px,5vw,24px);font-weight:600;letter-spacing:3px;text-transform:uppercase;color:hsl(var(--hue),50%,50%);transition:color 0.3s}
-.maneuver.braking{color:#ff6a00}
+/* Speed Card */
+.speed-card{flex:0 0 auto;padding:32px 24px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
+.peak-row{display:flex;align-items:baseline;gap:10px;height:28px;opacity:0;transition:opacity 0.3s}
+.peak-row.visible{opacity:1}
+.peak-label{font-size:11px;font-weight:600;color:var(--text-muted);letter-spacing:2px}
+.peak-val{font-size:20px;font-weight:300;color:var(--text-secondary);font-variant-numeric:tabular-nums}
+.speed-value{font-size:clamp(80px,22vw,120px);font-weight:200;letter-spacing:-3px;line-height:0.9;color:var(--text-primary);font-variant-numeric:tabular-nums}
+.speed-unit{font-size:13px;font-weight:500;color:var(--text-muted);letter-spacing:3px;text-transform:uppercase;margin-top:4px}
+.maneuver{margin-top:12px;font-size:14px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:var(--accent);opacity:0.8}
+.maneuver.braking{color:var(--accent-warn)}
 
-/* Middle Box: G-Force */
-#boxMiddle{position:relative;overflow:hidden;background:var(--bg)}
-.gf-canvas-full{position:absolute;top:0;left:0;width:100%;height:100%}
-.gf-clear{position:absolute;top:8px;left:10px;padding:4px 10px;font-size:9px;font-weight:500;font-family:inherit;letter-spacing:2px;color:#556;background:rgba(0,0,0,0.4);border:1px solid #334;cursor:pointer;z-index:10}
-.gf-axis{position:absolute;display:flex;flex-direction:column;align-items:center;gap:2px;z-index:5;pointer-events:none}
-.gf-axis-label{font-size:10px;font-weight:500;letter-spacing:2px;color:#667}
-.gf-axis-val{font-size:clamp(14px,3.5vw,18px);font-weight:600;font-variant-numeric:tabular-nums;color:#5a5a6a;transition:color 0.15s}
-.gf-axis-val.peak-active{color:hsl(var(--hue),100%,60%)}
-.gf-axis-top{top:8px;left:50%;transform:translateX(-50%)}
-.gf-axis-bottom{bottom:8px;left:50%;transform:translateX(-50%)}
-.gf-axis-left{left:10px;top:50%;transform:translateY(-50%);flex-direction:row;gap:6px}
-.gf-axis-right{right:10px;top:50%;transform:translateY(-50%);flex-direction:row;gap:6px}
+/* G-Force Card */
+.gforce-card{flex:1;min-height:180px;position:relative;overflow:hidden}
+.gforce-canvas{position:absolute;top:0;left:0;width:100%;height:100%}
+.gforce-label{position:absolute;font-size:10px;font-weight:600;color:var(--text-muted);letter-spacing:2px;z-index:5}
+.gforce-label.top{top:16px;left:50%;transform:translateX(-50%)}
+.gforce-label.bottom{bottom:16px;left:50%;transform:translateX(-50%)}
+.gforce-label.left{left:16px;top:50%;transform:translateY(-50%)}
+.gforce-label.right{right:16px;top:50%;transform:translateY(-50%)}
+.gforce-value{position:absolute;font-size:13px;font-weight:600;color:var(--text-secondary);font-variant-numeric:tabular-nums;z-index:5;transition:color 0.15s}
+.gforce-value.top{top:30px;left:50%;transform:translateX(-50%)}
+.gforce-value.bottom{bottom:30px;left:50%;transform:translateX(-50%)}
+.gforce-value.left{left:16px;top:calc(50% + 16px);transform:translateY(-50%)}
+.gforce-value.right{right:16px;top:calc(50% + 16px);transform:translateY(-50%)}
+.gforce-value.peak-active{color:var(--accent)}
+.clear-btn{position:absolute;top:12px;left:12px;padding:8px 16px;font-size:10px;font-weight:600;letter-spacing:2px;color:var(--text-muted);z-index:10;font-family:inherit}
 
-/* Bottom Box */
-#boxBottom{background:var(--bg);border:1px solid #1a2a30;box-shadow:none}
-#boxBottom .box-inner{gap:6px;padding:8px 10px}
-#boxBottom .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
-#boxBottom .met{padding:6px 4px;background:transparent;border:1px solid #1a2a30;text-align:center}
-#boxBottom .met-val{font-size:14px;font-weight:600;font-variant-numeric:tabular-nums;color:#7a8a8f}
-#boxBottom .met-lbl{font-weight:500;font-size:8px;color:#556}
-#boxBottom .ctrl{display:flex;padding:6px 0 0 0;gap:6px;border-top:1px solid #1a2a30}
-#boxBottom .btn{flex:1;padding:8px;font-size:9px;font-weight:600;background:transparent;border:1px solid #1a2a30;color:#667;font-family:inherit;cursor:pointer}
-#boxBottom .btn-rec.on{background:rgba(255,50,50,0.1);border-color:#4a2020;color:#c66}
+/* Metrics Row */
+.metrics-row{display:flex;gap:12px;flex-shrink:0}
+.metric-card{flex:1;padding:16px 12px;display:flex;flex-direction:column;align-items:center;gap:6px}
+.metric-value{font-size:20px;font-weight:300;color:var(--text-primary);font-variant-numeric:tabular-nums}
+.metric-label{font-size:9px;font-weight:600;color:var(--text-muted);letter-spacing:2px;text-transform:uppercase}
+
+/* Controls Row */
+.controls-row{display:flex;gap:12px;flex-shrink:0}
+.control-btn{flex:1;padding:14px 20px;font-size:12px;font-weight:600;letter-spacing:2px;color:var(--text-secondary);font-family:inherit;display:flex;align-items:center;justify-content:center;gap:8px}
+.control-btn .dot{width:8px;height:8px;border-radius:50%;background:currentColor}
+.control-btn.recording{color:var(--accent-warn)}
 </style></head>
 <body>
-<div class="hdr">
-    <div class="logo">BLACKBOX</div>
-    <div class="hdr-r">
-        <a href="/diagnostics" style="color:#334;text-decoration:none;font-size:9px;letter-spacing:1px;opacity:0.5">DIAG</a>
-        <span class="timer" id="timer">00:00</span>
-        <div class="gps-st" id="gps-st"><span class="gps-dot"></span><span id="gps-hz">GPS --</span></div>
-        <div class="st"><span class="dot" id="dot"></span><span id="stxt">--</span></div>
-    </div>
-</div>
-<div id="telemetryLayout">
-    <div id="boxTop" class="golden-box">
-        <div class="box-inner speed-focus">
-            <div class="mode-bg" id="mode-bg">&#9671;</div>
-            <div class="speed-stack">
-                <div class="peak-row" id="peak-row">
-                    <span class="peak-label">PEAK</span>
-                    <span class="peak-val" id="peak-val">0</span>
-                </div>
-                <div class="current-speed" id="current-speed">0</div>
-                <div class="speed-unit">km/h</div>
-                <div class="maneuver" id="maneuver">Idle</div>
-            </div>
-        </div>
-    </div>
-    <div id="boxMiddle" class="golden-box">
-        <button class="gf-clear" id="rstg">CLEAR</button>
-        <div class="gf-axis gf-axis-top"><span class="gf-axis-label">BRK</span><span class="gf-axis-val" id="maxB">0.00</span></div>
-        <div class="gf-axis gf-axis-bottom"><span class="gf-axis-val" id="maxA">0.00</span><span class="gf-axis-label">ACC</span></div>
-        <div class="gf-axis gf-axis-left"><span class="gf-axis-label">L</span><span class="gf-axis-val" id="maxL">0.00</span></div>
-        <div class="gf-axis gf-axis-right"><span class="gf-axis-val" id="maxR">0.00</span><span class="gf-axis-label">R</span></div>
-        <canvas id="gfc" class="gf-canvas-full"></canvas>
-    </div>
-    <div id="boxBottom" class="golden-box">
-        <div class="box-inner box-scroll">
-            <div class="metrics">
-                <div class="met"><div class="met-val" id="latg">0.00</div><div class="met-lbl">LAT G</div></div>
-                <div class="met"><div class="met-val" id="lng">0.00</div><div class="met-lbl">LON G</div></div>
-                <div class="met"><div class="met-val" id="yaw">0</div><div class="met-lbl">YAW</div></div>
-                <div class="met"><div class="met-val" id="hz">0</div><div class="met-lbl">HZ</div></div>
-            </div>
-            <div class="ctrl">
-                <button class="btn btn-rec" id="rec">REC</button>
-                <button class="btn" id="exp">EXPORT</button>
-            </div>
-        </div>
-    </div>
-</div>
-<script>
-const PHI=1.6180339887;
-const $=id=>document.getElementById(id);
 
-// Layout
-function applyGoldenHeights(){
-    const hdr=document.querySelector('.hdr');
-    const hdrH=hdr?hdr.offsetHeight:50;
-    const H=window.innerHeight-hdrH;
-    const top=H/(PHI*PHI),middle=H/(PHI*PHI),bottom=H/(PHI*PHI*PHI);
-    $('telemetryLayout').style.height=H+'px';
-    $('boxTop').style.height=top+'px';
-    $('boxMiddle').style.height=middle+'px';
-    $('boxBottom').style.height=bottom+'px';
-}
-window.addEventListener('resize',()=>{applyGoldenHeights();resizeCanvas()});
+<!-- Header -->
+<div class="header">
+    <div class="logo">Blackbox</div>
+    <div class="status-row">
+        <a href="/diagnostics" class="diag-link">DIAG</a>
+        <div class="status-pill gps-pill" id="gps-st">
+            <span class="status-dot"></span>
+            <span id="gps-hz">GPS --</span>
+        </div>
+        <div class="status-pill">
+            <span class="status-dot" id="dot"></span>
+            <span id="stxt">--</span>
+            <span id="timer">00:00</span>
+        </div>
+    </div>
+</div>
+
+<!-- Main Content -->
+<div class="main-content">
+    <!-- Speed Card -->
+    <div id="boxTop" class="speed-card neu-raised">
+        <div class="peak-row" id="peak-row">
+            <span class="peak-label">PEAK</span>
+            <span class="peak-val" id="peak-val">0</span>
+        </div>
+        <div class="speed-value" id="current-speed">0</div>
+        <div class="speed-unit">km/h</div>
+        <div class="maneuver" id="maneuver">Idle</div>
+    </div>
+
+    <!-- G-Force Card -->
+    <div id="boxMiddle" class="gforce-card neu-inset">
+        <button class="clear-btn neu-btn" id="rstg">CLEAR</button>
+        <span class="gforce-label top">BRAKE</span>
+        <span class="gforce-label bottom">ACCEL</span>
+        <span class="gforce-label left">L</span>
+        <span class="gforce-label right">R</span>
+        <span class="gforce-value top" id="maxB">0.00</span>
+        <span class="gforce-value bottom" id="maxA">0.00</span>
+        <span class="gforce-value left" id="maxL">0.00</span>
+        <span class="gforce-value right" id="maxR">0.00</span>
+        <canvas id="gfc" class="gforce-canvas"></canvas>
+    </div>
+
+    <!-- Metrics -->
+    <div class="metrics-row">
+        <div class="metric-card neu-flat">
+            <div class="metric-value" id="latg">0.00</div>
+            <div class="metric-label">Lat G</div>
+        </div>
+        <div class="metric-card neu-flat">
+            <div class="metric-value" id="lng">0.00</div>
+            <div class="metric-label">Lon G</div>
+        </div>
+        <div class="metric-card neu-flat">
+            <div class="metric-value" id="yaw">0</div>
+            <div class="metric-label">Yaw</div>
+        </div>
+        <div class="metric-card neu-flat">
+            <div class="metric-value" id="hz">0</div>
+            <div class="metric-label">Hz</div>
+        </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="controls-row">
+        <button class="control-btn neu-btn" id="rec">
+            <span class="dot"></span>
+            REC
+        </button>
+        <button class="control-btn neu-btn" id="exp">EXPORT</button>
+    </div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
 
 // Canvas
 const cv=$('gfc'),ctx=cv.getContext('2d');
-const GRID_COLS=28,GRID_ROWS=18,PERSPECTIVE_STRENGTH=0.55;
 
 function resizeCanvas(){
     const box=$('boxMiddle');
@@ -357,92 +375,117 @@ function resizeCanvas(){
     ctx.setTransform(1,0,0,1,0,0);
     ctx.scale(window.devicePixelRatio,window.devicePixelRatio);
 }
-
-// Perspective grid
-function gridToScreen(col,row,w,h){
-    const nx=(col/GRID_COLS)*2-1,ny=(row/GRID_ROWS)*2-1;
-    const depthFactor=(ny+1)*0.5;
-    const perspectiveFactor=0.4+depthFactor*0.6;
-    const px=nx*perspectiveFactor,py=ny*0.85+(1-depthFactor)*0.1;
-    const padX=w*0.06,padY=h*0.08;
-    return{x:padX+(px+1)*0.5*(w-2*padX),y:padY+(py+1)*0.5*(h-2*padY)};
-}
-function getCellCorners(col,row,w,h){
-    return[gridToScreen(col,row,w,h),gridToScreen(col+1,row,w,h),gridToScreen(col+1,row+1,w,h),gridToScreen(col,row+1,w,h)];
-}
+window.addEventListener('resize',resizeCanvas);
 
 // Auto-zoom
 let magnitudeHistory=[],currentMaxG=0.5;
-const PEAK_WINDOW_MS=800,MIN_MAX_G=0.2,MAX_MAX_G=2.0,ZOOM_OUT_RATE=0.12,ZOOM_IN_RATE=0.025,DEADBAND=0.04,SAFE_RADIUS_RATIO=2/3;
+const PEAK_WINDOW_MS=800,MIN_MAX_G=0.2,MAX_MAX_G=2.0;
 
 function updateAutoZoom(gx,gy){
     const now=Date.now(),magnitude=Math.sqrt(gx*gx+gy*gy);
     magnitudeHistory.push({time:now,mag:magnitude});
     magnitudeHistory=magnitudeHistory.filter(h=>now-h.time<PEAK_WINDOW_MS);
     const m_peak=Math.max(...magnitudeHistory.map(h=>h.mag),0.05);
-    const targetMaxG=Math.max(m_peak/SAFE_RADIUS_RATIO,MIN_MAX_G);
+    const targetMaxG=Math.max(m_peak/(2/3),MIN_MAX_G);
     const ratio=targetMaxG/currentMaxG;
-    if(ratio>1+DEADBAND)currentMaxG+=(targetMaxG-currentMaxG)*ZOOM_OUT_RATE;
-    else if(ratio<1-DEADBAND)currentMaxG+=(targetMaxG-currentMaxG)*ZOOM_IN_RATE;
+    if(ratio>1.04)currentMaxG+=(targetMaxG-currentMaxG)*0.12;
+    else if(ratio<0.96)currentMaxG+=(targetMaxG-currentMaxG)*0.025;
     currentMaxG=Math.max(MIN_MAX_G,Math.min(MAX_MAX_G,currentMaxG));
 }
 
-function gForceToGrid(gx,gy){
-    const col=Math.floor((gx/currentMaxG+1)*0.5*GRID_COLS);
-    const row=Math.floor((gy/currentMaxG+1)*0.5*GRID_ROWS);
-    return{col:Math.max(0,Math.min(GRID_COLS-1,col)),row:Math.max(0,Math.min(GRID_ROWS-1,row))};
-}
+// Trail
+let trail=[];
 
-// Trail & drawing
-let gridTrail=[];
-const HUE_CYAN=190,HUE_AMBER=25;
-let currentHue=190;
-
+// Draw G-meter - clean circular design
 function drawG(){
     const w=cv.width/window.devicePixelRatio,h=cv.height/window.devicePixelRatio;
+    const cx=w/2,cy=h/2,radius=Math.min(w,h)*0.35;
     ctx.clearRect(0,0,w,h);
-    ctx.strokeStyle=`hsla(${currentHue},50%,45%,0.2)`;ctx.lineWidth=1;
-    for(let col=0;col<=GRID_COLS;col++){ctx.beginPath();const t=gridToScreen(col,0,w,h),b=gridToScreen(col,GRID_ROWS,w,h);ctx.moveTo(t.x,t.y);ctx.lineTo(b.x,b.y);ctx.stroke()}
-    for(let row=0;row<=GRID_ROWS;row++){ctx.beginPath();const l=gridToScreen(0,row,w,h),r=gridToScreen(GRID_COLS,row,w,h);ctx.moveTo(l.x,l.y);ctx.lineTo(r.x,r.y);ctx.stroke()}
-    ctx.strokeStyle=`hsla(${currentHue},50%,50%,0.35)`;ctx.lineWidth=2;
-    const cCol=GRID_COLS/2,cRow=GRID_ROWS/2;
-    ctx.beginPath();const vT=gridToScreen(cCol,0,w,h),vB=gridToScreen(cCol,GRID_ROWS,w,h);ctx.moveTo(vT.x,vT.y);ctx.lineTo(vB.x,vB.y);ctx.stroke();
-    ctx.beginPath();const hL=gridToScreen(0,cRow,w,h),hR=gridToScreen(GRID_COLS,cRow,w,h);ctx.moveTo(hL.x,hL.y);ctx.lineTo(hR.x,hR.y);ctx.stroke();
-    for(let i=0;i<gridTrail.length;i++){
-        const cell=gridTrail[i],corners=getCellCorners(cell.col,cell.row,w,h),alpha=cell.intensity*0.6;
-        ctx.fillStyle=`hsla(${cell.hue},100%,55%,${alpha})`;
-        ctx.beginPath();ctx.moveTo(corners[0].x,corners[0].y);ctx.lineTo(corners[1].x,corners[1].y);ctx.lineTo(corners[2].x,corners[2].y);ctx.lineTo(corners[3].x,corners[3].y);ctx.closePath();ctx.fill();
+
+    // Subtle grid circles
+    ctx.strokeStyle='rgba(0,0,0,0.04)';
+    ctx.lineWidth=1;
+    for(let i=1;i<=3;i++){
+        ctx.beginPath();
+        ctx.arc(cx,cy,radius*i/3,0,Math.PI*2);
+        ctx.stroke();
+    }
+
+    // Cross lines
+    ctx.beginPath();
+    ctx.moveTo(cx-radius,cy);ctx.lineTo(cx+radius,cy);
+    ctx.moveTo(cx,cy-radius);ctx.lineTo(cx,cy+radius);
+    ctx.stroke();
+
+    // Trail line
+    if(trail.length>1){
+        ctx.beginPath();
+        ctx.strokeStyle='rgba(52,152,219,0.3)';
+        ctx.lineWidth=3;
+        ctx.lineCap='round';
+        ctx.lineJoin='round';
+        for(let i=0;i<trail.length;i++){
+            const p=trail[i];
+            const x=cx+(p.x/currentMaxG)*radius;
+            const y=cy-(p.y/currentMaxG)*radius;
+            if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+        }
+        ctx.stroke();
+    }
+
+    // Current position dot
+    if(trail.length>0){
+        const current=trail[trail.length-1];
+        const x=cx+(current.x/currentMaxG)*radius;
+        const y=cy-(current.y/currentMaxG)*radius;
+
+        // Soft shadow
+        ctx.beginPath();
+        ctx.arc(x,y,14,0,Math.PI*2);
+        ctx.fillStyle='rgba(52,152,219,0.2)';
+        ctx.fill();
+
+        // Main dot
+        ctx.beginPath();
+        ctx.arc(x,y,10,0,Math.PI*2);
+        ctx.fillStyle='#3498db';
+        ctx.fill();
+
+        // Inner highlight
+        ctx.beginPath();
+        ctx.arc(x-2,y-2,4,0,Math.PI*2);
+        ctx.fillStyle='rgba(255,255,255,0.4)';
+        ctx.fill();
     }
 }
 
 // State
 const M={0:'Idle',1:'Accelerating',2:'Braking',4:'Cornering',5:'Corner Exit',6:'Trail Braking'};
-const MODE_ICONS={0:'\u25C7',1:'\u25B3',2:'\u25BD',4:'\u25C8',5:'\u2B21',6:'\u2B22'};
 let rec=0,data=[],cnt=0,lastSeq=0;
-let trail=[],maxL=0,maxR=0,maxA=0,maxB=0;
+let maxL=0,maxR=0,maxA=0,maxB=0;
 let speed_ema=0,sessionStart=Date.now();
 let displayedPeak=0,sessionPeak=0,lastAccelTime=0,wasAccelerating=false;
 const PEAK_UPDATE_DELAY=3000;
 
-// Time-based EMA for G-meter dot (consistent smoothing regardless of update rate)
+// Time-based EMA for G-meter
 let emaGx=0,emaGy=0,lastProcessTime=0;
-const EMA_TAU=0.10; // 100ms time constant - tune for feel
+const EMA_TAU=0.10;
 
-// GPS status tracking (count actual position changes, not just gpsOk flag)
-let gpsCount=0,lastGpsState=0,lastGpsLat=0,lastGpsLon=0;
+// GPS status tracking
+let lastGpsState=0,lastGpsLat=0,lastGpsLon=0;
 
-// Fusion diagnostics for CSV export (inline with telemetry for perfect sync)
-let fusion={lon_imu:0,lon_gps:0,gps_wt:0,pitch_c:0,pitch_cf:0,roll_c:0,roll_cf:0,tilt_x:0,tilt_y:0};
+// Fusion diagnostics for CSV export (inline with telemetry)
+let fusion={lon_imu:0,lon_gps:0,gps_wt:0,gps_rate:0,pitch_c:0,pitch_cf:0,roll_c:0,roll_cf:0,tilt_x:0,tilt_y:0};
 
 function fmtTime(ms){const s=Math.floor(ms/1000),m=Math.floor(s/60);return String(m).padStart(2,'0')+':'+String(s%60).padStart(2,'0')}
-function fmtG(v){return Math.abs(v)<0.005?'0.00':v.toFixed(2)} // Dead zone to prevent 0.00/-0.00 flicker
+function fmtG(v){return Math.abs(v)<0.005?'0.00':v.toFixed(2)}
 
 function resetGMax(){
     maxL=maxR=maxA=maxB=0;
     $('maxL').textContent=$('maxR').textContent=$('maxA').textContent=$('maxB').textContent='0.00';
-    trail=[];gridTrail=[];magnitudeHistory=[];currentMaxG=0.5;
-    emaGx=emaGy=0;lastProcessTime=0; // Reset EMA state
-    displayedPeak=sessionPeak=0;$('peak-val').textContent='0';$('peak-row').classList.add('hidden');
+    trail=[];magnitudeHistory=[];currentMaxG=0.5;
+    emaGx=emaGy=0;lastProcessTime=0;
+    displayedPeak=sessionPeak=0;$('peak-val').textContent='0';$('peak-row').classList.remove('visible');
     sessionStart=Date.now();
 }
 
@@ -452,24 +495,23 @@ function process(buf){
     const lat=d.getFloat32(56,1),lon=d.getFloat32(60,1),gpsOk=d.getUint8(64);
     const latg=ay/9.81,lng=-ax/9.81,yawDeg=Math.abs(wz*57.3);
 
-    // Time-based EMA for smooth G-meter (consistent at any update rate)
+    // Time-based EMA
     const now=Date.now();
-    const dt=lastProcessTime?Math.min((now-lastProcessTime)/1000,0.2):0.033; // Cap dt to prevent jumps
+    const dt=lastProcessTime?Math.min((now-lastProcessTime)/1000,0.2):0.033;
     lastProcessTime=now;
     const alpha=1-Math.exp(-dt/EMA_TAU);
     emaGx=alpha*latg+(1-alpha)*emaGx;
     emaGy=alpha*lng+(1-alpha)*emaGy;
 
-    speed_ema=0.7*sp+(1-0.7)*speed_ema;
+    speed_ema=0.7*sp+0.3*speed_ema;
     const dspd=speed_ema<1?0:Math.round(speed_ema);
 
-    // Deadzone-filtered G values (used for display, color, autozoom)
+    // Deadzone
     const mag=Math.sqrt(emaGx*emaGx+emaGy*emaGy);
-    const noiseFloor=speed_ema<5?0.05:0.02; // Larger deadzone when stopped
+    const noiseFloor=speed_ema<5?0.05:0.02;
     const gx=mag<noiseFloor?0:emaGx;
     const gy=mag<noiseFloor?0:emaGy;
 
-    // Use filtered values for state detection to prevent color flicker
     const isAccelerating=gy>0.05,isBraking=gy<-0.1;
 
     // Peak tracking
@@ -477,43 +519,31 @@ function process(buf){
     if(dspd>sessionPeak)sessionPeak=dspd;
     const accelStoppedLongEnough=wasAccelerating&&!isAccelerating&&(now-lastAccelTime>=PEAK_UPDATE_DELAY);
     if(accelStoppedLongEnough||isBraking){if(sessionPeak>displayedPeak)displayedPeak=sessionPeak;wasAccelerating=false}
-    const atPeak=dspd>=displayedPeak&&dspd>0;
 
-    // Update hue based on acceleration state
-    currentHue=isAccelerating?HUE_CYAN:HUE_AMBER;
-    document.documentElement.style.setProperty('--hue',currentHue);
-
-    // Top box
+    // Update UI
     $('current-speed').textContent=dspd;
-    $('current-speed').classList.toggle('at-peak',atPeak);
-    $('boxTop').classList.toggle('at-peak',atPeak);
-    if(displayedPeak>0&&dspd<displayedPeak){$('peak-row').classList.remove('hidden');$('peak-val').textContent=displayedPeak}else{$('peak-row').classList.add('hidden')}
+    if(displayedPeak>0&&dspd<displayedPeak){$('peak-row').classList.add('visible');$('peak-val').textContent=displayedPeak}
+    else{$('peak-row').classList.remove('visible')}
     $('maneuver').textContent=M[mo]||'Idle';
     $('maneuver').classList.toggle('braking',isBraking);
-    $('mode-bg').textContent=MODE_ICONS[mo]||'\u25C7';
-    $('mode-bg').classList.toggle('at-peak',atPeak);
 
-    // GPS status tracking (count actual new fixes by detecting position changes)
+    // GPS tracking
     if(gpsOk){
         lastGpsState=1;
-        if(lat!==lastGpsLat||lon!==lastGpsLon){gpsCount++;lastGpsLat=lat;lastGpsLon=lon}
+        if(lat!==lastGpsLat||lon!==lastGpsLon){lastGpsLat=lat;lastGpsLon=lon}
     }else{lastGpsState=0}
 
-    // Bottom metrics (use smoothed/deadzone values to prevent flickering)
+    // Metrics
     $('latg').textContent=fmtG(gx);
     $('lng').textContent=fmtG(gy);
     $('yaw').textContent=yawDeg.toFixed(0);
 
-    // Only autozoom when moving; freeze G-meter when stopped
-    if(speed_ema>=2){
-        updateAutoZoom(gx,gy);
-    }else{
-        magnitudeHistory=[];
-        currentMaxG=MIN_MAX_G; // Reset to default 0.2g scale
-    }
-    trail.push({x:gx,y:gy});if(trail.length>30)trail.shift();
+    // Auto-zoom
+    if(speed_ema>=2){updateAutoZoom(gx,gy)}
+    else{magnitudeHistory=[];currentMaxG=MIN_MAX_G}
+    trail.push({x:gx,y:gy});if(trail.length>50)trail.shift();
 
-    // Max G with active highlighting
+    // Max G
     const maxLEl=$('maxL'),maxREl=$('maxR'),maxAEl=$('maxA'),maxBEl=$('maxB');
     maxLEl.classList.remove('peak-active');maxREl.classList.remove('peak-active');maxAEl.classList.remove('peak-active');maxBEl.classList.remove('peak-active');
     if(latg<0&&Math.abs(latg)>maxL){maxL=Math.abs(latg);maxLEl.textContent=maxL.toFixed(2);maxLEl.classList.add('peak-active')}
@@ -521,36 +551,23 @@ function process(buf){
     if(lng>0&&lng>maxA){maxA=lng;maxAEl.textContent=maxA.toFixed(2);maxAEl.classList.add('peak-active')}
     if(lng<0&&Math.abs(lng)>maxB){maxB=Math.abs(lng);maxBEl.textContent=maxB.toFixed(2);maxBEl.classList.add('peak-active')}
 
-    // G-meter trail
-    if(trail.length>0){
-        const current=trail[trail.length-1];
-        const gridPos=gForceToGrid(current.x,current.y);
-        const indicatorHue=isAccelerating?HUE_CYAN:HUE_AMBER;
-        const lastTrail=gridTrail[gridTrail.length-1];
-        if(!lastTrail||lastTrail.col!==gridPos.col||lastTrail.row!==gridPos.row){
-            gridTrail.push({col:gridPos.col,row:gridPos.row,intensity:1.0,hue:indicatorHue});
-        }
-    }
-    for(let i=gridTrail.length-1;i>=0;i--){gridTrail[i].intensity*=0.96;if(gridTrail[i].intensity<0.03)gridTrail.splice(i,1)}
-    if(gridTrail.length>80)gridTrail.shift();
-
     drawG();
     cnt++;
     if(rec)data.push({t:Date.now(),sp,ax,ay,wz,mo,latg,lng,lat,lon,gpsOk,...fusion});
 }
 
-// HTTP polling - fusion data is inline in response (no separate fetch needed)
+// HTTP polling
 async function poll(){
     try{
         const r=await fetch('/api/telemetry');
         const j=await r.json();
         if(j.data&&j.seq!==lastSeq){
             lastSeq=j.seq;
-            // Extract inline fusion BEFORE process() so recorded data has matching fusion
             if(j.f){
                 fusion.lon_imu=j.f.li||0;
                 fusion.lon_gps=j.f.lg||0;
                 fusion.gps_wt=j.f.gw||0;
+                fusion.gps_rate=j.f.gr||0;
                 fusion.pitch_c=j.f.pc||0;
                 fusion.pitch_cf=j.f.pf||0;
                 fusion.roll_c=j.f.rc||0;
@@ -561,18 +578,19 @@ async function poll(){
             const b=atob(j.data),a=new Uint8Array(b.length);
             for(let i=0;i<b.length;i++)a[i]=b.charCodeAt(i);
             process(a.buffer);
-            $('dot').className='dot on';$('stxt').textContent='LIVE';
+            $('dot').className='status-dot on';$('stxt').textContent='LIVE';
         }
         setTimeout(poll,33);
-    }catch(e){$('dot').className='dot';$('stxt').textContent='--';setTimeout(poll,500)}
+    }catch(e){$('dot').className='status-dot';$('stxt').textContent='--';setTimeout(poll,500)}
 }
 
 // Event handlers
 $('rstg').onclick=resetGMax;
 $('rec').onclick=()=>{
     rec=!rec;
-    if(rec){data=[];$('rec').className='btn btn-rec on';$('rec').textContent='STOP'}
-    else{$('rec').className='btn btn-rec';$('rec').textContent='REC';
+    const btn=$('rec');
+    if(rec){data=[];btn.classList.add('recording');btn.innerHTML='<span class="dot"></span>STOP'}
+    else{btn.classList.remove('recording');btn.innerHTML='<span class="dot"></span>REC';
     if(data.length){const s=JSON.parse(localStorage.getItem('bb')||'[]');s.unshift({id:Date.now(),n:data.length,d:data});localStorage.setItem('bb',JSON.stringify(s.slice(0,10)));alert('Saved '+data.length+' pts')}}
 };
 $('exp').onclick=()=>{
@@ -585,45 +603,46 @@ $('exp').onclick=()=>{
 setInterval(()=>{
     $('hz').textContent=cnt;cnt=0;
     $('timer').textContent=fmtTime(Date.now()-sessionStart);
-    // Update GPS status in header
     const gpsEl=$('gps-st');
-    if(lastGpsState){gpsEl.classList.add('ok');$('gps-hz').textContent='GPS '+gpsCount}
+    if(lastGpsState){gpsEl.classList.add('ok');$('gps-hz').textContent='GPS '+Math.round(fusion.gps_rate)}
     else{gpsEl.classList.remove('ok');$('gps-hz').textContent='GPS --'}
-    gpsCount=0;
 },1000);
 
 // Init
-applyGoldenHeights();
+resizeCanvas();
 setTimeout(()=>{resizeCanvas();drawG()},50);
 poll();
 </script></body></html>"#;
 
-/// Diagnostics page HTML - auto-refreshes every second
+/// Diagnostics page HTML - neumorphism design, auto-refreshes every second
 const DIAGNOSTICS_HTML: &str = r#"<!DOCTYPE html>
 <html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Blackbox Diagnostics</title>
 <style>
-:root{--cyan:#00f0ff;--amber:#ff6a00;--bg:#030508}
+:root{--bg:#e8ecef;--surface:#e8ecef;--shadow-dark:#c5c9cc;--shadow-light:#fff;--text-primary:#2c3e50;--text-secondary:#7f8c8d;--text-muted:#a0aab0;--accent:#3498db;--radius:16px}
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Courier New',monospace;background:var(--bg);color:#e0e0e0;padding:16px;font-size:13px}
-h1{font-size:14px;margin-bottom:16px;color:var(--cyan);letter-spacing:4px;text-transform:uppercase;font-weight:400}
-.section{background:rgba(0,20,30,0.6);border:1px solid hsla(190,100%,50%,0.25);padding:12px;margin-bottom:8px}
-.section h2{font-size:10px;color:#556;text-transform:uppercase;letter-spacing:2px;margin-bottom:8px;font-weight:500}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.row{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid hsla(190,50%,20%,0.3)}
+body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text-primary);padding:20px;font-size:13px;min-height:100vh}
+.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
+h1{font-size:14px;font-weight:600;letter-spacing:3px;color:var(--text-muted);text-transform:uppercase}
+.back{color:var(--accent);text-decoration:none;font-size:12px;font-weight:500;letter-spacing:1px;padding:8px 16px;background:linear-gradient(145deg,#f0f4f7,#dce0e3);border-radius:20px;box-shadow:3px 3px 6px var(--shadow-dark),-3px -3px 6px var(--shadow-light)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+@media(max-width:600px){.grid{grid-template-columns:1fr}}
+.section{background:var(--surface);border-radius:var(--radius);padding:16px;box-shadow:inset 4px 4px 8px var(--shadow-dark),inset -4px -4px 8px var(--shadow-light)}
+.section h2{font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:2px;margin-bottom:12px}
+.row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(0,0,0,0.04)}
 .row:last-child{border-bottom:none}
-.label{color:#667;font-size:11px}
-.value{color:var(--cyan);font-weight:600;font-size:12px}
-.ok{color:#22c55e}
-.warn{color:var(--amber)}
-.err{color:#ef4444}
-.back{display:inline-block;margin-bottom:16px;color:var(--cyan);text-decoration:none;font-size:11px;letter-spacing:2px;opacity:0.7}
-.back:hover{opacity:1}
-.uptime{color:#445;font-size:10px;margin-top:12px;text-align:center;letter-spacing:1px}
+.label{color:var(--text-secondary);font-size:11px;font-weight:500}
+.value{color:var(--text-primary);font-weight:600;font-size:12px;font-variant-numeric:tabular-nums}
+.ok{color:#27ae60}
+.warn{color:#f39c12}
+.err{color:#e74c3c}
+.uptime{text-align:center;margin-top:16px;padding:12px;font-size:11px;font-weight:500;color:var(--text-muted);letter-spacing:1px;background:linear-gradient(145deg,#f0f4f7,#dce0e3);border-radius:20px;box-shadow:4px 4px 8px var(--shadow-dark),-4px -4px 8px var(--shadow-light)}
 </style></head>
 <body>
-<a href="/" class="back">&larr; DASHBOARD</a>
-<h1>DIAGNOSTICS</h1>
+<div class="header">
+<h1>Diagnostics</h1>
+<a href="/" class="back">&larr; Dashboard</a>
+</div>
 <div class="grid">
 <div class="section">
 <h2>Configuration</h2>
@@ -640,18 +659,21 @@ h1{font-size:14px;margin-bottom:16px;color:var(--cyan);letter-spacing:4px;text-t
 <div class="row"><span class="label">Loop Rate</span><span class="value" id="loop-rate">--</span></div>
 <div class="row"><span class="label">ZUPT Rate</span><span class="value" id="zupt-rate">--</span></div>
 <div class="row"><span class="label">EKF/GPS</span><span class="value" id="ekf-per-gps">--</span></div>
-<div class="row"><span class="label">GPS Fix</span><span class="value" id="gps-fix">--</span></div>
-<div class="row"><span class="label">Satellites</span><span class="value" id="gps-sats">--</span></div>
-<div class="row"><span class="label">HDOP</span><span class="value" id="gps-hdop">--</span></div>
-<div class="row"><span class="label">Warmup</span><span class="value" id="gps-warmup">--</span></div>
 </div>
 </div>
 <div class="grid">
 <div class="section">
+<h2>GPS Status</h2>
+<div class="row"><span class="label">Fix</span><span class="value" id="gps-fix">--</span></div>
+<div class="row"><span class="label">Satellites</span><span class="value" id="gps-sats">--</span></div>
+<div class="row"><span class="label">HDOP</span><span class="value" id="gps-hdop">--</span></div>
+<div class="row"><span class="label">Warmup</span><span class="value" id="gps-warmup">--</span></div>
+</div>
+<div class="section">
 <h2>EKF Health</h2>
-<div class="row"><span class="label">Position sigma</span><span class="value" id="pos-sigma">--</span></div>
-<div class="row"><span class="label">Velocity sigma</span><span class="value" id="vel-sigma">--</span></div>
-<div class="row"><span class="label">Yaw sigma</span><span class="value" id="yaw-sigma">--</span></div>
+<div class="row"><span class="label">Position σ</span><span class="value" id="pos-sigma">--</span></div>
+<div class="row"><span class="label">Velocity σ</span><span class="value" id="vel-sigma">--</span></div>
+<div class="row"><span class="label">Yaw σ</span><span class="value" id="yaw-sigma">--</span></div>
 <div class="row"><span class="label">Bias X</span><span class="value" id="bias-x">--</span></div>
 <div class="row"><span class="label">Bias Y</span><span class="value" id="bias-y">--</span></div>
 </div>
@@ -663,18 +685,17 @@ h1{font-size:14px;margin-bottom:16px;color:var(--cyan);letter-spacing:4px;text-t
 <div class="row"><span class="label">Lon Filtered</span><span class="value" id="lon-filt">--</span></div>
 <div class="row"><span class="label">Lon Blended</span><span class="value" id="lon-blend">--</span></div>
 <div class="row"><span class="label">GPS Weight</span><span class="value" id="gps-wt">--</span></div>
-<div class="row"><span class="label">GPS Accel</span><span class="value" id="gps-accel">--</span></div>
+<div class="row"><span class="label">GPS Accel</span><span class="value" id="gps-acc">--</span></div>
 <div class="row"><span class="label">GPS Rejected</span><span class="value" id="gps-rej">--</span></div>
 </div>
 <div class="section">
-<h2>Orientation Correction</h2>
+<h2>Orientation</h2>
 <div class="row"><span class="label">Pitch Corr</span><span class="value" id="pitch-corr">--</span></div>
 <div class="row"><span class="label">Roll Corr</span><span class="value" id="roll-corr">--</span></div>
 <div class="row"><span class="label">Confidence</span><span class="value" id="orient-conf">--</span></div>
 <div class="row"><span class="label">Yaw Bias</span><span class="value" id="yaw-bias">--</span></div>
-<div class="row"><span class="label">Yaw Calibrated</span><span class="value" id="yaw-cal">--</span></div>
+<div class="row"><span class="label">Yaw Cal</span><span class="value" id="yaw-cal">--</span></div>
 <div class="row"><span class="label">Tilt X/Y</span><span class="value" id="tilt-xy">--</span></div>
-<div class="row"><span class="label">Tilt Valid</span><span class="value" id="tilt-valid">--</span></div>
 </div>
 </div>
 <div class="grid">
@@ -685,37 +706,10 @@ h1{font-size:14px;margin-bottom:16px;color:var(--cyan);letter-spacing:4px;text-t
 <div class="row"><span class="label">TX Failed</span><span class="value" id="tx-fail">--</span></div>
 </div>
 </div>
-<div class="section">
-<h2>Sensor Fusion</h2>
-<div class="grid">
-<div>
-<div class="row"><span class="label">Lon Raw</span><span class="value" id="lon-raw">--</span></div>
-<div class="row"><span class="label">Lon Filtered</span><span class="value" id="lon-filt">--</span></div>
-<div class="row"><span class="label">Lon Blended</span><span class="value" id="lon-blend">--</span></div>
-<div class="row"><span class="label">GPS Weight</span><span class="value" id="gps-wt">--</span></div>
-<div class="row"><span class="label">GPS Accel</span><span class="value" id="gps-acc">--</span></div>
-<div class="row"><span class="label">GPS Rejected</span><span class="value" id="gps-rej">--</span></div>
-</div>
-<div>
-<div class="row"><span class="label">Pitch Corr</span><span class="value" id="pitch-corr">--</span></div>
-<div class="row"><span class="label">Roll Corr</span><span class="value" id="roll-corr">--</span></div>
-<div class="row"><span class="label">Orient Conf</span><span class="value" id="orient-conf">--</span></div>
-<div class="row"><span class="label">Yaw Bias</span><span class="value" id="yaw-bias">--</span></div>
-<div class="row"><span class="label">Yaw Calibrated</span><span class="value" id="yaw-cal">--</span></div>
-<div class="row"><span class="label">Tilt X/Y</span><span class="value" id="tilt-xy">--</span></div>
-<div class="row"><span class="label">Tilt Valid</span><span class="value" id="tilt-v">--</span></div>
-</div>
-</div>
-</div>
 <div class="uptime" id="uptime">Uptime: --</div>
 <script>
 const $=id=>document.getElementById(id);
-function rateClass(actual,expected){
-  const pct=actual/expected;
-  if(pct>=0.9)return'ok';
-  if(pct>=0.5)return'warn';
-  return'err';
-}
+function rateClass(actual,expected){const pct=actual/expected;if(pct>=0.9)return'ok';if(pct>=0.5)return'warn';return'err'}
 async function update(){
   try{
     const r=await fetch('/api/diagnostics');
@@ -727,10 +721,10 @@ async function update(){
     $('gps-model').textContent=d.config.gps_model;
     $('warmup-fixes').textContent=d.config.warmup_fixes;
     const imuEl=$('imu-rate');
-    imuEl.textContent=d.sensor_rates.imu_hz.toFixed(0)+' / '+d.sensor_rates.imu_expected.toFixed(0)+' Hz';
+    imuEl.textContent=d.sensor_rates.imu_hz.toFixed(0)+'/'+d.sensor_rates.imu_expected.toFixed(0)+' Hz';
     imuEl.className='value '+rateClass(d.sensor_rates.imu_hz,d.sensor_rates.imu_expected);
     const gpsEl=$('gps-rate');
-    gpsEl.textContent=d.sensor_rates.gps_hz.toFixed(1)+' / '+d.sensor_rates.gps_expected.toFixed(0)+' Hz';
+    gpsEl.textContent=d.sensor_rates.gps_hz.toFixed(1)+'/'+d.sensor_rates.gps_expected.toFixed(0)+' Hz';
     gpsEl.className='value '+rateClass(d.sensor_rates.gps_hz,d.sensor_rates.gps_expected);
     const lr=$('loop-rate');
     lr.textContent=d.sensor_rates.loop_hz.toFixed(0)+' Hz';
@@ -743,7 +737,7 @@ async function update(){
     $('gps-sats').className='value '+(d.gps.satellites>=4?'ok':(d.gps.satellites>=1?'warn':'err'));
     $('gps-hdop').textContent=d.gps.hdop.toFixed(1);
     $('gps-hdop').className='value '+(d.gps.hdop<2?'ok':(d.gps.hdop<5?'warn':'err'));
-    $('gps-warmup').textContent=d.gps.warmup?'Complete':'Warming up...';
+    $('gps-warmup').textContent=d.gps.warmup?'Complete':'Warming...';
     $('gps-warmup').className='value '+(d.gps.warmup?'ok':'warn');
     const ps=$('pos-sigma');
     ps.textContent=d.ekf.pos_sigma.toFixed(2)+' m';
@@ -752,13 +746,13 @@ async function update(){
     vs.textContent=d.ekf.vel_sigma.toFixed(2)+' m/s';
     vs.className='value '+(d.ekf.vel_sigma<0.5?'ok':(d.ekf.vel_sigma<1.0?'warn':'err'));
     const ys=$('yaw-sigma');
-    ys.textContent=d.ekf.yaw_sigma_deg.toFixed(1)+'deg';
+    ys.textContent=d.ekf.yaw_sigma_deg.toFixed(1)+'°';
     ys.className='value '+(d.ekf.yaw_sigma_deg<5?'ok':(d.ekf.yaw_sigma_deg<10?'warn':'err'));
     const bx=$('bias-x');
-    bx.textContent=d.ekf.bias_x.toFixed(4)+' m/s2';
+    bx.textContent=d.ekf.bias_x.toFixed(3)+' m/s²';
     bx.className='value '+(Math.abs(d.ekf.bias_x)<0.3?'ok':(Math.abs(d.ekf.bias_x)<0.5?'warn':'err'));
     const by=$('bias-y');
-    by.textContent=d.ekf.bias_y.toFixed(4)+' m/s2';
+    by.textContent=d.ekf.bias_y.toFixed(3)+' m/s²';
     by.className='value '+(Math.abs(d.ekf.bias_y)<0.3?'ok':(Math.abs(d.ekf.bias_y)<0.5?'warn':'err'));
     const hp=$('heap');
     hp.textContent=(d.system.heap_free/1024).toFixed(0)+' KB';
@@ -770,45 +764,40 @@ async function update(){
     const s=d.system.uptime_s;
     const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;
     $('uptime').textContent='Uptime: '+h+'h '+m+'m '+sec+'s';
-    // Fusion diagnostics
     if(d.fusion){
-      $('lon-raw').textContent=d.fusion.lon_raw.toFixed(3)+' m/s2';
-      $('lon-filt').textContent=d.fusion.lon_filtered.toFixed(3)+' m/s2';
-      $('lon-blend').textContent=d.fusion.lon_blended.toFixed(3)+' m/s2';
+      $('lon-raw').textContent=d.fusion.lon_raw.toFixed(3)+' m/s²';
+      $('lon-filt').textContent=d.fusion.lon_filtered.toFixed(3)+' m/s²';
+      $('lon-blend').textContent=d.fusion.lon_blended.toFixed(3)+' m/s²';
       const wt=$('gps-wt');
       wt.textContent=(d.fusion.gps_weight*100).toFixed(0)+'%';
       wt.className='value '+(d.fusion.gps_weight>0?'ok':'warn');
       const ga=$('gps-acc');
-      ga.textContent=isNaN(d.fusion.gps_accel)?'N/A':d.fusion.gps_accel.toFixed(3)+' m/s2';
+      ga.textContent=isNaN(d.fusion.gps_accel)?'N/A':d.fusion.gps_accel.toFixed(3)+' m/s²';
       const rej=$('gps-rej');
-      rej.textContent=d.fusion.gps_rejected?'YES':'No';
+      rej.textContent=d.fusion.gps_rejected?'Yes':'No';
       rej.className='value '+(d.fusion.gps_rejected?'warn':'ok');
-      // OrientationCorrector (GPS-corrected AHRS)
       const pc=$('pitch-corr');
-      pc.textContent=d.fusion.pitch_corr.toFixed(1)+'deg';
+      pc.textContent=d.fusion.pitch_corr.toFixed(1)+'°';
       pc.className='value '+(Math.abs(d.fusion.pitch_corr)<10?'ok':'warn');
       const rc=$('roll-corr');
-      rc.textContent=d.fusion.roll_corr.toFixed(1)+'deg';
+      rc.textContent=d.fusion.roll_corr.toFixed(1)+'°';
       rc.className='value '+(Math.abs(d.fusion.roll_corr)<10?'ok':'warn');
       const oc=$('orient-conf');
-      oc.textContent=d.fusion.pitch_conf.toFixed(0)+'% / '+d.fusion.roll_conf.toFixed(0)+'%';
+      oc.textContent=d.fusion.pitch_conf.toFixed(0)+'%/'+d.fusion.roll_conf.toFixed(0)+'%';
       oc.className='value '+(d.fusion.pitch_conf>50?'ok':(d.fusion.pitch_conf>10?'warn':'err'));
       const yb=$('yaw-bias');
       const ybVal=Math.abs(d.fusion.yaw_bias*1000);
-      yb.textContent=ybVal.toFixed(2)+' mrad/s';
+      yb.textContent=ybVal.toFixed(1)+' mrad/s';
       yb.className='value '+(ybVal<10?'ok':(ybVal<50?'warn':'err'));
       const yc=$('yaw-cal');
       yc.textContent=d.fusion.yaw_calibrated?'Yes':'No';
       yc.className='value '+(d.fusion.yaw_calibrated?'ok':'warn');
       const txy=$('tilt-xy');
+      txy.textContent=d.fusion.tilt_x.toFixed(3)+'/'+d.fusion.tilt_y.toFixed(3);
       const tiltMax=Math.max(Math.abs(d.fusion.tilt_x),Math.abs(d.fusion.tilt_y));
-      txy.textContent=d.fusion.tilt_x.toFixed(3)+' / '+d.fusion.tilt_y.toFixed(3);
       txy.className='value '+(tiltMax<0.3?'ok':(tiltMax<0.5?'warn':'err'));
-      const tv=$('tilt-v');
-      tv.textContent=d.fusion.tilt_valid?'Yes':'No';
-      tv.className='value '+(d.fusion.tilt_valid?'ok':'warn');
     }
-  }catch(e){console.log('Diag fetch error:',e)}
+  }catch(e){console.log('Diag error:',e)}
 }
 setInterval(update,1000);
 update();
@@ -879,13 +868,14 @@ impl TelemetryServer {
                         format!(
                             concat!(
                                 r#"{{"seq":{},"data":"{}","#,
-                                r#""f":{{"li":{:.4},"lg":{:.4},"gw":{:.2},"pc":{:.1},"pf":{:.0},"rc":{:.1},"rf":{:.0},"tx":{:.4},"ty":{:.4}}}}}"#
+                                r#""f":{{"li":{:.4},"lg":{:.4},"gw":{:.2},"gr":{:.1},"pc":{:.1},"pf":{:.0},"rc":{:.1},"rf":{:.0},"tx":{:.4},"ty":{:.4}}}}}"#
                             ),
                             state_poll.packet_count(),
                             data,
                             f.lon_imu_filtered,
                             f.gps_accel,
                             f.gps_weight,
+                            f.gps_rate,
                             f.pitch_correction_deg,
                             f.pitch_confidence * 100.0,
                             f.roll_correction_deg,
