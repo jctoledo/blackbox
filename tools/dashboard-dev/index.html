@@ -3,6 +3,15 @@
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><title>Blackbox</title>
 <style>
 :root{
+    /* Spacing scale (4px base) */
+    --sp-xs:4px;
+    --sp-sm:8px;
+    --sp-md:12px;
+    --sp-lg:16px;
+    --sp-xl:24px;
+    --sp-2xl:32px;
+
+    /* Colors */
     --bg:#f2f2f7;
     --surface:#ffffff;
     --text:#1c1c1e;
@@ -18,7 +27,7 @@
 }
 .dark{
     --bg:#000000;
-    --surface:#1c1c1e;
+    --surface:#2c2c2e;
     --text:#ffffff;
     --text-secondary:#aeaeb2;
     --text-tertiary:#636366;
@@ -39,7 +48,7 @@ body{
     -webkit-user-select:none;
     user-select:none;
     overflow:hidden;
-    transition:background 0.3s,color 0.3s;
+    transition:background 0.3s ease-in-out,color 0.3s ease-in-out;
 }
 
 /* ============================================
@@ -56,7 +65,7 @@ body{
     display:flex;
     justify-content:space-between;
     align-items:center;
-    padding:14px 16px;
+    padding:var(--sp-lg) var(--sp-lg);
     background:transparent;
     flex-shrink:0;
 }
@@ -66,76 +75,76 @@ body{
     padding:0;
     display:flex;
     align-items:baseline;
-    gap:8px;
+    gap:var(--sp-sm);
     cursor:pointer;
     color:inherit;
     font-family:inherit;
 }
-.bbBrand{font-size:11px;font-weight:600;opacity:.55;letter-spacing:.03em}
-.bbModeLabel{font-size:11px;font-weight:400;opacity:.40;letter-spacing:.03em}
-.bbModeIcon{font-size:10px;opacity:.40}
+.bbBrand{font-size:12px;font-weight:600;opacity:.45;letter-spacing:.03em}
+.bbModeLabel{font-size:12px;font-weight:400;opacity:.45;letter-spacing:.03em}
+.bbModeIcon{font-size:10px;opacity:.45}
 .bbTopRight{
     display:flex;
     align-items:center;
-    gap:10px;
+    gap:var(--sp-md);
 }
 .bbStatusCluster{
     display:flex;
     align-items:center;
-    gap:12px;
-    opacity:.55;
+    gap:var(--sp-md);
+    opacity:.45;
     font-size:10px;
     letter-spacing:.03em;
 }
-.bbStatusItem{display:flex;align-items:center;gap:4px}
+.bbStatusItem{display:flex;align-items:center;gap:var(--sp-xs)}
 .bbStatusItem .bbHigh{margin-right:2px}
-.bbDot{width:6px;height:6px;border-radius:50%;background:var(--ok);display:inline-block;opacity:.9;margin-right:2px}
+.bbDot{width:6px;height:6px;border-radius:50%;background:var(--ok);display:inline-block}
 .bbHigh{color:var(--ok);font-weight:600}
-.bbKebab{background:none;border:0;padding:4px;font-size:24px;line-height:1;opacity:.6;cursor:pointer;color:inherit}
+.bbKebab{background:none;border:0;padding:var(--sp-xs);font-size:18px;line-height:1;opacity:.45;cursor:pointer;color:inherit}
 
 /* APP CONTAINER */
 .bbApp{
     flex:1;
     display:flex;
     flex-direction:column;
-    padding:0 12px 8px;
+    padding:0 var(--sp-md) var(--sp-xs);
     min-height:0;
 }
 
 /* CARD */
 .bbCard{
     background:var(--surface);
-    border-radius:16px;
+    border-radius:var(--sp-lg);
     overflow:hidden;
 }
 .bbGCard{
-    flex:1;
     display:flex;
     flex-direction:column;
-    margin-bottom:4px;
+    width:100%;
 }
 
-/* TOP ROW */
-.bbGTop{
-    display:flex;
-    justify-content:space-between;
-    align-items:flex-start;
-    padding:12px 18px 6px;
-    flex-shrink:0;
+/* TOP READOUT ROW */
+.bbGReadoutRow--top{
+    padding:var(--sp-md) var(--sp-lg) var(--sp-sm);
+    align-items:center;
 }
-.bbGTopLeft{}
-.bbSpeedLine{display:flex;align-items:baseline;gap:4px}
-.bbSpeed{font-size:22px;font-weight:600;opacity:.75;transition:color 0.3s,opacity 0.3s}
-.bbSpeed.peak{color:var(--amber);opacity:1}
-.bbUnit{font-size:12px;opacity:.45}
-.bbManeuver{font-size:14px;font-weight:600;margin-top:4px;min-width:7ch;transition:color 0.15s}
-.bbGTopRight{font-size:11px;opacity:.50}
+.bbGReadoutRow--top .bbGReadoutVal{
+    margin-top:0;
+}
+.bbGReadoutRow--top .bbMaxRow{
+    margin-top:var(--sp-xs);
+}
+.bbManeuver{font-weight:600;transition:color 0.15s ease-in-out}
+#speed{transition:color 0.6s ease-in-out}
+#speed.peak{color:var(--amber)}
+#max-speed{transition:color 0.6s ease-in-out}
+#max-speed.setting{color:var(--amber);font-weight:400;font-style:italic}
 
 /* PLOT AREA */
 .bbGPlotWrap{
     display:flex;
     justify-content:center;
-    padding:2px 18px 0;
+    padding:var(--sp-xl) var(--sp-lg);
 }
 .bbGPlotFrame{
     position:relative;
@@ -152,36 +161,35 @@ body{
 .bbAxis{
     position:absolute;
     font-size:10px;
-    font-weight:500;
+    font-weight:400;
     letter-spacing:.02em;
     text-transform:uppercase;
-    opacity:.50;
-    color:var(--text-tertiary);
+    opacity:.45;
+    color:var(--text);
     pointer-events:none;
 }
-.bbAxis--top{top:4px;left:50%;transform:translateX(-50%)}
-.bbAxis--bottom{bottom:4px;left:50%;transform:translateX(-50%)}
-.bbAxis--left{left:6px;top:50%;transform:translateY(-50%)}
-.bbAxis--right{right:6px;top:50%;transform:translateY(-50%)}
+.bbAxis--top{top:var(--sp-xs);left:50%;transform:translateX(-50%)}
+.bbAxis--bottom{bottom:var(--sp-xs);left:50%;transform:translateX(-50%)}
+.bbAxis--left{left:var(--sp-sm);top:50%;transform:translateY(-50%)}
+.bbAxis--right{right:var(--sp-sm);top:50%;transform:translateY(-50%)}
 
 .bbPlotMeta{
     position:absolute;
-    top:6px;
-    right:8px;
+    top:var(--sp-xs);
+    right:var(--sp-sm);
     font-size:10px;
-    color:var(--text-tertiary);
-    opacity:.50;
+    color:var(--text);
+    opacity:.45;
 }
 
 /* READOUT ROW */
 .bbGReadoutRow{
     display:flex;
     justify-content:center;
-    align-items:center;
+    align-items:flex-start;
     gap:0;
-    padding:16px 18px;
+    padding:var(--sp-lg) var(--sp-lg) var(--sp-xl);
     flex-shrink:0;
-    margin:auto 0;
 }
 .bbGReadoutCol{
     flex:1;
@@ -191,63 +199,78 @@ body{
     text-align:center;
 }
 .bbGReadoutLbl{
-    font-size:11px;
+    font-size:10px;
+    font-weight:400;
     letter-spacing:.02em;
     text-transform:uppercase;
-    opacity:.55;
-    color:var(--text-tertiary);
+    opacity:.45;
+    color:var(--text);
 }
 .bbGReadoutVal{
-    margin-top:8px;
-    font-size:34px;
+    margin-top:var(--sp-lg);
+    font-size:26px;
     font-weight:600;
     line-height:1.0;
-    min-width:8ch;
+    min-width:6ch;
     display:inline-flex;
     align-items:baseline;
     justify-content:center;
-    gap:2px;
+    gap:1px;
+    transition:color 0.6s ease-in-out;
 }
-.bbSign{display:inline-block;width:1.2ch;text-align:right;opacity:.9;margin-right:2px}
-.bbGUnit{font-size:.5em;opacity:.55;margin-left:2px}
+.bbGReadoutVal.peak{color:var(--amber)}
+.bbSign{display:inline-block;width:1ch;text-align:right;opacity:.45;margin-right:1px}
+.bbGUnit{opacity:.45;margin-left:1px}
 .bbGDivider{
     width:1px;
-    height:48px;
+    height:56px;
     background:var(--divider);
-    margin:0 12px;
+    margin:0 var(--sp-sm);
     flex-shrink:0;
 }
-
-/* MAX STRIP */
-.bbGMax{
-    display:grid;
-    grid-template-columns:1fr 1fr;
-    gap:8px 16px;
-    padding:16px 24px 20px;
-    border-top:1px solid var(--divider);
-    flex-shrink:0;
+.bbMaxRow{
+    display:flex;
+    justify-content:center;
+    gap:var(--sp-md);
+    margin-top:var(--sp-sm);
 }
-.bbMini{
-    display:grid;
-    grid-template-columns:auto 7ch;
-    column-gap:10px;
+.bbMaxItem{
+    display:flex;
     align-items:baseline;
+    gap:var(--sp-xs);
 }
-.bbMiniLbl{font-size:11px;color:var(--text-tertiary);opacity:.75;white-space:nowrap}
-.bbMiniVal{font-size:13px;font-weight:600;color:var(--text-secondary);text-align:left;justify-self:start}
+.bbMaxVal{font-size:12px;font-weight:500;opacity:.45;transition:color 0.6s ease-in-out}
+.bbMaxVal.setting{color:var(--amber);font-weight:400;font-style:italic;opacity:1}
+.bbMaxSign{font-size:12px;font-weight:500;opacity:.45;transition:opacity 0.6s ease-in-out}
+.bbMaxSign.hidden{opacity:0}
+.bbMaxLbl{font-size:12px;font-weight:400;opacity:.45;margin-left:var(--sp-xs)}
+.bbYawPad{opacity:.45}
 
 /* TELEMETRY STRIP */
 .bbTelemetryStrip{
     display:flex;
-    gap:14px;
     justify-content:center;
-    padding:14px 0 10px;
-    font-size:11px;
-    color:var(--text-tertiary);
+    align-items:center;
+    gap:var(--sp-lg);
+    padding:var(--sp-md) 0;
+    font-size:10px;
+    font-weight:400;
+    color:var(--text);
+    opacity:.45;
     flex-shrink:0;
 }
+.bbTCluster{
+    display:flex;
+    align-items:baseline;
+    gap:var(--sp-sm);
+}
+.bbTDivider{
+    width:1px;
+    height:12px;
+    background:var(--divider);
+}
 .bbTItem{display:flex;align-items:baseline;gap:3px}
-.bbTItem .bbNum{color:var(--text-secondary);font-weight:500;display:inline-block;text-align:right}
+.bbTItem .bbNum{font-weight:500;display:inline-block;text-align:right}
 .bbNum--hz{min-width:2.5ch}
 .bbNum--gps{min-width:2ch}
 .bbNum--drops{min-width:2ch}
@@ -268,9 +291,9 @@ body{
 .bbMenuPanel{
     position:fixed;
     top:44px;
-    right:12px;
+    right:var(--sp-md);
     background:var(--surface);
-    border-radius:12px;
+    border-radius:var(--sp-md);
     box-shadow:0 4px 20px rgba(0,0,0,0.15);
     min-width:180px;
     transform:scale(0.95);
@@ -284,8 +307,9 @@ body{
 .bbMenuItem{
     display:block;
     width:100%;
-    padding:14px 18px;
-    font-size:15px;
+    padding:var(--sp-md) var(--sp-lg);
+    font-size:18px;
+    font-weight:400;
     text-align:left;
     border:none;
     background:none;
@@ -317,12 +341,17 @@ body{
 
 <main class="bbApp">
     <section class="bbCard bbGCard">
-        <div class="bbGTop">
-            <div class="bbGTopLeft">
-                <div class="bbSpeedLine"><span class="bbSpeed bbNum" id="speed">0</span><span class="bbUnit">km/h</span></div>
-                <div class="bbManeuver" id="maneuver">IDLE</div>
+        <div class="bbGReadoutRow bbGReadoutRow--top">
+            <div class="bbGReadoutCol">
+                <div class="bbGReadoutVal bbManeuver" id="maneuver">IDLE</div>
             </div>
-            <div class="bbGTopRight"><span class="bbNum" id="session-time">0:00</span></div>
+            <div class="bbGDivider"></div>
+            <div class="bbGReadoutCol">
+                <div class="bbGReadoutVal bbNum"><span id="speed">0</span><span class="bbGUnit">km/h</span></div>
+                <div class="bbMaxRow">
+                    <span class="bbMaxItem"><span class="bbMaxVal bbNum" id="max-speed">0</span><span class="bbMaxLbl" id="max-speed-lbl">session max</span></span>
+                </div>
+            </div>
         </div>
 
         <div class="bbGPlotWrap">
@@ -340,27 +369,45 @@ body{
             <div class="bbGReadoutCol">
                 <div class="bbGReadoutLbl">Lat</div>
                 <div class="bbGReadoutVal bbNum" id="lat-g"><span class="bbSign">+</span><span class="bbVal">0.00</span><span class="bbGUnit">g</span></div>
+                <div class="bbMaxRow">
+                    <span class="bbMaxItem"><span class="bbMaxSign" id="sign-l">−</span><span class="bbMaxVal bbNum" id="max-l">0.00</span></span>
+                    <span class="bbMaxItem"><span class="bbMaxSign" id="sign-r">+</span><span class="bbMaxVal bbNum" id="max-r">0.00</span></span>
+                </div>
             </div>
             <div class="bbGDivider"></div>
             <div class="bbGReadoutCol">
                 <div class="bbGReadoutLbl">Long</div>
                 <div class="bbGReadoutVal bbNum" id="lon-g"><span class="bbSign">+</span><span class="bbVal">0.00</span><span class="bbGUnit">g</span></div>
+                <div class="bbMaxRow">
+                    <span class="bbMaxItem"><span class="bbMaxSign" id="sign-a">+</span><span class="bbMaxVal bbNum" id="max-a">0.00</span></span>
+                    <span class="bbMaxItem"><span class="bbMaxSign" id="sign-b">−</span><span class="bbMaxVal bbNum" id="max-b">0.00</span></span>
+                </div>
             </div>
-        </div>
-
-        <div class="bbGMax">
-            <div class="bbMini"><span class="bbMiniLbl">Max Lat L</span><span class="bbMiniVal bbNum" id="max-l">0.00g</span></div>
-            <div class="bbMini"><span class="bbMiniLbl">Max Lat R</span><span class="bbMiniVal bbNum" id="max-r">0.00g</span></div>
-            <div class="bbMini"><span class="bbMiniLbl">Max Acc</span><span class="bbMiniVal bbNum" id="max-a">0.00g</span></div>
-            <div class="bbMini"><span class="bbMiniLbl">Max Brk</span><span class="bbMiniVal bbNum" id="max-b">0.00g</span></div>
+            <div class="bbGDivider"></div>
+            <div class="bbGReadoutCol">
+                <div class="bbGReadoutLbl">Yaw</div>
+                <div class="bbGReadoutVal bbNum" id="yaw-main"><span class="bbSign">+</span><span class="bbYawPad"></span><span class="bbVal">0</span><span class="bbGUnit">°</span></div>
+                <div class="bbMaxRow">
+                    <span class="bbMaxItem"><span class="bbMaxSign" id="sign-yaw-l">−</span><span class="bbMaxVal bbNum" id="max-yaw-l">0</span></span>
+                    <span class="bbMaxItem"><span class="bbMaxSign" id="sign-yaw-r">+</span><span class="bbMaxVal bbNum" id="max-yaw-r">0</span></span>
+                </div>
+            </div>
         </div>
     </section>
 
     <div class="bbTelemetryStrip">
-        <span class="bbTItem"><span class="bbNum bbNum--hz" id="hz">30</span> Hz</span>
-        <span class="bbTItem">GPS <span class="bbNum bbNum--gps" id="gps-acc">2</span>m</span>
-        <span class="bbTItem">Drops <span class="bbNum bbNum--drops" id="drops">0</span></span>
-        <span class="bbTItem">Yaw <span class="bbNum bbNum--yaw" id="yaw">0</span>°</span>
+        <div class="bbTCluster">
+            <span class="bbTItem"><span class="bbNum" id="session-time">0:00</span></span>
+        </div>
+        <div class="bbTDivider"></div>
+        <div class="bbTCluster">
+            <span class="bbTItem"><span class="bbNum bbNum--hz" id="hz">30</span>Hz</span>
+            <span class="bbTItem"><span class="bbNum bbNum--drops" id="drops">0</span>drops</span>
+        </div>
+        <div class="bbTDivider"></div>
+        <div class="bbTCluster">
+            <span class="bbTItem">GPS <span class="bbNum bbNum--gps" id="gps-acc">2</span>m</span>
+        </div>
     </div>
 </main>
 
@@ -411,16 +458,18 @@ const MODE_COLORS = {
 
 function getModeColorsHex() {
     return {
-        0: isDark ? '#636366' : '#8e8e93',
+        0: isDark ? '#ffffff' : '#1c1c1e',
         1: isDark ? '#ffffff' : '#1c1c1e',
         2: '#ff3b30',
-        4: isDark ? '#636366' : '#8e8e93',
+        4: isDark ? '#ffffff' : '#1c1c1e',
         5: isDark ? '#ffffff' : '#1c1c1e',
         6: '#ff3b30'
     };
 }
 
 let currentModeColor = '#8e8e93';
+let isSettingAnyMax = false;
+let anyMaxTimeout = null;
 
 function catmullRom(p0, p1, p2, p3, t) {
     const t2 = t * t, t3 = t2 * t;
@@ -457,12 +506,27 @@ function addNoise(val, amount) { return val + (Math.random() - 0.5) * amount * 0
 let loopStartTime = Date.now();
 let sessionStart = Date.now();
 let rec = false, data = [], cnt = 0, drops = 0;
-let trail = [], maxL = 0, maxR = 0, maxA = 0, maxB = 0, peak = 0;
+let trail = [], maxL = 0, maxR = 0, maxA = 0, maxB = 0, maxYawL = 0, maxYawR = 0, peak = 0;
 let emaGx = 0, emaGy = 0, lastT = 0, speed_ema = 0;
 const EMA_TAU = 0.10;
-const TRAIL_DURATION_MS = 2500;
+const TRAIL_DURATION_MS = 4000;
 const TRAIL_MAX_POINTS = 60;
 const TRAIL_JITTER_THRESHOLD = 0.008;
+
+// G-envelope: track max magnitude in each angular direction
+const ENVELOPE_SEGMENTS = 72; // 5-degree resolution
+let gEnvelope = new Array(ENVELOPE_SEGMENTS).fill(0);
+
+function updateEnvelope(gx, gy) {
+    const mag = Math.sqrt(gx * gx + gy * gy);
+    if (mag < 0.02) return; // ignore noise near center
+    let angle = Math.atan2(gy, gx); // radians, -PI to PI
+    if (angle < 0) angle += Math.PI * 2; // convert to 0 to 2PI
+    const segment = Math.floor(angle / (Math.PI * 2) * ENVELOPE_SEGMENTS) % ENVELOPE_SEGMENTS;
+    if (mag > gEnvelope[segment]) {
+        gEnvelope[segment] = mag;
+    }
+}
 
 const SCALE_STEPS = [0.3, 0.5, 0.8, 1.0, 1.5, 2.0];
 let currentScale = 0.5;
@@ -557,10 +621,28 @@ function drawG() {
 
     ctx.clearRect(0, 0, size, size);
 
-    const ringColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
-    const axisColor = isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.18)';
+    // Draw G-envelope first (underneath everything)
+    const hasEnvelope = gEnvelope.some(v => v > 0.02);
+    if (hasEnvelope) {
+        ctx.beginPath();
+        for (let i = 0; i <= ENVELOPE_SEGMENTS; i++) {
+            const idx = i % ENVELOPE_SEGMENTS;
+            const angle = (idx / ENVELOPE_SEGMENTS) * Math.PI * 2;
+            const mag = gEnvelope[idx];
+            const px = cx + Math.cos(angle) * (mag / currentScale) * r;
+            const py = cy - Math.sin(angle) * (mag / currentScale) * r;
+            if (i === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fillStyle = isDark ? '#000000' : '#ffffff';
+        ctx.fill();
+    }
 
-    // Ring lines (4 rings, drawn first so axes are on top)
+    const ringColor = isDark ? 'rgba(255,255,255,0.33)' : 'rgba(0,0,0,0.33)';
+    const axisColor = isDark ? 'rgba(255,255,255,0.66)' : 'rgba(0,0,0,0.66)';
+
+    // Ring lines (4 rings)
     ctx.lineWidth = 1;
     ctx.strokeStyle = ringColor;
     [0.2, 0.4, 0.6, 0.8].forEach((f) => {
@@ -569,7 +651,7 @@ function drawG() {
         ctx.stroke();
     });
 
-    // Axis lines (thicker, drawn after rings so they appear on top)
+    // Axis lines (thicker, on top of rings)
     ctx.strokeStyle = axisColor;
     ctx.lineWidth = 2.5;
     ctx.beginPath();
@@ -593,8 +675,9 @@ function drawG() {
             const p0 = displayTrail[i - 1];
             const p1 = displayTrail[i];
             const age = (now - p1.t) / TRAIL_DURATION_MS;
-            const alpha = Math.max(0.05, 0.35 * (1 - age * 0.85));
-            ctx.strokeStyle = hexToRgba(currentModeColor, alpha);
+            const alpha = Math.max(0.1, 0.6 * (1 - age * 0.8));
+            const trailColor = isSettingAnyMax ? '#ff9500' : currentModeColor;
+            ctx.strokeStyle = hexToRgba(trailColor, alpha);
             ctx.lineWidth = 1.5 - age * 0.6;
             ctx.beginPath();
             const x0 = cx + (p0.x / currentScale) * r;
@@ -645,14 +728,45 @@ function updateModeDisplay(mo) {
     el.style.color = color;
 }
 
-function updateReadouts(lat, lon) {
+function updateReadouts(lat, lon, yawDeg) {
     const latFmt = fmtGSigned(lat);
     const lonFmt = fmtGSigned(lon);
+    const yawSign = yawDeg >= 0 ? '+' : '−';
+    const yawVal = Math.round(Math.abs(yawDeg));
+    const yawPad = yawVal < 10 ? '<span class="bbYawPad">0</span>' : '';
     $('lat-g').innerHTML = `<span class="bbSign">${latFmt.sign}</span><span class="bbVal">${latFmt.num}</span><span class="bbGUnit">g</span>`;
     $('lon-g').innerHTML = `<span class="bbSign">${lonFmt.sign}</span><span class="bbVal">${lonFmt.num}</span><span class="bbGUnit">g</span>`;
+    $('yaw-main').innerHTML = `<span class="bbSign">${yawSign}</span>${yawPad}<span class="bbVal">${yawVal}</span><span class="bbGUnit">°</span>`;
 }
 
 let peakHighlightTimeout = null;
+let maxLTimeout = null, maxRTimeout = null, maxATimeout = null, maxBTimeout = null, maxYawLTimeout = null, maxYawRTimeout = null;
+
+function showNewMax(elId, signId, value, formatFn, timeoutRef, mainReadoutId) {
+    // Skip max highlighting during first 10 seconds
+    if (Date.now() - sessionStart < 10000) {
+        $(elId).textContent = formatFn(value);
+        return;
+    }
+    const el = $(elId);
+    const signEl = signId ? $(signId) : null;
+    const mainEl = mainReadoutId ? $(mainReadoutId) : null;
+    el.textContent = 'max';
+    el.classList.add('setting');
+    if (signEl) signEl.classList.add('hidden');
+    if (mainEl) mainEl.classList.add('peak');
+    isSettingAnyMax = true;
+    if (anyMaxTimeout) clearTimeout(anyMaxTimeout);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
+        el.textContent = formatFn(value);
+        el.classList.remove('setting');
+        if (signEl) signEl.classList.remove('hidden');
+        if (mainEl) mainEl.classList.remove('peak');
+    }, 900);
+    anyMaxTimeout = setTimeout(() => { isSettingAnyMax = false; }, 900);
+}
+const maxLRef = {current:null}, maxRRef = {current:null}, maxARef = {current:null}, maxBRef = {current:null}, maxYawLRef = {current:null}, maxYawRRef = {current:null};
 
 function simulate() {
     const elapsed = Date.now() - loopStartTime;
@@ -660,7 +774,8 @@ function simulate() {
     const sp = addNoise(auto.speed, 2);
     const longRaw = addNoise(auto.lonG, 0.02);
     const latRaw = addNoise(auto.latG, 0.02);
-    const yawDeg = Math.abs(addNoise(auto.yawDeg, 1));
+    const yawDegSigned = addNoise(auto.yawDeg, 1);
+    const yawDeg = Math.abs(yawDegSigned);
     const yawRad = auto.yawDeg * Math.PI / 180;
     const speedMs = sp / 3.6;
 
@@ -683,22 +798,44 @@ function simulate() {
     const lon = mag < noise ? 0 : emaGy;
 
     const speedEl = $('speed');
+    const maxSpeedEl = $('max-speed');
+    const maxSpeedLbl = $('max-speed-lbl');
     if (dspd > peak) {
         peak = dspd;
-        speedEl.classList.add('peak');
-        if (peakHighlightTimeout) clearTimeout(peakHighlightTimeout);
-        peakHighlightTimeout = setTimeout(() => speedEl.classList.remove('peak'), 900);
+        // Skip max highlighting during first 10 seconds
+        if (Date.now() - sessionStart >= 10000) {
+            speedEl.classList.add('peak');
+            maxSpeedEl.textContent = 'setting new max';
+            maxSpeedEl.classList.add('setting');
+            maxSpeedLbl.style.display = 'none';
+            isSettingAnyMax = true;
+            if (anyMaxTimeout) clearTimeout(anyMaxTimeout);
+            if (peakHighlightTimeout) clearTimeout(peakHighlightTimeout);
+            peakHighlightTimeout = setTimeout(() => {
+                speedEl.classList.remove('peak');
+                maxSpeedEl.textContent = peak;
+                maxSpeedEl.classList.remove('setting');
+                maxSpeedLbl.style.display = '';
+            }, 900);
+            anyMaxTimeout = setTimeout(() => { isSettingAnyMax = false; }, 900);
+        } else {
+            maxSpeedEl.textContent = peak;
+        }
     }
     speedEl.textContent = dspd;
 
     updateModeDisplay(mo);
-    updateReadouts(lat, lon);
-    $('yaw').textContent = Math.round(yawDeg);
+    updateReadouts(lat, lon, yawDegSigned);
 
-    if (latRaw < 0 && Math.abs(latRaw) > maxL) { maxL = Math.abs(latRaw); $('max-l').textContent = maxL.toFixed(2) + 'g'; }
-    if (latRaw > 0 && latRaw > maxR) { maxR = latRaw; $('max-r').textContent = maxR.toFixed(2) + 'g'; }
-    if (longRaw > 0 && longRaw > maxA) { maxA = longRaw; $('max-a').textContent = maxA.toFixed(2) + 'g'; }
-    if (longRaw < 0 && Math.abs(longRaw) > maxB) { maxB = Math.abs(longRaw); $('max-b').textContent = maxB.toFixed(2) + 'g'; }
+    if (latRaw < 0 && Math.abs(latRaw) > maxL) { maxL = Math.abs(latRaw); showNewMax('max-l', 'sign-l', maxL, v => v.toFixed(2), maxLRef, 'lat-g'); }
+    if (latRaw > 0 && latRaw > maxR) { maxR = latRaw; showNewMax('max-r', 'sign-r', maxR, v => v.toFixed(2), maxRRef, 'lat-g'); }
+    if (longRaw > 0 && longRaw > maxA) { maxA = longRaw; showNewMax('max-a', 'sign-a', maxA, v => v.toFixed(2), maxARef, 'lon-g'); }
+    if (longRaw < 0 && Math.abs(longRaw) > maxB) { maxB = Math.abs(longRaw); showNewMax('max-b', 'sign-b', maxB, v => v.toFixed(2), maxBRef, 'lon-g'); }
+    if (yawDegSigned < 0 && Math.abs(yawDegSigned) > maxYawL) { maxYawL = Math.abs(yawDegSigned); showNewMax('max-yaw-l', 'sign-yaw-l', maxYawL, v => Math.round(v), maxYawLRef, 'yaw-main'); }
+    if (yawDegSigned > 0 && yawDegSigned > maxYawR) { maxYawR = yawDegSigned; showNewMax('max-yaw-r', 'sign-yaw-r', maxYawR, v => Math.round(v), maxYawRRef, 'yaw-main'); }
+
+    // Update G-envelope with current values
+    updateEnvelope(lat, lon);
 
     if (speed_ema >= 2) {
         updateScale(lat, lon);
@@ -761,10 +898,15 @@ $('menu-export').onclick = () => {
 
 $('menu-clear').onclick = () => {
     $('menu-overlay').classList.remove('open');
-    maxL = maxR = maxA = maxB = peak = drops = 0;
-    $('max-l').textContent = $('max-r').textContent = $('max-a').textContent = $('max-b').textContent = '0.00g';
+    maxL = maxR = maxA = maxB = maxYawL = maxYawR = peak = drops = 0;
+    $('max-l').textContent = $('max-r').textContent = $('max-a').textContent = $('max-b').textContent = '0.00';
+    $('max-yaw-l').textContent = $('max-yaw-r').textContent = '0';
+    $('max-speed').textContent = '0';
+    ['max-l','max-r','max-a','max-b','max-yaw-l','max-yaw-r'].forEach(id => $(id).classList.remove('setting'));
+    ['sign-l','sign-r','sign-a','sign-b','sign-yaw-l','sign-yaw-r'].forEach(id => $(id).classList.remove('hidden'));
     $('speed').classList.remove('peak');
     trail = []; magHist = []; currentScale = SCALE_STEPS[0];
+    gEnvelope = new Array(ENVELOPE_SEGMENTS).fill(0);
     $('range-val').textContent = 'Range ±' + currentScale.toFixed(1) + 'g';
     emaGx = emaGy = 0; sessionStart = Date.now(); loopStartTime = Date.now();
 };
