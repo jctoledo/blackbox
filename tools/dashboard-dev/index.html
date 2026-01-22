@@ -1,405 +1,378 @@
 <!DOCTYPE html>
-<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
-<meta name="apple-mobile-web-app-capable" content="yes"><title>Blackbox</title>
+<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><title>Blackbox</title>
 <style>
-:root {
-    --bg: #e8ecef;
-    --surface: #e8ecef;
-    --shadow-dark: #c5c9cc;
-    --shadow-light: #ffffff;
-    --text-primary: #2c3e50;
-    --text-secondary: #7f8c8d;
-    --text-muted: #a0aab0;
-    --accent: #3498db;
-    --accent-soft: rgba(52, 152, 219, 0.15);
-    --radius: 24px;
-    --radius-sm: 16px;
-    --radius-pill: 50px;
+:root{
+    --bg:#f2f2f7;
+    --surface:#ffffff;
+    --text:#1c1c1e;
+    --text-secondary:#48484a;
+    --text-tertiary:#8e8e93;
+    --divider:rgba(0,0,0,.08);
+    --ok:#34c759;
+    --amber:#ff9500;
+    --red:#ff3b30;
+    --mode-idle:#8e8e93;
+    --mode-accel:#1c1c1e;
+    --mode-brake:#ff3b30;
+}
+.dark{
+    --bg:#000000;
+    --surface:#1c1c1e;
+    --text:#ffffff;
+    --text-secondary:#aeaeb2;
+    --text-tertiary:#636366;
+    --divider:rgba(255,255,255,.08);
+    --mode-idle:#636366;
+    --mode-accel:#ffffff;
+    --mode-brake:#ff3b30;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+    font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display',system-ui,sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    height:100vh;
+    height:100dvh;
+    display:flex;
+    flex-direction:column;
+    -webkit-user-select:none;
+    user-select:none;
+    overflow:hidden;
+    transition:background 0.3s,color 0.3s;
 }
 
-* { margin: 0; padding: 0; box-sizing: border-box; }
+/* ============================================
+   CLEAN RESET: bb-prefixed classes only
+   ============================================ */
 
-body {
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
-    background: var(--bg);
-    color: var(--text-primary);
-    height: 100vh;
-    height: 100dvh;
-    display: flex;
-    flex-direction: column;
-    -webkit-user-select: none;
-    user-select: none;
-    overflow: hidden;
-    padding: 24px;
-    gap: 24px;
+.bbNum{
+    font-variant-numeric:tabular-nums;
+    font-feature-settings:"tnum" 1,"lnum" 1;
 }
 
-/* Neumorphic shadow mixins */
-.neu-raised {
-    background: var(--surface);
-    border-radius: var(--radius);
-    box-shadow:
-        8px 8px 16px var(--shadow-dark),
-        -8px -8px 16px var(--shadow-light);
+/* HEADER */
+.bbTopbar{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:14px 16px;
+    background:transparent;
+    flex-shrink:0;
+}
+.bbBrandToggle{
+    background:none;
+    border:0;
+    padding:0;
+    display:flex;
+    align-items:baseline;
+    gap:8px;
+    cursor:pointer;
+    color:inherit;
+    font-family:inherit;
+}
+.bbBrand{font-size:11px;font-weight:600;opacity:.55;letter-spacing:.03em}
+.bbModeLabel{font-size:11px;font-weight:400;opacity:.40;letter-spacing:.03em}
+.bbModeIcon{font-size:10px;opacity:.40}
+.bbTopRight{
+    display:flex;
+    align-items:center;
+    gap:10px;
+}
+.bbStatusCluster{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    opacity:.55;
+    font-size:10px;
+    letter-spacing:.03em;
+}
+.bbStatusItem{display:flex;align-items:center;gap:4px}
+.bbStatusItem .bbHigh{margin-right:2px}
+.bbDot{width:6px;height:6px;border-radius:50%;background:var(--ok);display:inline-block;opacity:.9;margin-right:2px}
+.bbHigh{color:var(--ok);font-weight:600}
+.bbKebab{background:none;border:0;padding:4px;font-size:24px;line-height:1;opacity:.6;cursor:pointer;color:inherit}
+
+/* APP CONTAINER */
+.bbApp{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    padding:0 12px 8px;
+    min-height:0;
 }
 
-.neu-inset {
-    background: var(--surface);
-    border-radius: var(--radius);
-    box-shadow:
-        inset 6px 6px 12px var(--shadow-dark),
-        inset -6px -6px 12px var(--shadow-light);
+/* CARD */
+.bbCard{
+    background:var(--surface);
+    border-radius:16px;
+    overflow:hidden;
+}
+.bbGCard{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    margin-bottom:4px;
 }
 
-.neu-flat {
-    background: linear-gradient(145deg, #f0f4f7, #dce0e3);
-    border-radius: var(--radius);
-    box-shadow:
-        6px 6px 12px var(--shadow-dark),
-        -6px -6px 12px var(--shadow-light);
+/* TOP ROW */
+.bbGTop{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    padding:12px 18px 6px;
+    flex-shrink:0;
+}
+.bbGTopLeft{}
+.bbSpeedLine{display:flex;align-items:baseline;gap:4px}
+.bbSpeed{font-size:22px;font-weight:600;opacity:.75;transition:color 0.3s,opacity 0.3s}
+.bbSpeed.peak{color:var(--amber);opacity:1}
+.bbUnit{font-size:12px;opacity:.45}
+.bbManeuver{font-size:14px;font-weight:600;margin-top:4px;min-width:7ch;transition:color 0.15s}
+.bbGTopRight{font-size:11px;opacity:.50}
+
+/* PLOT AREA */
+.bbGPlotWrap{
+    display:flex;
+    justify-content:center;
+    padding:2px 18px 0;
+}
+.bbGPlotFrame{
+    position:relative;
+    width:min(560px, 100%);
+    aspect-ratio:1/1;
+}
+.bbGPlot{
+    display:block;
+    width:100%;
+    height:100%;
 }
 
-.neu-btn {
-    background: linear-gradient(145deg, #f0f4f7, #dce0e3);
-    border-radius: var(--radius-pill);
-    box-shadow:
-        4px 4px 8px var(--shadow-dark),
-        -4px -4px 8px var(--shadow-light);
-    border: none;
-    cursor: pointer;
-    transition: all 0.2s ease;
+/* AXIS LABELS */
+.bbAxis{
+    position:absolute;
+    font-size:10px;
+    font-weight:500;
+    letter-spacing:.02em;
+    text-transform:uppercase;
+    opacity:.50;
+    color:var(--text-tertiary);
+    pointer-events:none;
+}
+.bbAxis--top{top:4px;left:50%;transform:translateX(-50%)}
+.bbAxis--bottom{bottom:4px;left:50%;transform:translateX(-50%)}
+.bbAxis--left{left:6px;top:50%;transform:translateY(-50%)}
+.bbAxis--right{right:6px;top:50%;transform:translateY(-50%)}
+
+.bbPlotMeta{
+    position:absolute;
+    top:6px;
+    right:8px;
+    font-size:10px;
+    color:var(--text-tertiary);
+    opacity:.50;
 }
 
-.neu-btn:active {
-    box-shadow:
-        inset 4px 4px 8px var(--shadow-dark),
-        inset -4px -4px 8px var(--shadow-light);
+/* READOUT ROW */
+.bbGReadoutRow{
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    gap:0;
+    padding:16px 18px;
+    flex-shrink:0;
+    margin:auto 0;
+}
+.bbGReadoutCol{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    text-align:center;
+}
+.bbGReadoutLbl{
+    font-size:11px;
+    letter-spacing:.02em;
+    text-transform:uppercase;
+    opacity:.55;
+    color:var(--text-tertiary);
+}
+.bbGReadoutVal{
+    margin-top:8px;
+    font-size:34px;
+    font-weight:600;
+    line-height:1.0;
+    min-width:8ch;
+    display:inline-flex;
+    align-items:baseline;
+    justify-content:center;
+    gap:2px;
+}
+.bbSign{display:inline-block;width:1.2ch;text-align:right;opacity:.9;margin-right:2px}
+.bbGUnit{font-size:.5em;opacity:.55;margin-left:2px}
+.bbGDivider{
+    width:1px;
+    height:48px;
+    background:var(--divider);
+    margin:0 12px;
+    flex-shrink:0;
 }
 
-/* Header - minimal */
-.header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0 8px;
-    flex-shrink: 0;
+/* MAX STRIP */
+.bbGMax{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:8px 16px;
+    padding:16px 24px 20px;
+    border-top:1px solid var(--divider);
+    flex-shrink:0;
 }
-
-.logo {
-    font-size: 13px;
-    font-weight: 600;
-    letter-spacing: 3px;
-    color: var(--text-muted);
-    text-transform: uppercase;
+.bbMini{
+    display:grid;
+    grid-template-columns:auto 7ch;
+    column-gap:10px;
+    align-items:baseline;
 }
+.bbMiniLbl{font-size:11px;color:var(--text-tertiary);opacity:.75;white-space:nowrap}
+.bbMiniVal{font-size:13px;font-weight:600;color:var(--text-secondary);text-align:left;justify-self:start}
 
-.status-row {
-    display: flex;
-    align-items: center;
-    gap: 16px;
+/* TELEMETRY STRIP */
+.bbTelemetryStrip{
+    display:flex;
+    gap:14px;
+    justify-content:center;
+    padding:14px 0 10px;
+    font-size:11px;
+    color:var(--text-tertiary);
+    flex-shrink:0;
 }
+.bbTItem{display:flex;align-items:baseline;gap:3px}
+.bbTItem .bbNum{color:var(--text-secondary);font-weight:500;display:inline-block;text-align:right}
+.bbNum--hz{min-width:2.5ch}
+.bbNum--gps{min-width:2ch}
+.bbNum--drops{min-width:2ch}
+.bbNum--yaw{min-width:3ch}
 
-.status-pill {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 16px;
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--text-secondary);
-    background: linear-gradient(145deg, #f0f4f7, #dce0e3);
-    border-radius: var(--radius-pill);
-    box-shadow:
-        3px 3px 6px var(--shadow-dark),
-        -3px -3px 6px var(--shadow-light);
+/* MENU */
+.bbMenuOverlay{
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,0.25);
+    opacity:0;
+    visibility:hidden;
+    transition:opacity 0.15s ease;
+    z-index:100;
 }
-
-.status-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--accent);
-    box-shadow: 0 0 8px var(--accent);
+.dark .bbMenuOverlay{background:rgba(0,0,0,0.5)}
+.bbMenuOverlay.open{opacity:1;visibility:visible}
+.bbMenuPanel{
+    position:fixed;
+    top:44px;
+    right:12px;
+    background:var(--surface);
+    border-radius:12px;
+    box-shadow:0 4px 20px rgba(0,0,0,0.15);
+    min-width:180px;
+    transform:scale(0.95);
+    opacity:0;
+    transition:transform 0.15s ease,opacity 0.15s ease;
+    z-index:101;
+    overflow:hidden;
 }
-
-.timer {
-    font-variant-numeric: tabular-nums;
-    letter-spacing: 1px;
+.dark .bbMenuPanel{box-shadow:0 4px 20px rgba(0,0,0,0.4)}
+.bbMenuOverlay.open .bbMenuPanel{transform:scale(1);opacity:1}
+.bbMenuItem{
+    display:block;
+    width:100%;
+    padding:14px 18px;
+    font-size:15px;
+    text-align:left;
+    border:none;
+    background:none;
+    color:var(--text);
+    cursor:pointer;
+    border-bottom:0.5px solid var(--divider);
 }
-
-/* Main content area */
-.main-content {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 24px;
-    overflow: hidden;
-}
-
-/* Speed Card - Hero element */
-.speed-card {
-    flex: 0 0 auto;
-    padding: 48px 32px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-}
-
-.speed-value {
-    font-size: clamp(96px, 25vw, 140px);
-    font-weight: 200;
-    letter-spacing: -4px;
-    line-height: 0.9;
-    color: var(--text-primary);
-    font-variant-numeric: tabular-nums;
-}
-
-.speed-unit {
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--text-muted);
-    letter-spacing: 4px;
-    text-transform: uppercase;
-}
-
-.maneuver {
-    margin-top: 16px;
-    font-size: 16px;
-    font-weight: 600;
-    letter-spacing: 3px;
-    text-transform: uppercase;
-    color: var(--accent);
-    opacity: 0.8;
-}
-
-/* G-Force Card */
-.gforce-card {
-    flex: 1;
-    min-height: 200px;
-    position: relative;
-    overflow: hidden;
-}
-
-.gforce-canvas {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-}
-
-.gforce-label {
-    position: absolute;
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--text-muted);
-    letter-spacing: 2px;
-    z-index: 5;
-}
-
-.gforce-label.top { top: 20px; left: 50%; transform: translateX(-50%); }
-.gforce-label.bottom { bottom: 20px; left: 50%; transform: translateX(-50%); }
-.gforce-label.left { left: 20px; top: 50%; transform: translateY(-50%); }
-.gforce-label.right { right: 20px; top: 50%; transform: translateY(-50%); }
-
-.gforce-value {
-    position: absolute;
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--text-secondary);
-    font-variant-numeric: tabular-nums;
-    z-index: 5;
-}
-
-.gforce-value.top { top: 36px; left: 50%; transform: translateX(-50%); }
-.gforce-value.bottom { bottom: 36px; left: 50%; transform: translateX(-50%); }
-.gforce-value.left { left: 20px; top: calc(50% + 18px); transform: translateY(-50%); }
-.gforce-value.right { right: 20px; top: calc(50% + 18px); transform: translateY(-50%); }
-
-.clear-btn {
-    position: absolute;
-    top: 16px;
-    left: 16px;
-    padding: 10px 20px;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 2px;
-    color: var(--text-muted);
-    z-index: 10;
-    font-family: inherit;
-}
-
-/* Metrics Row */
-.metrics-row {
-    display: flex;
-    gap: 16px;
-    flex-shrink: 0;
-}
-
-.metric-card {
-    flex: 1;
-    padding: 20px 16px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-}
-
-.metric-value {
-    font-size: 22px;
-    font-weight: 300;
-    color: var(--text-primary);
-    font-variant-numeric: tabular-nums;
-}
-
-.metric-label {
-    font-size: 10px;
-    font-weight: 600;
-    color: var(--text-muted);
-    letter-spacing: 2px;
-    text-transform: uppercase;
-}
-
-/* Controls Row */
-.controls-row {
-    display: flex;
-    gap: 16px;
-    flex-shrink: 0;
-}
-
-.control-btn {
-    flex: 1;
-    padding: 18px 24px;
-    font-size: 13px;
-    font-weight: 600;
-    letter-spacing: 2px;
-    color: var(--text-secondary);
-    font-family: inherit;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-}
-
-.control-btn.recording {
-    color: #e74c3c;
-}
-
-.control-btn .dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: currentColor;
-}
-
-/* Peak display */
-.peak-row {
-    display: flex;
-    align-items: baseline;
-    gap: 12px;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-}
-
-.peak-row.visible {
-    opacity: 1;
-}
-
-.peak-label {
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--text-muted);
-    letter-spacing: 2px;
-}
-
-.peak-value {
-    font-size: 24px;
-    font-weight: 300;
-    color: var(--text-secondary);
-    font-variant-numeric: tabular-nums;
-}
-
-/* Hidden elements */
-.hidden { display: none !important; }
+.bbMenuItem:last-child{border-bottom:none}
+.bbMenuItem:active{background:var(--bg)}
+.bbMenuItem.destructive{color:var(--red)}
 </style></head>
 <body>
 
-<!-- Header -->
-<div class="header">
-    <div class="logo">Blackbox</div>
-    <div class="status-row">
-        <div class="status-pill">
-            <span class="status-dot"></span>
-            <span class="timer" id="timer">00:00</span>
+<header class="bbTopbar">
+    <button class="bbBrandToggle" id="brandToggle" aria-label="Toggle theme">
+        <span class="bbBrand">Blackbox</span>
+        <span class="bbModeLabel" id="modeLabel">Bright</span>
+        <span class="bbModeIcon" aria-hidden="true">◐</span>
+    </button>
+    <div class="bbTopRight">
+        <div class="bbStatusCluster">
+            <span class="bbStatusItem"><span class="bbHigh">High</span>&nbsp;Confidence</span>
+            <span class="bbStatusItem"><span class="bbDot"></span>GPS</span>
+            <span class="bbStatusItem"><span class="bbDot"></span>IMU</span>
         </div>
+        <button class="bbKebab" id="menu-btn" aria-label="Menu">⋮</button>
     </div>
-</div>
+</header>
 
-<!-- Main Content -->
-<div class="main-content">
-
-    <!-- Speed Card -->
-    <div class="speed-card neu-raised">
-        <div class="peak-row" id="peak-row">
-            <span class="peak-label">PEAK</span>
-            <span class="peak-value" id="peak-val">0</span>
+<main class="bbApp">
+    <section class="bbCard bbGCard">
+        <div class="bbGTop">
+            <div class="bbGTopLeft">
+                <div class="bbSpeedLine"><span class="bbSpeed bbNum" id="speed">0</span><span class="bbUnit">km/h</span></div>
+                <div class="bbManeuver" id="maneuver">IDLE</div>
+            </div>
+            <div class="bbGTopRight"><span class="bbNum" id="session-time">0:00</span></div>
         </div>
-        <div class="speed-value" id="speed">0</div>
-        <div class="speed-unit">km/h</div>
-        <div class="maneuver" id="maneuver">Idle</div>
+
+        <div class="bbGPlotWrap">
+            <div class="bbGPlotFrame">
+                <div class="bbAxis bbAxis--top">Brake</div>
+                <div class="bbAxis bbAxis--bottom">Accel</div>
+                <div class="bbAxis bbAxis--left">Left</div>
+                <div class="bbAxis bbAxis--right">Right</div>
+                <div class="bbPlotMeta" id="range-val">Range ±0.5g</div>
+                <canvas class="bbGPlot" id="gcanvas"></canvas>
+            </div>
+        </div>
+
+        <div class="bbGReadoutRow">
+            <div class="bbGReadoutCol">
+                <div class="bbGReadoutLbl">Lat</div>
+                <div class="bbGReadoutVal bbNum" id="lat-g"><span class="bbSign">+</span><span class="bbVal">0.00</span><span class="bbGUnit">g</span></div>
+            </div>
+            <div class="bbGDivider"></div>
+            <div class="bbGReadoutCol">
+                <div class="bbGReadoutLbl">Long</div>
+                <div class="bbGReadoutVal bbNum" id="lon-g"><span class="bbSign">+</span><span class="bbVal">0.00</span><span class="bbGUnit">g</span></div>
+            </div>
+        </div>
+
+        <div class="bbGMax">
+            <div class="bbMini"><span class="bbMiniLbl">Max Lat L</span><span class="bbMiniVal bbNum" id="max-l">0.00g</span></div>
+            <div class="bbMini"><span class="bbMiniLbl">Max Lat R</span><span class="bbMiniVal bbNum" id="max-r">0.00g</span></div>
+            <div class="bbMini"><span class="bbMiniLbl">Max Acc</span><span class="bbMiniVal bbNum" id="max-a">0.00g</span></div>
+            <div class="bbMini"><span class="bbMiniLbl">Max Brk</span><span class="bbMiniVal bbNum" id="max-b">0.00g</span></div>
+        </div>
+    </section>
+
+    <div class="bbTelemetryStrip">
+        <span class="bbTItem"><span class="bbNum bbNum--hz" id="hz">30</span> Hz</span>
+        <span class="bbTItem">GPS <span class="bbNum bbNum--gps" id="gps-acc">2</span>m</span>
+        <span class="bbTItem">Drops <span class="bbNum bbNum--drops" id="drops">0</span></span>
+        <span class="bbTItem">Yaw <span class="bbNum bbNum--yaw" id="yaw">0</span>°</span>
     </div>
+</main>
 
-    <!-- G-Force Card -->
-    <div class="gforce-card neu-inset">
-        <button class="clear-btn neu-btn" id="clear-btn">CLEAR</button>
-        <span class="gforce-label top">BRAKE</span>
-        <span class="gforce-label bottom">ACCEL</span>
-        <span class="gforce-label left">L</span>
-        <span class="gforce-label right">R</span>
-        <span class="gforce-value top" id="maxB">0.00</span>
-        <span class="gforce-value bottom" id="maxA">0.00</span>
-        <span class="gforce-value left" id="maxL">0.00</span>
-        <span class="gforce-value right" id="maxR">0.00</span>
-        <canvas class="gforce-canvas" id="canvas"></canvas>
+<div class="bbMenuOverlay" id="menu-overlay">
+    <div class="bbMenuPanel">
+        <button class="bbMenuItem" id="menu-rec">Start Recording</button>
+        <button class="bbMenuItem" id="menu-export">Export CSV</button>
+        <button class="bbMenuItem destructive" id="menu-clear">Clear Session</button>
     </div>
-
-    <!-- Metrics -->
-    <div class="metrics-row">
-        <div class="metric-card neu-flat">
-            <div class="metric-value" id="latg">0.00</div>
-            <div class="metric-label">Lat G</div>
-        </div>
-        <div class="metric-card neu-flat">
-            <div class="metric-value" id="lng">0.00</div>
-            <div class="metric-label">Lon G</div>
-        </div>
-        <div class="metric-card neu-flat">
-            <div class="metric-value" id="yaw">0</div>
-            <div class="metric-label">Yaw</div>
-        </div>
-        <div class="metric-card neu-flat">
-            <div class="metric-value" id="hz">0</div>
-            <div class="metric-label">Hz</div>
-        </div>
-    </div>
-
-    <!-- Controls -->
-    <div class="controls-row">
-        <button class="control-btn neu-btn" id="rec">
-            <span class="dot"></span>
-            REC
-        </button>
-        <button class="control-btn neu-btn" id="exp">
-            EXPORT
-        </button>
-    </div>
-
 </div>
 
 <script>
-// === CANYON DRIVE SIMULATION ===
 const CANYON_KEYFRAMES = [
     [0,      55,    0.15,  0.05,  3],
     [2000,   70,    0.30,  0.02,  1],
@@ -423,9 +396,31 @@ const CANYON_KEYFRAMES = [
     [28000,  65,    0.05,  -0.42, -32],
     [30000,  55,    0.15,  0.05,  3],
 ];
-
 const LOOP_DURATION = 30000;
+
 const $ = id => document.getElementById(id);
+const MODES = {0:'IDLE', 1:'ACCEL', 2:'BRAKE', 4:'CORNER', 5:'ACCEL', 6:'BRAKE'};
+const MODE_COLORS = {
+    0: 'var(--mode-idle)',
+    1: 'var(--mode-accel)',
+    2: 'var(--mode-brake)',
+    4: 'var(--mode-idle)',
+    5: 'var(--mode-accel)',
+    6: 'var(--mode-brake)'
+};
+
+function getModeColorsHex() {
+    return {
+        0: isDark ? '#636366' : '#8e8e93',
+        1: isDark ? '#ffffff' : '#1c1c1e',
+        2: '#ff3b30',
+        4: isDark ? '#636366' : '#8e8e93',
+        5: isDark ? '#ffffff' : '#1c1c1e',
+        6: '#ff3b30'
+    };
+}
+
+let currentModeColor = '#8e8e93';
 
 function catmullRom(p0, p1, p2, p3, t) {
     const t2 = t * t, t3 = t2 * t;
@@ -457,19 +452,21 @@ function getAutoValues(timeMs) {
     };
 }
 
-function addNoise(val, amount) { return val + (Math.random() - 0.5) * amount * 0.2; }
+function addNoise(val, amount) { return val + (Math.random() - 0.5) * amount * 0.15; }
 
-// State
 let loopStartTime = Date.now();
 let sessionStart = Date.now();
-let rec = false, data = [], cnt = 0;
-let trail = [], maxL = 0, maxR = 0, maxA = 0, maxB = 0;
-let speed_ema = 0, displayedPeak = 0, sessionPeak = 0;
-let emaGx = 0, emaGy = 0, lastProcessTime = 0;
+let rec = false, data = [], cnt = 0, drops = 0;
+let trail = [], maxL = 0, maxR = 0, maxA = 0, maxB = 0, peak = 0;
+let emaGx = 0, emaGy = 0, lastT = 0, speed_ema = 0;
 const EMA_TAU = 0.10;
+const TRAIL_DURATION_MS = 2500;
+const TRAIL_MAX_POINTS = 60;
+const TRAIL_JITTER_THRESHOLD = 0.008;
 
-// Mode detection
-const MANEUVERS = {0:'Idle', 1:'Accelerating', 2:'Braking', 4:'Cornering', 5:'Corner Exit', 6:'Trail Braking'};
+const SCALE_STEPS = [0.3, 0.5, 0.8, 1.0, 1.5, 2.0];
+let currentScale = 0.5;
+
 let config = { acc_thr: 0.22, acc_exit: 0.11, brake_thr: 0.35, brake_exit: 0.17, lat_thr: 0.28, lat_exit: 0.14, yaw_thr: 0.10, min_speed: 3.0, alpha: 0.35 };
 let emaLat = 0, emaYaw = 0, inAccel = false, inBrake = false, inCorner = false;
 
@@ -488,222 +485,290 @@ function classifyMode(lonG, latG, yawRad, speedMs) {
     return mode;
 }
 
-// Canvas
-const cv = $('canvas');
+let isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+function applyTheme() {
+    document.body.classList.toggle('dark', isDark);
+    $('modeLabel').textContent = isDark ? 'Dark' : 'Bright';
+}
+applyTheme();
+
+$('brandToggle').onclick = () => { isDark = !isDark; applyTheme(); };
+
+const cv = $('gcanvas');
 const ctx = cv.getContext('2d');
 
-function resizeCanvas() {
-    const card = cv.parentElement;
-    const rect = card.getBoundingClientRect();
-    cv.width = rect.width * window.devicePixelRatio;
-    cv.height = rect.height * window.devicePixelRatio;
+function resize() {
+    const frame = cv.parentElement;
+    const rect = frame.getBoundingClientRect();
+    const size = Math.min(rect.width, rect.height);
+    cv.width = size * devicePixelRatio;
+    cv.height = size * devicePixelRatio;
+    cv.style.width = size + 'px';
+    cv.style.height = size + 'px';
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    ctx.scale(devicePixelRatio, devicePixelRatio);
 }
-resizeCanvas();
-window.addEventListener('resize', resizeCanvas);
+resize();
+window.addEventListener('resize', resize);
 
-// Auto-zoom
-let magnitudeHistory = [], currentMaxG = 0.5;
-const PEAK_WINDOW_MS = 800, MIN_MAX_G = 0.2, MAX_MAX_G = 2.0;
-
-function updateAutoZoom(gx, gy) {
+let magHist = [];
+function updateScale(gx, gy) {
     const now = Date.now();
-    const magnitude = Math.sqrt(gx * gx + gy * gy);
-    magnitudeHistory.push({ time: now, mag: magnitude });
-    magnitudeHistory = magnitudeHistory.filter(h => now - h.time < PEAK_WINDOW_MS);
-    const m_peak = Math.max(...magnitudeHistory.map(h => h.mag), 0.05);
-    const targetMaxG = Math.max(m_peak / (2/3), MIN_MAX_G);
-    const ratio = targetMaxG / currentMaxG;
-    if (ratio > 1.04) currentMaxG += (targetMaxG - currentMaxG) * 0.12;
-    else if (ratio < 0.96) currentMaxG += (targetMaxG - currentMaxG) * 0.025;
-    currentMaxG = Math.max(MIN_MAX_G, Math.min(MAX_MAX_G, currentMaxG));
+    const mag = Math.sqrt(gx * gx + gy * gy);
+    magHist.push({ t: now, m: mag });
+    magHist = magHist.filter(h => now - h.t < 1000);
+    const peakMag = Math.max(...magHist.map(h => h.m), 0.1);
+    const needed = peakMag * 1.4;
+    let targetScale = SCALE_STEPS[0];
+    for (const step of SCALE_STEPS) {
+        if (step >= needed) { targetScale = step; break; }
+        targetScale = step;
+    }
+    if (targetScale > currentScale) currentScale += (targetScale - currentScale) * 0.15;
+    else if (targetScale < currentScale) currentScale += (targetScale - currentScale) * 0.03;
+    for (const step of SCALE_STEPS) {
+        if (Math.abs(currentScale - step) < 0.02) { currentScale = step; break; }
+    }
+    $('range-val').textContent = 'Range ±' + currentScale.toFixed(1) + 'g';
 }
 
-// Draw G-meter - clean, minimal
+function hexToRgba(hex, a) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r},${g},${b},${a})`;
+}
+
+function downsampleTrail(points, maxPoints) {
+    if (points.length <= maxPoints) return points;
+    const recentCount = Math.min(25, Math.floor(maxPoints * 0.4));
+    const recent = points.slice(-recentCount);
+    const older = points.slice(0, -recentCount);
+    const olderTarget = maxPoints - recentCount;
+    const step = Math.ceil(older.length / olderTarget);
+    const sampled = older.filter((_, i) => i % step === 0);
+    return [...sampled, ...recent];
+}
+
 function drawG() {
-    const w = cv.width / window.devicePixelRatio;
-    const h = cv.height / window.devicePixelRatio;
-    const cx = w / 2, cy = h / 2;
-    const radius = Math.min(w, h) * 0.35;
+    const size = cv.width / devicePixelRatio;
+    const cx = size / 2, cy = size / 2;
+    const r = size * 0.38;
 
-    ctx.clearRect(0, 0, w, h);
+    ctx.clearRect(0, 0, size, size);
 
-    // Subtle grid circles - neumorphic style
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.04)';
+    const ringColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
+    const axisColor = isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.18)';
+
+    // Ring lines (4 rings, drawn first so axes are on top)
     ctx.lineWidth = 1;
-    for (let i = 1; i <= 3; i++) {
+    ctx.strokeStyle = ringColor;
+    [0.2, 0.4, 0.6, 0.8].forEach((f) => {
         ctx.beginPath();
-        ctx.arc(cx, cy, radius * i / 3, 0, Math.PI * 2);
+        ctx.arc(cx, cy, r * f, 0, Math.PI * 2);
         ctx.stroke();
-    }
+    });
 
-    // Cross lines
+    // Axis lines (thicker, drawn after rings so they appear on top)
+    ctx.strokeStyle = axisColor;
+    ctx.lineWidth = 2.5;
     ctx.beginPath();
-    ctx.moveTo(cx - radius, cy);
-    ctx.lineTo(cx + radius, cy);
-    ctx.moveTo(cx, cy - radius);
-    ctx.lineTo(cx, cy + radius);
+    ctx.moveTo(cx - r, cy); ctx.lineTo(cx + r, cy);
+    ctx.moveTo(cx, cy - r); ctx.lineTo(cx, cy + r);
     ctx.stroke();
 
-    // Trail
-    if (trail.length > 1) {
-        ctx.beginPath();
-        ctx.strokeStyle = 'rgba(52, 152, 219, 0.3)';
-        ctx.lineWidth = 3;
+    ctx.fillStyle = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
+    ctx.beginPath();
+    ctx.arc(cx, cy, 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    const now = Date.now();
+    const recentTrail = trail.filter(p => now - p.t < TRAIL_DURATION_MS);
+    const displayTrail = downsampleTrail(recentTrail, TRAIL_MAX_POINTS);
+
+    if (displayTrail.length > 1) {
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
-
-        for (let i = 0; i < trail.length; i++) {
-            const p = trail[i];
-            const x = cx + (p.x / currentMaxG) * radius;
-            const y = cy - (p.y / currentMaxG) * radius;
-            if (i === 0) ctx.moveTo(x, y);
-            else ctx.lineTo(x, y);
+        for (let i = 1; i < displayTrail.length; i++) {
+            const p0 = displayTrail[i - 1];
+            const p1 = displayTrail[i];
+            const age = (now - p1.t) / TRAIL_DURATION_MS;
+            const alpha = Math.max(0.05, 0.35 * (1 - age * 0.85));
+            ctx.strokeStyle = hexToRgba(currentModeColor, alpha);
+            ctx.lineWidth = 1.5 - age * 0.6;
+            ctx.beginPath();
+            const x0 = cx + (p0.x / currentScale) * r;
+            const y0 = cy - (p0.y / currentScale) * r;
+            const x1 = cx + (p1.x / currentScale) * r;
+            const y1 = cy - (p1.y / currentScale) * r;
+            ctx.moveTo(x0, y0);
+            ctx.lineTo(x1, y1);
+            ctx.stroke();
         }
-        ctx.stroke();
     }
 
-    // Current position dot
     if (trail.length > 0) {
-        const current = trail[trail.length - 1];
-        const x = cx + (current.x / currentMaxG) * radius;
-        const y = cy - (current.y / currentMaxG) * radius;
-
-        // Soft shadow
+        const cur = trail[trail.length - 1];
+        const x = cx + (cur.x / currentScale) * r;
+        const y = cy - (cur.y / currentScale) * r;
+        const crossSize = 8;
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
         ctx.beginPath();
-        ctx.arc(x, y, 14, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(52, 152, 219, 0.2)';
-        ctx.fill();
-
-        // Main dot
-        ctx.beginPath();
-        ctx.arc(x, y, 10, 0, Math.PI * 2);
-        ctx.fillStyle = '#3498db';
-        ctx.fill();
-
-        // Inner highlight
-        ctx.beginPath();
-        ctx.arc(x - 2, y - 2, 4, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-        ctx.fill();
+        ctx.moveTo(x - crossSize, y);
+        ctx.lineTo(x + crossSize, y);
+        ctx.moveTo(x, y - crossSize);
+        ctx.lineTo(x, y + crossSize);
+        ctx.stroke();
     }
 }
 
-// Format helpers
-function fmtG(v) { return Math.abs(v) < 0.005 ? '0.00' : v.toFixed(2); }
-function fmtTime(ms) { const s = Math.floor(ms / 1000), m = Math.floor(s / 60); return String(m).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); }
+function fmtGSigned(v) {
+    const sign = v >= 0 ? '+' : '−';
+    return { sign, num: Math.abs(v).toFixed(2) };
+}
 
-// Main loop
+function fmtTime(ms) {
+    const s = Math.floor(ms / 1000);
+    const m = Math.floor(s / 60);
+    return m + ':' + String(s % 60).padStart(2, '0');
+}
+
+function updateModeDisplay(mo) {
+    const name = MODES[mo] || 'IDLE';
+    const color = MODE_COLORS[mo] || MODE_COLORS[0];
+    const hexColors = getModeColorsHex();
+    currentModeColor = hexColors[mo] || hexColors[0];
+    const el = $('maneuver');
+    el.textContent = name;
+    el.style.color = color;
+}
+
+function updateReadouts(lat, lon) {
+    const latFmt = fmtGSigned(lat);
+    const lonFmt = fmtGSigned(lon);
+    $('lat-g').innerHTML = `<span class="bbSign">${latFmt.sign}</span><span class="bbVal">${latFmt.num}</span><span class="bbGUnit">g</span>`;
+    $('lon-g').innerHTML = `<span class="bbSign">${lonFmt.sign}</span><span class="bbVal">${lonFmt.num}</span><span class="bbGUnit">g</span>`;
+}
+
+let peakHighlightTimeout = null;
+
 function simulate() {
     const elapsed = Date.now() - loopStartTime;
     const auto = getAutoValues(elapsed);
-    const simSpeed = addNoise(auto.speed, 2);
-    const simLonG = addNoise(auto.lonG, 0.02);
-    const simLatG = addNoise(auto.latG, 0.02);
-    const simYawDeg = addNoise(auto.yawDeg, 1);
-
-    const sp = simSpeed, latg = simLatG, lng = simLonG;
-    const yawDeg = Math.abs(simYawDeg), yawRad = simYawDeg * Math.PI / 180;
+    const sp = addNoise(auto.speed, 2);
+    const longRaw = addNoise(auto.lonG, 0.02);
+    const latRaw = addNoise(auto.latG, 0.02);
+    const yawDeg = Math.abs(addNoise(auto.yawDeg, 1));
+    const yawRad = auto.yawDeg * Math.PI / 180;
     const speedMs = sp / 3.6;
-    const mo = classifyMode(lng, latg, yawRad, speedMs);
+
+    const mo = classifyMode(longRaw, latRaw, yawRad, speedMs);
 
     speed_ema = 0.7 * sp + 0.3 * speed_ema;
     const dspd = speed_ema < 1 ? 0 : Math.round(speed_ema);
 
-    // Time-based EMA
     const now = Date.now();
-    const dt = lastProcessTime ? Math.min((now - lastProcessTime) / 1000, 0.2) : 0.033;
-    lastProcessTime = now;
+    const dt = lastT ? Math.min((now - lastT) / 1000, 0.2) : 0.033;
+    lastT = now;
     const alpha = 1 - Math.exp(-dt / EMA_TAU);
-    emaGx = alpha * latg + (1 - alpha) * emaGx;
-    emaGy = alpha * lng + (1 - alpha) * emaGy;
 
-    // Peak tracking
-    if (dspd > sessionPeak) sessionPeak = dspd;
-    if (lng < -0.1 && sessionPeak > displayedPeak) displayedPeak = sessionPeak;
+    emaGx = alpha * latRaw + (1 - alpha) * emaGx;
+    emaGy = alpha * longRaw + (1 - alpha) * emaGy;
 
-    // Update UI
-    $('speed').textContent = dspd;
-    $('maneuver').textContent = MANEUVERS[mo] || 'Idle';
+    const mag = Math.sqrt(emaGx * emaGx + emaGy * emaGy);
+    const noise = speed_ema < 5 ? 0.04 : 0.015;
+    const lat = mag < noise ? 0 : emaGx;
+    const lon = mag < noise ? 0 : emaGy;
 
-    // Peak display
-    const peakRow = $('peak-row');
-    if (displayedPeak > 0 && dspd < displayedPeak) {
-        peakRow.classList.add('visible');
-        $('peak-val').textContent = displayedPeak;
+    const speedEl = $('speed');
+    if (dspd > peak) {
+        peak = dspd;
+        speedEl.classList.add('peak');
+        if (peakHighlightTimeout) clearTimeout(peakHighlightTimeout);
+        peakHighlightTimeout = setTimeout(() => speedEl.classList.remove('peak'), 900);
+    }
+    speedEl.textContent = dspd;
+
+    updateModeDisplay(mo);
+    updateReadouts(lat, lon);
+    $('yaw').textContent = Math.round(yawDeg);
+
+    if (latRaw < 0 && Math.abs(latRaw) > maxL) { maxL = Math.abs(latRaw); $('max-l').textContent = maxL.toFixed(2) + 'g'; }
+    if (latRaw > 0 && latRaw > maxR) { maxR = latRaw; $('max-r').textContent = maxR.toFixed(2) + 'g'; }
+    if (longRaw > 0 && longRaw > maxA) { maxA = longRaw; $('max-a').textContent = maxA.toFixed(2) + 'g'; }
+    if (longRaw < 0 && Math.abs(longRaw) > maxB) { maxB = Math.abs(longRaw); $('max-b').textContent = maxB.toFixed(2) + 'g'; }
+
+    if (speed_ema >= 2) {
+        updateScale(lat, lon);
     } else {
-        peakRow.classList.remove('visible');
+        magHist = [];
+        currentScale = SCALE_STEPS[0];
+        $('range-val').textContent = 'Range ±' + currentScale.toFixed(1) + 'g';
     }
 
-    // Metrics
-    $('latg').textContent = fmtG(latg);
-    $('lng').textContent = fmtG(lng);
-    $('yaw').textContent = yawDeg.toFixed(0);
-
-    // G-force
-    const gx = emaGx, gy = emaGy;
-    updateAutoZoom(gx, gy);
-    trail.push({x: gx, y: gy});
-    if (trail.length > 50) trail.shift();
-
-    // Max values
-    if (latg < 0 && Math.abs(latg) > maxL) { maxL = Math.abs(latg); $('maxL').textContent = maxL.toFixed(2); }
-    if (latg > 0 && latg > maxR) { maxR = latg; $('maxR').textContent = maxR.toFixed(2); }
-    if (lng > 0 && lng > maxA) { maxA = lng; $('maxA').textContent = maxA.toFixed(2); }
-    if (lng < 0 && Math.abs(lng) > maxB) { maxB = Math.abs(lng); $('maxB').textContent = maxB.toFixed(2); }
-
+    const lastPt = trail.length > 0 ? trail[trail.length - 1] : null;
+    const dx = lastPt ? Math.abs(lat - lastPt.x) : 1;
+    const dy = lastPt ? Math.abs(lon - lastPt.y) : 1;
+    if (!lastPt || dx > TRAIL_JITTER_THRESHOLD || dy > TRAIL_JITTER_THRESHOLD) {
+        trail.push({ x: lat, y: lon, t: now });
+    }
+    trail = trail.filter(p => now - p.t < TRAIL_DURATION_MS + 200);
     drawG();
-    cnt++;
 
-    if (rec) data.push({t: now, sp, ax: -lng * 9.81, ay: latg * 9.81, wz: yawRad, mo, latg, lng, lat: 37.8199, lon: -122.4783, gpsOk: 1});
+    cnt++;
+    if (rec) data.push({ t: now, sp, ax: -longRaw * 9.81, ay: latRaw * 9.81, wz: yawRad, mo, latg: latRaw, lng: longRaw, lat: 37.82, lon: -122.48, gpsOk: 1 });
 }
 
 setInterval(simulate, 33);
+
 setInterval(() => {
     $('hz').textContent = cnt;
     cnt = 0;
-    $('timer').textContent = fmtTime(Date.now() - sessionStart);
+    $('session-time').textContent = fmtTime(Date.now() - sessionStart);
+    $('gps-acc').textContent = '2';
+    $('drops').textContent = drops;
 }, 1000);
 
-// Clear button
-$('clear-btn').onclick = () => {
-    maxL = maxR = maxA = maxB = 0;
-    $('maxL').textContent = $('maxR').textContent = $('maxA').textContent = $('maxB').textContent = '0.00';
-    trail = [];
-    magnitudeHistory = [];
-    currentMaxG = 0.5;
-    emaGx = emaGy = 0;
-};
+$('menu-btn').onclick = () => $('menu-overlay').classList.add('open');
+$('menu-overlay').onclick = e => { if (e.target === $('menu-overlay')) $('menu-overlay').classList.remove('open'); };
 
-// Record button
-$('rec').onclick = () => {
+$('menu-rec').onclick = () => {
     rec = !rec;
-    const btn = $('rec');
-    if (rec) {
-        data = [];
-        btn.classList.add('recording');
-        btn.innerHTML = '<span class="dot"></span> STOP';
-    } else {
-        btn.classList.remove('recording');
-        btn.innerHTML = '<span class="dot"></span> REC';
+    $('menu-overlay').classList.remove('open');
+    if (rec) { data = []; sessionStart = Date.now(); $('menu-rec').textContent = 'Stop Recording'; }
+    else {
+        $('menu-rec').textContent = 'Start Recording';
         if (data.length) {
             const s = JSON.parse(localStorage.getItem('bb') || '[]');
-            s.unshift({id: Date.now(), n: data.length, d: data});
+            s.unshift({ id: Date.now(), n: data.length, d: data });
             localStorage.setItem('bb', JSON.stringify(s.slice(0, 10)));
             alert('Saved ' + data.length + ' points');
         }
     }
 };
 
-// Export button
-$('exp').onclick = () => {
+$('menu-export').onclick = () => {
+    $('menu-overlay').classList.remove('open');
     const s = JSON.parse(localStorage.getItem('bb') || '[]');
-    if (!s.length) return alert('No data');
-    let c = 'time,speed,ax,ay,wz,mode,lat_g,lon_g,gps_lat,gps_lon,gps_valid\n';
-    s[0].d.forEach(r => { c += r.t + ',' + r.sp + ',' + r.ax + ',' + r.ay + ',' + r.wz + ',' + r.mo + ',' + r.latg + ',' + r.lng + ',' + (r.lat || 0) + ',' + (r.lon || 0) + ',' + (r.gpsOk || 0) + '\n'; });
-    const b = new Blob([c], {type: 'text/csv'}), u = URL.createObjectURL(b), a = document.createElement('a');
-    a.href = u; a.download = 'blackbox.csv'; a.click();
+    if (!s.length) return alert('No recorded data');
+    let csv = 'time,speed,ax,ay,wz,mode,lat_g,lon_g,gps_lat,gps_lon,gps_valid\n';
+    s[0].d.forEach(r => { csv += [r.t, r.sp, r.ax, r.ay, r.wz, r.mo, r.latg, r.lng, r.lat||0, r.lon||0, r.gpsOk||0].join(',') + '\n'; });
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'blackbox_session.csv'; a.click();
 };
+
+$('menu-clear').onclick = () => {
+    $('menu-overlay').classList.remove('open');
+    maxL = maxR = maxA = maxB = peak = drops = 0;
+    $('max-l').textContent = $('max-r').textContent = $('max-a').textContent = $('max-b').textContent = '0.00g';
+    $('speed').classList.remove('peak');
+    trail = []; magHist = []; currentScale = SCALE_STEPS[0];
+    $('range-val').textContent = 'Range ±' + currentScale.toFixed(1) + 'g';
+    emaGx = emaGy = 0; sessionStart = Date.now(); loopStartTime = Date.now();
+};
+
+setTimeout(() => { resize(); drawG(); }, 50);
 </script>
 </body></html>
