@@ -11,6 +11,15 @@
     --sp-xl:24px;
     --sp-2xl:32px;
 
+    /* Typography scale */
+    --fs-xs:10px;
+    --fs-sm:12px;
+    --fs-md:18px;
+    --fs-lg:22px;
+
+    /* Opacity scale */
+    --op-muted:0.45;
+
     /* Colors */
     --bg:#f2f2f7;
     --surface:#ffffff;
@@ -37,17 +46,48 @@
     --mode-brake:#ff3b30;
 }
 *{margin:0;padding:0;box-sizing:border-box}
+
+/* iPhone 15 Pro frame */
+html,body{height:100%;overflow:hidden}
 body{
     font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display',system-ui,sans-serif;
+    background:#1a1a1a;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+}
+.bbDeviceFrame{
+    width:393px;
+    height:852px;
+    background:#1a1a1a;
+    border-radius:55px;
+    padding:11px;
+    box-shadow:inset 0 0 0 3px #333;
+    position:relative;
+}
+.bbDeviceFrame::before{
+    content:'';
+    position:absolute;
+    top:11px;
+    left:50%;
+    transform:translateX(-50%);
+    width:126px;
+    height:37px;
+    background:#1a1a1a;
+    border-radius:0 0 24px 24px;
+    z-index:10;
+}
+.bbDeviceScreen{
+    width:100%;
+    height:100%;
+    border-radius:44px;
+    overflow:hidden;
     background:var(--bg);
     color:var(--text);
-    height:100vh;
-    height:100dvh;
     display:flex;
     flex-direction:column;
     -webkit-user-select:none;
     user-select:none;
-    overflow:hidden;
     transition:background 0.3s ease-in-out,color 0.3s ease-in-out;
 }
 
@@ -65,7 +105,7 @@ body{
     display:flex;
     justify-content:space-between;
     align-items:center;
-    padding:var(--sp-lg) var(--sp-lg);
+    padding:0 var(--sp-lg) var(--sp-xs);
     background:transparent;
     flex-shrink:0;
 }
@@ -80,9 +120,9 @@ body{
     color:inherit;
     font-family:inherit;
 }
-.bbBrand{font-size:12px;font-weight:600;opacity:.45;letter-spacing:.03em}
-.bbModeLabel{font-size:12px;font-weight:400;opacity:.45;letter-spacing:.03em}
-.bbModeIcon{font-size:10px;opacity:.45}
+.bbBrand{font-size:var(--fs-sm);font-weight:600;opacity:.45;letter-spacing:.03em}
+.bbModeLabel{font-size:var(--fs-sm);font-weight:400;opacity:.45;letter-spacing:.03em}
+.bbModeIcon{font-size:var(--fs-xs);opacity:.45}
 .bbTopRight{
     display:flex;
     align-items:center;
@@ -93,14 +133,14 @@ body{
     align-items:center;
     gap:var(--sp-md);
     opacity:.45;
-    font-size:10px;
+    font-size:var(--fs-xs);
     letter-spacing:.03em;
 }
 .bbStatusItem{display:flex;align-items:center;gap:var(--sp-xs)}
-.bbStatusItem .bbHigh{margin-right:2px}
+.bbStatusItem .bbHigh{margin-right:1px}
 .bbDot{width:6px;height:6px;border-radius:50%;background:var(--ok);display:inline-block}
 .bbHigh{color:var(--ok);font-weight:600}
-.bbKebab{background:none;border:0;padding:var(--sp-xs);font-size:18px;line-height:1;opacity:.45;cursor:pointer;color:inherit}
+.bbKebab{background:none;border:0;padding:var(--sp-xs);font-size:var(--fs-md);line-height:1;opacity:.45;cursor:pointer;color:inherit}
 
 /* APP CONTAINER */
 .bbApp{
@@ -123,10 +163,23 @@ body{
     width:100%;
 }
 
-/* TOP READOUT ROW */
+/* TOP READOUT ROW (Mode/Speed) */
 .bbGReadoutRow--top{
-    padding:var(--sp-md) var(--sp-lg) var(--sp-sm);
+    padding:var(--sp-xl) var(--sp-lg) var(--sp-sm);
     align-items:center;
+    justify-content:space-between;
+    gap:20%;
+}
+.bbGReadoutRow--top .bbGReadoutCol{
+    flex:1;
+    width:50%;
+}
+.bbGReadoutRow--top .bbGReadoutCol:first-child{
+    align-items:flex-end;
+}
+.bbGReadoutRow--top .bbGReadoutCol:last-child{
+    align-items:flex-start;
+    min-height:2.4em;
 }
 .bbGReadoutRow--top .bbGReadoutVal{
     margin-top:0;
@@ -134,7 +187,7 @@ body{
 .bbGReadoutRow--top .bbMaxRow{
     margin-top:var(--sp-xs);
 }
-.bbManeuver{font-weight:600;transition:color 0.15s ease-in-out}
+.bbManeuver{font-weight:600;font-size:14px;transition:color 0.15s ease-in-out;line-height:1.3;text-align:left !important;justify-content:flex-start !important;align-items:flex-start !important;min-height:2.6em;width:100%}
 #speed{transition:color 0.6s ease-in-out}
 #speed.peak{color:var(--amber)}
 #max-speed{transition:color 0.6s ease-in-out}
@@ -144,11 +197,11 @@ body{
 .bbGPlotWrap{
     display:flex;
     justify-content:center;
-    padding:var(--sp-xl) var(--sp-lg);
+    padding:var(--sp-md) 0;
 }
 .bbGPlotFrame{
     position:relative;
-    width:min(560px, 100%);
+    width:100%;
     aspect-ratio:1/1;
 }
 .bbGPlot{
@@ -160,7 +213,7 @@ body{
 /* AXIS LABELS */
 .bbAxis{
     position:absolute;
-    font-size:10px;
+    font-size:var(--fs-xs);
     font-weight:400;
     letter-spacing:.02em;
     text-transform:uppercase;
@@ -177,7 +230,7 @@ body{
     position:absolute;
     top:var(--sp-xs);
     right:var(--sp-sm);
-    font-size:10px;
+    font-size:var(--fs-xs);
     color:var(--text);
     opacity:.45;
 }
@@ -188,7 +241,7 @@ body{
     justify-content:center;
     align-items:flex-start;
     gap:0;
-    padding:var(--sp-lg) var(--sp-lg) var(--sp-xl);
+    padding:var(--sp-md) var(--sp-lg) var(--sp-lg);
     flex-shrink:0;
 }
 .bbGReadoutCol{
@@ -199,7 +252,7 @@ body{
     text-align:center;
 }
 .bbGReadoutLbl{
-    font-size:10px;
+    font-size:var(--fs-xs);
     font-weight:400;
     letter-spacing:.02em;
     text-transform:uppercase;
@@ -208,7 +261,7 @@ body{
 }
 .bbGReadoutVal{
     margin-top:var(--sp-lg);
-    font-size:26px;
+    font-size:var(--fs-lg);
     font-weight:600;
     line-height:1.0;
     min-width:6ch;
@@ -219,8 +272,8 @@ body{
     transition:color 0.6s ease-in-out;
 }
 .bbGReadoutVal.peak{color:var(--amber)}
-.bbSign{display:inline-block;width:1ch;text-align:right;opacity:.45;margin-right:1px}
-.bbGUnit{opacity:.45;margin-left:1px}
+.bbSign{display:inline-block;width:1ch;text-align:right;opacity:.45;margin-right:1px;font-weight:400}
+.bbGUnit{opacity:.45;margin-left:1px;font-weight:400}
 .bbGDivider{
     width:1px;
     height:56px;
@@ -237,13 +290,13 @@ body{
 .bbMaxItem{
     display:flex;
     align-items:baseline;
-    gap:var(--sp-xs);
+    gap:1px;
 }
-.bbMaxVal{font-size:12px;font-weight:500;opacity:.45;transition:color 0.6s ease-in-out}
+.bbMaxVal{font-size:var(--fs-sm);font-weight:500;opacity:.45;transition:color 0.6s ease-in-out}
 .bbMaxVal.setting{color:var(--amber);font-weight:400;font-style:italic;opacity:1}
-.bbMaxSign{font-size:12px;font-weight:500;opacity:.45;transition:opacity 0.6s ease-in-out}
+.bbMaxSign{font-size:var(--fs-sm);font-weight:500;opacity:.45;transition:opacity 0.6s ease-in-out}
 .bbMaxSign.hidden{opacity:0}
-.bbMaxLbl{font-size:12px;font-weight:400;opacity:.45;margin-left:var(--sp-xs)}
+.bbMaxLbl{font-size:var(--fs-sm);font-weight:400;opacity:.45;margin-left:var(--sp-xs)}
 .bbYawPad{opacity:.45}
 
 /* TELEMETRY STRIP */
@@ -253,7 +306,7 @@ body{
     align-items:center;
     gap:var(--sp-lg);
     padding:var(--sp-md) 0;
-    font-size:10px;
+    font-size:var(--fs-xs);
     font-weight:400;
     color:var(--text);
     opacity:.45;
@@ -269,7 +322,77 @@ body{
     height:12px;
     background:var(--divider);
 }
-.bbTItem{display:flex;align-items:baseline;gap:3px}
+
+/* CLEAR BUTTON */
+.bbClearBtn{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    width:100%;
+    height:44px;
+    flex-shrink:0;
+    margin-top:auto;
+    font-family:inherit;
+    font-size:var(--fs-sm);
+    font-weight:500;
+    text-align:center;
+    color:var(--red);
+    background:rgba(255,59,48,0.22);
+    border:none;
+    border-radius:var(--sp-md);
+    cursor:pointer;
+    transition:opacity 0.15s ease-in-out;
+}
+.bbClearBtn:active{
+    opacity:0.6;
+}
+
+/* iOS STATUS BAR */
+.bbStatusBar{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    padding:var(--sp-xs) var(--sp-xl) var(--sp-xs);
+    height:52px;
+    font-size:var(--fs-sm);
+    font-weight:600;
+    flex-shrink:0;
+}
+.bbStatusBar__left{
+    display:flex;
+    align-items:center;
+    gap:var(--sp-xs);
+}
+.bbStatusBar__center{
+    flex:1;
+}
+.bbStatusBar__right{
+    display:flex;
+    align-items:center;
+    gap:var(--sp-sm);
+    font-size:var(--fs-xs);
+}
+.bbStatusBar__right svg{
+    width:20px;
+    height:12px;
+    fill:currentColor;
+}
+
+/* iOS HOME INDICATOR */
+.bbHomeIndicator{
+    display:flex;
+    justify-content:center;
+    padding:var(--sp-sm) 0 var(--sp-md);
+    flex-shrink:0;
+}
+.bbHomeIndicator__bar{
+    width:134px;
+    height:5px;
+    background:var(--text);
+    border-radius:3px;
+    opacity:0.25;
+}
+.bbTItem{display:flex;align-items:baseline;gap:var(--sp-xs)}
 .bbTItem .bbNum{font-weight:500;display:inline-block;text-align:right}
 .bbNum--hz{min-width:2.5ch}
 .bbNum--gps{min-width:2ch}
@@ -283,7 +406,7 @@ body{
     background:rgba(0,0,0,0.25);
     opacity:0;
     visibility:hidden;
-    transition:opacity 0.15s ease;
+    transition:opacity 0.15s ease-in-out;
     z-index:100;
 }
 .dark .bbMenuOverlay{background:rgba(0,0,0,0.5)}
@@ -298,7 +421,7 @@ body{
     min-width:180px;
     transform:scale(0.95);
     opacity:0;
-    transition:transform 0.15s ease,opacity 0.15s ease;
+    transition:transform 0.15s ease-in-out,opacity 0.15s ease-in-out;
     z-index:101;
     overflow:hidden;
 }
@@ -308,7 +431,7 @@ body{
     display:block;
     width:100%;
     padding:var(--sp-md) var(--sp-lg);
-    font-size:18px;
+    font-size:var(--fs-md);
     font-weight:400;
     text-align:left;
     border:none;
@@ -322,6 +445,19 @@ body{
 .bbMenuItem.destructive{color:var(--red)}
 </style></head>
 <body>
+
+<div class="bbDeviceFrame">
+<div class="bbDeviceScreen">
+
+<div class="bbStatusBar">
+    <div class="bbStatusBar__left">9:41</div>
+    <div class="bbStatusBar__center"></div>
+    <div class="bbStatusBar__right">
+        <svg viewBox="0 0 17 12"><path d="M15.5 4h-1a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h1a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5zM16.5 5v2a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5z"/><rect x="0" y="1" width="3" height="10" rx="1" opacity=".3"/><rect x="4" y="1" width="3" height="10" rx="1" opacity=".3"/><rect x="8" y="1" width="3" height="10" rx="1"/><rect x="12" y="1" width="3" height="10" rx="1"/></svg>
+        <span>LTE</span>
+        <svg viewBox="0 0 25 12"><rect x="0" y="0" width="22" height="12" rx="3" stroke="currentColor" stroke-width="1" fill="none" opacity=".35"/><rect x="23" y="4" width="2" height="4" rx="1" opacity=".4"/><rect x="2" y="2" width="18" height="8" rx="1.5" fill="currentColor"/></svg>
+    </div>
+</div>
 
 <header class="bbTopbar">
     <button class="bbBrandToggle" id="brandToggle" aria-label="Toggle theme">
@@ -343,14 +479,13 @@ body{
     <section class="bbCard bbGCard">
         <div class="bbGReadoutRow bbGReadoutRow--top">
             <div class="bbGReadoutCol">
-                <div class="bbGReadoutVal bbManeuver" id="maneuver">IDLE</div>
-            </div>
-            <div class="bbGDivider"></div>
-            <div class="bbGReadoutCol">
                 <div class="bbGReadoutVal bbNum"><span id="speed">0</span><span class="bbGUnit">km/h</span></div>
                 <div class="bbMaxRow">
-                    <span class="bbMaxItem"><span class="bbMaxVal bbNum" id="max-speed">0</span><span class="bbMaxLbl" id="max-speed-lbl">session max</span></span>
+                    <span class="bbMaxItem"><span class="bbMaxVal bbNum" id="max-speed">0</span><span class="bbMaxLbl" id="max-speed-lbl">max</span></span>
                 </div>
+            </div>
+            <div class="bbGReadoutCol">
+                <div class="bbGReadoutVal bbManeuver" id="maneuver">IDLE</div>
             </div>
         </div>
 
@@ -358,8 +493,8 @@ body{
             <div class="bbGPlotFrame">
                 <div class="bbAxis bbAxis--top">Brake</div>
                 <div class="bbAxis bbAxis--bottom">Accel</div>
-                <div class="bbAxis bbAxis--left">Left</div>
-                <div class="bbAxis bbAxis--right">Right</div>
+                <div class="bbAxis bbAxis--left">L</div>
+                <div class="bbAxis bbAxis--right">R</div>
                 <div class="bbPlotMeta" id="range-val">Range ±0.5g</div>
                 <canvas class="bbGPlot" id="gcanvas"></canvas>
             </div>
@@ -409,6 +544,8 @@ body{
             <span class="bbTItem">GPS <span class="bbNum bbNum--gps" id="gps-acc">2</span>m</span>
         </div>
     </div>
+
+    <button class="bbClearBtn" id="clear-btn">Clear Session</button>
 </main>
 
 <div class="bbMenuOverlay" id="menu-overlay">
@@ -417,6 +554,10 @@ body{
         <button class="bbMenuItem" id="menu-export">Export CSV</button>
         <button class="bbMenuItem destructive" id="menu-clear">Clear Session</button>
     </div>
+</div>
+
+<div class="bbHomeIndicator">
+    <div class="bbHomeIndicator__bar"></div>
 </div>
 
 <script>
@@ -446,7 +587,7 @@ const CANYON_KEYFRAMES = [
 const LOOP_DURATION = 30000;
 
 const $ = id => document.getElementById(id);
-const MODES = {0:'IDLE', 1:'ACCEL', 2:'BRAKE', 4:'CORNER', 5:'ACCEL', 6:'BRAKE'};
+const MODES = {0:'IDLE', 1:'ACCEL', 2:'BRAKE', 4:'CORNER', 5:'CORNER EXIT', 6:'TRAIL BRAKING'};
 const MODE_COLORS = {
     0: 'var(--mode-idle)',
     1: 'var(--mode-accel)',
@@ -551,7 +692,7 @@ function classifyMode(lonG, latG, yawRad, speedMs) {
 
 let isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
 function applyTheme() {
-    document.body.classList.toggle('dark', isDark);
+    document.querySelector('.bbDeviceScreen').classList.toggle('dark', isDark);
     $('modeLabel').textContent = isDark ? 'Dark' : 'Bright';
 }
 applyTheme();
@@ -624,6 +765,7 @@ function drawG() {
     // Draw G-envelope first (underneath everything)
     const hasEnvelope = gEnvelope.some(v => v > 0.02);
     if (hasEnvelope) {
+        // Draw envelope path
         ctx.beginPath();
         for (let i = 0; i <= ENVELOPE_SEGMENTS; i++) {
             const idx = i % ENVELOPE_SEGMENTS;
@@ -637,23 +779,33 @@ function drawG() {
         ctx.closePath();
         ctx.fillStyle = isDark ? '#000000' : '#ffffff';
         ctx.fill();
+
     }
 
-    const ringColor = isDark ? 'rgba(255,255,255,0.33)' : 'rgba(0,0,0,0.33)';
+    const ringColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
+    const ringColorThick = isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)';
     const axisColor = isDark ? 'rgba(255,255,255,0.66)' : 'rgba(0,0,0,0.66)';
 
-    // Ring lines (4 rings)
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = ringColor;
-    [0.2, 0.4, 0.6, 0.8].forEach((f) => {
+    // Ring lines at fixed G values (absolute, not relative to scale)
+    // Light rings at 0.1g increments, main rings at 0.2g, accent rings at 0.5g and 1.0g
+    // Keep 20% margin around outermost ring
+    const ringColorLight = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+    const ringColorAccent = isDark ? 'rgba(255,255,255,0.33)' : 'rgba(0,0,0,0.33)';
+    [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0].forEach((gVal) => {
+        const ringRadius = (gVal / currentScale) * r;
+        if (ringRadius > r * 0.8) return; // keep 20% empty around outermost ring
+        const isAccent = gVal === 0.5 || gVal === 1.0;
+        const isMain = gVal % 0.2 < 0.01 && !isAccent;
+        ctx.lineWidth = isAccent ? 2 : 1;
+        ctx.strokeStyle = isAccent ? ringColorAccent : (isMain ? ringColor : ringColorLight);
         ctx.beginPath();
-        ctx.arc(cx, cy, r * f, 0, Math.PI * 2);
+        ctx.arc(cx, cy, ringRadius, 0, Math.PI * 2);
         ctx.stroke();
     });
 
-    // Axis lines (thicker, on top of rings)
+    // Axis lines
     ctx.strokeStyle = axisColor;
-    ctx.lineWidth = 2.5;
+    ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(cx - r, cy); ctx.lineTo(cx + r, cy);
     ctx.moveTo(cx, cy - r); ctx.lineTo(cx, cy + r);
@@ -739,7 +891,6 @@ function updateReadouts(lat, lon, yawDeg) {
     $('yaw-main').innerHTML = `<span class="bbSign">${yawSign}</span>${yawPad}<span class="bbVal">${yawVal}</span><span class="bbGUnit">°</span>`;
 }
 
-let peakHighlightTimeout = null;
 let maxLTimeout = null, maxRTimeout = null, maxATimeout = null, maxBTimeout = null, maxYawLTimeout = null, maxYawRTimeout = null;
 
 function showNewMax(elId, signId, value, formatFn, timeoutRef, mainReadoutId) {
@@ -751,9 +902,13 @@ function showNewMax(elId, signId, value, formatFn, timeoutRef, mainReadoutId) {
     const el = $(elId);
     const signEl = signId ? $(signId) : null;
     const mainEl = mainReadoutId ? $(mainReadoutId) : null;
+    const isSpeedMax = elId === 'max-speed';
     el.textContent = 'max';
     el.classList.add('setting');
-    if (signEl) signEl.classList.add('hidden');
+    if (signEl) {
+        if (isSpeedMax) signEl.style.display = 'none';
+        else signEl.classList.add('hidden');
+    }
     if (mainEl) mainEl.classList.add('peak');
     isSettingAnyMax = true;
     if (anyMaxTimeout) clearTimeout(anyMaxTimeout);
@@ -761,12 +916,15 @@ function showNewMax(elId, signId, value, formatFn, timeoutRef, mainReadoutId) {
     timeoutRef.current = setTimeout(() => {
         el.textContent = formatFn(value);
         el.classList.remove('setting');
-        if (signEl) signEl.classList.remove('hidden');
+        if (signEl) {
+            if (isSpeedMax) signEl.style.display = '';
+            else signEl.classList.remove('hidden');
+        }
         if (mainEl) mainEl.classList.remove('peak');
     }, 900);
     anyMaxTimeout = setTimeout(() => { isSettingAnyMax = false; }, 900);
 }
-const maxLRef = {current:null}, maxRRef = {current:null}, maxARef = {current:null}, maxBRef = {current:null}, maxYawLRef = {current:null}, maxYawRRef = {current:null};
+const maxLRef = {current:null}, maxRRef = {current:null}, maxARef = {current:null}, maxBRef = {current:null}, maxYawLRef = {current:null}, maxYawRRef = {current:null}, maxSpeedRef = {current:null};
 
 function simulate() {
     const elapsed = Date.now() - loopStartTime;
@@ -798,29 +956,9 @@ function simulate() {
     const lon = mag < noise ? 0 : emaGy;
 
     const speedEl = $('speed');
-    const maxSpeedEl = $('max-speed');
-    const maxSpeedLbl = $('max-speed-lbl');
     if (dspd > peak) {
         peak = dspd;
-        // Skip max highlighting during first 10 seconds
-        if (Date.now() - sessionStart >= 10000) {
-            speedEl.classList.add('peak');
-            maxSpeedEl.textContent = 'setting new max';
-            maxSpeedEl.classList.add('setting');
-            maxSpeedLbl.style.display = 'none';
-            isSettingAnyMax = true;
-            if (anyMaxTimeout) clearTimeout(anyMaxTimeout);
-            if (peakHighlightTimeout) clearTimeout(peakHighlightTimeout);
-            peakHighlightTimeout = setTimeout(() => {
-                speedEl.classList.remove('peak');
-                maxSpeedEl.textContent = peak;
-                maxSpeedEl.classList.remove('setting');
-                maxSpeedLbl.style.display = '';
-            }, 900);
-            anyMaxTimeout = setTimeout(() => { isSettingAnyMax = false; }, 900);
-        } else {
-            maxSpeedEl.textContent = peak;
-        }
+        showNewMax('max-speed', 'max-speed-lbl', peak, v => v, maxSpeedRef, 'speed');
     }
     speedEl.textContent = dspd;
 
@@ -896,12 +1034,14 @@ $('menu-export').onclick = () => {
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'blackbox_session.csv'; a.click();
 };
 
-$('menu-clear').onclick = () => {
+function clearSession() {
     $('menu-overlay').classList.remove('open');
     maxL = maxR = maxA = maxB = maxYawL = maxYawR = peak = drops = 0;
     $('max-l').textContent = $('max-r').textContent = $('max-a').textContent = $('max-b').textContent = '0.00';
     $('max-yaw-l').textContent = $('max-yaw-r').textContent = '0';
     $('max-speed').textContent = '0';
+    $('max-speed').classList.remove('setting');
+    $('max-speed-lbl').style.display = '';
     ['max-l','max-r','max-a','max-b','max-yaw-l','max-yaw-r'].forEach(id => $(id).classList.remove('setting'));
     ['sign-l','sign-r','sign-a','sign-b','sign-yaw-l','sign-yaw-r'].forEach(id => $(id).classList.remove('hidden'));
     $('speed').classList.remove('peak');
@@ -909,8 +1049,14 @@ $('menu-clear').onclick = () => {
     gEnvelope = new Array(ENVELOPE_SEGMENTS).fill(0);
     $('range-val').textContent = 'Range ±' + currentScale.toFixed(1) + 'g';
     emaGx = emaGy = 0; sessionStart = Date.now(); loopStartTime = Date.now();
-};
+}
+
+$('menu-clear').onclick = clearSession;
+$('clear-btn').onclick = clearSession;
 
 setTimeout(() => { resize(); drawG(); }, 50);
 </script>
+
+</div>
+</div>
 </body></html>
