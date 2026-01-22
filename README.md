@@ -495,6 +495,9 @@ blackbox/
 │       ├── sdkconfig.defaults       # ESP-IDF configuration
 │       └── build.rs                 # Build script
 ├── tools/
+│   ├── dashboard-dev/               # Dashboard simulator (no hardware needed)
+│   │   ├── index.html               # Local dev dashboard with CSV replay
+│   │   └── README.md                # Dev tool documentation
 │   └── python/
 │       ├── configure_wt901.py       # IMU configuration tool (200Hz setup)
 │       ├── probe_wt901.py           # IMU baud rate detection
@@ -752,6 +755,8 @@ You can trigger recalibration from the dashboard:
 ## Mobile Dashboard
 
 The firmware includes a built-in web dashboard that runs directly on the ESP32. No external server needed - just connect your phone and view live telemetry.
+
+> **Development:** To iterate on the dashboard UI without hardware, use the [Dashboard Development Tool](tools/dashboard-dev/README.md). It includes a canyon drive simulator and CSV replay for testing.
 
 ### How to Use
 

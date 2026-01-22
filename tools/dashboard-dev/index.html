@@ -321,6 +321,57 @@ body {
     font-variant-numeric: tabular-nums;
 }
 
+/* CSV Replay Controls */
+.csv-row {
+    display: none;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    margin-top: -8px;
+}
+
+.csv-row.visible {
+    display: flex;
+}
+
+.csv-name {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    letter-spacing: 1px;
+    max-width: 100px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.csv-progress {
+    flex: 1;
+    height: 8px;
+    background: var(--shadow-dark);
+    border-radius: 4px;
+    cursor: pointer;
+    position: relative;
+    box-shadow: inset 2px 2px 4px rgba(0,0,0,0.1);
+}
+
+.csv-bar {
+    height: 100%;
+    background: var(--accent);
+    width: 0%;
+    border-radius: 4px;
+    transition: width 0.1s linear;
+}
+
+.csv-time {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+    min-width: 80px;
+    text-align: right;
+}
+
 /* Hidden elements */
 .hidden { display: none !important; }
 </style></head>
@@ -332,6 +383,7 @@ body {
     <div class="status-row">
         <div class="status-pill">
             <span class="status-dot"></span>
+            <span id="stxt">SIM</span>
             <span class="timer" id="timer">00:00</span>
         </div>
     </div>
@@ -365,6 +417,15 @@ body {
         <canvas class="gforce-canvas" id="canvas"></canvas>
     </div>
 
+    <!-- CSV Playback Progress -->
+    <div class="csv-row neu-flat" id="csv-row">
+        <span class="csv-name" id="csv-name"></span>
+        <div class="csv-progress" id="csv-progress">
+            <div class="csv-bar" id="csv-bar"></div>
+        </div>
+        <span class="csv-time" id="csv-time">0:00 / 0:00</span>
+    </div>
+
     <!-- Metrics -->
     <div class="metrics-row">
         <div class="metric-card neu-flat">
@@ -394,9 +455,18 @@ body {
         <button class="control-btn neu-btn" id="exp">
             EXPORT
         </button>
+        <button class="control-btn neu-btn" id="load-csv">
+            LOAD
+        </button>
+        <button class="control-btn neu-btn hidden" id="sim-btn">
+            SIM
+        </button>
     </div>
 
 </div>
+
+<!-- Hidden file input -->
+<input type="file" id="csv-input" accept=".csv" style="display:none">
 
 <script>
 // === CANYON DRIVE SIMULATION ===
@@ -486,6 +556,131 @@ function classifyMode(lonG, latG, yawRad, speedMs) {
     if (inAccel) mode |= 1; if (inBrake) mode |= 2; if (inCorner) mode |= 4;
     if ((mode & 3) === 3) mode &= ~2;
     return mode;
+}
+
+// === CSV REPLAY ===
+let dataSource = 'loop'; // 'loop' or 'csv'
+let csvData = null;
+let csvFileName = '';
+let csvPlaybackIndex = 0;
+let csvStartTime = 0;
+let csvDuration = 0;
+
+function parseCSV(text) {
+    const lines = text.trim().split('\n');
+    const data = [];
+    // Skip header, parse data rows
+    for (let i = 1; i < lines.length; i++) {
+        const values = lines[i].split(',');
+        if (values.length < 8) continue;
+        data.push({
+            t: parseFloat(values[0]),
+            speed: parseFloat(values[1]),
+            latG: parseFloat(values[6]),  // lat_g column
+            lonG: parseFloat(values[7]),  // lon_g column
+            yawRad: parseFloat(values[4]), // wz column
+            mode: parseInt(values[5]) || 0
+        });
+    }
+    // Convert to relative timestamps
+    if (data.length > 0) {
+        const startT = data[0].t;
+        data.forEach(d => d.relativeT = d.t - startT);
+    }
+    return data;
+}
+
+function loadCSVData(text, filename) {
+    csvData = parseCSV(text);
+    if (csvData.length === 0) {
+        alert('No valid data in CSV');
+        return;
+    }
+    csvFileName = filename;
+    csvDuration = csvData[csvData.length - 1].relativeT;
+    csvPlaybackIndex = 0;
+    csvStartTime = Date.now();
+    dataSource = 'csv';
+    resetGMax();
+    updateSourceUI();
+}
+
+function switchToLoop() {
+    dataSource = 'loop';
+    loopStartTime = Date.now();
+    resetGMax();
+    updateSourceUI();
+}
+
+function updateSourceUI() {
+    const loadBtn = $('load-csv');
+    const simBtn = $('sim-btn');
+    const csvRow = $('csv-row');
+    const stxt = $('stxt');
+
+    if (dataSource === 'csv') {
+        loadBtn.classList.add('hidden');
+        simBtn.classList.remove('hidden');
+        csvRow.classList.add('visible');
+        $('csv-name').textContent = csvFileName.length > 15 ?
+            csvFileName.substring(0, 12) + '...' : csvFileName;
+        stxt.textContent = 'CSV';
+    } else {
+        loadBtn.classList.remove('hidden');
+        simBtn.classList.add('hidden');
+        csvRow.classList.remove('visible');
+        stxt.textContent = 'SIM';
+    }
+}
+
+function formatDuration(ms) {
+    const s = Math.floor(ms / 1000);
+    const m = Math.floor(s / 60);
+    return m + ':' + String(s % 60).padStart(2, '0');
+}
+
+function getCSVValues() {
+    if (!csvData || csvData.length === 0) return null;
+
+    const elapsed = Date.now() - csvStartTime;
+
+    // Find current frame
+    while (csvPlaybackIndex < csvData.length - 1 &&
+           csvData[csvPlaybackIndex + 1].relativeT <= elapsed) {
+        csvPlaybackIndex++;
+    }
+
+    // Loop if finished
+    if (csvPlaybackIndex >= csvData.length - 1 && elapsed > csvDuration) {
+        csvPlaybackIndex = 0;
+        csvStartTime = Date.now();
+    }
+
+    const frame = csvData[csvPlaybackIndex];
+
+    // Update progress bar
+    const progress = Math.min(1, elapsed / csvDuration);
+    $('csv-bar').style.width = (progress * 100) + '%';
+    $('csv-time').textContent = formatDuration(elapsed) + ' / ' + formatDuration(csvDuration);
+
+    return {
+        speed: frame.speed,
+        lonG: frame.lonG,
+        latG: frame.latG,
+        yawDeg: frame.yawRad * 180 / Math.PI,
+        mode: frame.mode
+    };
+}
+
+function seekCSV(pct) {
+    if (!csvData || csvDuration === 0) return;
+    const seekTime = pct * csvDuration;
+    csvPlaybackIndex = 0;
+    for (let i = 0; i < csvData.length; i++) {
+        if (csvData[i].relativeT <= seekTime) csvPlaybackIndex = i;
+        else break;
+    }
+    csvStartTime = Date.now() - seekTime;
 }
 
 // Canvas
@@ -594,19 +789,46 @@ function drawG() {
 function fmtG(v) { return Math.abs(v) < 0.005 ? '0.00' : v.toFixed(2); }
 function fmtTime(ms) { const s = Math.floor(ms / 1000), m = Math.floor(s / 60); return String(m).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); }
 
+function resetGMax() {
+    maxL = maxR = maxA = maxB = 0;
+    $('maxL').textContent = $('maxR').textContent = $('maxA').textContent = $('maxB').textContent = '0.00';
+    trail = [];
+    magnitudeHistory = [];
+    currentMaxG = 0.5;
+    emaGx = emaGy = 0;
+    displayedPeak = sessionPeak = 0;
+    $('peak-val').textContent = '0';
+    $('peak-row').classList.remove('visible');
+    sessionStart = Date.now();
+}
+
 // Main loop
 function simulate() {
-    const elapsed = Date.now() - loopStartTime;
-    const auto = getAutoValues(elapsed);
-    const simSpeed = addNoise(auto.speed, 2);
-    const simLonG = addNoise(auto.lonG, 0.02);
-    const simLatG = addNoise(auto.latG, 0.02);
-    const simYawDeg = addNoise(auto.yawDeg, 1);
+    let sp, latg, lng, yawDeg, mo;
 
-    const sp = simSpeed, latg = simLatG, lng = simLonG;
-    const yawDeg = Math.abs(simYawDeg), yawRad = simYawDeg * Math.PI / 180;
-    const speedMs = sp / 3.6;
-    const mo = classifyMode(lng, latg, yawRad, speedMs);
+    if (dataSource === 'csv' && csvData) {
+        const values = getCSVValues();
+        if (values) {
+            sp = values.speed;
+            latg = values.latG;
+            lng = values.lonG;
+            yawDeg = Math.abs(values.yawDeg);
+            mo = values.mode;
+        } else {
+            return;
+        }
+    } else {
+        const elapsed = Date.now() - loopStartTime;
+        const auto = getAutoValues(elapsed);
+        sp = addNoise(auto.speed, 2);
+        lng = addNoise(auto.lonG, 0.02);
+        latg = addNoise(auto.latG, 0.02);
+        const simYawDeg = addNoise(auto.yawDeg, 1);
+        yawDeg = Math.abs(simYawDeg);
+        const yawRad = simYawDeg * Math.PI / 180;
+        const speedMs = sp / 3.6;
+        mo = classifyMode(lng, latg, yawRad, speedMs);
+    }
 
     speed_ema = 0.7 * sp + 0.3 * speed_ema;
     const dspd = speed_ema < 1 ? 0 : Math.round(speed_ema);
@@ -656,7 +878,7 @@ function simulate() {
     drawG();
     cnt++;
 
-    if (rec) data.push({t: now, sp, ax: -lng * 9.81, ay: latg * 9.81, wz: yawRad, mo, latg, lng, lat: 37.8199, lon: -122.4783, gpsOk: 1});
+    if (rec) data.push({t: now, sp, ax: -lng * 9.81, ay: latg * 9.81, wz: yawDeg * Math.PI / 180, mo, latg, lng, lat: 37.8199, lon: -122.4783, gpsOk: 1});
 }
 
 setInterval(simulate, 33);
@@ -667,14 +889,7 @@ setInterval(() => {
 }, 1000);
 
 // Clear button
-$('clear-btn').onclick = () => {
-    maxL = maxR = maxA = maxB = 0;
-    $('maxL').textContent = $('maxR').textContent = $('maxA').textContent = $('maxB').textContent = '0.00';
-    trail = [];
-    magnitudeHistory = [];
-    currentMaxG = 0.5;
-    emaGx = emaGy = 0;
-};
+$('clear-btn').onclick = resetGMax;
 
 // Record button
 $('rec').onclick = () => {
@@ -704,6 +919,22 @@ $('exp').onclick = () => {
     s[0].d.forEach(r => { c += r.t + ',' + r.sp + ',' + r.ax + ',' + r.ay + ',' + r.wz + ',' + r.mo + ',' + r.latg + ',' + r.lng + ',' + (r.lat || 0) + ',' + (r.lon || 0) + ',' + (r.gpsOk || 0) + '\n'; });
     const b = new Blob([c], {type: 'text/csv'}), u = URL.createObjectURL(b), a = document.createElement('a');
     a.href = u; a.download = 'blackbox.csv'; a.click();
+};
+
+// CSV replay handlers
+$('load-csv').onclick = () => $('csv-input').click();
+$('csv-input').onchange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => loadCSVData(evt.target.result, file.name);
+    reader.readAsText(file);
+};
+$('sim-btn').onclick = switchToLoop;
+$('csv-progress').onclick = (e) => {
+    const rect = e.target.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    seekCSV(pct);
 };
 </script>
 </body></html>
