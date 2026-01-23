@@ -58,9 +58,9 @@ pub struct OrientationCorrector {
     pitch_correction: f32,
     /// Roll correction in radians (added to AHRS roll before gravity removal)
     roll_correction: f32,
-    /// Confidence in pitch correction (0-1, based on learning samples)
+    /// Confidence in pitch correction (0-1, based on stability)
     pitch_confidence: f32,
-    /// Confidence in roll correction (0-1)
+    /// Confidence in roll correction (0-1, based on stability)
     roll_confidence: f32,
     /// Cruise bias - offset learned when driving at constant speed (m/s²)
     /// This catches mounting offsets that show up during cruise but not at stops
@@ -76,12 +76,20 @@ pub struct OrientationCorrector {
     /// Minimum speed for learning (m/s) - need motion for GPS accuracy
     min_speed: f32,
     /// Minimum acceleration to trigger pitch/roll learning (m/s²)
-    /// Below this threshold, cruise bias learning kicks in instead
+    /// Must be well above GPS noise floor (~0.5g at 15Hz GPS)
     min_accel: f32,
     /// Maximum correction magnitude (radians) - safety cap
     max_correction: f32,
-    /// Number of learning updates (for confidence calculation)
+    /// Number of learning updates (for confidence ramp-up)
     update_count: u32,
+    /// Rolling variance of pitch correction (for stability-based confidence)
+    pitch_variance: f32,
+    /// Rolling variance of roll correction
+    roll_variance: f32,
+    /// Previous pitch correction (for variance calculation)
+    prev_pitch_corr: f32,
+    /// Previous roll correction (for variance calculation)
+    prev_roll_corr: f32,
 }
 
 impl OrientationCorrector {
@@ -97,9 +105,13 @@ impl OrientationCorrector {
             cruise_time: 0.0,
             alpha: 0.05,          // Slow learning for stability
             min_speed: 3.0,       // ~11 km/h
-            min_accel: 0.3,       // ~0.03g - lowered to learn from more events
+            min_accel: 1.5,       // ~0.15g - must be above GPS noise floor
             max_correction: 0.26, // ~15 degrees max
             update_count: 0,
+            pitch_variance: 0.0,
+            roll_variance: 0.0,
+            prev_pitch_corr: 0.0,
+            prev_roll_corr: 0.0,
         }
     }
 
@@ -143,15 +155,29 @@ impl OrientationCorrector {
             let pitch_innovation = lon_error / G;
 
             // EMA update with clamping
-            self.pitch_correction =
-                (1.0 - self.alpha) * self.pitch_correction + self.alpha * pitch_innovation;
-            self.pitch_correction = self
-                .pitch_correction
-                .clamp(-self.max_correction, self.max_correction);
+            let new_pitch = (1.0 - self.alpha) * self.pitch_correction + self.alpha * pitch_innovation;
+            let new_pitch_clamped = new_pitch.clamp(-self.max_correction, self.max_correction);
 
-            // Update confidence
+            // Track variance for stability-based confidence
+            // Use EMA of squared changes to estimate rolling variance
+            let pitch_change = new_pitch_clamped - self.prev_pitch_corr;
+            self.pitch_variance =
+                0.95 * self.pitch_variance + 0.05 * (pitch_change * pitch_change);
+            self.prev_pitch_corr = self.pitch_correction;
+
+            self.pitch_correction = new_pitch_clamped;
+
+            // Update confidence based on both update count AND stability
+            // Confidence = min(ramp_up, stability)
+            // - ramp_up: reaches 1.0 after 100 updates
+            // - stability: 1.0 when variance < 0.0001 rad² (~0.6°), 0 when variance > 0.01 rad² (~6°)
             self.update_count = self.update_count.saturating_add(1);
-            self.pitch_confidence = (self.update_count as f32 / 100.0).min(1.0);
+            let ramp_up = (self.update_count as f32 / 100.0).min(1.0);
+            // Convert variance to stability score (low variance = high stability)
+            // variance of 0.0001 rad² (~0.6° std) → stability = 1.0
+            // variance of 0.01 rad² (~6° std) → stability = 0.0
+            let stability = (1.0 - (self.pitch_variance - 0.0001) / 0.01).clamp(0.0, 1.0);
+            self.pitch_confidence = ramp_up * stability;
 
             // Reset cruise accumulator when accelerating
             self.cruise_time = 0.0;
@@ -186,13 +212,20 @@ impl OrientationCorrector {
         if lat_gps.abs() > self.min_accel {
             let roll_innovation = lat_error / G;
 
-            self.roll_correction =
-                (1.0 - self.alpha) * self.roll_correction + self.alpha * roll_innovation;
-            self.roll_correction = self
-                .roll_correction
-                .clamp(-self.max_correction, self.max_correction);
+            let new_roll = (1.0 - self.alpha) * self.roll_correction + self.alpha * roll_innovation;
+            let new_roll_clamped = new_roll.clamp(-self.max_correction, self.max_correction);
 
-            self.roll_confidence = (self.update_count as f32 / 100.0).min(1.0);
+            // Track variance for stability-based confidence
+            let roll_change = new_roll_clamped - self.prev_roll_corr;
+            self.roll_variance = 0.95 * self.roll_variance + 0.05 * (roll_change * roll_change);
+            self.prev_roll_corr = self.roll_correction;
+
+            self.roll_correction = new_roll_clamped;
+
+            // Stability-based confidence for roll
+            let ramp_up = (self.update_count as f32 / 100.0).min(1.0);
+            let stability = (1.0 - (self.roll_variance - 0.0001) / 0.01).clamp(0.0, 1.0);
+            self.roll_confidence = ramp_up * stability;
         }
     }
 
@@ -246,6 +279,10 @@ impl OrientationCorrector {
         self.cruise_bias_count = 0;
         self.cruise_time = 0.0;
         self.update_count = 0;
+        self.pitch_variance = 0.0;
+        self.roll_variance = 0.0;
+        self.prev_pitch_corr = 0.0;
+        self.prev_roll_corr = 0.0;
     }
 }
 
@@ -325,7 +362,9 @@ pub struct GpsAcceleration {
     prev_speed: f32,
     /// Previous timestamp (seconds, monotonic)
     prev_time: f32,
-    /// Computed longitudinal acceleration (m/s²)
+    /// Raw computed longitudinal acceleration (m/s²)
+    accel_raw: f32,
+    /// EMA-filtered longitudinal acceleration (m/s²)
     accel_lon: f32,
     /// Is the acceleration estimate valid?
     valid: bool,
@@ -339,6 +378,8 @@ pub struct GpsAcceleration {
     last_fix_count: u32,
     /// Time of last rate calculation
     last_rate_time: f32,
+    /// EMA alpha for acceleration smoothing (smaller = more smoothing)
+    accel_alpha: f32,
 }
 
 impl GpsAcceleration {
@@ -346,6 +387,7 @@ impl GpsAcceleration {
         Self {
             prev_speed: 0.0,
             prev_time: 0.0,
+            accel_raw: 0.0,
             accel_lon: 0.0,
             valid: false,
             gps_rate: 0.0,
@@ -353,6 +395,9 @@ impl GpsAcceleration {
             rate_ema: 0.0,
             last_fix_count: 0,
             last_rate_time: 0.0,
+            // EMA alpha = 0.3 provides good smoothing while staying responsive
+            // At 25Hz GPS: ~3 samples to reach 95% of step change
+            accel_alpha: 0.3,
         }
     }
 
@@ -363,7 +408,7 @@ impl GpsAcceleration {
     /// * `time` - Current timestamp in seconds (monotonic)
     ///
     /// # Returns
-    /// The computed longitudinal acceleration, or None if not enough data
+    /// The EMA-filtered longitudinal acceleration, or None if not enough data
     pub fn update(&mut self, speed: f32, time: f32) -> Option<f32> {
         self.time_since_fix = 0.0;
 
@@ -372,9 +417,20 @@ impl GpsAcceleration {
 
             // Validate dt: should be 20-200ms for 5-50Hz GPS
             if dt > 0.02 && dt < 0.5 {
-                self.accel_lon = (speed - self.prev_speed) / dt;
-                self.valid = true;
+                // Compute raw acceleration
+                let accel_new = (speed - self.prev_speed) / dt;
+                self.accel_raw = accel_new;
 
+                // Outlier rejection: ignore spikes > 2g (19.6 m/s²)
+                // Real vehicle accel rarely exceeds 1g, GPS noise can spike to 5g+
+                if accel_new.abs() < 19.6 {
+                    // EMA filter to smooth GPS noise
+                    self.accel_lon =
+                        self.accel_alpha * accel_new + (1.0 - self.accel_alpha) * self.accel_lon;
+                }
+                // else: keep previous filtered value (reject outlier)
+
+                self.valid = true;
                 self.prev_speed = speed;
                 self.prev_time = time;
 
@@ -385,6 +441,11 @@ impl GpsAcceleration {
         self.prev_speed = speed;
         self.prev_time = time;
         None
+    }
+
+    /// Get raw (unfiltered) GPS acceleration for diagnostics
+    pub fn get_accel_raw(&self) -> f32 {
+        self.accel_raw
     }
 
     /// Update GPS rate estimate
@@ -1056,9 +1117,24 @@ mod tests {
         assert!(gps.update(10.0, 1.0).is_none());
 
         // Second update - should compute acceleration
-        let accel = gps.update(12.0, 1.1); // 2 m/s increase over 0.1s = 20 m/s²
+        // Raw: 0.5 m/s increase over 0.1s = 5 m/s² (~0.5g, realistic)
+        let accel = gps.update(10.5, 1.1);
         assert!(accel.is_some());
-        assert!((accel.unwrap() - 20.0).abs() < 0.1);
+
+        // Check raw value is correct
+        assert!(
+            (gps.get_accel_raw() - 5.0).abs() < 0.1,
+            "Raw accel should be 5 m/s², got {}",
+            gps.get_accel_raw()
+        );
+
+        // EMA-filtered with alpha=0.3: first value = 0.3 * 5 + 0.7 * 0 = 1.5 m/s²
+        let filtered = accel.unwrap();
+        assert!(
+            (filtered - 1.5).abs() < 0.3,
+            "Filtered accel should be ~1.5 m/s² (EMA from 0), got {}",
+            filtered
+        );
     }
 
     #[test]
@@ -1067,10 +1143,69 @@ mod tests {
 
         // Use non-zero times (prev_time > 0.0 check in code)
         gps.update(20.0, 1.0);
-        let accel = gps.update(15.0, 1.1); // 5 m/s decrease = -50 m/s²
+        // Raw: 1 m/s decrease over 0.1s = -10 m/s² (~1g braking, realistic)
+        let accel = gps.update(19.0, 1.1);
 
         assert!(accel.is_some());
-        assert!((accel.unwrap() + 50.0).abs() < 0.1);
+        assert!(
+            (gps.get_accel_raw() + 10.0).abs() < 0.1,
+            "Raw accel should be -10 m/s², got {}",
+            gps.get_accel_raw()
+        );
+        // EMA-filtered with alpha=0.3: first value = 0.3 * -10 + 0.7 * 0 = -3.0 m/s²
+        let filtered = accel.unwrap();
+        assert!(
+            (filtered + 3.0).abs() < 0.5,
+            "Filtered accel should be ~-3.0 m/s² (EMA from 0), got {}",
+            filtered
+        );
+    }
+
+    #[test]
+    fn test_gps_acceleration_ema_converges() {
+        // Test that EMA converges to steady-state with repeated inputs
+        let mut gps = GpsAcceleration::new();
+
+        gps.update(10.0, 1.0);
+
+        // Feed constant acceleration (speed increases by 1 m/s every 0.1s = 10 m/s²)
+        for i in 1..10 {
+            let speed = 10.0 + (i as f32);
+            let time = 1.0 + (i as f32) * 0.1;
+            gps.update(speed, time);
+        }
+
+        // After ~10 samples, EMA should be close to 10 m/s²
+        let accel = gps.get_accel().unwrap();
+        assert!(
+            (accel - 10.0).abs() < 1.0,
+            "EMA should converge to 10 m/s² after repeated samples: got {}",
+            accel
+        );
+    }
+
+    #[test]
+    fn test_gps_acceleration_outlier_rejection() {
+        // Test that outliers > 2g are rejected
+        let mut gps = GpsAcceleration::new();
+
+        // Setup: normal acceleration
+        gps.update(10.0, 1.0);
+        gps.update(11.0, 1.1); // 10 m/s²
+        let accel_before = gps.get_accel().unwrap();
+
+        // Spike: would be 200 m/s² = 20g (outlier!)
+        // Speed jump of 20 m/s in 0.1s
+        gps.update(31.0, 1.2);
+
+        // Filtered value should NOT change much (outlier rejected)
+        let accel_after = gps.get_accel().unwrap();
+        assert!(
+            (accel_after - accel_before).abs() < 1.0,
+            "Outlier should be rejected: before={}, after={}",
+            accel_before,
+            accel_after
+        );
     }
 
     #[test]

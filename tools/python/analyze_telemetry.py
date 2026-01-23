@@ -16,6 +16,95 @@ import csv
 import sys
 from collections import Counter
 import statistics
+import math
+
+
+def detect_driving_context(speeds):
+    """
+    Detect driving context from speed profile.
+    Returns: 'highway', 'city', 'track', or 'mixed'
+    """
+    if not speeds:
+        return 'unknown'
+
+    mean_speed = statistics.mean(speeds)
+    max_speed = max(speeds)
+    min_speed = min(speeds)
+    speed_range = max_speed - min_speed
+
+    # Highway: consistently high speed (>80 km/h), low variation
+    # Track: high speeds with large variations (hard accel/braking)
+    # City: lower speeds with stops
+
+    stopped_pct = sum(1 for s in speeds if s < 5) / len(speeds)
+    highway_pct = sum(1 for s in speeds if s > 80) / len(speeds)
+
+    if highway_pct > 0.8 and speed_range < 40:
+        return 'highway'
+    elif highway_pct > 0.5 and speed_range > 50:
+        return 'track'
+    elif stopped_pct > 0.2:
+        return 'city'
+    elif mean_speed < 50:
+        return 'city'
+    else:
+        return 'mixed'
+
+
+def get_context_thresholds(context):
+    """
+    Get appropriate analysis thresholds for driving context.
+    Returns dict with ground_truth_thresh, expected_max_g, correction_stability_thresh
+    """
+    thresholds = {
+        'highway': {
+            'ground_truth_accel': 0.08,  # Highway inputs are gentle
+            'ground_truth_brake': 0.08,
+            'expected_max_g': 0.25,  # Don't expect hard braking on highway
+            'pitch_stability': 3.0,  # Degrees - car shouldn't pitch much
+            'roll_stability': 5.0,   # Degrees - some roll in lane changes
+            'mode_accel_thresh': 0.12,  # Match highway preset
+            'mode_brake_thresh': 0.15,
+        },
+        'city': {
+            'ground_truth_accel': 0.05,
+            'ground_truth_brake': 0.05,
+            'expected_max_g': 0.40,
+            'pitch_stability': 5.0,
+            'roll_stability': 8.0,
+            'mode_accel_thresh': 0.10,
+            'mode_brake_thresh': 0.15,
+        },
+        'track': {
+            'ground_truth_accel': 0.10,
+            'ground_truth_brake': 0.10,
+            'expected_max_g': 1.5,
+            'pitch_stability': 8.0,
+            'roll_stability': 12.0,
+            'mode_accel_thresh': 0.35,
+            'mode_brake_thresh': 0.35,
+        },
+        'mixed': {
+            'ground_truth_accel': 0.05,
+            'ground_truth_brake': 0.05,
+            'expected_max_g': 0.50,
+            'pitch_stability': 5.0,
+            'roll_stability': 8.0,
+            'mode_accel_thresh': 0.10,
+            'mode_brake_thresh': 0.15,
+        },
+        'unknown': {
+            'ground_truth_accel': 0.05,
+            'ground_truth_brake': 0.05,
+            'expected_max_g': 0.50,
+            'pitch_stability': 5.0,
+            'roll_stability': 8.0,
+            'mode_accel_thresh': 0.10,
+            'mode_brake_thresh': 0.15,
+        },
+    }
+    return thresholds.get(context, thresholds['mixed'])
+
 
 def analyze_telemetry(filename):
     with open(filename, 'r') as f:
@@ -52,6 +141,11 @@ def analyze_telemetry(filename):
     speeds = [float(r['speed']) for r in rows]
     print(f"Range: {min(speeds):.1f} to {max(speeds):.1f} km/h")
     print(f"Mean: {statistics.mean(speeds):.1f} km/h")
+
+    # Detect driving context
+    context = detect_driving_context(speeds)
+    thresholds = get_context_thresholds(context)
+    print(f"Detected context: {context.upper()}")
 
     # Time spent in speed bands
     stopped = sum(1 for s in speeds if s < 2)
@@ -151,13 +245,27 @@ def analyze_telemetry(filename):
         roll_confs = [float(r['roll_conf']) for r in rows]
 
         pc_mean, pc_min, pc_max = statistics.mean(pitch_corrs), min(pitch_corrs), max(pitch_corrs)
-        print(f"Pitch correction: {pc_mean:.1f}° (range {pc_min:.1f}° to {pc_max:.1f}°)")
+        pc_std = statistics.stdev(pitch_corrs) if len(pitch_corrs) > 1 else 0
+        pc_range = pc_max - pc_min
+        print(f"Pitch correction: {pc_mean:.1f}° (range {pc_min:.1f}° to {pc_max:.1f}°, std={pc_std:.1f}°)")
         pcf_mean, pcf_min, pcf_max = statistics.mean(pitch_confs), min(pitch_confs), max(pitch_confs)
         print(f"Pitch confidence: {pcf_mean:.0f}% (range {pcf_min:.0f}% to {pcf_max:.0f}%)")
+
         rc_mean, rc_min, rc_max = statistics.mean(roll_corrs), min(roll_corrs), max(roll_corrs)
-        print(f"Roll correction: {rc_mean:.1f}° (range {rc_min:.1f}° to {rc_max:.1f}°)")
+        rc_std = statistics.stdev(roll_corrs) if len(roll_corrs) > 1 else 0
+        rc_range = rc_max - rc_min
+        print(f"Roll correction: {rc_mean:.1f}° (range {rc_min:.1f}° to {rc_max:.1f}°, std={rc_std:.1f}°)")
         rcf_mean, rcf_min, rcf_max = statistics.mean(roll_confs), min(roll_confs), max(roll_confs)
         print(f"Roll confidence: {rcf_mean:.0f}% (range {rcf_min:.0f}% to {rcf_max:.0f}%)")
+
+        # Correction stability assessment
+        pitch_stable = pc_std < thresholds['pitch_stability']
+        roll_stable = rc_std < thresholds['roll_stability']
+        print(f"\nCorrection stability ({context}):")
+        print(f"  Pitch: {'STABLE' if pitch_stable else 'UNSTABLE'} (std={pc_std:.1f}°, "
+              f"expect <{thresholds['pitch_stability']:.0f}° for {context})")
+        print(f"  Roll:  {'STABLE' if roll_stable else 'UNSTABLE'} (std={rc_std:.1f}°, "
+              f"expect <{thresholds['roll_stability']:.0f}° for {context})")
 
         # Tilt offsets
         tilt_x = [float(r['tilt_x']) for r in rows]
@@ -168,12 +276,16 @@ def analyze_telemetry(filename):
         # Confidence assessment
         avg_pitch_conf = statistics.mean(pitch_confs)
         if avg_pitch_conf < 30:
-            print("⚠️  LOW PITCH CONFIDENCE: OrientationCorrector hasn't learned enough")
+            print("\n⚠️  LOW PITCH CONFIDENCE: OrientationCorrector hasn't learned enough")
             print("    Need more acceleration/braking events for learning")
         elif avg_pitch_conf < 70:
-            print("⚠️  MODERATE PITCH CONFIDENCE: OrientationCorrector still learning")
+            print("\n⚠️  MODERATE PITCH CONFIDENCE: OrientationCorrector still learning")
+        elif not pitch_stable:
+            print("\n⚠️  HIGH CONFIDENCE BUT UNSTABLE: Corrections oscillating")
+            print("    This indicates firmware bug: min_accel threshold too low,")
+            print("    allowing GPS noise to trigger learning. Fix in firmware.")
         else:
-            print("✓ HIGH PITCH CONFIDENCE: OrientationCorrector well-calibrated")
+            print("\n✓ HIGH PITCH CONFIDENCE + STABLE: OrientationCorrector well-calibrated")
         print()
 
     # === RAW ACCELEROMETER ===
@@ -205,30 +317,65 @@ def analyze_telemetry(filename):
 
     # Calculate acceleration from speed changes
     true_accels = []
+    dt_values = []
     for i in range(1, len(rows)):
         dt = (int(rows[i]['time']) - int(rows[i - 1]['time'])) / 1000.0  # seconds
         if dt > 0:
             dv = (float(rows[i]['speed']) - float(rows[i - 1]['speed'])) / 3.6  # m/s
             accel_g = (dv / dt) / 9.80665  # in G
             true_accels.append(accel_g)
+            dt_values.append(dt)
 
     if true_accels:
         print(f"GPS-derived accel range: {min(true_accels):.3f}g to {max(true_accels):.3f}g")
+        true_std = statistics.stdev(true_accels) if len(true_accels) > 1 else 0
+        avg_dt = statistics.mean(dt_values) if dt_values else 0
 
-        # Count actual accel/brake events using speed-derived acceleration
-        accel_events = sum(1 for a in true_accels if a > 0.05)  # > 0.05g
-        brake_events = sum(1 for a in true_accels if a < -0.05)  # < -0.05g
+        # Estimate GPS speed noise based on accel std dev when speed is stable
+        # When truly coasting at constant speed, GPS accel should be ~0
+        # Any measured accel is noise
+        stable_true_accels = []
+        for i in range(1, len(rows)):
+            speed_diff = abs(float(rows[i]['speed']) - float(rows[i - 1]['speed']))
+            if speed_diff < 0.5:  # Speed "stable" within 0.5 km/h
+                dt = (int(rows[i]['time']) - int(rows[i - 1]['time'])) / 1000.0
+                if dt > 0:
+                    dv = (float(rows[i]['speed']) - float(rows[i - 1]['speed'])) / 3.6
+                    accel_g = (dv / dt) / 9.80665
+                    stable_true_accels.append(accel_g)
+
+        print(f"GPS-derived accel std dev: {true_std:.3f}g")
+        if stable_true_accels:
+            noise_std = statistics.stdev(stable_true_accels) if len(stable_true_accels) > 1 else 0
+            # Estimate speed measurement noise: noise_accel ≈ speed_noise / dt
+            # so speed_noise ≈ noise_accel * dt * 9.81 (in m/s)
+            speed_noise = noise_std * 9.81 * avg_dt if avg_dt > 0 else 0
+            print(f"Estimated GPS speed noise: ±{speed_noise:.2f} m/s (from stable-speed accel std)")
+            print(f"GPS accel noise (at {1/avg_dt:.0f}Hz): ±{noise_std:.3f}g")
+            if noise_std > 0.15:
+                print("  ⚠️  HIGH GPS NOISE: OrientationCorrector learning is compromised")
+                print(f"     Need firmware fix: raise min_accel threshold above {noise_std*9.81:.1f} m/s²")
+
+        # Count actual accel/brake events using context-aware thresholds
+        accel_thresh = thresholds['ground_truth_accel']
+        brake_thresh = thresholds['ground_truth_brake']
+        accel_events = sum(1 for a in true_accels if a > accel_thresh)
+        brake_events = sum(1 for a in true_accels if a < -brake_thresh)
         coast_events = len(true_accels) - accel_events - brake_events
-        print(f"True events: accel={accel_events}, brake={brake_events}, coast={coast_events}")
+        print(f"True events ({context}, >{accel_thresh:.2f}g): "
+              f"accel={accel_events}, brake={brake_events}, coast={coast_events}")
     print()
 
     # === MODE ACCURACY ANALYSIS ===
     print("--- MODE DETECTION ACCURACY ---")
 
-    # Ground truth thresholds for determining "truly accelerating/braking"
-    # (independent of mode detection thresholds)
-    TRUE_ACCEL_THRESH = 0.05  # 0.05g from speed changes = real acceleration
-    TRUE_BRAKE_THRESH = 0.05  # 0.05g from speed changes = real braking
+    # Use context-aware thresholds that match mode detector settings
+    # This gives meaningful accuracy metrics for the detected driving context
+    mode_accel_thresh = thresholds['mode_accel_thresh']
+    mode_brake_thresh = thresholds['mode_brake_thresh']
+
+    print(f"Using {context} thresholds: accel>{mode_accel_thresh:.2f}g, brake>{mode_brake_thresh:.2f}g")
+    print(f"(Matching firmware mode detector thresholds for {context} preset)\n")
 
     tp_accel = fp_accel = fn_accel = 0
     tp_brake = fp_brake = fn_brake = 0
@@ -246,8 +393,8 @@ def analyze_telemetry(filename):
 
         is_accel_mode = mode in [1, 5]
         is_brake_mode = mode in [2, 6]
-        truly_accelerating = true_accel_g > TRUE_ACCEL_THRESH
-        truly_braking = true_accel_g < -TRUE_BRAKE_THRESH
+        truly_accelerating = true_accel_g > mode_accel_thresh
+        truly_braking = true_accel_g < -mode_brake_thresh
 
         # ACCEL accuracy
         if is_accel_mode and truly_accelerating:
@@ -349,6 +496,16 @@ def analyze_telemetry(filename):
         if avg_gps_weight > 0.8:
             issues.append(f"High GPS weight: {avg_gps_weight:.0f}% (IMU correction not trusted yet)")
 
+        # Check correction stability (context-aware)
+        if pc_std > thresholds['pitch_stability']:
+            issues.append(f"Pitch correction unstable: std={pc_std:.1f}° (expect <{thresholds['pitch_stability']:.0f}° for {context})")
+        if rc_std > thresholds['roll_stability']:
+            issues.append(f"Roll correction unstable: std={rc_std:.1f}° (expect <{thresholds['roll_stability']:.0f}° for {context})")
+
+        # High confidence + high instability = firmware bug
+        if avg_pitch_conf > 70 and pc_std > thresholds['pitch_stability']:
+            issues.append("FIRMWARE BUG: High confidence but unstable corrections (min_accel too low)")
+
     if issues:
         print("ISSUES DETECTED:")
         for issue in issues:
@@ -364,6 +521,14 @@ def analyze_telemetry(filename):
         if avg_pitch_conf < 50:
             print("• Drive more with varied acceleration/braking to train OrientationCorrector")
 
+        # Check for correction instability + high confidence = firmware bug
+        if avg_pitch_conf > 70 and pc_std > thresholds['pitch_stability']:
+            print("\n** FIRMWARE FIX NEEDED **")
+            print("• OrientationCorrector is learning from GPS noise (corrections oscillate)")
+            print("• Fix: Raise min_accel threshold in OrientationCorrector")
+            print("• Fix: Add EMA filter to GPS-derived acceleration")
+            print("• Fix: Base confidence on correction stability, not update count")
+
         if stable_lon:
             bias = statistics.mean(stable_lon)
             if bias > 0.05:
@@ -371,6 +536,13 @@ def analyze_telemetry(filename):
                 print(f"• Consider lowering BRAKE threshold by ~{bias:.2f}g to improve brake detection")
             elif bias < -0.05:
                 print(f"• Consider lowering ACCEL threshold by ~{abs(bias):.2f}g to compensate for negative bias")
+
+        # Context-specific advice
+        if context == 'highway' and pc_range > 8:
+            print(f"\n• Highway driving detected with high pitch swing ({pc_range:.1f}°)")
+            print("  - This is abnormal for highway (smooth roads, gentle inputs)")
+            print("  - Root cause: GPS accel noise at 15-25Hz triggers OrientationCorrector")
+
     else:
         print("• Re-record with latest firmware to get fusion diagnostics for detailed analysis")
 
