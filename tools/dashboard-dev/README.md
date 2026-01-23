@@ -62,20 +62,26 @@ Load and replay telemetry sessions exported from the production dashboard:
 
 **Supported CSV format:**
 ```
-time,speed,ax,ay,wz,mode,lat_g,lon_g,gps_lat,gps_lon,gps_valid
+time,speed,ax,ay,wz,mode,lat_g,lon_g,gps_lat,gps_lon,gps_valid,lon_imu,lon_gps,gps_weight,pitch_corr,pitch_conf,roll_corr,roll_conf,tilt_x,tilt_y
 ```
 
-This matches the export format from the production dashboard's EXPORT button.
+This matches the export format from the production dashboard's EXPORT button. The additional fusion fields (lon_imu through tilt_y) are optional and used for diagnostics.
 
 ### Recording
 
 The dashboard can record simulated or replayed sessions:
 
 - **REC** - Start recording (button turns red, shows STOP)
-- **STOP** - Stop recording and save to browser localStorage
+- **STOP** - Stop recording
 - **EXPORT** - Download the most recent recording as CSV
 
-Recordings are stored in browser localStorage (persists across page reloads, up to 10 sessions).
+**Dev tool (this simulator):** Uses localStorage (limited to ~5MB / ~6 minutes at 30 Hz).
+
+**Production dashboard:** Uses IndexedDB with 60-second auto-save chunks for multi-hour recordings:
+- Automatically saves data every 60 seconds to prevent data loss
+- Supports recordings up to 3+ hours
+- Recovers incomplete sessions if browser crashes or is backgrounded
+- Recording survives navigating between Dashboard and Diagnostics views
 
 ### Mode Detection
 
@@ -120,7 +126,9 @@ When you're happy with changes in `index.html`:
 - HTTP polling to `/api/telemetry` (instead of local simulation)
 - GPS status indicator with firmware rate
 - Inline fusion diagnostics for CSV export
-- Link to diagnostics page
+- Integrated diagnostics view (single-page app, no navigation)
+- IndexedDB chunked recording for multi-hour sessions
+- Session recovery on page load
 
 ## Related Files
 

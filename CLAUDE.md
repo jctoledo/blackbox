@@ -788,6 +788,27 @@ Dashboard validates threshold ranges before sending to ESP32:
 **Changed from WebSocket (ap_enabled branch):**
 Originally used WebSocket push at 30Hz but this caused thread starvation. Refactored to HTTP polling for reliability.
 
+**Single-Page App Architecture:**
+Dashboard and diagnostics are combined in one HTML page with CSS-based view switching:
+- Dashboard view: G-meter, speed, mode display, telemetry strip
+- Diagnostics view: Sensor rates, EKF health, GPS status, fusion diagnostics, recording status
+- Navigation via DIAG link (top right) and "← Dashboard" button
+- View switching preserves JavaScript context (recording continues uninterrupted)
+
+**IndexedDB Recording System:**
+Chunked recording for multi-hour sessions (replaces localStorage):
+- Auto-saves every 60 seconds to IndexedDB (`blackbox-rec` database)
+- Two object stores: `sessions` (metadata) and `chunks` (data segments)
+- ~900KB per chunk at 30 Hz, enabling 3+ hour recordings
+- Export flushes current buffer before collecting chunks
+- Transaction error handling preserves data on failure
+
+**Session Recovery:**
+On page load, checks for incomplete sessions (`status: 'active'`):
+- Displays "⚠ Recovered" status with chunk count
+- User can export recovered data or start new recording
+- Protects against data loss from browser crashes or app switching
+
 ### diagnostics.rs - System Health Monitoring
 
 **Purpose:**

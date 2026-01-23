@@ -187,50 +187,22 @@ pub struct TelemetryServer {
     state: Arc<TelemetryServerState>,
 }
 
-/// Apple-native iOS dashboard with light/dark mode and kebab menu
+/// Combined dashboard + diagnostics single-page app with IndexedDB recording
 const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
 <html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><title>Blackbox</title>
 <style>
 :root{
-    --bg:#f2f2f7;
-    --surface:#ffffff;
-    --text:#1c1c1e;
-    --text-secondary:#48484a;
-    --text-tertiary:#8e8e93;
-    --divider:rgba(0,0,0,.08);
-    --ok:#34c759;
-    --amber:#ff9500;
-    --red:#ff3b30;
-    --mode-idle:#8e8e93;
-    --mode-accel:#1c1c1e;
-    --mode-brake:#ff3b30;
+    --bg:#f2f2f7;--surface:#ffffff;--text:#1c1c1e;--text-secondary:#48484a;--text-tertiary:#8e8e93;
+    --divider:rgba(0,0,0,.08);--ok:#34c759;--amber:#ff9500;--red:#ff3b30;
+    --mode-idle:#8e8e93;--mode-accel:#1c1c1e;--mode-brake:#ff3b30;
 }
 .dark{
-    --bg:#000000;
-    --surface:#1c1c1e;
-    --text:#ffffff;
-    --text-secondary:#aeaeb2;
-    --text-tertiary:#636366;
-    --divider:rgba(255,255,255,.08);
-    --mode-idle:#636366;
-    --mode-accel:#ffffff;
-    --mode-brake:#ff3b30;
+    --bg:#000000;--surface:#1c1c1e;--text:#ffffff;--text-secondary:#aeaeb2;--text-tertiary:#636366;
+    --divider:rgba(255,255,255,.08);--mode-idle:#636366;--mode-accel:#ffffff;--mode-brake:#ff3b30;
 }
 *{margin:0;padding:0;box-sizing:border-box}
-body{
-    font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display',system-ui,sans-serif;
-    background:var(--bg);
-    color:var(--text);
-    height:100vh;
-    height:100dvh;
-    display:flex;
-    flex-direction:column;
-    -webkit-user-select:none;
-    user-select:none;
-    overflow:hidden;
-    transition:background 0.3s,color 0.3s;
-}
+body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display',system-ui,sans-serif;background:var(--bg);color:var(--text);height:100vh;height:100dvh;display:flex;flex-direction:column;-webkit-user-select:none;user-select:none;overflow:hidden;transition:background 0.3s,color 0.3s}
 .bbNum{font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1,"lnum" 1}
 .bbTopbar{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;background:transparent;flex-shrink:0}
 .bbBrandToggle{background:none;border:0;padding:0;display:flex;align-items:baseline;gap:8px;cursor:pointer;color:inherit;font-family:inherit}
@@ -242,10 +214,15 @@ body{
 .bbStatusItem{display:flex;align-items:center;gap:4px}
 .bbDot{width:6px;height:6px;border-radius:50%;background:var(--text-tertiary);display:inline-block;opacity:.9;margin-right:2px;transition:all 0.3s}
 .bbDot.on{background:var(--ok)}
+.bbDot.rec{background:var(--red);animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
 .bbHigh{color:var(--ok);font-weight:600}
-.bbDiag{color:var(--text-tertiary);text-decoration:none;font-size:10px;opacity:.5}
+.bbDiag{color:var(--text-tertiary);text-decoration:none;font-size:10px;opacity:.7;cursor:pointer}
+.bbDiag:hover{opacity:1}
+.bbBack{color:var(--text-tertiary);text-decoration:none;font-size:12px;font-weight:500;letter-spacing:.03em;padding:8px 14px;background:var(--surface);border-radius:16px;display:flex;align-items:center;gap:4px;cursor:pointer}
+.bbBack:active{opacity:.7}
 .bbKebab{background:none;border:0;padding:4px;font-size:24px;line-height:1;opacity:.6;cursor:pointer;color:inherit}
-.bbApp{flex:1;display:flex;flex-direction:column;padding:0 12px 8px;min-height:0}
+.bbApp{flex:1;display:flex;flex-direction:column;padding:0 12px 8px;min-height:0;overflow-y:auto}
 .bbCard{background:var(--surface);border-radius:16px;overflow:hidden}
 .bbGCard{flex:1;display:flex;flex-direction:column;margin-bottom:4px}
 .bbGTop{display:flex;justify-content:space-between;align-items:flex-start;padding:12px 18px 6px;flex-shrink:0}
@@ -290,9 +267,26 @@ body{
 .bbMenuItem:last-child{border-bottom:none}
 .bbMenuItem:active{background:var(--bg)}
 .bbMenuItem.destructive{color:var(--red)}
+.view{display:none}.view.active{display:flex;flex-direction:column;flex:1;min-height:0}
+.bbDiagApp{flex:1;display:flex;flex-direction:column;padding:0 12px 20px;overflow-y:auto}
+.bbDiagCard{background:var(--surface);border-radius:16px;padding:14px 16px;margin-bottom:10px}
+.bbCardHead{font-size:10px;font-weight:600;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px}
+.bbRow{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--divider)}
+.bbRow:last-child{border-bottom:none}
+.bbLbl{color:var(--text-secondary);font-size:12px;font-weight:500}
+.bbVal{color:var(--text);font-weight:600;font-size:13px}
+.ok{color:var(--ok)}.warn{color:var(--amber)}.err{color:var(--red)}
+.bbGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:500px){.bbGrid{grid-template-columns:1fr}}
+.bbUptime{text-align:center;margin-top:6px;padding:14px;font-size:12px;font-weight:500;color:var(--text-tertiary);letter-spacing:.03em;background:var(--surface);border-radius:16px}
+.bbRecBtn{display:inline-flex;align-items:center;gap:8px;padding:10px 16px;background:var(--surface);border:none;border-radius:12px;font-size:13px;font-weight:600;color:var(--text);cursor:pointer;font-family:inherit;margin-right:8px}
+.bbRecBtn:active{opacity:.7}
+.bbRecBtn.recording{color:var(--red)}
 </style></head>
 <body>
 
+<!-- DASHBOARD VIEW -->
+<div id="view-dashboard" class="view active">
 <header class="bbTopbar">
     <button class="bbBrandToggle" id="brandToggle" aria-label="Toggle theme">
         <span class="bbBrand">Blackbox</span>
@@ -301,14 +295,14 @@ body{
     </button>
     <div class="bbTopRight">
         <div class="bbStatusCluster">
-            <a href="/diagnostics" class="bbDiag">DIAG</a>
+            <span class="bbDiag" id="link-diag">DIAG</span>
+            <span class="bbStatusItem"><span class="bbDot" id="recDot"></span><span id="recTxt"></span></span>
             <span class="bbStatusItem"><span class="bbDot" id="gpsDot"></span><span id="gpsHz">GPS --</span></span>
             <span class="bbStatusItem"><span class="bbDot" id="liveDot"></span><span id="stxt">--</span></span>
         </div>
         <button class="bbKebab" id="menu-btn" aria-label="Menu">⋮</button>
     </div>
 </header>
-
 <main class="bbApp">
     <section class="bbCard bbGCard">
         <div class="bbGTop">
@@ -318,7 +312,6 @@ body{
             </div>
             <div class="bbGTopRight"><span class="bbNum" id="session-time">0:00</span></div>
         </div>
-
         <div class="bbGPlotWrap">
             <div class="bbGPlotFrame">
                 <div class="bbAxis bbAxis--top">Accel</div>
@@ -329,7 +322,6 @@ body{
                 <canvas class="bbGPlot" id="gcanvas"></canvas>
             </div>
         </div>
-
         <div class="bbGReadoutRow">
             <div class="bbGReadoutCol">
                 <div class="bbGReadoutLbl">Lat</div>
@@ -341,7 +333,6 @@ body{
                 <div class="bbGReadoutVal bbNum" id="lon-g"><span class="bbSign">+</span><span class="bbVal">0.00</span><span class="bbGUnit">g</span></div>
             </div>
         </div>
-
         <div class="bbGMax">
             <div class="bbMini"><span class="bbMiniLbl">Max Lat L</span><span class="bbMiniVal bbNum" id="max-l">0.00g</span></div>
             <div class="bbMini"><span class="bbMiniLbl">Max Lat R</span><span class="bbMiniVal bbNum" id="max-r">0.00g</span></div>
@@ -349,13 +340,101 @@ body{
             <div class="bbMini"><span class="bbMiniLbl">Max Brk</span><span class="bbMiniVal bbNum" id="max-b">0.00g</span></div>
         </div>
     </section>
-
     <div class="bbTelemetryStrip">
         <span class="bbTItem"><span class="bbNum bbNum--hz" id="hz">0</span> Hz</span>
         <span class="bbTItem">GPS <span class="bbNum bbNum--gps" id="gps-acc">--</span>m</span>
         <span class="bbTItem">Yaw <span class="bbNum" id="yaw">0</span>°</span>
     </div>
 </main>
+</div>
+
+<!-- DIAGNOSTICS VIEW -->
+<div id="view-diagnostics" class="view">
+<header class="bbTopbar">
+    <button class="bbBrandToggle" id="brandToggle2" aria-label="Toggle theme">
+        <span class="bbBrand">Diagnostics</span>
+        <span class="bbModeLabel" id="modeLabel2">Bright</span>
+        <span class="bbModeIcon" aria-hidden="true">◐</span>
+    </button>
+    <span class="bbBack" id="link-dashboard">← Dashboard</span>
+</header>
+<main class="bbDiagApp">
+    <div class="bbGrid">
+    <section class="bbDiagCard">
+        <div class="bbCardHead">Recording</div>
+        <div class="bbRow"><span class="bbLbl">Status</span><span class="bbVal" id="rec-status">Inactive</span></div>
+        <div class="bbRow"><span class="bbLbl">Duration</span><span class="bbVal bbNum" id="rec-duration">--</span></div>
+        <div class="bbRow"><span class="bbLbl">Chunks Saved</span><span class="bbVal bbNum" id="rec-chunks">0</span></div>
+        <div class="bbRow"><span class="bbLbl">Last Save</span><span class="bbVal bbNum" id="rec-lastsave">--</span></div>
+        <div style="padding-top:12px;display:flex;gap:8px">
+            <button class="bbRecBtn" id="diag-rec">Start Recording</button>
+            <button class="bbRecBtn" id="diag-export">Export CSV</button>
+        </div>
+    </section>
+    <section class="bbDiagCard">
+        <div class="bbCardHead">Sensors</div>
+        <div class="bbRow"><span class="bbLbl">IMU Rate</span><span class="bbVal bbNum" id="imu-rate">--</span></div>
+        <div class="bbRow"><span class="bbLbl">GPS Rate</span><span class="bbVal bbNum" id="gps-rate">--</span></div>
+        <div class="bbRow"><span class="bbLbl">Loop Rate</span><span class="bbVal bbNum" id="loop-rate">--</span></div>
+        <div class="bbRow"><span class="bbLbl">ZUPT Rate</span><span class="bbVal bbNum" id="zupt-rate">--</span></div>
+        <div class="bbRow"><span class="bbLbl">EKF/GPS</span><span class="bbVal bbNum" id="ekf-per-gps">--</span></div>
+    </section>
+    </div>
+    <div class="bbGrid">
+    <section class="bbDiagCard">
+        <div class="bbCardHead">GPS Status</div>
+        <div class="bbRow"><span class="bbLbl">Fix</span><span class="bbVal" id="gps-fix">--</span></div>
+        <div class="bbRow"><span class="bbLbl">Satellites</span><span class="bbVal bbNum" id="gps-sats">--</span></div>
+        <div class="bbRow"><span class="bbLbl">HDOP</span><span class="bbVal bbNum" id="gps-hdop">--</span></div>
+        <div class="bbRow"><span class="bbLbl">Warmup</span><span class="bbVal" id="gps-warmup">--</span></div>
+    </section>
+    <section class="bbDiagCard">
+        <div class="bbCardHead">EKF Health</div>
+        <div class="bbRow"><span class="bbLbl">Position σ</span><span class="bbVal bbNum" id="pos-sigma">--</span></div>
+        <div class="bbRow"><span class="bbLbl">Velocity σ</span><span class="bbVal bbNum" id="vel-sigma">--</span></div>
+        <div class="bbRow"><span class="bbLbl">Yaw σ</span><span class="bbVal bbNum" id="yaw-sigma">--</span></div>
+        <div class="bbRow"><span class="bbLbl">Bias X</span><span class="bbVal bbNum" id="bias-x">--</span></div>
+        <div class="bbRow"><span class="bbLbl">Bias Y</span><span class="bbVal bbNum" id="bias-y">--</span></div>
+    </section>
+    </div>
+    <div class="bbGrid">
+    <section class="bbDiagCard">
+        <div class="bbCardHead">Sensor Fusion</div>
+        <div class="bbRow"><span class="bbLbl">Lon Raw</span><span class="bbVal bbNum" id="lon-raw">--</span></div>
+        <div class="bbRow"><span class="bbLbl">Lon Filtered</span><span class="bbVal bbNum" id="lon-filt">--</span></div>
+        <div class="bbRow"><span class="bbLbl">Lon Blended</span><span class="bbVal bbNum" id="lon-blend">--</span></div>
+        <div class="bbRow"><span class="bbLbl">GPS Weight</span><span class="bbVal bbNum" id="gps-wt">--</span></div>
+        <div class="bbRow"><span class="bbLbl">GPS Accel</span><span class="bbVal bbNum" id="d-gps-acc">--</span></div>
+        <div class="bbRow"><span class="bbLbl">GPS Rejected</span><span class="bbVal" id="gps-rej">--</span></div>
+    </section>
+    <section class="bbDiagCard">
+        <div class="bbCardHead">Orientation</div>
+        <div class="bbRow"><span class="bbLbl">Pitch Corr</span><span class="bbVal bbNum" id="pitch-corr">--</span></div>
+        <div class="bbRow"><span class="bbLbl">Roll Corr</span><span class="bbVal bbNum" id="roll-corr">--</span></div>
+        <div class="bbRow"><span class="bbLbl">Confidence</span><span class="bbVal bbNum" id="orient-conf">--</span></div>
+        <div class="bbRow"><span class="bbLbl">Yaw Bias</span><span class="bbVal bbNum" id="yaw-bias">--</span></div>
+        <div class="bbRow"><span class="bbLbl">Yaw Cal</span><span class="bbVal" id="yaw-cal">--</span></div>
+        <div class="bbRow"><span class="bbLbl">Tilt X/Y</span><span class="bbVal bbNum" id="tilt-xy">--</span></div>
+    </section>
+    </div>
+    <div class="bbGrid">
+    <section class="bbDiagCard">
+        <div class="bbCardHead">Configuration</div>
+        <div class="bbRow"><span class="bbLbl">WiFi Mode</span><span class="bbVal" id="wifi-mode">--</span></div>
+        <div class="bbRow"><span class="bbLbl">SSID</span><span class="bbVal" id="wifi-ssid">--</span></div>
+        <div class="bbRow"><span class="bbLbl">Telemetry Rate</span><span class="bbVal" id="telem-hz">--</span></div>
+        <div class="bbRow"><span class="bbLbl">GPS Model</span><span class="bbVal" id="gps-model">--</span></div>
+    </section>
+    <section class="bbDiagCard">
+        <div class="bbCardHead">System</div>
+        <div class="bbRow"><span class="bbLbl">Heap Free</span><span class="bbVal bbNum" id="heap">--</span></div>
+        <div class="bbRow"><span class="bbLbl">TX Success</span><span class="bbVal bbNum" id="tx-ok">--</span></div>
+        <div class="bbRow"><span class="bbLbl">TX Failed</span><span class="bbVal bbNum" id="tx-fail">--</span></div>
+    </section>
+    </div>
+    <div class="bbUptime" id="uptime">Uptime: --</div>
+</main>
+</div>
 
 <div class="bbMenuOverlay" id="menu-overlay">
     <div class="bbMenuPanel">
@@ -369,11 +448,19 @@ body{
 const $=id=>document.getElementById(id);
 const MODES={0:'IDLE',1:'ACCEL',2:'BRAKE',4:'CORNER',5:'ACCEL',6:'BRAKE'};
 const MODE_COLORS={0:'var(--mode-idle)',1:'var(--mode-accel)',2:'var(--mode-brake)',4:'var(--mode-idle)',5:'var(--mode-accel)',6:'var(--mode-brake)'};
+const DB_NAME='blackbox-rec',DB_VERSION=1,CHUNK_INTERVAL=60000;
 
 let isDark=window.matchMedia('(prefers-color-scheme:dark)').matches;
-function applyTheme(){document.body.classList.toggle('dark',isDark);$('modeLabel').textContent=isDark?'Dark':'Bright'}
+function applyTheme(){
+    document.body.classList.toggle('dark',isDark);
+    $('modeLabel').textContent=$('modeLabel2').textContent=isDark?'Dark':'Bright';
+}
 applyTheme();
-$('brandToggle').onclick=()=>{isDark=!isDark;applyTheme()};
+$('brandToggle').onclick=$('brandToggle2').onclick=()=>{isDark=!isDark;applyTheme()};
+
+// View switching
+$('link-diag').onclick=()=>{$('view-dashboard').classList.remove('active');$('view-diagnostics').classList.add('active')};
+$('link-dashboard').onclick=()=>{$('view-diagnostics').classList.remove('active');$('view-dashboard').classList.add('active')};
 
 function getModeColorHex(mo){
     const h={0:isDark?'#636366':'#8e8e93',1:isDark?'#ffffff':'#1c1c1e',2:'#ff3b30',4:isDark?'#636366':'#8e8e93',5:isDark?'#ffffff':'#1c1c1e',6:'#ff3b30'};
@@ -381,6 +468,93 @@ function getModeColorHex(mo){
 }
 let currentModeColor='#8e8e93';
 
+// IndexedDB
+let db=null;
+function openDB(){
+    return new Promise((resolve,reject)=>{
+        const req=indexedDB.open(DB_NAME,DB_VERSION);
+        req.onerror=()=>reject(req.error);
+        req.onsuccess=()=>{db=req.result;resolve(db)};
+        req.onupgradeneeded=(e)=>{
+            const d=e.target.result;
+            if(!d.objectStoreNames.contains('chunks')){
+                d.createObjectStore('chunks',{keyPath:['sessionId','chunkIndex']});
+            }
+            if(!d.objectStoreNames.contains('sessions')){
+                d.createObjectStore('sessions',{keyPath:'sessionId'});
+            }
+        };
+    });
+}
+
+// Recording state
+let rec=false,sessionId=null,chunkBuffer=[],chunkIndex=0,lastSaveTime=0,sessionStart=0;
+
+async function startRecording(){
+    if(!db)await openDB();
+    sessionId=Date.now();sessionStart=sessionId;chunkBuffer=[];chunkIndex=0;lastSaveTime=Date.now();rec=true;
+    const tx=db.transaction('sessions','readwrite');
+    tx.objectStore('sessions').put({sessionId,startTime:sessionId,status:'active'});
+    updateRecUI();
+}
+
+async function saveChunk(){
+    if(!db||chunkBuffer.length===0)return;
+    const data=[...chunkBuffer];
+    try{
+        const tx=db.transaction('chunks','readwrite');
+        await new Promise((resolve,reject)=>{
+            const req=tx.objectStore('chunks').put({sessionId,chunkIndex,data,timestamp:Date.now()});
+            req.onsuccess=resolve;req.onerror=()=>reject(req.error);
+        });
+        chunkIndex++;chunkBuffer=[];lastSaveTime=Date.now();
+        updateRecUI();
+    }catch(e){console.error('Chunk save failed:',e);/* Keep buffer intact for retry */}
+}
+
+async function stopRecording(){
+    if(chunkBuffer.length>0)await saveChunk();
+    if(db&&sessionId){
+        const tx=db.transaction('sessions','readwrite');
+        tx.objectStore('sessions').put({sessionId,startTime:sessionStart,status:'complete',chunks:chunkIndex});
+    }
+    rec=false;updateRecUI();
+}
+
+function updateRecUI(){
+    const dot=$('recDot'),txt=$('recTxt'),btn=$('menu-rec'),dbtn=$('diag-rec'),stat=$('rec-status');
+    if(rec){
+        dot.classList.add('rec');txt.textContent='REC';btn.textContent='Stop Recording';dbtn.textContent='Stop Recording';dbtn.classList.add('recording');
+        stat.textContent='● Recording';stat.className='bbVal ok';
+    }else{
+        dot.classList.remove('rec');txt.textContent='';btn.textContent='Start Recording';dbtn.textContent='Start Recording';dbtn.classList.remove('recording');
+        stat.textContent='Inactive';stat.className='bbVal';
+    }
+    $('rec-chunks').textContent=chunkIndex;
+    $('rec-lastsave').textContent=lastSaveTime?(Math.floor((Date.now()-lastSaveTime)/1000)+'s ago'):'--';
+    $('rec-duration').textContent=sessionStart?fmtTime(Date.now()-sessionStart):'--';
+}
+
+async function exportCSV(){
+    if(!db){alert('No data');return}
+    // Flush any buffered data if recording
+    if(rec&&chunkBuffer.length>0)await saveChunk();
+    const tx=db.transaction(['sessions','chunks'],'readonly');
+    const sessions=await new Promise(r=>{const req=tx.objectStore('sessions').getAll();req.onsuccess=()=>r(req.result)});
+    if(!sessions.length){alert('No recordings found');return}
+    const latest=sessions.sort((a,b)=>b.sessionId-a.sessionId)[0];
+    const chunks=await new Promise(r=>{const req=tx.objectStore('chunks').getAll();req.onsuccess=()=>r(req.result)});
+    const sessionChunks=chunks.filter(c=>c.sessionId===latest.sessionId).sort((a,b)=>a.chunkIndex-b.chunkIndex);
+    if(!sessionChunks.length){alert('No data in recording');return}
+    let allData=[];
+    sessionChunks.forEach(c=>allData=allData.concat(c.data));
+    let csv='time,speed,ax,ay,wz,mode,lat_g,lon_g,gps_lat,gps_lon,gps_valid,lon_imu,lon_gps,gps_weight,pitch_corr,pitch_conf,roll_corr,roll_conf,tilt_x,tilt_y\n';
+    allData.forEach(r=>{csv+=r.t+','+r.sp+','+r.ax+','+r.ay+','+r.wz+','+r.mo+','+r.latg+','+r.lng+','+(r.lat||0)+','+(r.lon||0)+','+(r.gpsOk||0)+','+(r.lon_imu||0).toFixed(4)+','+(r.lon_gps||0).toFixed(4)+','+(r.gps_wt||0).toFixed(2)+','+(r.pitch_c||0).toFixed(2)+','+(r.pitch_cf||0).toFixed(1)+','+(r.roll_c||0).toFixed(2)+','+(r.roll_cf||0).toFixed(1)+','+(r.tilt_x||0).toFixed(4)+','+(r.tilt_y||0).toFixed(4)+'\n'});
+    const b=new Blob([csv],{type:'text/csv'}),u=URL.createObjectURL(b),a=document.createElement('a');
+    a.href=u;a.download='blackbox_'+new Date(latest.sessionId).toISOString().slice(0,19).replace(/[T:]/g,'-')+'.csv';a.click();
+}
+
+// G-meter
 const cv=$('gcanvas'),ctx=cv.getContext('2d');
 const SCALE_STEPS=[0.3,0.5,0.8,1.0,1.5,2.0];
 let currentScale=0.5,magHist=[];
@@ -451,16 +625,16 @@ function drawG(){
 }
 
 // State
-let rec=0,data=[],cnt=0,lastSeq=0;
+let cnt=0,lastSeq=0;
 let maxL=0,maxR=0,maxA=0,maxB=0,peak=0;
-let speed_ema=0,sessionStart=Date.now();
+let speed_ema=0,displaySessionStart=Date.now();
 let emaGx=0,emaGy=0,lastT=0;
 const EMA_TAU=0.10;
 let lastGpsState=0;
 let fusion={lon_imu:0,lon_gps:0,gps_wt:0,gps_rate:0,pitch_c:0,pitch_cf:0,roll_c:0,roll_cf:0,tilt_x:0,tilt_y:0};
 
 function fmtGSigned(v){const sign=v>=0?'+':'−';return{sign,num:Math.abs(v).toFixed(2)}}
-function fmtTime(ms){const s=Math.floor(ms/1000),m=Math.floor(s/60);return m+':'+String(s%60).padStart(2,'0')}
+function fmtTime(ms){const s=Math.floor(ms/1000),m=Math.floor(s/60),h=Math.floor(m/60);if(h>0)return h+':'+String(m%60).padStart(2,'0')+':'+String(s%60).padStart(2,'0');return m+':'+String(s%60).padStart(2,'0')}
 
 function updateReadouts(lat,lon){
     const latFmt=fmtGSigned(lat),lonFmt=fmtGSigned(lon);
@@ -474,7 +648,7 @@ function resetState(){
     $('speed').classList.remove('peak');
     trail=[];magHist=[];currentScale=SCALE_STEPS[0];
     $('range-val').textContent='Range ±'+currentScale.toFixed(1)+'g';
-    emaGx=emaGy=0;sessionStart=Date.now();
+    emaGx=emaGy=0;displaySessionStart=Date.now();
 }
 
 let peakHighlightTimeout=null;
@@ -530,7 +704,12 @@ function process(buf){
     lastGpsState=gpsOk;
     drawG();
     cnt++;
-    if(rec)data.push({t:now,sp,ax,ay,wz,mo,latg,lng,lat,lon,gpsOk,...fusion});
+
+    // Recording
+    if(rec){
+        chunkBuffer.push({t:now,sp,ax,ay,wz,mo,latg,lng,lat,lon,gpsOk,lon_imu:fusion.lon_imu,lon_gps:fusion.lon_gps,gps_wt:fusion.gps_wt,pitch_c:fusion.pitch_c,pitch_cf:fusion.pitch_cf,roll_c:fusion.roll_c,roll_cf:fusion.roll_cf,tilt_x:fusion.tilt_x,tilt_y:fusion.tilt_y});
+        if(now-lastSaveTime>=CHUNK_INTERVAL)saveChunk();
+    }
 }
 
 async function poll(){
@@ -553,275 +732,127 @@ async function poll(){
     }catch(e){$('liveDot').classList.remove('on');$('stxt').textContent='--';setTimeout(poll,500)}
 }
 
+// Diagnostics polling
+function rateClass(actual,expected){const pct=actual/expected;if(pct>=0.9)return'ok';if(pct>=0.5)return'warn';return'err'}
+async function updateDiag(){
+    try{
+        const r=await fetch('/api/diagnostics');
+        const d=await r.json();
+        if(d.error)return;
+        $('wifi-mode').textContent=d.wifi.mode;
+        $('wifi-ssid').textContent=d.wifi.ssid;
+        $('telem-hz').textContent=d.config.telemetry_hz+' Hz';
+        $('gps-model').textContent=d.config.gps_model;
+        const imuEl=$('imu-rate');
+        imuEl.textContent=d.sensor_rates.imu_hz.toFixed(0)+'/'+d.sensor_rates.imu_expected.toFixed(0)+' Hz';
+        imuEl.className='bbVal bbNum '+rateClass(d.sensor_rates.imu_hz,d.sensor_rates.imu_expected);
+        const gpsEl=$('gps-rate');
+        gpsEl.textContent=d.sensor_rates.gps_hz.toFixed(1)+'/'+d.sensor_rates.gps_expected.toFixed(0)+' Hz';
+        gpsEl.className='bbVal bbNum '+rateClass(d.sensor_rates.gps_hz,d.sensor_rates.gps_expected);
+        const lr=$('loop-rate');
+        lr.textContent=d.sensor_rates.loop_hz.toFixed(0)+' Hz';
+        lr.className='bbVal bbNum '+(d.sensor_rates.loop_hz>500?'ok':(d.sensor_rates.loop_hz>200?'warn':'err'));
+        $('zupt-rate').textContent=d.sensor_rates.zupt_per_min.toFixed(1)+'/min';
+        $('ekf-per-gps').textContent=d.sensor_rates.ekf_per_gps.toFixed(1);
+        $('gps-fix').textContent=d.gps.fix?'Valid':'No Fix';
+        $('gps-fix').className='bbVal '+(d.gps.fix?'ok':'warn');
+        $('gps-sats').textContent=d.gps.satellites;
+        $('gps-sats').className='bbVal bbNum '+(d.gps.satellites>=4?'ok':(d.gps.satellites>=1?'warn':'err'));
+        $('gps-hdop').textContent=d.gps.hdop.toFixed(1);
+        $('gps-hdop').className='bbVal bbNum '+(d.gps.hdop<2?'ok':(d.gps.hdop<5?'warn':'err'));
+        $('gps-warmup').textContent=d.gps.warmup?'Complete':'Warming...';
+        $('gps-warmup').className='bbVal '+(d.gps.warmup?'ok':'warn');
+        const ps=$('pos-sigma');ps.textContent=d.ekf.pos_sigma.toFixed(2)+' m';
+        ps.className='bbVal bbNum '+(d.ekf.pos_sigma<5?'ok':(d.ekf.pos_sigma<10?'warn':'err'));
+        const vs=$('vel-sigma');vs.textContent=d.ekf.vel_sigma.toFixed(2)+' m/s';
+        vs.className='bbVal bbNum '+(d.ekf.vel_sigma<0.5?'ok':(d.ekf.vel_sigma<1.0?'warn':'err'));
+        const ys=$('yaw-sigma');ys.textContent=d.ekf.yaw_sigma_deg.toFixed(1)+'°';
+        ys.className='bbVal bbNum '+(d.ekf.yaw_sigma_deg<5?'ok':(d.ekf.yaw_sigma_deg<10?'warn':'err'));
+        const bx=$('bias-x');bx.textContent=d.ekf.bias_x.toFixed(3)+' m/s²';
+        bx.className='bbVal bbNum '+(Math.abs(d.ekf.bias_x)<0.3?'ok':(Math.abs(d.ekf.bias_x)<0.5?'warn':'err'));
+        const by=$('bias-y');by.textContent=d.ekf.bias_y.toFixed(3)+' m/s²';
+        by.className='bbVal bbNum '+(Math.abs(d.ekf.bias_y)<0.3?'ok':(Math.abs(d.ekf.bias_y)<0.5?'warn':'err'));
+        const hp=$('heap');hp.textContent=(d.system.heap_free/1024).toFixed(0)+' KB';
+        hp.className='bbVal bbNum '+(d.system.heap_free>40000?'ok':(d.system.heap_free>20000?'warn':'err'));
+        $('tx-ok').textContent=d.system.tx_ok.toLocaleString();
+        const txf=$('tx-fail');txf.textContent=d.system.tx_fail;
+        txf.className='bbVal bbNum '+(d.system.tx_fail>0?'warn':'ok');
+        const s=d.system.uptime_s;
+        const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;
+        $('uptime').textContent='Uptime: '+h+'h '+m+'m '+sec+'s';
+        if(d.fusion){
+            $('lon-raw').textContent=d.fusion.lon_raw.toFixed(3)+' m/s²';
+            $('lon-filt').textContent=d.fusion.lon_filtered.toFixed(3)+' m/s²';
+            $('lon-blend').textContent=d.fusion.lon_blended.toFixed(3)+' m/s²';
+            const wt=$('gps-wt');wt.textContent=(d.fusion.gps_weight*100).toFixed(0)+'%';
+            wt.className='bbVal bbNum '+(d.fusion.gps_weight>0?'ok':'warn');
+            const ga=$('d-gps-acc');ga.textContent=isNaN(d.fusion.gps_accel)?'N/A':d.fusion.gps_accel.toFixed(3)+' m/s²';
+            const rej=$('gps-rej');rej.textContent=d.fusion.gps_rejected?'Yes':'No';
+            rej.className='bbVal '+(d.fusion.gps_rejected?'warn':'ok');
+            const pc=$('pitch-corr');pc.textContent=d.fusion.pitch_corr.toFixed(1)+'°';
+            pc.className='bbVal bbNum '+(Math.abs(d.fusion.pitch_corr)<10?'ok':'warn');
+            const rc=$('roll-corr');rc.textContent=d.fusion.roll_corr.toFixed(1)+'°';
+            rc.className='bbVal bbNum '+(Math.abs(d.fusion.roll_corr)<10?'ok':'warn');
+            const oc=$('orient-conf');oc.textContent=d.fusion.pitch_conf.toFixed(0)+'%/'+d.fusion.roll_conf.toFixed(0)+'%';
+            oc.className='bbVal bbNum '+(d.fusion.pitch_conf>50?'ok':(d.fusion.pitch_conf>10?'warn':'err'));
+            const yb=$('yaw-bias');const ybVal=Math.abs(d.fusion.yaw_bias*1000);
+            yb.textContent=ybVal.toFixed(1)+' mrad/s';
+            yb.className='bbVal bbNum '+(ybVal<10?'ok':(ybVal<50?'warn':'err'));
+            const yc=$('yaw-cal');yc.textContent=d.fusion.yaw_calibrated?'Yes':'No';
+            yc.className='bbVal '+(d.fusion.yaw_calibrated?'ok':'warn');
+            const txy=$('tilt-xy');txy.textContent=d.fusion.tilt_x.toFixed(3)+'/'+d.fusion.tilt_y.toFixed(3);
+            const tiltMax=Math.max(Math.abs(d.fusion.tilt_x),Math.abs(d.fusion.tilt_y));
+            txy.className='bbVal bbNum '+(tiltMax<0.3?'ok':(tiltMax<0.5?'warn':'err'));
+        }
+    }catch(e){}
+}
+
+// Menu
 $('menu-btn').onclick=()=>$('menu-overlay').classList.add('open');
 $('menu-overlay').onclick=e=>{if(e.target===$('menu-overlay'))$('menu-overlay').classList.remove('open')};
 
-$('menu-rec').onclick=()=>{
-    rec=!rec;$('menu-overlay').classList.remove('open');
-    if(rec){data=[];sessionStart=Date.now();$('menu-rec').textContent='Stop Recording'}
-    else{$('menu-rec').textContent='Start Recording';
-    if(data.length){const s=JSON.parse(localStorage.getItem('bb')||'[]');s.unshift({id:Date.now(),n:data.length,d:data});localStorage.setItem('bb',JSON.stringify(s.slice(0,10)));alert('Saved '+data.length+' pts')}}
-};
-
-$('menu-export').onclick=()=>{
+$('menu-rec').onclick=$('diag-rec').onclick=async()=>{
     $('menu-overlay').classList.remove('open');
-    const s=JSON.parse(localStorage.getItem('bb')||'[]');if(!s.length)return alert('No data');
-    let c='time,speed,ax,ay,wz,mode,lat_g,lon_g,gps_lat,gps_lon,gps_valid,lon_imu,lon_gps,gps_weight,pitch_corr,pitch_conf,roll_corr,roll_conf,tilt_x,tilt_y\n';
-    s[0].d.forEach(r=>{c+=r.t+','+r.sp+','+r.ax+','+r.ay+','+r.wz+','+r.mo+','+r.latg+','+r.lng+','+(r.lat||0)+','+(r.lon||0)+','+(r.gpsOk||0)+','+(r.lon_imu||0).toFixed(4)+','+(r.lon_gps||0).toFixed(4)+','+(r.gps_wt||0).toFixed(2)+','+(r.pitch_c||0).toFixed(2)+','+(r.pitch_cf||0).toFixed(1)+','+(r.roll_c||0).toFixed(2)+','+(r.roll_cf||0).toFixed(1)+','+(r.tilt_x||0).toFixed(4)+','+(r.tilt_y||0).toFixed(4)+'\n'});
-    const b=new Blob([c],{type:'text/csv'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download='blackbox.csv';a.click();
+    if(rec)await stopRecording();else await startRecording();
 };
-
+$('menu-export').onclick=$('diag-export').onclick=()=>{$('menu-overlay').classList.remove('open');exportCSV()};
 $('menu-clear').onclick=()=>{$('menu-overlay').classList.remove('open');resetState()};
 
+// Init
 setInterval(()=>{
     $('hz').textContent=cnt;cnt=0;
-    $('session-time').textContent=fmtTime(Date.now()-sessionStart);
+    $('session-time').textContent=fmtTime(Date.now()-displaySessionStart);
     if(lastGpsState){$('gpsDot').classList.add('on');$('gpsHz').textContent='GPS '+Math.round(fusion.gps_rate)}
     else{$('gpsDot').classList.remove('on');$('gpsHz').textContent='GPS --'}
     $('gps-acc').textContent=lastGpsState?'2':'--';
+    updateRecUI();
 },1000);
+
+setInterval(updateDiag,1000);
+
+openDB().then(()=>{
+    // Check for incomplete sessions on load
+    const tx=db.transaction('sessions','readonly');
+    tx.objectStore('sessions').getAll().onsuccess=(e)=>{
+        const active=e.target.result.filter(s=>s.status==='active');
+        if(active.length>0){
+            const latest=active.sort((a,b)=>b.sessionId-a.sessionId)[0];
+            sessionId=latest.sessionId;sessionStart=latest.startTime;
+            // Count existing chunks
+            const ctx=db.transaction('chunks','readonly');
+            ctx.objectStore('chunks').getAll().onsuccess=(e2)=>{
+                chunkIndex=e2.target.result.filter(c=>c.sessionId===sessionId).length;
+                $('rec-status').textContent='⚠ Recovered';$('rec-status').className='bbVal warn';
+                updateRecUI();
+            };
+        }
+    };
+}).catch(e=>console.log('IndexedDB error:',e));
 
 resize();setTimeout(()=>{resize();drawG()},50);
 poll();
+updateDiag();
 </script></body></html>"#;
-
-/// Diagnostics page HTML - Apple-native iOS design matching dashboard
-const DIAGNOSTICS_HTML: &str = r#"<!DOCTYPE html>
-<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><title>Blackbox Diagnostics</title>
-<style>
-:root{
-    --bg:#f2f2f7;
-    --surface:#ffffff;
-    --text:#1c1c1e;
-    --text-secondary:#48484a;
-    --text-tertiary:#8e8e93;
-    --divider:rgba(0,0,0,.08);
-    --ok:#34c759;
-    --warn:#ff9500;
-    --err:#ff3b30;
-}
-.dark{
-    --bg:#000000;
-    --surface:#1c1c1e;
-    --text:#ffffff;
-    --text-secondary:#aeaeb2;
-    --text-tertiary:#636366;
-    --divider:rgba(255,255,255,.08);
-}
-*{margin:0;padding:0;box-sizing:border-box}
-body{
-    font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display',system-ui,sans-serif;
-    background:var(--bg);
-    color:var(--text);
-    padding:0 12px 20px;
-    font-size:13px;
-    min-height:100vh;
-    -webkit-user-select:none;
-    user-select:none;
-    transition:background 0.3s,color 0.3s;
-}
-.bbNum{font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1,"lnum" 1}
-.bbTopbar{display:flex;justify-content:space-between;align-items:center;padding:14px 4px;flex-shrink:0}
-.bbBrandToggle{background:none;border:0;padding:0;display:flex;align-items:baseline;gap:8px;cursor:pointer;color:inherit;font-family:inherit}
-.bbBrand{font-size:11px;font-weight:600;opacity:.55;letter-spacing:.03em}
-.bbModeLabel{font-size:11px;font-weight:400;opacity:.40;letter-spacing:.03em}
-.bbModeIcon{font-size:10px;opacity:.40}
-.bbBack{color:var(--text-tertiary);text-decoration:none;font-size:12px;font-weight:500;letter-spacing:.03em;padding:8px 14px;background:var(--surface);border-radius:16px;display:flex;align-items:center;gap:4px}
-.bbBack:active{opacity:.7}
-.bbCard{background:var(--surface);border-radius:16px;padding:14px 16px;margin-bottom:10px}
-.bbCardHead{font-size:10px;font-weight:600;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px}
-.bbRow{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--divider)}
-.bbRow:last-child{border-bottom:none}
-.bbLbl{color:var(--text-secondary);font-size:12px;font-weight:500}
-.bbVal{color:var(--text);font-weight:600;font-size:13px}
-.ok{color:var(--ok)}
-.warn{color:var(--warn)}
-.err{color:var(--err)}
-.bbGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-@media(max-width:500px){.bbGrid{grid-template-columns:1fr}}
-.bbUptime{text-align:center;margin-top:6px;padding:14px;font-size:12px;font-weight:500;color:var(--text-tertiary);letter-spacing:.03em;background:var(--surface);border-radius:16px}
-</style></head>
-<body>
-
-<header class="bbTopbar">
-    <button class="bbBrandToggle" id="brandToggle" aria-label="Toggle theme">
-        <span class="bbBrand">Diagnostics</span>
-        <span class="bbModeLabel" id="modeLabel">Bright</span>
-        <span class="bbModeIcon" aria-hidden="true">◐</span>
-    </button>
-    <a href="/" class="bbBack">← Dashboard</a>
-</header>
-
-<div class="bbGrid">
-<section class="bbCard">
-    <div class="bbCardHead">Configuration</div>
-    <div class="bbRow"><span class="bbLbl">WiFi Mode</span><span class="bbVal" id="wifi-mode">--</span></div>
-    <div class="bbRow"><span class="bbLbl">SSID</span><span class="bbVal" id="wifi-ssid">--</span></div>
-    <div class="bbRow"><span class="bbLbl">Telemetry Rate</span><span class="bbVal" id="telem-hz">--</span></div>
-    <div class="bbRow"><span class="bbLbl">GPS Model</span><span class="bbVal" id="gps-model">--</span></div>
-    <div class="bbRow"><span class="bbLbl">Warmup Fixes</span><span class="bbVal" id="warmup-fixes">--</span></div>
-</section>
-<section class="bbCard">
-    <div class="bbCardHead">Sensors</div>
-    <div class="bbRow"><span class="bbLbl">IMU Rate</span><span class="bbVal bbNum" id="imu-rate">--</span></div>
-    <div class="bbRow"><span class="bbLbl">GPS Rate</span><span class="bbVal bbNum" id="gps-rate">--</span></div>
-    <div class="bbRow"><span class="bbLbl">Loop Rate</span><span class="bbVal bbNum" id="loop-rate">--</span></div>
-    <div class="bbRow"><span class="bbLbl">ZUPT Rate</span><span class="bbVal bbNum" id="zupt-rate">--</span></div>
-    <div class="bbRow"><span class="bbLbl">EKF/GPS</span><span class="bbVal bbNum" id="ekf-per-gps">--</span></div>
-</section>
-</div>
-
-<div class="bbGrid">
-<section class="bbCard">
-    <div class="bbCardHead">GPS Status</div>
-    <div class="bbRow"><span class="bbLbl">Fix</span><span class="bbVal" id="gps-fix">--</span></div>
-    <div class="bbRow"><span class="bbLbl">Satellites</span><span class="bbVal bbNum" id="gps-sats">--</span></div>
-    <div class="bbRow"><span class="bbLbl">HDOP</span><span class="bbVal bbNum" id="gps-hdop">--</span></div>
-    <div class="bbRow"><span class="bbLbl">Warmup</span><span class="bbVal" id="gps-warmup">--</span></div>
-</section>
-<section class="bbCard">
-    <div class="bbCardHead">EKF Health</div>
-    <div class="bbRow"><span class="bbLbl">Position σ</span><span class="bbVal bbNum" id="pos-sigma">--</span></div>
-    <div class="bbRow"><span class="bbLbl">Velocity σ</span><span class="bbVal bbNum" id="vel-sigma">--</span></div>
-    <div class="bbRow"><span class="bbLbl">Yaw σ</span><span class="bbVal bbNum" id="yaw-sigma">--</span></div>
-    <div class="bbRow"><span class="bbLbl">Bias X</span><span class="bbVal bbNum" id="bias-x">--</span></div>
-    <div class="bbRow"><span class="bbLbl">Bias Y</span><span class="bbVal bbNum" id="bias-y">--</span></div>
-</section>
-</div>
-
-<div class="bbGrid">
-<section class="bbCard">
-    <div class="bbCardHead">Sensor Fusion</div>
-    <div class="bbRow"><span class="bbLbl">Lon Raw</span><span class="bbVal bbNum" id="lon-raw">--</span></div>
-    <div class="bbRow"><span class="bbLbl">Lon Filtered</span><span class="bbVal bbNum" id="lon-filt">--</span></div>
-    <div class="bbRow"><span class="bbLbl">Lon Blended</span><span class="bbVal bbNum" id="lon-blend">--</span></div>
-    <div class="bbRow"><span class="bbLbl">GPS Weight</span><span class="bbVal bbNum" id="gps-wt">--</span></div>
-    <div class="bbRow"><span class="bbLbl">GPS Accel</span><span class="bbVal bbNum" id="gps-acc">--</span></div>
-    <div class="bbRow"><span class="bbLbl">GPS Rejected</span><span class="bbVal" id="gps-rej">--</span></div>
-</section>
-<section class="bbCard">
-    <div class="bbCardHead">Orientation</div>
-    <div class="bbRow"><span class="bbLbl">Pitch Corr</span><span class="bbVal bbNum" id="pitch-corr">--</span></div>
-    <div class="bbRow"><span class="bbLbl">Roll Corr</span><span class="bbVal bbNum" id="roll-corr">--</span></div>
-    <div class="bbRow"><span class="bbLbl">Confidence</span><span class="bbVal bbNum" id="orient-conf">--</span></div>
-    <div class="bbRow"><span class="bbLbl">Yaw Bias</span><span class="bbVal bbNum" id="yaw-bias">--</span></div>
-    <div class="bbRow"><span class="bbLbl">Yaw Cal</span><span class="bbVal" id="yaw-cal">--</span></div>
-    <div class="bbRow"><span class="bbLbl">Tilt X/Y</span><span class="bbVal bbNum" id="tilt-xy">--</span></div>
-</section>
-</div>
-
-<section class="bbCard">
-    <div class="bbCardHead">System</div>
-    <div class="bbRow"><span class="bbLbl">Heap Free</span><span class="bbVal bbNum" id="heap">--</span></div>
-    <div class="bbRow"><span class="bbLbl">TX Success</span><span class="bbVal bbNum" id="tx-ok">--</span></div>
-    <div class="bbRow"><span class="bbLbl">TX Failed</span><span class="bbVal bbNum" id="tx-fail">--</span></div>
-</section>
-
-<div class="bbUptime" id="uptime">Uptime: --</div>
-
-<script>
-const $=id=>document.getElementById(id);
-
-let isDark=window.matchMedia('(prefers-color-scheme:dark)').matches;
-function applyTheme(){document.body.classList.toggle('dark',isDark);$('modeLabel').textContent=isDark?'Dark':'Bright'}
-applyTheme();
-$('brandToggle').onclick=()=>{isDark=!isDark;applyTheme()};
-
-function rateClass(actual,expected){const pct=actual/expected;if(pct>=0.9)return'ok';if(pct>=0.5)return'warn';return'err'}
-async function update(){
-  try{
-    const r=await fetch('/api/diagnostics');
-    const d=await r.json();
-    if(d.error)return;
-    $('wifi-mode').textContent=d.wifi.mode;
-    $('wifi-ssid').textContent=d.wifi.ssid;
-    $('telem-hz').textContent=d.config.telemetry_hz+' Hz';
-    $('gps-model').textContent=d.config.gps_model;
-    $('warmup-fixes').textContent=d.config.warmup_fixes;
-    const imuEl=$('imu-rate');
-    imuEl.textContent=d.sensor_rates.imu_hz.toFixed(0)+'/'+d.sensor_rates.imu_expected.toFixed(0)+' Hz';
-    imuEl.className='bbVal bbNum '+rateClass(d.sensor_rates.imu_hz,d.sensor_rates.imu_expected);
-    const gpsEl=$('gps-rate');
-    gpsEl.textContent=d.sensor_rates.gps_hz.toFixed(1)+'/'+d.sensor_rates.gps_expected.toFixed(0)+' Hz';
-    gpsEl.className='bbVal bbNum '+rateClass(d.sensor_rates.gps_hz,d.sensor_rates.gps_expected);
-    const lr=$('loop-rate');
-    lr.textContent=d.sensor_rates.loop_hz.toFixed(0)+' Hz';
-    lr.className='bbVal bbNum '+(d.sensor_rates.loop_hz>500?'ok':(d.sensor_rates.loop_hz>200?'warn':'err'));
-    $('zupt-rate').textContent=d.sensor_rates.zupt_per_min.toFixed(1)+'/min';
-    $('ekf-per-gps').textContent=d.sensor_rates.ekf_per_gps.toFixed(1);
-    $('gps-fix').textContent=d.gps.fix?'Valid':'No Fix';
-    $('gps-fix').className='bbVal '+(d.gps.fix?'ok':'warn');
-    $('gps-sats').textContent=d.gps.satellites;
-    $('gps-sats').className='bbVal bbNum '+(d.gps.satellites>=4?'ok':(d.gps.satellites>=1?'warn':'err'));
-    $('gps-hdop').textContent=d.gps.hdop.toFixed(1);
-    $('gps-hdop').className='bbVal bbNum '+(d.gps.hdop<2?'ok':(d.gps.hdop<5?'warn':'err'));
-    $('gps-warmup').textContent=d.gps.warmup?'Complete':'Warming...';
-    $('gps-warmup').className='bbVal '+(d.gps.warmup?'ok':'warn');
-    const ps=$('pos-sigma');
-    ps.textContent=d.ekf.pos_sigma.toFixed(2)+' m';
-    ps.className='bbVal bbNum '+(d.ekf.pos_sigma<5?'ok':(d.ekf.pos_sigma<10?'warn':'err'));
-    const vs=$('vel-sigma');
-    vs.textContent=d.ekf.vel_sigma.toFixed(2)+' m/s';
-    vs.className='bbVal bbNum '+(d.ekf.vel_sigma<0.5?'ok':(d.ekf.vel_sigma<1.0?'warn':'err'));
-    const ys=$('yaw-sigma');
-    ys.textContent=d.ekf.yaw_sigma_deg.toFixed(1)+'°';
-    ys.className='bbVal bbNum '+(d.ekf.yaw_sigma_deg<5?'ok':(d.ekf.yaw_sigma_deg<10?'warn':'err'));
-    const bx=$('bias-x');
-    bx.textContent=d.ekf.bias_x.toFixed(3)+' m/s²';
-    bx.className='bbVal bbNum '+(Math.abs(d.ekf.bias_x)<0.3?'ok':(Math.abs(d.ekf.bias_x)<0.5?'warn':'err'));
-    const by=$('bias-y');
-    by.textContent=d.ekf.bias_y.toFixed(3)+' m/s²';
-    by.className='bbVal bbNum '+(Math.abs(d.ekf.bias_y)<0.3?'ok':(Math.abs(d.ekf.bias_y)<0.5?'warn':'err'));
-    const hp=$('heap');
-    hp.textContent=(d.system.heap_free/1024).toFixed(0)+' KB';
-    hp.className='bbVal bbNum '+(d.system.heap_free>40000?'ok':(d.system.heap_free>20000?'warn':'err'));
-    $('tx-ok').textContent=d.system.tx_ok.toLocaleString();
-    const txf=$('tx-fail');
-    txf.textContent=d.system.tx_fail;
-    txf.className='bbVal bbNum '+(d.system.tx_fail>0?'warn':'ok');
-    const s=d.system.uptime_s;
-    const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;
-    $('uptime').textContent='Uptime: '+h+'h '+m+'m '+sec+'s';
-    if(d.fusion){
-      $('lon-raw').textContent=d.fusion.lon_raw.toFixed(3)+' m/s²';
-      $('lon-filt').textContent=d.fusion.lon_filtered.toFixed(3)+' m/s²';
-      $('lon-blend').textContent=d.fusion.lon_blended.toFixed(3)+' m/s²';
-      const wt=$('gps-wt');
-      wt.textContent=(d.fusion.gps_weight*100).toFixed(0)+'%';
-      wt.className='bbVal bbNum '+(d.fusion.gps_weight>0?'ok':'warn');
-      const ga=$('gps-acc');
-      ga.textContent=isNaN(d.fusion.gps_accel)?'N/A':d.fusion.gps_accel.toFixed(3)+' m/s²';
-      const rej=$('gps-rej');
-      rej.textContent=d.fusion.gps_rejected?'Yes':'No';
-      rej.className='bbVal '+(d.fusion.gps_rejected?'warn':'ok');
-      const pc=$('pitch-corr');
-      pc.textContent=d.fusion.pitch_corr.toFixed(1)+'°';
-      pc.className='bbVal bbNum '+(Math.abs(d.fusion.pitch_corr)<10?'ok':'warn');
-      const rc=$('roll-corr');
-      rc.textContent=d.fusion.roll_corr.toFixed(1)+'°';
-      rc.className='bbVal bbNum '+(Math.abs(d.fusion.roll_corr)<10?'ok':'warn');
-      const oc=$('orient-conf');
-      oc.textContent=d.fusion.pitch_conf.toFixed(0)+'%/'+d.fusion.roll_conf.toFixed(0)+'%';
-      oc.className='bbVal bbNum '+(d.fusion.pitch_conf>50?'ok':(d.fusion.pitch_conf>10?'warn':'err'));
-      const yb=$('yaw-bias');
-      const ybVal=Math.abs(d.fusion.yaw_bias*1000);
-      yb.textContent=ybVal.toFixed(1)+' mrad/s';
-      yb.className='bbVal bbNum '+(ybVal<10?'ok':(ybVal<50?'warn':'err'));
-      const yc=$('yaw-cal');
-      yc.textContent=d.fusion.yaw_calibrated?'Yes':'No';
-      yc.className='bbVal '+(d.fusion.yaw_calibrated?'ok':'warn');
-      const txy=$('tilt-xy');
-      txy.textContent=d.fusion.tilt_x.toFixed(3)+'/'+d.fusion.tilt_y.toFixed(3);
-      const tiltMax=Math.max(Math.abs(d.fusion.tilt_x),Math.abs(d.fusion.tilt_y));
-      txy.className='bbVal bbNum '+(tiltMax<0.3?'ok':(tiltMax<0.5?'warn':'err'));
-    }
-  }catch(e){console.log('Diag error:',e)}
-}
-setInterval(update,1000);
-update();
-</script>
-</body></html>"#;
 
 impl TelemetryServer {
     /// Create and start the telemetry server with HTTP polling
@@ -837,9 +868,8 @@ impl TelemetryServer {
 
         let server_config = Configuration {
             http_port: port,
-            max_uri_handlers: 9, /* Dashboard, telemetry, status, calibrate, settings GET,
-                                  * settings SET, diagnostics page, diagnostics API */
-            max_open_sockets: 8, // HTTP only - no long-lived WebSocket connections
+            max_uri_handlers: 8,
+            max_open_sockets: 8,
             stack_size: 10240,
             ..Default::default()
         };
@@ -850,7 +880,7 @@ impl TelemetryServer {
             None => TelemetryServerState::new(),
         });
 
-        // Serve the dashboard HTML
+        // Serve the combined dashboard + diagnostics HTML
         server.fn_handler(
             "/",
             esp_idf_svc::http::Method::Get,
@@ -870,9 +900,6 @@ impl TelemetryServer {
                 Ok(())
             },
         )?;
-
-        // WebSocket removed - using HTTP polling for reliability and to eliminate
-        // thread blocking
 
         // HTTP polling endpoint - includes fusion data for synchronized CSV export
         let state_poll = state.clone();
@@ -1101,27 +1128,6 @@ impl TelemetryServer {
                     ],
                 )?;
                 response.write_all(json.as_bytes())?;
-                Ok(())
-            },
-        )?;
-
-        // Diagnostics HTML page
-        server.fn_handler(
-            "/diagnostics",
-            esp_idf_svc::http::Method::Get,
-            |req| -> Result<(), esp_idf_svc::io::EspIOError> {
-                let html_bytes = DIAGNOSTICS_HTML.as_bytes();
-                let content_length = html_bytes.len().to_string();
-                let mut response = req.into_response(
-                    200,
-                    None,
-                    &[
-                        ("Content-Type", "text/html; charset=utf-8"),
-                        ("Content-Length", &content_length),
-                        ("Connection", "close"),
-                    ],
-                )?;
-                response.write_all(html_bytes)?;
                 Ok(())
             },
         )?;

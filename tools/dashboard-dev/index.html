@@ -593,10 +593,81 @@ function seekCSV(pct) {
     csvStartTime = Date.now() - seekTime;
 }
 
+// IndexedDB Recording (matches production)
+const DB_NAME = 'blackbox-rec', DB_VERSION = 1, CHUNK_INTERVAL = 60000;
+let db = null, sessionId = null, chunkBuffer = [], chunkIndex = 0, lastSaveTime = 0, recSessionStart = 0;
+
+function openDB() {
+    return new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB_NAME, DB_VERSION);
+        req.onerror = () => reject(req.error);
+        req.onsuccess = () => { db = req.result; resolve(db); };
+        req.onupgradeneeded = (e) => {
+            const d = e.target.result;
+            if (!d.objectStoreNames.contains('chunks')) {
+                d.createObjectStore('chunks', { keyPath: ['sessionId', 'chunkIndex'] });
+            }
+            if (!d.objectStoreNames.contains('sessions')) {
+                d.createObjectStore('sessions', { keyPath: 'sessionId' });
+            }
+        };
+    });
+}
+
+async function saveChunk() {
+    if (!db || chunkBuffer.length === 0) return;
+    const data = [...chunkBuffer];
+    try {
+        const tx = db.transaction('chunks', 'readwrite');
+        await new Promise((resolve, reject) => {
+            const req = tx.objectStore('chunks').put({ sessionId, chunkIndex, data, timestamp: Date.now() });
+            req.onsuccess = resolve; req.onerror = () => reject(req.error);
+        });
+        chunkIndex++; chunkBuffer = []; lastSaveTime = Date.now();
+    } catch (e) { console.error('Chunk save failed:', e); }
+}
+
+async function startRecording() {
+    if (!db) await openDB();
+    sessionId = Date.now(); recSessionStart = sessionId; chunkBuffer = []; chunkIndex = 0; lastSaveTime = Date.now(); rec = true;
+    const tx = db.transaction('sessions', 'readwrite');
+    tx.objectStore('sessions').put({ sessionId, startTime: sessionId, status: 'active' });
+    $('menu-rec').textContent = 'Stop Recording';
+}
+
+async function stopRecording() {
+    if (chunkBuffer.length > 0) await saveChunk();
+    if (db && sessionId) {
+        const tx = db.transaction('sessions', 'readwrite');
+        tx.objectStore('sessions').put({ sessionId, startTime: recSessionStart, status: 'complete', chunks: chunkIndex });
+    }
+    rec = false;
+    $('menu-rec').textContent = 'Start Recording';
+}
+
+async function exportCSV() {
+    if (!db) { alert('No data'); return; }
+    if (rec && chunkBuffer.length > 0) await saveChunk();
+    const tx = db.transaction(['sessions', 'chunks'], 'readonly');
+    const sessions = await new Promise(r => { const req = tx.objectStore('sessions').getAll(); req.onsuccess = () => r(req.result); });
+    if (!sessions.length) { alert('No recordings found'); return; }
+    const latest = sessions.sort((a, b) => b.sessionId - a.sessionId)[0];
+    const chunks = await new Promise(r => { const req = tx.objectStore('chunks').getAll(); req.onsuccess = () => r(req.result); });
+    const sessionChunks = chunks.filter(c => c.sessionId === latest.sessionId).sort((a, b) => a.chunkIndex - b.chunkIndex);
+    if (!sessionChunks.length) { alert('No data in recording'); return; }
+    let allData = [];
+    sessionChunks.forEach(c => allData = allData.concat(c.data));
+    let csv = 'time,speed,ax,ay,wz,mode,lat_g,lon_g,gps_lat,gps_lon,gps_valid\n';
+    allData.forEach(r => { csv += [r.t, r.sp, r.ax, r.ay, r.wz, r.mo, r.latg, r.lng, r.lat || 0, r.lon || 0, r.gpsOk || 0].join(',') + '\n'; });
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = 'blackbox_' + new Date(latest.sessionId).toISOString().slice(0, 19).replace(/[T:]/g, '-') + '.csv'; a.click();
+}
+
 // State
 let loopStartTime = Date.now();
 let sessionStart = Date.now();
-let rec = false, data = [], cnt = 0, drops = 0;
+let rec = false, cnt = 0, drops = 0;
 let trail = [], maxL = 0, maxR = 0, maxA = 0, maxB = 0, peak = 0;
 let emaGx = 0, emaGy = 0, lastT = 0, speed_ema = 0;
 const EMA_TAU = 0.10;
@@ -878,7 +949,10 @@ function simulate() {
     drawG();
 
     cnt++;
-    if (rec) data.push({ t: now, sp, ax: -longRaw * 9.81, ay: latRaw * 9.81, wz: yawRad, mo, latg: latRaw, lng: longRaw, lat: 37.82, lon: -122.48, gpsOk: 1 });
+    if (rec) {
+        chunkBuffer.push({ t: now, sp, ax: -longRaw * 9.81, ay: latRaw * 9.81, wz: yawRad, mo, latg: latRaw, lng: longRaw, lat: 37.82, lon: -122.48, gpsOk: 1 });
+        if (now - lastSaveTime >= CHUNK_INTERVAL) saveChunk();
+    }
 }
 
 setInterval(simulate, 33);
@@ -918,29 +992,15 @@ $('csv-progress').onclick = (e) => {
     seekCSV(pct);
 };
 
-$('menu-rec').onclick = () => {
-    rec = !rec;
+$('menu-rec').onclick = async () => {
     $('menu-overlay').classList.remove('open');
-    if (rec) { data = []; sessionStart = Date.now(); $('menu-rec').textContent = 'Stop Recording'; }
-    else {
-        $('menu-rec').textContent = 'Start Recording';
-        if (data.length) {
-            const s = JSON.parse(localStorage.getItem('bb') || '[]');
-            s.unshift({ id: Date.now(), n: data.length, d: data });
-            localStorage.setItem('bb', JSON.stringify(s.slice(0, 10)));
-            alert('Saved ' + data.length + ' points');
-        }
-    }
+    if (rec) await stopRecording();
+    else { sessionStart = Date.now(); await startRecording(); }
 };
 
 $('menu-export').onclick = () => {
     $('menu-overlay').classList.remove('open');
-    const s = JSON.parse(localStorage.getItem('bb') || '[]');
-    if (!s.length) return alert('No recorded data');
-    let csv = 'time,speed,ax,ay,wz,mode,lat_g,lon_g,gps_lat,gps_lon,gps_valid\n';
-    s[0].d.forEach(r => { csv += [r.t, r.sp, r.ax, r.ay, r.wz, r.mo, r.latg, r.lng, r.lat||0, r.lon||0, r.gpsOk||0].join(',') + '\n'; });
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'blackbox_session.csv'; a.click();
+    exportCSV();
 };
 
 $('menu-clear').onclick = () => {
@@ -950,5 +1010,6 @@ $('menu-clear').onclick = () => {
 };
 
 setTimeout(() => { resize(); drawG(); }, 50);
+openDB().catch(e => console.log('IndexedDB error:', e));
 </script>
 </body></html>
