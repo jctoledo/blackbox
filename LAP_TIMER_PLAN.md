@@ -235,6 +235,7 @@ const timingLine = { p1: [-10, 0], p2: [10, 0], direction: Math.PI/2 };
 | 5 | Track Configuration UI | ✅ COMPLETE |
 | 6 | Track Persistence (IndexedDB) | ✅ COMPLETE |
 | 5A | Start Line Approach UX | ✅ COMPLETE |
+| 5B | Point-to-Point Track Creation | ❌ NOT STARTED |
 | 7 | Track Recording | ❌ NOT STARTED |
 | 8 | Track Auto-Detection | ❌ NOT STARTED |
 | 9 | Reference Lap & Predictive Delta | ❌ NOT STARTED |
@@ -659,19 +660,204 @@ Track persistence is implemented as part of Phase 5. Key functionality:
 
 ---
 
+## Phase 5B: Point-to-Point Track Creation ❌ NOT STARTED
+
+### Goal
+Add UI for creating point-to-point tracks (hill climbs, rally stages, drag strips). Backend support already complete.
+
+### User Flow
+1. User opens track modal, taps "New Track"
+2. User selects track type: **Loop** or **Point-to-Point**
+3. For Point-to-Point:
+   - Step 1: User drives to start location, taps "Set Start Line"
+   - Step 2: User drives to finish location, taps "Set Finish Line"
+   - User names and saves the track
+4. Track activates automatically after creation
+
+### UI Changes
+
+**Track Creation Modal:**
+```
+┌─────────────────────────────┐
+│  CREATE NEW TRACK           │
+│  ─────────────────          │
+│                             │
+│  Track Type:                │
+│  ┌─────────┐ ┌─────────────┐│
+│  │  Loop   │ │Point-to-Point│
+│  │   ◉     │ │      ○      ││
+│  └─────────┘ └─────────────┘│
+│                             │
+│  [Set Start Line Here]      │
+│                             │
+└─────────────────────────────┘
+```
+
+**Point-to-Point Creation (Step 1 - At Start):**
+```
+┌─────────────────────────────┐
+│  POINT-TO-POINT TRACK       │
+│  ─────────────────          │
+│                             │
+│  ✓ Start Line Set           │
+│    Position: (127.3, 45.2)  │
+│                             │
+│  ○ Finish Line              │
+│    Drive to finish location │
+│                             │
+│  [Set Finish Line Here]     │
+│  [Cancel]                   │
+└─────────────────────────────┘
+```
+
+**Point-to-Point Creation (Step 2 - At Finish):**
+```
+┌─────────────────────────────┐
+│  POINT-TO-POINT TRACK       │
+│  ─────────────────          │
+│                             │
+│  ✓ Start Line Set           │
+│  ✓ Finish Line Set          │
+│                             │
+│  Track Name:                │
+│  ┌─────────────────────────┐│
+│  │ Mulholland Hill Climb   ││
+│  └─────────────────────────┘│
+│                             │
+│  [Save Track]               │
+│  [Cancel]                   │
+└─────────────────────────────┘
+```
+
+### Active Point-to-Point Display
+
+**Armed State (at start):**
+```
+┌──────────────────────────────┐
+│         0:00.000             │
+│       Run 0 · Armed          │
+│                              │
+│  ┌────────────────────────┐  │
+│  │ Cross start to begin   │  │
+│  └────────────────────────┘  │
+│                              │
+│  Best     Last      Delta    │
+│  —:——     —:——        —      │
+└──────────────────────────────┘
+```
+
+**Running State:**
+```
+┌──────────────────────────────┐
+│         1:23.456             │
+│       Run 1 · Running        │
+│                              │
+│  ┌────────────────────────┐  │
+│  │ Finish: 234m ↑         │  │
+│  └────────────────────────┘  │
+│                              │
+│  Best     Last      Delta    │
+│  1:45.2   —:——        —      │
+└──────────────────────────────┘
+```
+
+**Finished State:**
+```
+┌──────────────────────────────┐
+│         1:42.789             │
+│    Run 1 · Finished ✓        │
+│                              │
+│  ┌────────────────────────┐  │
+│  │ Return to start for    │  │
+│  │ next run               │  │
+│  └────────────────────────┘  │
+│                              │
+│  Best     Last      Delta    │
+│  1:42.7   1:42.7    BEST     │
+└──────────────────────────────┘
+```
+
+### State Machine (Point-to-Point)
+
+```
+             cross start
+    Armed ─────────────────► Running
+      ▲                         │
+      │                         │ cross finish
+      │ return to               ▼
+      │ start area          Finished
+      └─────────────────────────┘
+            (auto-reset)
+```
+
+### Implementation
+
+**Track Schema Extension:**
+```javascript
+{
+  type: "point_to_point",  // vs "loop"
+  startLine: { p1: [x,y], p2: [x,y], direction: rad },
+  finishLine: { p1: [x,y], p2: [x,y], direction: rad },
+  // ...
+}
+```
+
+**API Call:**
+```javascript
+async function activatePointToPointTrack(track) {
+    const s = track.startLine, f = track.finishLine;
+    const url = '/api/laptimer/configure?type=point_to_point' +
+        '&p1_x=' + s.p1[0] + '&p1_y=' + s.p1[1] +
+        '&p2_x=' + s.p2[0] + '&p2_y=' + s.p2[1] +
+        '&dir=' + s.direction +
+        '&f_p1_x=' + f.p1[0] + '&f_p1_y=' + f.p1[1] +
+        '&f_p2_x=' + f.p2[0] + '&f_p2_y=' + f.p2[1] +
+        '&f_dir=' + f.direction;
+    await fetch(url);
+}
+```
+
+**Terminology Changes:**
+| Loop | Point-to-Point |
+|------|----------------|
+| Lap 1, Lap 2 | Run 1, Run 2 |
+| Armed | Armed |
+| Timing | Running |
+| (continuous) | Finished |
+| Best Lap | Best Run |
+| Last Lap | Last Run |
+
+### Finish Line Approach Indicator
+
+Reuse Phase 5A approach indicator logic:
+- When running, show distance to finish line
+- Progressive feedback: "Finish: 234m ↑" → "Approaching finish" → "Cross to finish!"
+
+---
+
 ## Phase 7: Track Recording ❌ NOT STARTED
 
 ### Goal
-Allow user to define a track by driving it once.
+Allow user to define a track by driving it once. Supports both loop and point-to-point tracks.
 
 ### User Flow
-1. User taps "Record Track by Driving"
+
+**Loop Track Recording:**
+1. User taps "Record Track by Driving" and selects "Loop"
 2. Dashboard shows recording overlay with instructions
 3. User drives around their intended circuit
 4. Dashboard detects loop closure (returned near start)
 5. User confirms or continues driving
-6. Dashboard calculates timing line automatically
+6. Dashboard calculates timing line automatically from start/end heading
 7. User names and saves the track
+
+**Point-to-Point Track Recording:**
+1. User taps "Record Track by Driving" and selects "Point-to-Point"
+2. Dashboard shows recording overlay: "Drive from start to finish"
+3. User drives the route (no loop closure detection)
+4. User taps "Mark Finish" when done
+5. Dashboard calculates start line from initial heading, finish line from final heading
+6. User names and saves the track
 
 ### Implementation: `TrackRecorder` Class
 
