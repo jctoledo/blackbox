@@ -475,13 +475,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
 .bbLapSetupText{font-size:13px;color:var(--text-tertiary)}
 .bbLapSetupBtn{background:var(--bg);border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;color:var(--text);cursor:pointer;font-family:inherit}
 .bbLapSetupBtn:active{opacity:0.7}
-.bbLapActive{display:none}
+.bbLapActive{display:none;cursor:pointer}
 .bbLapCard.active .bbLapActive{display:block}
 .bbLapCard.active .bbLapSetup{display:none}
 .bbLapMain{display:flex;flex-direction:column;align-items:center;padding:16px 18px 12px}
 .bbLapTime{font-size:44px;font-weight:600;line-height:1}
 .bbLapMeta{display:flex;align-items:center;gap:12px;margin-top:6px}
-.bbLapCount{font-size:13px;color:var(--text-tertiary);opacity:0.7}
+.bbLapCount{font-size:17px;font-weight:600;color:var(--text);opacity:0.6}
 .bbLapState{font-size:11px;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-tertiary);opacity:0.5}
 .bbLapState.timing{color:var(--ok);opacity:0.9}
 .bbLapHistory{display:flex;justify-content:center;gap:0;padding:12px 18px;border-top:1px solid var(--divider)}
@@ -493,8 +493,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
 .bbLapHistValue.delta{font-size:18px}
 .bbLapHistValue.delta.faster{color:var(--ok)}
 .bbLapHistValue.delta.slower{color:var(--red)}
-.bbLapFlash{animation:lapFlash 0.6s ease-out}
-@keyframes lapFlash{0%{background:rgba(52,199,89,0.25)}100%{background:var(--surface)}}
+.bbLapFlash{animation:lapFlash 0.8s ease-out}
+@keyframes lapFlash{0%{background:rgba(52,199,89,0.35);transform:scale(1.01)}15%{background:rgba(52,199,89,0.45);transform:scale(1.02)}100%{background:var(--surface);transform:scale(1)}}
 .bbLapBestFlash{animation:bestFlash 0.8s ease-out}
 @keyframes bestFlash{0%,30%{transform:scale(1.05)}100%{transform:scale(1)}}
 .bbStartLineIndicator{display:none;padding:10px 16px;border-top:1px solid var(--divider);text-align:center}
@@ -573,7 +573,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
             <span class="bbLapSetupText" id="lap-setup-text">Tap to configure</span>
             <button class="bbLapSetupBtn" id="btn-tracks">Tracks</button>
         </div>
-        <div class="bbLapActive" id="lap-active">
+        <div class="bbLapActive" id="lap-active" onclick="openTrackModal()">
             <div class="bbLapMain">
                 <div class="bbLapTime bbNum" id="lap-time">0:00.000</div>
                 <div class="bbLapMeta">
@@ -1030,6 +1030,7 @@ async function activateTrack(track){
         const j=await r.json();
         if(j.error){alert('Failed to configure lap timer: '+j.error);return}
         activeTrack=track;
+        suppressStartLineIndicator=false; // Reset - only setStartLineHere sets this to true
         $('lap-setup-text').textContent=track.name;
         updateActiveTrackDisplay();
         console.log('Track activated:',track.name);

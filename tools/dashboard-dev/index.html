@@ -356,7 +356,7 @@ body{
 }
 .bbLapSetupBtn:active{opacity:0.7}
 
-.bbLapActive{display:none}
+.bbLapActive{display:none;cursor:pointer}
 .bbLapCard.active .bbLapActive{display:block}
 .bbLapCard.active .bbLapSetup{display:none}
 
@@ -378,9 +378,10 @@ body{
     margin-top:6px;
 }
 .bbLapCount{
-    font-size:13px;
-    color:var(--text-tertiary);
-    opacity:0.7;
+    font-size:17px;
+    font-weight:600;
+    color:var(--text);
+    opacity:0.6;
 }
 .bbLapState{
     font-size:11px;
@@ -427,11 +428,12 @@ body{
 .bbLapHistValue.delta.slower{color:var(--red)}
 
 .bbLapFlash{
-    animation:lapFlash 0.6s ease-out;
+    animation:lapFlash 0.8s ease-out;
 }
 @keyframes lapFlash{
-    0%{background:rgba(52,199,89,0.25)}
-    100%{background:var(--surface)}
+    0%{background:rgba(52,199,89,0.35);transform:scale(1.01)}
+    15%{background:rgba(52,199,89,0.45);transform:scale(1.02)}
+    100%{background:var(--surface);transform:scale(1)}
 }
 .bbLapBestFlash{
     animation:bestFlash 0.8s ease-out;
@@ -455,7 +457,7 @@ body{
     color:var(--text-secondary);
     font-weight:500;
 }
-.bbStartLineText.approaching{color:var(--yellow)}
+.bbStartLineText.approaching{color:var(--amber)}
 .bbStartLineText.close{color:var(--ok)}
 .bbStartLineText.at-line{
     color:var(--ok);
@@ -464,12 +466,7 @@ body{
 }
 @keyframes pulseText{
     0%,100%{opacity:1}
-    50%{opacity:0.6}
-}
-.bbStartLineArrow{
-    display:inline-block;
-    margin-left:6px;
-    font-size:16px;
+    50%{opacity:0.5}
 }
 
 /* TRACK MANAGER MODAL */
@@ -695,7 +692,7 @@ body{
             <span class="bbLapSetupText" id="lap-setup-text">No track configured</span>
             <button class="bbLapSetupBtn" id="btn-open-tracks">Tracks</button>
         </div>
-        <div class="bbLapActive" id="lap-active">
+        <div class="bbLapActive" id="lap-active" onclick="openTrackModal()">
             <div class="bbLapMain">
                 <div class="bbLapTime bbNum" id="lap-time">0:00.000</div>
                 <div class="bbLapMeta">
@@ -1534,6 +1531,7 @@ async function handleTrackAction(action, trackId) {
 
 function activateTrack(track) {
     activeTrack = track;
+    suppressStartLineIndicator = false; // Reset - only setStartLineHere sets this to true
 
     // Set up the timing line from the track
     simTimingLine = {
