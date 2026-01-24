@@ -371,6 +371,17 @@ body{
     font-weight:600;
     line-height:1;
 }
+.bbLapTrackName{
+    font-size:12px;
+    font-weight:500;
+    opacity:0.45;
+    margin-top:4px;
+    letter-spacing:0.02em;
+    max-width:200px;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
 .bbLapMeta{
     display:flex;
     align-items:center;
@@ -391,6 +402,27 @@ body{
     opacity:0.5;
 }
 .bbLapState.timing{color:var(--ok);opacity:0.9}
+.bbLapState.finished{color:var(--ok);opacity:1;animation:finishedPulse 0.5s ease-in-out 2}
+@keyframes finishedPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
+
+/* First run badge */
+.bbLapCard.first-run .bbLapMeta::after{
+    content:'NEW';
+    display:inline-block;
+    margin-left:8px;
+    padding:2px 6px;
+    background:var(--amber);
+    color:#fff;
+    font-size:9px;
+    font-weight:700;
+    border-radius:4px;
+    letter-spacing:0.05em;
+}
+
+/* P2P track styling */
+.bbLapCard.p2p .bbLapHistLabel:first-child::before{content:'Best '}
+.bbLapCard.p2p .bbLapHistLabel:first-child{font-size:0}
+.bbLapCard.p2p .bbLapHistLabel:first-child::before{font-size:11px}
 
 .bbLapHistory{
     display:flex;
@@ -460,6 +492,25 @@ body{
 .bbStartLineText.approaching{color:var(--amber)}
 .bbStartLineText.close{color:var(--ok)}
 .bbStartLineText.at-line{
+    color:var(--ok);
+    font-weight:600;
+}
+/* Finish line indicator (P2P only, shown while running) */
+.bbFinishLineIndicator{
+    display:none;
+    padding:10px 16px;
+    border-top:1px solid var(--divider);
+    text-align:center;
+}
+.bbLapCard.active.timing.p2p .bbFinishLineIndicator{display:block}
+.bbFinishLineText{
+    font-size:14px;
+    color:var(--text-secondary);
+    font-weight:500;
+}
+.bbFinishLineText.approaching{color:var(--amber)}
+.bbFinishLineText.close{color:var(--ok)}
+.bbFinishLineText.at-line{
     color:var(--ok);
     font-weight:600;
     animation:pulseText 1s ease-in-out infinite;
@@ -587,6 +638,129 @@ body{
     opacity:0.4;
     cursor:not-allowed;
 }
+
+/* TRACK TYPE SELECTOR */
+.bbTrackTypeSelector{
+    display:flex;
+    background:var(--bg);
+    border-radius:10px;
+    padding:3px;
+    margin-bottom:14px;
+}
+.bbTrackTypeBtn{
+    flex:1;
+    padding:10px 12px;
+    border:none;
+    border-radius:8px;
+    background:transparent;
+    font-size:13px;
+    font-weight:600;
+    color:var(--text-tertiary);
+    cursor:pointer;
+    font-family:inherit;
+    transition:all 0.15s;
+}
+.bbTrackTypeBtn.selected{
+    background:var(--surface);
+    color:var(--text);
+    box-shadow:0 1px 3px rgba(0,0,0,0.1);
+}
+.bbTrackTypeBtn:active{opacity:0.7}
+
+/* P2P CREATION PROGRESS */
+.bbP2PProgress{
+    background:var(--bg);
+    border-radius:12px;
+    padding:14px 16px;
+    margin-bottom:14px;
+    display:none;
+}
+.bbP2PProgress.active{display:block}
+.bbP2PStep{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:8px 0;
+    transition:opacity 0.3s;
+}
+.bbP2PStep.waiting{opacity:0.5}
+.bbP2PStepIcon{
+    width:24px;
+    height:24px;
+    border-radius:50%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:12px;
+    font-weight:600;
+    flex-shrink:0;
+    transition:all 0.3s;
+}
+.bbP2PStepIcon.pending{
+    border:2px solid var(--text-tertiary);
+    color:var(--text-tertiary);
+    background:transparent;
+}
+.bbP2PStepIcon.current{
+    border:2px solid var(--accent);
+    color:var(--accent);
+    background:rgba(0,122,255,0.1);
+    animation:p2p-pulse 2s ease-in-out infinite;
+}
+@keyframes p2p-pulse{
+    0%,100%{box-shadow:0 0 0 0 rgba(0,122,255,0.4)}
+    50%{box-shadow:0 0 0 6px rgba(0,122,255,0)}
+}
+.bbP2PStepIcon.done{
+    background:var(--ok);
+    color:#fff;
+    border:none;
+}
+.bbP2PStepText{
+    font-size:13px;
+    color:var(--text-secondary);
+    transition:color 0.3s;
+}
+.bbP2PStepText.current{
+    color:var(--text);
+    font-weight:600;
+}
+.bbP2PStepText.done{color:var(--ok)}
+.bbP2PStepCoords{
+    font-size:11px;
+    color:var(--text-tertiary);
+    margin-left:34px;
+    margin-top:-4px;
+    margin-bottom:4px;
+}
+.bbP2PConnector{
+    width:2px;
+    height:16px;
+    background:var(--divider);
+    margin-left:11px;
+    transition:background 0.3s;
+}
+.bbP2PConnector.active{
+    background:linear-gradient(to bottom, var(--ok), var(--accent));
+}
+.bbP2PMessage{
+    text-align:center;
+    padding:12px;
+    margin-top:8px;
+    background:rgba(0,122,255,0.08);
+    border-radius:8px;
+    font-size:13px;
+    color:var(--text-secondary);
+    display:none;
+}
+.bbP2PMessage.active{display:block}
+.bbP2PDistance{
+    font-size:15px;
+    font-weight:600;
+    color:var(--accent);
+    font-family:var(--mono);
+}
+
 .bbTrackList{
     border-radius:12px;
     overflow:hidden;
@@ -695,6 +869,7 @@ body{
         <div class="bbLapActive" id="lap-active" onclick="openTrackModal()">
             <div class="bbLapMain">
                 <div class="bbLapTime bbNum" id="lap-time">0:00.000</div>
+                <div class="bbLapTrackName" id="lap-track-name"></div>
                 <div class="bbLapMeta">
                     <span class="bbLapCount" id="lap-count">Lap 0</span>
                     <span class="bbLapState" id="lap-state">Armed</span>
@@ -718,6 +893,9 @@ body{
             </div>
             <div class="bbStartLineIndicator" id="start-line-indicator">
                 <span class="bbStartLineText" id="start-line-text">Calculating...</span>
+            </div>
+            <div class="bbFinishLineIndicator" id="finish-line-indicator">
+                <span class="bbFinishLineText" id="finish-line-text">Finish ahead...</span>
             </div>
         </div>
     </section>
@@ -782,7 +960,6 @@ body{
 <div class="bbMenuOverlay" id="menu-overlay">
     <div class="bbMenuPanel">
         <button class="bbMenuItem" id="menu-tracks">Tracks</button>
-        <button class="bbMenuItem" id="menu-lap">Simulate Track</button>
         <button class="bbMenuItem" id="menu-load">Load CSV</button>
         <button class="bbMenuItem" id="menu-sim">Back to Sim</button>
         <button class="bbMenuItem" id="menu-rec">Start Recording</button>
@@ -825,15 +1002,56 @@ body{
                 </div>
             </div>
 
-            <!-- Quick Actions -->
-            <div class="bbModalSection">
-                <div class="bbSectionTitle">Quick Actions</div>
+            <!-- Track Type Selection -->
+            <div class="bbModalSection" id="track-type-section">
+                <div class="bbSectionTitle">New Track</div>
+                <div class="bbTrackTypeSelector">
+                    <button class="bbTrackTypeBtn selected" id="btn-type-loop" onclick="selectTrackType('loop')">Loop</button>
+                    <button class="bbTrackTypeBtn" id="btn-type-p2p" onclick="selectTrackType('point_to_point')">Point-to-Point</button>
+                </div>
+
+                <!-- P2P Creation Progress (hidden by default) -->
+                <div class="bbP2PProgress" id="p2p-progress">
+                    <div class="bbP2PStep" id="p2p-step-1">
+                        <div class="bbP2PStepIcon current" id="p2p-start-icon">1</div>
+                        <span class="bbP2PStepText current" id="p2p-start-text">Set start line</span>
+                    </div>
+                    <div class="bbP2PStepCoords" id="p2p-start-coords"></div>
+                    <div class="bbP2PConnector" id="p2p-connector"></div>
+                    <div class="bbP2PStep waiting" id="p2p-step-2">
+                        <div class="bbP2PStepIcon pending" id="p2p-finish-icon">2</div>
+                        <span class="bbP2PStepText" id="p2p-finish-text">Set finish line</span>
+                    </div>
+                    <div class="bbP2PStepCoords" id="p2p-finish-coords"></div>
+                    <div class="bbP2PMessage" id="p2p-message">
+                        Drive to your finish location<br>
+                        <span class="bbP2PDistance" id="p2p-distance">—</span> from start
+                    </div>
+                </div>
+
                 <button class="bbActionBtn primary" id="btn-set-start" disabled>
                     Set Start Line Here
                 </button>
+                <button class="bbActionBtn primary" id="btn-set-finish" disabled style="display:none">
+                    Set Finish Line Here
+                </button>
+                <button class="bbActionBtn secondary" id="btn-cancel-p2p" style="display:none" onclick="cancelP2PCreation()">
+                    Cancel
+                </button>
+            </div>
+
+            <!-- Active Track Actions -->
+            <div class="bbModalSection" id="active-track-actions" style="display:none">
+                <div class="bbSectionTitle">Active Track</div>
                 <button class="bbActionBtn secondary" id="btn-clear-track">
                     Clear Active Track
                 </button>
+            </div>
+
+            <!-- Demo Tracks -->
+            <div class="bbModalSection">
+                <div class="bbSectionTitle">Demo Tracks</div>
+                <div class="bbTrackList" id="demo-track-list"></div>
             </div>
 
             <!-- Saved Tracks -->
@@ -874,6 +1092,92 @@ const CANYON_KEYFRAMES = [
     [20000,  55,    0.15,  0.05,  3],
 ];
 const LOOP_DURATION = 20000;
+const P2P_DURATION = 25000;  // 25 seconds for P2P runs (longer to see messages)
+
+// ============================================================================
+// P2P TEST TRACK - A longer oval for point-to-point testing
+// Start at (0,0), finish at (200,0) on opposite side
+// Total run takes 20 seconds, with approach messages visible
+// ============================================================================
+const P2P_TRACK = (() => {
+    const waypoints = [];
+    let d = 0;
+    const r = 15;  // Larger corners
+    const cornerSteps = 10;
+    const arcLength = (Math.PI * r / 2);
+
+    function addCorner(cx, cy, startAngle, endAngle) {
+        for (let i = 1; i <= cornerSteps; i++) {
+            const t = i / cornerSteps;
+            const angle = startAngle + t * (endAngle - startAngle);
+            const x = cx + r * Math.cos(angle);
+            const y = cy + r * Math.sin(angle);
+            const heading = angle - Math.PI / 2;
+            d += arcLength / cornerSteps;
+            waypoints.push([d, x, y, heading]);
+        }
+    }
+
+    // Start at (0,0) heading north → up to (0,80)
+    for (let i = 0; i <= 16; i++) {
+        waypoints.push([d, 0, i * 5, Math.PI / 2]);
+        if (i < 16) d += 5;
+    }
+    // Corner 1: turn right at (0,80) → (15,95)
+    addCorner(15, 80, Math.PI, Math.PI / 2);
+    // East along top from (15,95) to (185,95) - 170m
+    for (let i = 1; i <= 34; i++) {
+        d += 5;
+        waypoints.push([d, 15 + i * 5, 95, 0]);
+    }
+    // Corner 2: turn right at (185,95) → (200,80)
+    addCorner(185, 80, Math.PI / 2, 0);
+    // South from (200,80) to (200,0) - FINISH LINE at y=40
+    for (let i = 1; i <= 16; i++) {
+        d += 5;
+        waypoints.push([d, 200, 80 - i * 5, -Math.PI / 2]);
+    }
+    // Corner 3: turn right at (200,0) → (185,-15)
+    addCorner(185, 0, 0, -Math.PI / 2);
+    // West along bottom from (185,-15) to (15,-15) - 170m
+    for (let i = 1; i <= 34; i++) {
+        d += 5;
+        waypoints.push([d, 185 - i * 5, -15, Math.PI]);
+    }
+    // Corner 4: turn right at (15,-15) → (0,0)
+    addCorner(15, 0, -Math.PI / 2, -Math.PI);
+    // Final approach to start
+    d += 1;
+    waypoints.push([d, 0, 0, Math.PI / 2]);
+
+    return { waypoints, totalLength: d, finishY: 40 };  // finishY marks where finish line should be
+})();
+
+// ============================================================================
+// DEMO TRACKS - Pre-made tracks matching simulation geometries
+// These are always available in Track Manager without needing to create them
+// ============================================================================
+const DEMO_TRACKS = [
+    {
+        id: 'demo_loop',
+        name: 'Demo Loop',
+        type: 'loop',
+        isDemo: true,
+        // Start/finish line at (0,0) perpendicular to northbound direction
+        // Uses [x, y] array format to match user-created tracks
+        startLine: { p1: [-5, 0], p2: [5, 0], direction: Math.PI / 2 }
+    },
+    {
+        id: 'demo_p2p',
+        name: 'Demo P2P Stage',
+        type: 'point_to_point',
+        isDemo: true,
+        // Start at (0,0) heading north, finish at (200,40) heading south
+        // Uses [x, y] array format to match user-created tracks
+        startLine: { p1: [-5, 0], p2: [5, 0], direction: Math.PI / 2 },
+        finishLine: { p1: [195, 40], p2: [205, 40], direction: -Math.PI / 2 }
+    }
+];
 
 // ============================================================================
 // SIMULATED TRACK PATH - A rectangular block loop for geometry-based lap timing
@@ -1046,20 +1350,26 @@ function directionValid(velocity, expectedDir, tolerance = Math.PI / 2) {
 }
 
 /**
- * Interpolate position along the block track based on elapsed time
+ * Interpolate position along the track based on elapsed time
+ * Uses P2P_TRACK for point-to-point tracks, BLOCK_TRACK for loops
  * @param {number} elapsedMs - Elapsed time since loop start
  * @returns {{x: number, y: number, vx: number, vy: number, heading: number, speed: number}}
  */
 function getSimulatedPosition(elapsedMs) {
-    const loopTime = elapsedMs % LOOP_DURATION;
-    const progress = loopTime / LOOP_DURATION;  // 0 to 1
+    // Use P2P track when P2P track is active
+    const isP2P = activeTrack && activeTrack.type === 'point_to_point';
+    const track = isP2P ? P2P_TRACK : BLOCK_TRACK;
+    const duration = isP2P ? P2P_DURATION : LOOP_DURATION;
+
+    const loopTime = elapsedMs % duration;
+    const progress = loopTime / duration;  // 0 to 1
 
     // Distance traveled along track
-    const totalDist = BLOCK_TRACK.totalLength;
+    const totalDist = track.totalLength;
     const targetDist = progress * totalDist;
 
     // Find the two waypoints we're between
-    const wps = BLOCK_TRACK.waypoints;
+    const wps = track.waypoints;
     let i = 0;
     while (i < wps.length - 1 && wps[i + 1][0] < targetDist) {
         i++;
@@ -1100,7 +1410,8 @@ function getSimulatedPosition(elapsedMs) {
 // ============================================================================
 // TIMING LINE STATE
 // ============================================================================
-let simTimingLine = null;  // {p1: [x,y], p2: [x,y], direction: radians}
+let simTimingLine = null;  // {p1: [x,y], p2: [x,y], direction: radians} - start line
+let simFinishLine = null;  // For point-to-point tracks - finish line
 let simPrevPos = null;     // Previous position for crossing detection
 
 const $ = id => document.getElementById(id);
@@ -1421,6 +1732,8 @@ async function deleteTrack(id) {
 // ========== TRACK MANAGER STATE ==========
 let activeTrack = null;
 let currentSimPos = null;  // Updated by simulation loop
+let selectedTrackType = 'loop';  // 'loop' or 'point_to_point'
+let p2pCreationState = null;  // { startLine: {...}, startPos: {x, y} } when creating P2P track
 
 function generateTrackId() {
     return 'track_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
@@ -1429,23 +1742,114 @@ function generateTrackId() {
 // ========== TRACK MANAGER UI ==========
 function openTrackModal() {
     $('track-modal').classList.add('open');
+    renderDemoTrackList();
     renderTrackList();
     updateActiveTrackDisplay();
 }
 
 function closeTrackModal() {
     $('track-modal').classList.remove('open');
+    // Reset P2P creation if in progress
+    if (p2pCreationState) {
+        cancelP2PCreation();
+    }
+}
+
+function selectTrackType(type) {
+    selectedTrackType = type;
+    $('btn-type-loop').classList.toggle('selected', type === 'loop');
+    $('btn-type-p2p').classList.toggle('selected', type === 'point_to_point');
+
+    // Show/hide P2P progress indicator
+    $('p2p-progress').classList.toggle('active', type === 'point_to_point');
+
+    // Update button text based on type
+    if (type === 'loop') {
+        $('btn-set-start').textContent = 'Set Start Line Here';
+        $('btn-set-start').style.display = 'block';
+        $('btn-set-finish').style.display = 'none';
+        $('btn-cancel-p2p').style.display = 'none';
+    } else {
+        $('btn-set-start').textContent = 'Set Start Line';
+        updateP2PCreationUI();
+    }
+}
+
+function updateP2PCreationUI() {
+    if (p2pCreationState) {
+        // Start line is set, waiting for finish
+        $('p2p-step-1').classList.remove('waiting');
+        $('p2p-start-icon').className = 'bbP2PStepIcon done';
+        $('p2p-start-icon').textContent = '✓';
+        $('p2p-start-text').className = 'bbP2PStepText done';
+        $('p2p-start-coords').textContent = 'Start position saved';
+
+        $('p2p-connector').classList.add('active');
+
+        $('p2p-step-2').classList.remove('waiting');
+        $('p2p-finish-icon').className = 'bbP2PStepIcon current';
+        $('p2p-finish-icon').textContent = '2';
+        $('p2p-finish-text').className = 'bbP2PStepText current';
+        $('p2p-finish-coords').textContent = '';
+
+        $('p2p-message').classList.add('active');
+
+        // Update distance from start
+        if (currentSimPos && p2pCreationState.startPos) {
+            const dx = currentSimPos.x - p2pCreationState.startPos.x;
+            const dy = currentSimPos.y - p2pCreationState.startPos.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            $('p2p-distance').textContent = Math.round(dist) + 'm';
+        } else {
+            $('p2p-distance').textContent = '—';
+        }
+
+        $('btn-set-start').style.display = 'none';
+        $('btn-set-finish').style.display = 'block';
+        $('btn-set-finish').disabled = !currentSimPos;
+        $('btn-cancel-p2p').style.display = 'block';
+    } else {
+        // Initial state - waiting for start
+        $('p2p-step-1').classList.remove('waiting');
+        $('p2p-start-icon').className = 'bbP2PStepIcon current';
+        $('p2p-start-icon').textContent = '1';
+        $('p2p-start-text').className = 'bbP2PStepText current';
+        $('p2p-start-coords').textContent = '';
+
+        $('p2p-connector').classList.remove('active');
+
+        $('p2p-step-2').classList.add('waiting');
+        $('p2p-finish-icon').className = 'bbP2PStepIcon pending';
+        $('p2p-finish-icon').textContent = '2';
+        $('p2p-finish-text').className = 'bbP2PStepText';
+        $('p2p-finish-coords').textContent = '';
+
+        $('p2p-message').classList.remove('active');
+
+        $('btn-set-start').style.display = 'block';
+        $('btn-set-finish').style.display = 'none';
+        $('btn-cancel-p2p').style.display = 'none';
+    }
+}
+
+function cancelP2PCreation() {
+    p2pCreationState = null;
+    updateP2PCreationUI();
 }
 
 function updateActiveTrackDisplay() {
     const section = $('active-track-section');
+    const actionsSection = $('active-track-actions');
     if (activeTrack) {
         section.style.display = 'block';
+        actionsSection.style.display = 'block';
         $('active-track-name').textContent = activeTrack.name;
+        const typeLabel = activeTrack.type === 'point_to_point' ? 'runs' : 'laps';
         const bestStr = activeTrack.bestLapMs ? formatLapTime(activeTrack.bestLapMs) : '—';
-        $('active-track-meta').textContent = 'Best: ' + bestStr + ' · ' + (activeTrack.lapCount || 0) + ' laps';
+        $('active-track-meta').textContent = 'Best: ' + bestStr + ' · ' + (activeTrack.lapCount || 0) + ' ' + typeLabel;
     } else {
         section.style.display = 'none';
+        actionsSection.style.display = 'none';
     }
 }
 
@@ -1456,11 +1860,21 @@ function updateTrackModalPosition() {
         $('pos-heading').textContent = (currentSimPos.heading * 180 / Math.PI).toFixed(0) + '°';
         $('pos-speed').textContent = (currentSimPos.speed * 3.6).toFixed(0) + ' km/h';
         $('btn-set-start').disabled = false;
+        $('btn-set-finish').disabled = false;
+
+        // Update P2P creation distance if in progress
+        if (p2pCreationState && p2pCreationState.startPos) {
+            const dx = currentSimPos.x - p2pCreationState.startPos.x;
+            const dy = currentSimPos.y - p2pCreationState.startPos.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            $('p2p-distance').textContent = Math.round(dist) + 'm';
+        }
     } else {
         $('pos-xy').textContent = 'Waiting...';
         $('pos-heading').textContent = '—';
         $('pos-speed').textContent = '—';
         $('btn-set-start').disabled = true;
+        $('btn-set-finish').disabled = true;
     }
 }
 
@@ -1505,6 +1919,41 @@ async function renderTrackList() {
     }
 }
 
+function renderDemoTrackList() {
+    const listEl = $('demo-track-list');
+
+    listEl.innerHTML = DEMO_TRACKS.map(track => {
+        const isActive = activeTrack && activeTrack.id === track.id;
+        const typeLabel = track.type === 'point_to_point' ? 'Point-to-Point' : 'Loop';
+        return '<div class="bbTrackItem" data-track-id="' + track.id + '">' +
+            '<div class="bbTrackInfo">' +
+                '<div class="bbTrackName">' + escapeHtml(track.name) + (isActive ? ' ✓' : '') + '</div>' +
+                '<div class="bbTrackMeta">' +
+                    '<span>' + typeLabel + '</span>' +
+                    '<span>Simulation track</span>' +
+                '</div>' +
+            '</div>' +
+            '<div class="bbTrackActions">' +
+                '<button class="bbTrackBtn primary" data-action="use">Use</button>' +
+            '</div>' +
+        '</div>';
+    }).join('');
+
+    // Add event listeners
+    listEl.querySelectorAll('.bbTrackBtn').forEach(btn => {
+        btn.onclick = () => {
+            const trackId = btn.closest('.bbTrackItem').dataset.trackId;
+            const demoTrack = DEMO_TRACKS.find(t => t.id === trackId);
+            if (demoTrack) {
+                // Make a copy so we can add lap data without modifying the constant
+                const track = { ...demoTrack, isNew: true };
+                activateTrack(track);
+                closeTrackModal();
+            }
+        };
+    });
+}
+
 function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
@@ -1533,13 +1982,24 @@ function activateTrack(track) {
     activeTrack = track;
     suppressStartLineIndicator = false; // Reset - only setStartLineHere sets this to true
 
-    // Set up the timing line from the track
+    const isP2P = track.type === 'point_to_point';
+
+    // Set up timing lines from the track
     simTimingLine = {
         p1: track.startLine.p1,
         p2: track.startLine.p2,
         direction: track.startLine.direction
     };
+    simFinishLine = isP2P && track.finishLine ? {
+        p1: track.finishLine.p1,
+        p2: track.finishLine.p2,
+        direction: track.finishLine.direction
+    } : null;
     simPrevPos = null;
+
+    // For new P2P tracks, require moving away from start before timing can begin
+    // This prevents immediate timing start when the simulation car is already near the start
+    p2pNeedsWarmup = isP2P && track.isNew;
 
     // Activate lap timer
     lapTimerActive = true;
@@ -1554,26 +2014,41 @@ function activateTrack(track) {
     const section = $('lap-section');
     section.classList.remove('inactive');
     section.classList.add('active');
+    section.classList.toggle('p2p', isP2P);
+    section.classList.toggle('first-run', !track.lapCount);
     $('lap-time').textContent = '0:00.000';
-    $('lap-count').textContent = 'Lap 0';
+
+    // Terminology: "Run" for P2P, "Lap" for loops
+    const unit = isP2P ? 'Run' : 'Lap';
+    $('lap-count').textContent = unit + ' 0';
     $('lap-state').textContent = 'Armed';
     $('lap-state').classList.remove('timing');
-    $('best-lap').textContent = bestLapMs ? formatLapTime(bestLapMs) : '—:——';
-    $('best-lap').classList.toggle('best', !!bestLapMs);
-    $('last-lap').textContent = '—:——';
+
+    // Show messaging for new tracks (no completed laps/runs yet)
+    if (!track.lapCount) {
+        $('best-lap').textContent = '—:——';
+        $('best-lap').classList.remove('best');
+        $('last-lap').textContent = '—:——';
+    } else {
+        $('best-lap').textContent = bestLapMs ? formatLapTime(bestLapMs) : '—:——';
+        $('best-lap').classList.toggle('best', !!bestLapMs);
+        $('last-lap').textContent = '—:——';
+    }
     $('lap-delta').textContent = '—';
     $('lap-delta').className = 'bbLapHistValue bbNum delta';
 
-    // Update setup text
+    // Update track name displays
     $('lap-setup-text').textContent = track.name;
+    $('lap-track-name').textContent = track.name;
 
-    console.log('Track activated:', track.name, 'Timing line:', simTimingLine);
+    console.log('Track activated:', track.name, 'Type:', track.type, 'Timing line:', simTimingLine, 'Finish:', simFinishLine);
 }
 
 function deactivateTrack() {
     activeTrack = null;
     deactivateLapTimer();
     $('lap-setup-text').textContent = 'No track configured';
+    $('lap-track-name').textContent = '';
 }
 
 async function setStartLineHere() {
@@ -1588,17 +2063,27 @@ async function setStartLineHere() {
 
     // Create perpendicular timing line (20m wide, 10m each side)
     const width = 10;
-    const perpAngle = heading + Math.PI / 2;  // Perpendicular to heading
+    const perpAngle = heading + Math.PI / 2;
 
     const timingLine = {
         p1: [x + Math.cos(perpAngle) * width, y + Math.sin(perpAngle) * width],
         p2: [x - Math.cos(perpAngle) * width, y - Math.sin(perpAngle) * width],
-        direction: heading  // Valid crossing direction = current heading
+        direction: heading
     };
 
-    // Create track object
+    if (selectedTrackType === 'point_to_point') {
+        // P2P: Save start line and wait for finish
+        p2pCreationState = {
+            startLine: timingLine,
+            startPos: { x, y }
+        };
+        updateP2PCreationUI();
+        return;
+    }
+
+    // Loop track: Create and activate immediately
     const trackName = prompt('Enter track name:', 'Track ' + new Date().toLocaleDateString());
-    if (!trackName) return;  // User cancelled
+    if (!trackName) return;
 
     const track = {
         id: generateTrackId(),
@@ -1607,24 +2092,77 @@ async function setStartLineHere() {
         created: Date.now(),
         modified: Date.now(),
         startLine: timingLine,
+        finishLine: null,
         origin: { x, y },
         bestLapMs: null,
         lapCount: 0
     };
 
-    // Save to IndexedDB
     await saveTrack(track);
-
-    // Activate the track
     activateTrack(track);
-
-    // Suppress start line indicator for newly created tracks (user is already at the line)
     suppressStartLineIndicator = true;
-
-    // Close modal
     closeTrackModal();
+    console.log('Loop track created:', track);
+}
 
-    console.log('Track created:', track);
+async function setFinishLineHere() {
+    if (!currentSimPos || !p2pCreationState) {
+        alert('Position not available or start line not set.');
+        return;
+    }
+
+    const x = currentSimPos.x;
+    const y = currentSimPos.y;
+    const heading = currentSimPos.heading;
+
+    // Calculate distance from start
+    const dx = x - p2pCreationState.startPos.x;
+    const dy = y - p2pCreationState.startPos.y;
+    const stageLength = Math.sqrt(dx * dx + dy * dy);
+
+    // Create perpendicular finish line
+    const width = 10;
+    const perpAngle = heading + Math.PI / 2;
+
+    const finishLine = {
+        p1: [x + Math.cos(perpAngle) * width, y + Math.sin(perpAngle) * width],
+        p2: [x - Math.cos(perpAngle) * width, y - Math.sin(perpAngle) * width],
+        direction: heading
+    };
+
+    // Update P2P progress UI to show finish is set
+    $('p2p-finish-icon').className = 'bbP2PStepIcon done';
+    $('p2p-finish-icon').textContent = '✓';
+    $('p2p-finish-text').className = 'bbP2PStepText done';
+    $('p2p-finish-coords').textContent = 'Finish position saved';
+    $('p2p-message').innerHTML = 'Stage ready<br><span class="bbP2PDistance">' + Math.round(stageLength) + 'm</span> total';
+
+    const trackName = prompt('Enter track name:', 'Stage ' + new Date().toLocaleDateString());
+    if (!trackName) {
+        // Reset finish step visually (user cancelled)
+        updateP2PCreationUI(); // Restore the "waiting for finish" state
+        return;
+    }
+
+    const track = {
+        id: generateTrackId(),
+        name: trackName,
+        type: 'point_to_point',
+        created: Date.now(),
+        modified: Date.now(),
+        startLine: p2pCreationState.startLine,
+        finishLine: finishLine,
+        origin: p2pCreationState.startPos,
+        bestLapMs: null,
+        lapCount: 0
+    };
+
+    await saveTrack(track);
+    p2pCreationState = null;
+    activateTrack(track);
+    suppressStartLineIndicator = true;
+    closeTrackModal();
+    console.log('Point-to-point track created:', track);
 }
 
 async function clearActiveTrack() {
@@ -1654,6 +2192,7 @@ let rec = false, cnt = 0, drops = 0;
 let lapTimerActive = false;
 let lapTimerState = 'idle'; // 'idle', 'armed', 'timing'
 let suppressStartLineIndicator = false; // True after creating new track, cleared on first crossing
+let p2pNeedsWarmup = false; // True for new P2P tracks - must move away from start before crossings count
 let lapStartTime = 0;
 let currentLapMs = 0;
 let lapCount = 0;
@@ -1671,61 +2210,27 @@ function formatLapTime(ms) {
     return min + ':' + sec.toFixed(3).padStart(6, '0');
 }
 
-function activateLapTimer() {
-    lapTimerActive = true;
-    lapTimerState = 'armed';
-    lapStartTime = 0;
-    currentLapMs = 0;
-    lapCount = 0;
-    bestLapMs = null;
-    lastLapMs = null;
-    lapCrossingDebounce = 0;
-
-    // Configure timing line at the track start
-    // The track starts at (0, 0) heading north (+Y)
-    // Create a 20m wide timing line perpendicular to the start direction
-    const lineWidth = 10;  // 10m each side
-    simTimingLine = {
-        p1: [-lineWidth, 0],  // Left side of timing line
-        p2: [lineWidth, 0],   // Right side of timing line
-        direction: Math.PI / 2  // Valid crossing direction: north (+Y)
-    };
-    simPrevPos = null;  // Clear previous position
-
-    // Reset loop timing so we start at the beginning of the track
-    loopStartTime = Date.now();
-
-    const section = $('lap-section');
-    section.classList.remove('inactive');
-    section.classList.add('active');
-
-    $('lap-state').textContent = 'Armed';
-    $('lap-state').classList.remove('timing');
-    $('lap-delta').textContent = '—';
-    $('lap-delta').className = 'bbLapHistValue bbNum delta';
-    $('menu-lap').textContent = 'Stop Lap Timer';
-
-    updateLapDisplay();
-    console.log('Lap timer activated with timing line:', simTimingLine);
-}
-
 function deactivateLapTimer() {
     lapTimerActive = false;
     lapTimerState = 'idle';
 
     // Clear timing line and position tracking
     simTimingLine = null;
+    simFinishLine = null;
     simPrevPos = null;
+    p2pNeedsWarmup = false;
 
     const section = $('lap-section');
-    section.classList.remove('active', 'timing');
+    section.classList.remove('active', 'timing', 'p2p', 'first-run');
     section.classList.add('inactive');
-    $('menu-lap').textContent = 'Simulate Track';
 }
 
 function updateLapDisplay() {
+    const isP2P = activeTrack && activeTrack.type === 'point_to_point';
+    const unit = isP2P ? 'Run' : 'Lap';
+
     $('lap-time').textContent = formatLapTime(currentLapMs);
-    $('lap-count').textContent = 'Lap ' + lapCount;
+    $('lap-count').textContent = unit + ' ' + lapCount;
 
     if (bestLapMs !== null) {
         $('best-lap').textContent = formatLapTime(bestLapMs);
@@ -1761,6 +2266,14 @@ function getDistanceToStartLine() {
     return { distance, bearing, cx, cy };
 }
 
+// Format distance with km for large values, m for small
+function formatDistance(meters) {
+    if (meters >= 1000) {
+        return (meters / 1000).toFixed(1) + 'km';
+    }
+    return Math.round(meters) + 'm';
+}
+
 // Convert bearing to arrow character (cardinal direction relative to current heading)
 function bearingToArrow(bearing, currentHeading) {
     // Relative bearing (how far to turn from current heading)
@@ -1790,7 +2303,7 @@ function updateStartLineIndicator() {
 
     if (!indicator || !textEl) return;
 
-    // Only show when armed (not timing or idle)
+    // Only show when armed (not timing/running or idle)
     if (lapTimerState !== 'armed' || !simTimingLine || !currentSimPos) {
         indicator.style.display = 'none';
         return;
@@ -1798,10 +2311,27 @@ function updateStartLineIndicator() {
 
     indicator.style.display = 'block';
 
-    // For newly created tracks, show instruction instead of distance
+    const isP2P = activeTrack && activeTrack.type === 'point_to_point';
+    const hasHistory = activeTrack && activeTrack.lapCount > 0;
+
+    // For newly created tracks, show contextual instruction
     if (suppressStartLineIndicator) {
-        textEl.textContent = 'Drive track, cross start to begin';
-        textEl.className = 'bbStartLineText';
+        if (isP2P) {
+            // For P2P, show distance to start (user is at finish location)
+            const result = getDistanceToStartLine();
+            if (result) {
+                const arrow = bearingToArrow(result.bearing, currentSimPos.heading);
+                textEl.textContent = 'Return to start: ' + formatDistance(result.distance) + ' ' + arrow;
+                textEl.className = result.distance < 50 ? 'bbStartLineText approaching' : 'bbStartLineText';
+            } else {
+                textEl.textContent = 'Return to start';
+                textEl.className = 'bbStartLineText';
+            }
+        } else {
+            // For loops, user is at the start already
+            textEl.textContent = 'Drive track, cross start to begin';
+            textEl.className = 'bbStartLineText';
+        }
         return;
     }
 
@@ -1815,15 +2345,30 @@ function updateStartLineIndicator() {
     const { distance, bearing } = result;
     const arrow = bearingToArrow(bearing, currentSimPos.heading);
 
-    // Distance-based messaging for loaded tracks
+    // For loaded tracks without history, show simple instruction
+    if (!hasHistory) {
+        if (distance > 50) {
+            textEl.textContent = 'Start: ' + formatDistance(distance) + ' ' + arrow;
+            textEl.className = 'bbStartLineText';
+        } else if (distance > 15) {
+            textEl.textContent = 'Approach start ' + arrow;
+            textEl.className = 'bbStartLineText approaching';
+        } else {
+            textEl.textContent = 'Cross to begin! ' + arrow;
+            textEl.className = 'bbStartLineText at-line';
+        }
+        return;
+    }
+
+    // Distance-based messaging for loaded tracks with history
     if (distance > 100) {
-        textEl.textContent = 'Start: ' + Math.round(distance) + 'm ' + arrow;
+        textEl.textContent = 'Start: ' + formatDistance(distance) + ' ' + arrow;
         textEl.className = 'bbStartLineText';
     } else if (distance > 50) {
-        textEl.textContent = 'Approaching: ' + Math.round(distance) + 'm ' + arrow;
+        textEl.textContent = 'Approaching: ' + formatDistance(distance) + ' ' + arrow;
         textEl.className = 'bbStartLineText approaching';
     } else if (distance > 15) {
-        textEl.textContent = 'Getting close: ' + Math.round(distance) + 'm ' + arrow;
+        textEl.textContent = 'Getting close: ' + formatDistance(distance) + ' ' + arrow;
         textEl.className = 'bbStartLineText close';
     } else {
         textEl.textContent = 'Cross to begin! ' + arrow;
@@ -1831,12 +2376,77 @@ function updateStartLineIndicator() {
     }
 }
 
-function onLineCrossing(timestamp) {
+// Calculate distance to finish line (P2P tracks only)
+function getDistanceToFinishLine() {
+    if (!simFinishLine || !currentSimPos) return null;
+
+    // Center of finish line
+    const cx = (simFinishLine.p1[0] + simFinishLine.p2[0]) / 2;
+    const cy = (simFinishLine.p1[1] + simFinishLine.p2[1]) / 2;
+
+    // Vector from current position to finish line center
+    const dx = cx - currentSimPos.x;
+    const dy = cy - currentSimPos.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    // Bearing in radians (0 = east, π/2 = north)
+    const bearing = Math.atan2(dy, dx);
+
+    return { distance, bearing, cx, cy };
+}
+
+// Update the finish line indicator UI (P2P tracks when running)
+function updateFinishLineIndicator() {
+    const indicator = $('finish-line-indicator');
+    const textEl = $('finish-line-text');
+
+    if (!indicator || !textEl) return;
+
+    const isP2P = activeTrack && activeTrack.type === 'point_to_point';
+
+    // Only show when P2P and timing (running)
+    if (!isP2P || lapTimerState !== 'timing' || !simFinishLine || !currentSimPos) {
+        indicator.style.display = 'none';
+        return;
+    }
+
+    indicator.style.display = 'block';
+
+    const result = getDistanceToFinishLine();
+    if (!result) {
+        textEl.textContent = 'Position unavailable';
+        textEl.className = 'bbFinishLineText';
+        return;
+    }
+
+    const { distance, bearing } = result;
+    const arrow = bearingToArrow(bearing, currentSimPos.heading);
+
+    // Distance-based messaging
+    if (distance > 100) {
+        textEl.textContent = 'Finish: ' + formatDistance(distance) + ' ' + arrow;
+        textEl.className = 'bbFinishLineText';
+    } else if (distance > 50) {
+        textEl.textContent = 'Approaching finish: ' + formatDistance(distance) + ' ' + arrow;
+        textEl.className = 'bbFinishLineText approaching';
+    } else if (distance > 15) {
+        textEl.textContent = 'Almost there: ' + formatDistance(distance) + ' ' + arrow;
+        textEl.className = 'bbFinishLineText close';
+    } else {
+        textEl.textContent = 'Cross to finish! ' + arrow;
+        textEl.className = 'bbFinishLineText at-line';
+    }
+}
+
+function onStartLineCrossing(timestamp) {
     if (!lapTimerActive) return;
 
     // Debounce check
     if (timestamp - lapCrossingDebounce < LAP_DEBOUNCE_MS) return;
     lapCrossingDebounce = timestamp;
+
+    const isP2P = activeTrack && activeTrack.type === 'point_to_point';
+    const unit = isP2P ? 'Run' : 'Lap';
 
     if (lapTimerState === 'armed') {
         // First crossing - start timing
@@ -1844,7 +2454,7 @@ function onLineCrossing(timestamp) {
         lapStartTime = timestamp;
         currentLapMs = 0;
         suppressStartLineIndicator = false; // Clear suppression on first crossing
-        $('lap-state').textContent = 'Timing';
+        $('lap-state').textContent = isP2P ? 'Running' : 'Timing';
         $('lap-state').classList.add('timing');
 
         // Add timing class to card (hides start line indicator via CSS)
@@ -1855,61 +2465,106 @@ function onLineCrossing(timestamp) {
         section.classList.add('bbLapFlash');
         setTimeout(() => section.classList.remove('bbLapFlash'), 600);
 
+        // For P2P, we wait for finish line, not start line again
+        if (isP2P) return;
+
     } else if (lapTimerState === 'timing') {
-        // Complete lap
-        const lapTimeMs = timestamp - lapStartTime;
+        // For P2P tracks, ignore start line crossing while timing (wait for finish)
+        if (isP2P) return;
 
-        // Validate lap time
-        if (lapTimeMs < MIN_LAP_TIME_MS) {
-            // Invalid lap - too short
-            return;
-        }
+        // Complete lap (loop tracks only)
+        completeLapOrRun(timestamp);
+    }
+}
 
-        lastLapMs = lapTimeMs;
-        lapCount++;
+// Called when crossing finish line (P2P tracks only)
+function onFinishLineCrossing(timestamp) {
+    if (!lapTimerActive || lapTimerState !== 'timing') return;
 
-        const isNewBest = bestLapMs === null || lapTimeMs < bestLapMs;
-        if (isNewBest) {
-            bestLapMs = lapTimeMs;
-        }
+    const isP2P = activeTrack && activeTrack.type === 'point_to_point';
+    if (!isP2P) return; // Shouldn't happen, but guard
 
-        // Update delta display
-        const deltaEl = $('lap-delta');
-        if (isNewBest && lapCount > 1) {
-            // Just set a new best (and had a previous best to compare)
-            deltaEl.textContent = 'BEST';
-            deltaEl.className = 'bbLapHistValue bbNum delta faster';
-        } else if (!isNewBest) {
-            const deltaMs = lapTimeMs - bestLapMs;
-            const sign = deltaMs > 0 ? '+' : '';
-            deltaEl.textContent = sign + (deltaMs / 1000).toFixed(3);
-            deltaEl.className = 'bbLapHistValue bbNum delta slower';
-        } else {
-            // First lap, no comparison
-            deltaEl.textContent = '—';
-            deltaEl.className = 'bbLapHistValue bbNum delta';
-        }
+    // Debounce check (use same debounce variable)
+    if (timestamp - lapCrossingDebounce < LAP_DEBOUNCE_MS) return;
+    lapCrossingDebounce = timestamp;
 
-        // Flash animations
-        const section = $('lap-section');
-        section.classList.add('bbLapFlash');
-        setTimeout(() => section.classList.remove('bbLapFlash'), 600);
+    // Complete the run
+    completeLapOrRun(timestamp, true);
+}
 
-        if (isNewBest) {
-            const bestEl = $('best-lap');
-            bestEl.classList.add('bbLapBestFlash');
-            setTimeout(() => bestEl.classList.remove('bbLapBestFlash'), 800);
-        }
+// Complete a lap (loops) or run (P2P) and update state
+function completeLapOrRun(timestamp, isFinishLine = false) {
+    const isP2P = activeTrack && activeTrack.type === 'point_to_point';
+    const unit = isP2P ? 'Run' : 'Lap';
+    const lapTimeMs = timestamp - lapStartTime;
 
-        // Update track's best lap in IndexedDB
-        updateTrackBestLap(lapTimeMs);
+    // Validate lap/run time
+    if (lapTimeMs < MIN_LAP_TIME_MS) {
+        return; // Too short
+    }
 
-        // Start new lap
+    lastLapMs = lapTimeMs;
+    lapCount++;
+
+    const isNewBest = bestLapMs === null || lapTimeMs < bestLapMs;
+    if (isNewBest) {
+        bestLapMs = lapTimeMs;
+    }
+
+    // Update delta display
+    const deltaEl = $('lap-delta');
+    if (isNewBest && lapCount > 1) {
+        deltaEl.textContent = 'BEST';
+        deltaEl.className = 'bbLapHistValue bbNum delta faster';
+    } else if (!isNewBest) {
+        const deltaMs = lapTimeMs - bestLapMs;
+        const sign = deltaMs > 0 ? '+' : '';
+        deltaEl.textContent = sign + (deltaMs / 1000).toFixed(3);
+        deltaEl.className = 'bbLapHistValue bbNum delta slower';
+    } else {
+        deltaEl.textContent = '—';
+        deltaEl.className = 'bbLapHistValue bbNum delta';
+    }
+
+    // Flash animations
+    const section = $('lap-section');
+    section.classList.add('bbLapFlash');
+    setTimeout(() => section.classList.remove('bbLapFlash'), 600);
+
+    if (isNewBest) {
+        const bestEl = $('best-lap');
+        bestEl.classList.add('bbLapBestFlash');
+        setTimeout(() => bestEl.classList.remove('bbLapBestFlash'), 800);
+    }
+
+    // Update track's best lap in IndexedDB
+    updateTrackBestLap(lapTimeMs);
+
+    // Clear first-run badge after first completion (both loop and P2P)
+    section.classList.remove('first-run');
+
+    if (isP2P) {
+        // P2P: Run complete - show "Finished!" briefly, then show "Armed"
+        lapTimerState = 'armed';  // Set state immediately to prevent more crossings
+        suppressStartLineIndicator = true;  // Show "Return to start" message
+        section.classList.remove('timing');
+        $('lap-state').classList.remove('timing');
+        $('lap-state').textContent = 'Finished!';
+        $('lap-state').classList.add('finished');
+        $('lap-count').textContent = unit + ' ' + lapCount;
+
+        // After 1.5s, show "Armed" text
+        setTimeout(() => {
+            $('lap-state').textContent = 'Armed';
+            $('lap-state').classList.remove('finished');
+        }, 1500);
+    } else {
+        // Loop: Start new lap immediately
         lapStartTime = timestamp;
         currentLapMs = 0;
-
-        updateLapDisplay();
     }
+
+    updateLapDisplay();
 }
 
 /**
@@ -1928,22 +2583,54 @@ function simulateLapTimerUpdate(now, posData) {
 
     // Geometry-based crossing detection (requires position data and timing line)
     if (posData && simTimingLine) {
+        // P2P warmup check: car must move away from start before timing can begin
+        if (p2pNeedsWarmup) {
+            const cx = (simTimingLine.p1[0] + simTimingLine.p2[0]) / 2;
+            const cy = (simTimingLine.p1[1] + simTimingLine.p2[1]) / 2;
+            const distToStart = Math.sqrt(
+                (posData.x - cx) ** 2 + (posData.y - cy) ** 2
+            );
+            // Once car is 50m away, allow crossings
+            if (distToStart > 50) {
+                p2pNeedsWarmup = false;
+                console.log('P2P warmup complete - crossings now enabled');
+            }
+        }
+
         // Need previous position for crossing detection
         if (simPrevPos) {
             // Skip if nearly stationary (< 0.5 m/s)
             if (posData.speed >= 0.5) {
-                // Check for line crossing
-                const intersection = lineSegmentIntersection(
-                    [simPrevPos.x, simPrevPos.y],
-                    [posData.x, posData.y],
-                    simTimingLine.p1,
-                    simTimingLine.p2
-                );
+                // Check for start line crossing (skip if warmup needed)
+                if (!p2pNeedsWarmup) {
+                    const intersection = lineSegmentIntersection(
+                        [simPrevPos.x, simPrevPos.y],
+                        [posData.x, posData.y],
+                        simTimingLine.p1,
+                        simTimingLine.p2
+                    );
 
-                if (intersection !== null) {
-                    // Validate crossing direction
-                    if (directionValid([posData.vx, posData.vy], simTimingLine.direction)) {
-                        onLineCrossing(now);
+                    if (intersection !== null) {
+                        // Validate crossing direction
+                        if (directionValid([posData.vx, posData.vy], simTimingLine.direction)) {
+                            onStartLineCrossing(now);
+                        }
+                    }
+                }
+
+                // Check for finish line crossing (P2P only, when timing)
+                if (simFinishLine && lapTimerState === 'timing') {
+                    const finishIntersection = lineSegmentIntersection(
+                        [simPrevPos.x, simPrevPos.y],
+                        [posData.x, posData.y],
+                        simFinishLine.p1,
+                        simFinishLine.p2
+                    );
+
+                    if (finishIntersection !== null) {
+                        if (directionValid([posData.vx, posData.vy], simFinishLine.direction)) {
+                            onFinishLineCrossing(now);
+                        }
                     }
                 }
             }
@@ -1952,6 +2639,9 @@ function simulateLapTimerUpdate(now, posData) {
         // Store current position for next frame
         simPrevPos = { x: posData.x, y: posData.y };
     }
+
+    // Update finish line indicator for P2P tracks when running
+    updateFinishLineIndicator();
 }
 let trail = [], maxL = 0, maxR = 0, maxA = 0, maxB = 0, peak = 0;
 let emaGx = 0, emaGy = 0, lastT = 0, speed_ema = 0;
@@ -2353,19 +3043,6 @@ $('menu-tracks').onclick = () => {
     openTrackModal();
 };
 
-// Legacy: "Simulate Track" in menu - quick activate with simulated block track
-$('menu-lap').onclick = () => {
-    $('menu-overlay').classList.remove('open');
-    if (lapTimerActive) {
-        deactivateLapTimer();
-        activeTrack = null;
-        $('lap-setup-text').textContent = 'No track configured';
-    } else {
-        // Quick simulate with default block track timing line
-        activateLapTimer();
-    }
-};
-
 // Track modal close button
 $('track-modal-close').onclick = closeTrackModal;
 
@@ -2376,6 +3053,9 @@ $('track-modal').onclick = (e) => {
 
 // Set start line button
 $('btn-set-start').onclick = setStartLineHere;
+
+// Set finish line button (P2P tracks)
+$('btn-set-finish').onclick = setFinishLineHere;
 
 // Clear active track button
 $('btn-clear-track').onclick = clearActiveTrack;

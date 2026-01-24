@@ -235,7 +235,7 @@ const timingLine = { p1: [-10, 0], p2: [10, 0], direction: Math.PI/2 };
 | 5 | Track Configuration UI | ✅ COMPLETE |
 | 6 | Track Persistence (IndexedDB) | ✅ COMPLETE |
 | 5A | Start Line Approach UX | ✅ COMPLETE |
-| 5B | Point-to-Point Track Creation | ❌ NOT STARTED |
+| 5B | Point-to-Point Track Creation | ✅ COMPLETE |
 | 7 | Track Recording | ❌ NOT STARTED |
 | 8 | Track Auto-Detection | ❌ NOT STARTED |
 | 9 | Reference Lap & Predictive Delta | ❌ NOT STARTED |
@@ -660,10 +660,194 @@ Track persistence is implemented as part of Phase 5. Key functionality:
 
 ---
 
-## Phase 5B: Point-to-Point Track Creation ❌ NOT STARTED
+## Phase 5B: Point-to-Point Track Creation ✅ COMPLETE
 
 ### Goal
 Add UI for creating point-to-point tracks (hill climbs, rally stages, drag strips). Backend support already complete.
+
+### Implementation Complete
+
+**Dashboard-dev (`tools/dashboard-dev/index.html`):** ✅ Full Implementation
+- Track type selector (Loop vs Point-to-Point) in track creation section
+- Two-step P2P creation flow with progress indicators
+- Step 1: "Set Start Line Here" → shows checkmark, enables "Set Finish Line"
+- Step 2: "Set Finish Line Here" → completes track, prompts for name
+- Live distance display during P2P creation (distance from start position)
+- "NEW" badge for first-run tracks (both loop and P2P)
+- Contextual terminology: "Run" instead of "Lap", "Running" instead of "Timing"
+- Finish line indicator during active runs (distance + direction to finish)
+- "Finished!" state briefly displayed (1.5s) after crossing finish
+
+**Production (`sensors/blackbox/src/websocket_server.rs`):** ✅ Full Implementation
+- All P2P CSS styles ported (track type selector, progress steps, finish indicator)
+- P2P HTML elements added (selector, progress UI, finish line indicator)
+- P2P JavaScript functions (selectTrackType, updateP2PCreationUI, setFinishLineHere, etc.)
+- activateTrack sends P2P config to ESP32 with both start and finish lines
+- API integration with `/api/laptimer/configure?type=point_to_point&...`
+- Track name display in main UI (`.bbLapTrackName` element)
+- P2P warmup state and logic for new tracks
+- Demo Tracks section with Demo Loop and Demo P2P Stage
+- formatDistance function for km/m display
+
+**UX Cleanup (dashboard-dev only):**
+- Removed confusing "Simulate Loop" and "Test P2P Stage" menu buttons
+- These were development artifacts that served no user-facing purpose
+- Demo Tracks in Track Manager now serve the testing purpose better
+
+**Demo Tracks Feature:**
+- Built-in "Demo Loop" and "Demo P2P Stage" tracks in Track Manager
+- Always available without needing to create them
+- Demo tracks match simulation geometries for testing
+- Demo tracks marked with "Simulation track" label
+- Demo tracks use `[x, y]` array format for coordinates (must match line crossing detection)
+
+**Distance Formatting:**
+- `formatDistance(meters)` displays distances appropriately for track scale
+- Shows "X.Xkm" for distances >= 1000m (e.g., "4.4km" for long circuits)
+- Shows "Xm" for distances < 1000m (e.g., "234m")
+- Applied to: start line indicator, finish line indicator, P2P creation distance
+
+**Track Name Display:**
+- Active track name shown on main UI below lap time during timing
+- Appears in subtle gray text (opacity 0.45) to avoid distraction
+- Cleared when track is deactivated
+
+**Post-Completion UX (P2P):**
+- After finishing a P2P run, indicator shows "Return to start: X.Xkm" instead of "Start: X.Xm"
+- Uses `suppressStartLineIndicator` flag to control messaging context
+- Helps users understand they need to return to start for another run
+
+### Key Implementation Details
+
+**Track Type Selector CSS:**
+```css
+.bbTrackTypeSelector { display: flex; gap: 8px; margin: 12px 0; }
+.bbTrackTypeBtn { flex: 1; padding: 10px; border-radius: 8px; ... }
+.bbTrackTypeBtn.selected { background: #007aff; color: white; }
+```
+
+**P2P Creation State:**
+```javascript
+let selectedTrackType = 'loop';  // 'loop' or 'point_to_point'
+let p2pCreationState = null;     // { startLine, startPos } when creating P2P track
+```
+
+**P2P Progress UI:**
+```html
+<div class="bbP2PProgress" id="p2p-progress" style="display:none">
+    <div class="bbP2PStep completed" id="p2p-step-start">
+        <span class="bbP2PIcon">✓</span>
+        <span class="bbP2PLabel">Start Line</span>
+    </div>
+    <div class="bbP2PConnector"></div>
+    <div class="bbP2PStep" id="p2p-step-finish">
+        <span class="bbP2PIcon">2</span>
+        <span class="bbP2PLabel">Finish Line</span>
+    </div>
+    <div class="bbP2PDistance" id="p2p-distance">0m</div>
+</div>
+```
+
+**Finish Line Indicator (during P2P runs):**
+```javascript
+function updateFinishLineIndicator() {
+    // Shows: "Approaching finish: Xm [arrow]"
+    // Progressive feedback based on distance
+    // Hidden when not timing or not P2P track
+}
+```
+
+**Terminology Handling:**
+```javascript
+const isP2P = activeTrack?.type === 'point_to_point';
+$('lap-count').textContent = isP2P ? 'Run ' + count : 'Lap ' + count;
+$('lap-state').textContent = isP2P ? 'Running' : 'Timing';
+```
+
+**P2P Warmup (Prevents Immediate Timing Start):**
+```javascript
+let p2pNeedsWarmup = false;  // Set true for newly created P2P tracks
+
+// In activateTrack:
+p2pNeedsWarmup = isP2P && track.isNew;  // Only new P2P tracks need warmup
+
+// In simulateLapTimerUpdate:
+if (p2pNeedsWarmup) {
+    // Calculate distance from start line center
+    const cx = (startLine.p1[0] + startLine.p2[0]) / 2;
+    const cy = (startLine.p1[1] + startLine.p2[1]) / 2;
+    const distToStart = Math.sqrt((posData.x - cx) ** 2 + (posData.y - cy) ** 2);
+    if (distToStart > 50) {
+        p2pNeedsWarmup = false;  // Allow crossings after moving 50m away
+    }
+}
+// Skip start line crossings while warmup is needed
+```
+
+**Rationale:** When creating a new P2P track, the user sets the start line at their current position.
+Without warmup, crossing detection would trigger immediately. The 50m requirement ensures the user
+has moved away from the start line before timing can begin, allowing them to approach naturally.
+
+**Track Name Display:**
+Track name displays on the main UI below the lap time when a track is active:
+```css
+.bbLapTrackName {
+    font-size: 12px;
+    font-weight: 500;
+    opacity: 0.45;
+    margin-top: 4px;
+    letter-spacing: 0.02em;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+```
+
+```html
+<div class="bbLapTrackName" id="lap-track-name"></div>
+```
+
+```javascript
+// In activateTrack:
+$('lap-track-name').textContent = track.name;
+
+// In deactivateTrack:
+$('lap-track-name').textContent = '';
+```
+
+**Demo Tracks (Built-in):**
+```javascript
+// CRITICAL: Coordinates must use [x, y] array format, NOT {x, y} objects
+// Line crossing detection expects arrays for p1/p2 coordinates
+const DEMO_TRACKS = [
+    {
+        id: 'demo_loop',
+        name: 'Demo Loop',
+        type: 'loop',
+        isDemo: true,  // Marks as demo track (non-deletable)
+        startLine: { p1: [-5, 0], p2: [5, 0], direction: Math.PI / 2 }
+    },
+    {
+        id: 'demo_p2p',
+        name: 'Demo P2P Stage',
+        type: 'point_to_point',
+        isDemo: true,
+        startLine: { p1: [-5, 0], p2: [5, 0], direction: Math.PI / 2 },
+        finishLine: { p1: [195, 40], p2: [205, 40], direction: -Math.PI / 2 }
+    }
+];
+```
+
+**formatDistance Helper:**
+```javascript
+function formatDistance(meters) {
+    if (meters >= 1000) {
+        return (meters / 1000).toFixed(1) + 'km';
+    }
+    return Math.round(meters) + 'm';
+}
+```
 
 ### User Flow
 1. User opens track modal, taps "New Track"
@@ -735,6 +919,7 @@ Add UI for creating point-to-point tracks (hill climbs, rally stages, drag strip
 ```
 ┌──────────────────────────────┐
 │         0:00.000             │
+│       Demo P2P Stage         │ ← Track name displayed
 │       Run 0 · Armed          │
 │                              │
 │  ┌────────────────────────┐  │
@@ -750,10 +935,11 @@ Add UI for creating point-to-point tracks (hill climbs, rally stages, drag strip
 ```
 ┌──────────────────────────────┐
 │         1:23.456             │
+│       Demo P2P Stage         │
 │       Run 1 · Running        │
 │                              │
 │  ┌────────────────────────┐  │
-│  │ Finish: 234m ↑         │  │
+│  │ Approaching finish: 234m ↑│  │ ← Uses formatDistance (km for long tracks)
 │  └────────────────────────┘  │
 │                              │
 │  Best     Last      Delta    │
@@ -765,17 +951,21 @@ Add UI for creating point-to-point tracks (hill climbs, rally stages, drag strip
 ```
 ┌──────────────────────────────┐
 │         1:42.789             │
+│       Demo P2P Stage         │ ← Track name displayed
 │    Run 1 · Finished ✓        │
 │                              │
 │  ┌────────────────────────┐  │
-│  │ Return to start for    │  │
-│  │ next run               │  │
+│  │ Return to start: 4.4km │  │ ← Shows distance back to start
 │  └────────────────────────┘  │
 │                              │
 │  Best     Last      Delta    │
 │  1:42.7   1:42.7    BEST     │
 └──────────────────────────────┘
 ```
+
+**Implementation Note:** After P2P run completion, `suppressStartLineIndicator = true` is set.
+This changes the indicator from showing "Start: Xm" to "Return to start: X.Xkm", providing
+contextually appropriate guidance for the user to return for another run.
 
 ### State Machine (Point-to-Point)
 
