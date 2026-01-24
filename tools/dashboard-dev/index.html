@@ -1351,15 +1351,17 @@ function directionValid(velocity, expectedDir, tolerance = Math.PI / 2) {
 
 /**
  * Interpolate position along the track based on elapsed time
- * Uses P2P_TRACK for point-to-point tracks, BLOCK_TRACK for loops
+ * Uses P2P_TRACK only for demo P2P track, BLOCK_TRACK for all other tracks
+ * User-created P2P tracks use BLOCK_TRACK since that's what they were created on
  * @param {number} elapsedMs - Elapsed time since loop start
  * @returns {{x: number, y: number, vx: number, vy: number, heading: number, speed: number}}
  */
 function getSimulatedPosition(elapsedMs) {
-    // Use P2P track when P2P track is active
-    const isP2P = activeTrack && activeTrack.type === 'point_to_point';
-    const track = isP2P ? P2P_TRACK : BLOCK_TRACK;
-    const duration = isP2P ? P2P_DURATION : LOOP_DURATION;
+    // Only use P2P_TRACK for the demo P2P track (id: 'demo_p2p')
+    // User-created P2P tracks are positioned based on BLOCK_TRACK
+    const isDemoP2P = activeTrack && activeTrack.id === 'demo_p2p';
+    const track = isDemoP2P ? P2P_TRACK : BLOCK_TRACK;
+    const duration = isDemoP2P ? P2P_DURATION : LOOP_DURATION;
 
     const loopTime = elapsedMs % duration;
     const progress = loopTime / duration;  // 0 to 1
@@ -2424,7 +2426,7 @@ function updateFinishLineIndicator() {
 
     // Distance-based messaging
     if (distance > 100) {
-        textEl.textContent = 'Finish: ' + formatDistance(distance) + ' ' + arrow;
+        textEl.textContent = 'Distance to finish: ' + formatDistance(distance) + ' ' + arrow;
         textEl.className = 'bbFinishLineText';
     } else if (distance > 50) {
         textEl.textContent = 'Approaching finish: ' + formatDistance(distance) + ' ' + arrow;

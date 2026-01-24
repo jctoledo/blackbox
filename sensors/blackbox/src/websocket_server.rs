@@ -1361,9 +1361,9 @@ function updateFinishLineIndicator(){
     const r=getDistanceToFinishLine();
     if(!r){txt.textContent='Position unavailable';txt.className='bbFinishLineText';return}
     const arrow=bearingToArrow(r.bearing,currentPos.yaw);
-    if(r.distance>100){txt.textContent='Finish: '+Math.round(r.distance)+'m '+arrow;txt.className='bbFinishLineText'}
-    else if(r.distance>50){txt.textContent='Approaching finish: '+Math.round(r.distance)+'m '+arrow;txt.className='bbFinishLineText approaching'}
-    else if(r.distance>15){txt.textContent='Almost there: '+Math.round(r.distance)+'m '+arrow;txt.className='bbFinishLineText close'}
+    if(r.distance>100){txt.textContent='Distance to finish: '+formatDistance(r.distance)+' '+arrow;txt.className='bbFinishLineText'}
+    else if(r.distance>50){txt.textContent='Approaching finish: '+formatDistance(r.distance)+' '+arrow;txt.className='bbFinishLineText approaching'}
+    else if(r.distance>15){txt.textContent='Almost there: '+formatDistance(r.distance)+' '+arrow;txt.className='bbFinishLineText close'}
     else{txt.textContent='Cross to finish! '+arrow;txt.className='bbFinishLineText at-line'}
 }
 
