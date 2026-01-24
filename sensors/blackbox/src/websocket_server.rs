@@ -594,7 +594,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
 .bbRecordQualityText{font-size:11px;font-weight:600;color:var(--text-secondary);min-width:60px;text-align:right;text-transform:uppercase;letter-spacing:0.02em}
 .bbRecordHint{text-align:center;font-size:13px;color:var(--text-tertiary);margin:0 0 18px 0;line-height:1.45}
 .bbRecordActions{display:flex;gap:10px}
-.bbRecordActionBtn{flex:1;padding:14px 20px;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;text-align:center;transition:transform 0.1s, opacity 0.15s}
+.bbRecordActionBtn{flex:1;padding:14px 20px;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;text-align:center;justify-content:center;align-items:center;transition:transform 0.1s, opacity 0.15s}
 .bbRecordActionBtn:active{transform:scale(0.97)}
 .bbRecordActionBtn.secondary{background:rgba(128,128,128,0.12);color:var(--text)}
 .bbRecordActionBtn.primary{background:var(--ok);color:#fff}
