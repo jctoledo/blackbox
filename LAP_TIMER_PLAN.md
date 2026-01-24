@@ -1021,7 +1021,36 @@ async function activatePointToPointTrack(track) {
 
 Reuse Phase 5A approach indicator logic:
 - When running, show distance to finish line
-- Progressive feedback: "Finish: 234m ↑" → "Approaching finish" → "Cross to finish!"
+- Progressive feedback: "Distance to finish: 234m ↑" → "Approaching finish" → "Cross to finish!"
+
+### UX Polish (Post-Review)
+
+After comprehensive UX review, the following improvements were made:
+
+**1. Clear Active Track Button**
+- Production now shows "Clear Active Track" button in Track Manager when a track is active
+- Allows users to completely deactivate lap timing without selecting another track
+
+**2. Consistent "runs" vs "laps" Terminology**
+- Track list and active track display now correctly show "runs" for P2P tracks
+- Previously hardcoded as "laps" for all track types
+
+**3. formatDistance() Used Consistently**
+- All distance displays now use `formatDistance()` for proper km/m formatting
+- Includes: start line indicator, return to start, P2P creation distance, stage length
+
+**4. Demo Tracks Removed from Production**
+- Demo tracks (Demo Loop, Demo P2P Stage) only exist in dashboard-dev for simulation testing
+- Production uses real GPS coordinates that wouldn't match simulation track positions
+- Demo tracks remain in dashboard-dev for development and testing
+
+**5. Clearer Post-Creation Message**
+- Changed "Drive track, cross start to begin" to "Drive a lap, then cross start to begin"
+- Clearly instructs user to complete a circuit before timing begins
+
+**6. Consistent Default Text**
+- Both dashboards now show "Tap to configure" when no track is active
+- More actionable than previous "No track configured" in dashboard-dev
 
 ---
 

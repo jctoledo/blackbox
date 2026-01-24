@@ -827,10 +827,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
                 <button class="bbActionBtn secondary" id="btn-clear-track">Clear Active Track</button>
             </div>
             <div class="bbModalSection">
-                <div class="bbSectionTitle">Demo Tracks</div>
-                <div class="bbTrackList" id="demo-track-list"></div>
-            </div>
-            <div class="bbModalSection">
                 <div class="bbSectionTitle">Saved Tracks</div>
                 <div class="bbTrackList" id="track-list"><div class="bbTrackEmpty">No saved tracks</div></div>
             </div>
@@ -954,12 +950,6 @@ const TRACK_DB='blackbox-tracks',TRACK_DB_VER=1;
 let trackDb=null,activeTrack=null,currentPos=null,suppressStartLineIndicator=false;
 let selectedTrackType='loop',p2pCreationState=null,p2pNeedsWarmup=false;
 
-// Demo tracks - always available in Track Manager
-const DEMO_TRACKS=[
-    {id:'demo_loop',name:'Demo Loop',type:'loop',isDemo:true,startLine:{p1:[-5,0],p2:[5,0],direction:Math.PI/2}},
-    {id:'demo_p2p',name:'Demo P2P Stage',type:'point_to_point',isDemo:true,startLine:{p1:[-5,0],p2:[5,0],direction:Math.PI/2},finishLine:{p1:[195,40],p2:[205,40],direction:-Math.PI/2}}
-];
-
 function openTrackDB(){
     return new Promise((res,rej)=>{
         const r=indexedDB.open(TRACK_DB,TRACK_DB_VER);
@@ -1018,7 +1008,6 @@ function escHtml(t){const d=document.createElement('div');d.textContent=t;return
 // Track Manager UI
 function openTrackModal(){
     $('track-modal').classList.add('open');
-    renderDemoTrackList();
     renderTrackList();
     updateActiveTrackDisplay();
     updateTrackPos();
@@ -1026,13 +1015,15 @@ function openTrackModal(){
 function closeTrackModal(){$('track-modal').classList.remove('open')}
 
 function updateActiveTrackDisplay(){
-    const sec=$('active-track-section');
+    const sec=$('active-track-section'),act=$('active-track-actions');
     if(activeTrack){
         sec.style.display='block';
+        act.style.display='block';
         $('active-track-name').textContent=activeTrack.name;
         const best=activeTrack.bestLapMs?fmtLapTime(activeTrack.bestLapMs):'—';
-        $('active-track-meta').textContent='Best: '+best+' · '+(activeTrack.lapCount||0)+' laps';
-    }else{sec.style.display='none'}
+        const unit=activeTrack.type==='point_to_point'?'runs':'laps';
+        $('active-track-meta').textContent='Best: '+best+' · '+(activeTrack.lapCount||0)+' '+unit;
+    }else{sec.style.display='none';act.style.display='none'}
 }
 
 function updateTrackPos(){
@@ -1044,7 +1035,7 @@ function updateTrackPos(){
         $('btn-set-finish').disabled=false;
         if(p2pCreationState&&p2pCreationState.startPos){
             const dx=currentPos.x-p2pCreationState.startPos.x,dy=currentPos.y-p2pCreationState.startPos.y;
-            $('p2p-distance').textContent=Math.round(Math.sqrt(dx*dx+dy*dy))+'m';
+            $('p2p-distance').textContent=formatDistance(Math.sqrt(dx*dx+dy*dy));
         }
     }else{
         $('pos-xy').textContent='Waiting for GPS...';
@@ -1064,10 +1055,11 @@ async function renderTrackList(){
         el.innerHTML=tracks.map(t=>{
             const best=t.bestLapMs?fmtLapTime(t.bestLapMs):'—';
             const isActive=activeTrack&&activeTrack.id===t.id;
+            const unit=t.type==='point_to_point'?'runs':'laps';
             return '<div class=\"bbTrackItem\" data-id=\"'+t.id+'\">'+
                 '<div class=\"bbTrackInfo\">'+
                     '<div class=\"bbTrackName\">'+escHtml(t.name)+(isActive?' ✓':'')+'</div>'+
-                    '<div class=\"bbTrackMeta\"><span>Best: '+best+'</span><span>'+(t.lapCount||0)+' laps</span></div>'+
+                    '<div class=\"bbTrackMeta\"><span>Best: '+best+'</span><span>'+(t.lapCount||0)+' '+unit+'</span></div>'+
                 '</div>'+
                 '<div class=\"bbTrackActions\">'+
                     '<button class=\"bbTrackBtn primary\" data-action=\"use\">Use</button>'+
@@ -1078,33 +1070,6 @@ async function renderTrackList(){
             b.onclick=()=>handleTrackAction(b.dataset.action,b.closest('.bbTrackItem').dataset.id);
         });
     }catch(e){console.error('Track list error:',e);el.innerHTML='<div class=\"bbTrackEmpty\">Error loading</div>'}
-}
-
-function renderDemoTrackList(){
-    const el=$('demo-track-list');
-    el.innerHTML=DEMO_TRACKS.map(t=>{
-        const isActive=activeTrack&&activeTrack.id===t.id;
-        const typeLabel=t.type==='point_to_point'?'Point-to-Point':'Loop';
-        return '<div class=\"bbTrackItem\" data-id=\"'+t.id+'\">'+
-            '<div class=\"bbTrackInfo\">'+
-                '<div class=\"bbTrackName\">'+escHtml(t.name)+(isActive?' ✓':'')+'</div>'+
-                '<div class=\"bbTrackMeta\"><span>'+typeLabel+'</span><span>Demo track</span></div>'+
-            '</div>'+
-            '<div class=\"bbTrackActions\">'+
-                '<button class=\"bbTrackBtn primary\" data-action=\"use\">Use</button>'+
-            '</div></div>';
-    }).join('');
-    el.querySelectorAll('.bbTrackBtn').forEach(b=>{
-        b.onclick=()=>{
-            const id=b.closest('.bbTrackItem').dataset.id;
-            const demo=DEMO_TRACKS.find(t=>t.id===id);
-            if(demo){
-                const track={...demo,isNew:true};
-                activateTrack(track);
-                closeTrackModal();
-            }
-        };
-    });
 }
 
 async function handleTrackAction(action,id){
@@ -1201,7 +1166,7 @@ function updateP2PCreationUI(){
         $('p2p-message').classList.add('active');
         if(currentPos&&currentPos.valid&&p2pCreationState.startPos){
             const dx=currentPos.x-p2pCreationState.startPos.x,dy=currentPos.y-p2pCreationState.startPos.y;
-            $('p2p-distance').textContent=Math.round(Math.sqrt(dx*dx+dy*dy))+'m';
+            $('p2p-distance').textContent=formatDistance(Math.sqrt(dx*dx+dy*dy));
         }else{$('p2p-distance').textContent='—'}
         $('btn-set-start').style.display='none';
         $('btn-set-finish').style.display='block';
@@ -1261,7 +1226,7 @@ async function setFinishLineHere(){
     $('p2p-finish-icon').textContent='✓';
     $('p2p-finish-text').className='bbP2PStepText done';
     $('p2p-finish-coords').textContent='Finish position saved';
-    $('p2p-message').innerHTML='Stage ready<br><span class="bbP2PDistance">'+Math.round(stageLength)+'m</span> total';
+    $('p2p-message').innerHTML='Stage ready<br><span class="bbP2PDistance">'+formatDistance(stageLength)+'</span> total';
     const name=prompt('Enter track name:','Stage '+new Date().toLocaleDateString());
     if(!name){updateP2PCreationUI();return}
     const track={id:genTrackId(),name,type:'point_to_point',created:Date.now(),modified:Date.now(),startLine:p2pCreationState.startLine,finishLine,origin:p2pCreationState.startPos,bestLapMs:null,lapCount:0};
@@ -1327,19 +1292,19 @@ function updateStartLineIndicator(){
             const r=getDistanceToStartLine();
             if(r){
                 const arrow=bearingToArrow(r.bearing,currentPos.yaw);
-                txt.textContent='Return to start: '+Math.round(r.distance)+'m '+arrow;
+                txt.textContent='Return to start: '+formatDistance(r.distance)+' '+arrow;
                 txt.className=r.distance<50?'bbStartLineText approaching':'bbStartLineText';
             }else{txt.textContent='Return to start';txt.className='bbStartLineText'}
-        }else{txt.textContent='Drive track, cross start to begin';txt.className='bbStartLineText'}
+        }else{txt.textContent='Drive a lap, then cross start to begin';txt.className='bbStartLineText'}
         return;
     }
     if(!currentPos||!currentPos.valid){txt.textContent='Position unavailable';txt.className='bbStartLineText';return}
     const r=getDistanceToStartLine();
     if(!r){el.style.display='none';return}
     const arrow=bearingToArrow(r.bearing,currentPos.yaw);
-    if(r.distance>100){txt.textContent='Start: '+Math.round(r.distance)+'m '+arrow;txt.className='bbStartLineText'}
-    else if(r.distance>50){txt.textContent='Approaching: '+Math.round(r.distance)+'m '+arrow;txt.className='bbStartLineText approaching'}
-    else if(r.distance>15){txt.textContent='Getting close: '+Math.round(r.distance)+'m '+arrow;txt.className='bbStartLineText close'}
+    if(r.distance>100){txt.textContent='Start line: '+formatDistance(r.distance)+' '+arrow;txt.className='bbStartLineText'}
+    else if(r.distance>50){txt.textContent='Approaching start: '+formatDistance(r.distance)+' '+arrow;txt.className='bbStartLineText approaching'}
+    else if(r.distance>15){txt.textContent='Almost there: '+formatDistance(r.distance)+' '+arrow;txt.className='bbStartLineText close'}
     else{txt.textContent='Cross to begin! '+arrow;txt.className='bbStartLineText at-line'}
 }
 

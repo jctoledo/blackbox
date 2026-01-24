@@ -863,7 +863,7 @@ body{
     <!-- Lap Timer Section -->
     <section class="bbCard bbLapCard inactive" id="lap-section">
         <div class="bbLapSetup" id="lap-setup">
-            <span class="bbLapSetupText" id="lap-setup-text">No track configured</span>
+            <span class="bbLapSetupText" id="lap-setup-text">Tap to configure</span>
             <button class="bbLapSetupBtn" id="btn-open-tracks">Tracks</button>
         </div>
         <div class="bbLapActive" id="lap-active" onclick="openTrackModal()">
@@ -1869,7 +1869,7 @@ function updateTrackModalPosition() {
             const dx = currentSimPos.x - p2pCreationState.startPos.x;
             const dy = currentSimPos.y - p2pCreationState.startPos.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
-            $('p2p-distance').textContent = Math.round(dist) + 'm';
+            $('p2p-distance').textContent = formatDistance(dist);
         }
     } else {
         $('pos-xy').textContent = 'Waiting...';
@@ -2137,7 +2137,7 @@ async function setFinishLineHere() {
     $('p2p-finish-icon').textContent = '✓';
     $('p2p-finish-text').className = 'bbP2PStepText done';
     $('p2p-finish-coords').textContent = 'Finish position saved';
-    $('p2p-message').innerHTML = 'Stage ready<br><span class="bbP2PDistance">' + Math.round(stageLength) + 'm</span> total';
+    $('p2p-message').innerHTML = 'Stage ready<br><span class="bbP2PDistance">' + formatDistance(stageLength) + '</span> total';
 
     const trackName = prompt('Enter track name:', 'Stage ' + new Date().toLocaleDateString());
     if (!trackName) {
@@ -2331,7 +2331,7 @@ function updateStartLineIndicator() {
             }
         } else {
             // For loops, user is at the start already
-            textEl.textContent = 'Drive track, cross start to begin';
+            textEl.textContent = 'Drive a lap, then cross start to begin';
             textEl.className = 'bbStartLineText';
         }
         return;
@@ -2350,10 +2350,10 @@ function updateStartLineIndicator() {
     // For loaded tracks without history, show simple instruction
     if (!hasHistory) {
         if (distance > 50) {
-            textEl.textContent = 'Start: ' + formatDistance(distance) + ' ' + arrow;
+            textEl.textContent = 'Start line: ' + formatDistance(distance) + ' ' + arrow;
             textEl.className = 'bbStartLineText';
         } else if (distance > 15) {
-            textEl.textContent = 'Approach start ' + arrow;
+            textEl.textContent = 'Approaching start: ' + formatDistance(distance) + ' ' + arrow;
             textEl.className = 'bbStartLineText approaching';
         } else {
             textEl.textContent = 'Cross to begin! ' + arrow;
@@ -2364,13 +2364,13 @@ function updateStartLineIndicator() {
 
     // Distance-based messaging for loaded tracks with history
     if (distance > 100) {
-        textEl.textContent = 'Start: ' + formatDistance(distance) + ' ' + arrow;
+        textEl.textContent = 'Start line: ' + formatDistance(distance) + ' ' + arrow;
         textEl.className = 'bbStartLineText';
     } else if (distance > 50) {
-        textEl.textContent = 'Approaching: ' + formatDistance(distance) + ' ' + arrow;
+        textEl.textContent = 'Approaching start: ' + formatDistance(distance) + ' ' + arrow;
         textEl.className = 'bbStartLineText approaching';
     } else if (distance > 15) {
-        textEl.textContent = 'Getting close: ' + formatDistance(distance) + ' ' + arrow;
+        textEl.textContent = 'Almost there: ' + formatDistance(distance) + ' ' + arrow;
         textEl.className = 'bbStartLineText close';
     } else {
         textEl.textContent = 'Cross to begin! ' + arrow;
