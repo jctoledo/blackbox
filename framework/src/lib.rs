@@ -134,6 +134,7 @@
 pub mod ekf;
 pub mod filter;
 pub mod fusion;
+pub mod lap_timer;
 pub mod mode;
 pub mod sensor_framework;
 pub mod sensors;
@@ -142,6 +143,14 @@ pub mod velocity;
 
 // Re-export mode detection types
 pub use mode::{Mode, ModeClassifier, ModeConfig, DEFAULT_MODE_ALPHA};
+
+// Re-export lap timer types
+pub use lap_timer::{
+    direction_valid, line_segment_intersection, timing_line_from_path, LapTimer, LapTimerState,
+    TimingLine, TrackType, CROSSED_FINISH, CROSSED_START, DEFAULT_CROSSING_DEBOUNCE_MS,
+    DEFAULT_DIRECTION_TOLERANCE, DEFAULT_MIN_LAP_TIME_MS, FLAG_NONE, INVALID_LAP, NEW_BEST,
+    NEW_LAP,
+};
 
 // Re-export sensor fusion types
 pub use fusion::{

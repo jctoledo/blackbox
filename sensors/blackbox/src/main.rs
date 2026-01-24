@@ -29,9 +29,10 @@ use log::info;
 use mqtt::MqttClient;
 use rgb_led::RgbLed;
 use sensor_fusion::transforms::{body_to_earth, remove_gravity}; // Used for EKF prediction
+use sensor_fusion::{LapTimer, TimingLine};
 use system::{SensorManager, StateEstimator, StatusManager, TelemetryPublisher};
 use udp_stream::UdpTelemetryStream;
-use websocket_server::{TelemetryServer, TelemetryServerState};
+use websocket_server::{LapTimerConfig, TelemetryServer, TelemetryServerState};
 use wifi::WifiManager;
 
 fn main() {
@@ -446,6 +447,9 @@ fn main() {
     let mut estimator = StateEstimator::new();
     let mut publisher = TelemetryPublisher::new(udp_stream, mqtt_opt, telemetry_state.clone());
 
+    // Create lap timer (configured via HTTP API)
+    let mut lap_timer = LapTimer::new();
+
     // Create sensor fusion for mode detection
     //
     // Uses GPS-corrected orientation (ArduPilot-style approach):
@@ -540,6 +544,46 @@ fn main() {
                     FreeRtos::delay_ms(80);
                 }
                 status_mgr.led_mut().set_low().unwrap();
+            }
+
+            // Check for lap timer config changes from web UI
+            if let Some(config) = state.take_lap_timer_config() {
+                match config {
+                    LapTimerConfig::None => {
+                        lap_timer.clear();
+                        info!(">>> Lap timer cleared");
+                    }
+                    LapTimerConfig::Loop(line) => {
+                        lap_timer.configure_loop(TimingLine::new(
+                            (line.p1_x, line.p1_y),
+                            (line.p2_x, line.p2_y),
+                            line.direction,
+                        ));
+                        info!(
+                            ">>> Lap timer configured: loop track, line ({:.1},{:.1})-({:.1},{:.1})",
+                            line.p1_x, line.p1_y, line.p2_x, line.p2_y
+                        );
+                    }
+                    LapTimerConfig::PointToPoint { start, finish } => {
+                        lap_timer.configure_point_to_point(
+                            TimingLine::new(
+                                (start.p1_x, start.p1_y),
+                                (start.p2_x, start.p2_y),
+                                start.direction,
+                            ),
+                            TimingLine::new(
+                                (finish.p1_x, finish.p1_y),
+                                (finish.p2_x, finish.p2_y),
+                                finish.direction,
+                            ),
+                        );
+                        info!(
+                            ">>> Lap timer configured: point-to-point, start ({:.1},{:.1})-({:.1},{:.1}), finish ({:.1},{:.1})-({:.1},{:.1})",
+                            start.p1_x, start.p1_y, start.p2_x, start.p2_y,
+                            finish.p1_x, finish.p1_y, finish.p2_x, finish.p2_y
+                        );
+                    }
+                }
             }
         }
 
@@ -825,9 +869,19 @@ fn main() {
                 speed,
             );
 
-            // Publish telemetry with tilt-corrected accelerations
+            // Update lap timer with EKF position and velocity
+            let (ekf_x, ekf_y) = estimator.ekf.position();
+            let (ekf_vx, ekf_vy) = estimator.ekf.velocity();
+            let lap_flags = lap_timer.update((ekf_x, ekf_y), (ekf_vx, ekf_vy), now_ms, speed);
+            let lap_timer_data = Some((
+                lap_timer.current_lap_ms(),
+                lap_timer.lap_count(),
+                lap_flags,
+            ));
+
+            // Publish telemetry with tilt-corrected accelerations and lap timer data
             publisher
-                .publish_telemetry(&sensors, &estimator, &sensor_fusion, now_ms)
+                .publish_telemetry(&sensors, &estimator, &sensor_fusion, now_ms, lap_timer_data)
                 .ok();
 
             // Update fusion diagnostics at telemetry rate for synchronized CSV export

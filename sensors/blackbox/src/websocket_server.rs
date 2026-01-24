@@ -11,6 +11,36 @@ use log::info;
 
 use crate::diagnostics::DiagnosticsState;
 
+/// Lap timer timing line configuration
+#[derive(Clone, Copy, Debug)]
+pub struct TimingLineConfig {
+    pub p1_x: f32,
+    pub p1_y: f32,
+    pub p2_x: f32,
+    pub p2_y: f32,
+    pub direction: f32,
+}
+
+/// Lap timer configuration
+#[derive(Clone, Debug)]
+pub enum LapTimerConfig {
+    /// No configuration / clear timer
+    None,
+    /// Loop track with single start/finish line
+    Loop(TimingLineConfig),
+    /// Point-to-point with separate start and finish
+    PointToPoint {
+        start: TimingLineConfig,
+        finish: TimingLineConfig,
+    },
+}
+
+impl Default for LapTimerConfig {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
 /// Mode detection settings (matching mode.rs ModeConfig)
 #[derive(Clone, Copy)]
 pub struct ModeSettings {
@@ -54,6 +84,10 @@ pub struct TelemetryServerState {
     settings_changed: AtomicBool,
     /// Optional diagnostics state (shared with main loop)
     diagnostics_state: Option<Arc<DiagnosticsState>>,
+    /// Lap timer configuration
+    lap_timer_config: Mutex<LapTimerConfig>,
+    /// Lap timer config changed flag
+    lap_timer_changed: AtomicBool,
 }
 
 impl TelemetryServerState {
@@ -65,6 +99,8 @@ impl TelemetryServerState {
             mode_settings: Mutex::new(ModeSettings::default()),
             settings_changed: AtomicBool::new(false),
             diagnostics_state: None,
+            lap_timer_config: Mutex::new(LapTimerConfig::default()),
+            lap_timer_changed: AtomicBool::new(false),
         }
     }
 
@@ -77,6 +113,8 @@ impl TelemetryServerState {
             mode_settings: Mutex::new(ModeSettings::default()),
             settings_changed: AtomicBool::new(false),
             diagnostics_state: Some(diagnostics),
+            lap_timer_config: Mutex::new(LapTimerConfig::default()),
+            lap_timer_changed: AtomicBool::new(false),
         }
     }
 
@@ -112,6 +150,23 @@ impl TelemetryServerState {
     pub fn take_settings_change(&self) -> Option<ModeSettings> {
         if self.settings_changed.swap(false, Ordering::SeqCst) {
             Some(self.get_settings())
+        } else {
+            None
+        }
+    }
+
+    /// Set lap timer configuration
+    pub fn set_lap_timer_config(&self, config: LapTimerConfig) {
+        if let Ok(mut guard) = self.lap_timer_config.lock() {
+            *guard = config;
+            self.lap_timer_changed.store(true, Ordering::SeqCst);
+        }
+    }
+
+    /// Check if lap timer config was changed and get the new config
+    pub fn take_lap_timer_config(&self) -> Option<LapTimerConfig> {
+        if self.lap_timer_changed.swap(false, Ordering::SeqCst) {
+            self.lap_timer_config.lock().ok().map(|g| g.clone())
         } else {
             None
         }
@@ -179,6 +234,142 @@ fn base64_encode(data: &[u8]) -> String {
     }
 
     result
+}
+
+/// Parse lap timer configuration from query string
+fn parse_lap_timer_config(uri: &str, state: &TelemetryServerState) -> (String, u16) {
+    let query = match uri.split('?').nth(1) {
+        Some(q) => q,
+        None => return (r#"{"error":"missing query parameters"}"#.to_string(), 400),
+    };
+
+    // Parse query parameters into a simple map
+    let mut params = std::collections::HashMap::new();
+    for param in query.split('&') {
+        let mut parts = param.split('=');
+        if let (Some(key), Some(val)) = (parts.next(), parts.next()) {
+            params.insert(key, val);
+        }
+    }
+
+    // Get config type
+    let config_type = match params.get("type") {
+        Some(&t) => t,
+        None => return (r#"{"error":"missing 'type' parameter"}"#.to_string(), 400),
+    };
+
+    match config_type {
+        "clear" | "none" => {
+            state.set_lap_timer_config(LapTimerConfig::None);
+            info!("Lap timer cleared");
+            (r#"{"status":"ok","config":"cleared"}"#.to_string(), 200)
+        }
+        "loop" => {
+            // Parse timing line parameters
+            let p1_x = params.get("p1_x").and_then(|v| v.parse::<f32>().ok());
+            let p1_y = params.get("p1_y").and_then(|v| v.parse::<f32>().ok());
+            let p2_x = params.get("p2_x").and_then(|v| v.parse::<f32>().ok());
+            let p2_y = params.get("p2_y").and_then(|v| v.parse::<f32>().ok());
+            let dir = params.get("dir").and_then(|v| v.parse::<f32>().ok());
+
+            match (p1_x, p1_y, p2_x, p2_y, dir) {
+                (Some(p1_x), Some(p1_y), Some(p2_x), Some(p2_y), Some(direction)) => {
+                    let line = TimingLineConfig {
+                        p1_x,
+                        p1_y,
+                        p2_x,
+                        p2_y,
+                        direction,
+                    };
+                    state.set_lap_timer_config(LapTimerConfig::Loop(line));
+                    info!(
+                        "Lap timer configured: loop track, line ({:.1},{:.1})-({:.1},{:.1}) dir={:.2}",
+                        p1_x, p1_y, p2_x, p2_y, direction
+                    );
+                    (
+                        format!(
+                            r#"{{"status":"ok","config":"loop","line":{{"p1":[{},{}],"p2":[{},{}],"dir":{}}}}}"#,
+                            p1_x, p1_y, p2_x, p2_y, direction
+                        ),
+                        200,
+                    )
+                }
+                _ => (
+                    r#"{"error":"missing parameters for loop config (p1_x, p1_y, p2_x, p2_y, dir)"}"#
+                        .to_string(),
+                    400,
+                ),
+            }
+        }
+        "point_to_point" => {
+            // Parse start line
+            let p1_x = params.get("p1_x").and_then(|v| v.parse::<f32>().ok());
+            let p1_y = params.get("p1_y").and_then(|v| v.parse::<f32>().ok());
+            let p2_x = params.get("p2_x").and_then(|v| v.parse::<f32>().ok());
+            let p2_y = params.get("p2_y").and_then(|v| v.parse::<f32>().ok());
+            let dir = params.get("dir").and_then(|v| v.parse::<f32>().ok());
+            // Parse finish line (f_ prefix)
+            let f_p1_x = params.get("f_p1_x").and_then(|v| v.parse::<f32>().ok());
+            let f_p1_y = params.get("f_p1_y").and_then(|v| v.parse::<f32>().ok());
+            let f_p2_x = params.get("f_p2_x").and_then(|v| v.parse::<f32>().ok());
+            let f_p2_y = params.get("f_p2_y").and_then(|v| v.parse::<f32>().ok());
+            let f_dir = params.get("f_dir").and_then(|v| v.parse::<f32>().ok());
+
+            match (
+                p1_x, p1_y, p2_x, p2_y, dir, f_p1_x, f_p1_y, f_p2_x, f_p2_y, f_dir,
+            ) {
+                (
+                    Some(p1_x),
+                    Some(p1_y),
+                    Some(p2_x),
+                    Some(p2_y),
+                    Some(direction),
+                    Some(f_p1_x),
+                    Some(f_p1_y),
+                    Some(f_p2_x),
+                    Some(f_p2_y),
+                    Some(f_direction),
+                ) => {
+                    let start = TimingLineConfig {
+                        p1_x,
+                        p1_y,
+                        p2_x,
+                        p2_y,
+                        direction,
+                    };
+                    let finish = TimingLineConfig {
+                        p1_x: f_p1_x,
+                        p1_y: f_p1_y,
+                        p2_x: f_p2_x,
+                        p2_y: f_p2_y,
+                        direction: f_direction,
+                    };
+                    state.set_lap_timer_config(LapTimerConfig::PointToPoint { start, finish });
+                    info!(
+                        "Lap timer configured: point-to-point, start ({:.1},{:.1})-({:.1},{:.1}), finish ({:.1},{:.1})-({:.1},{:.1})",
+                        p1_x, p1_y, p2_x, p2_y, f_p1_x, f_p1_y, f_p2_x, f_p2_y
+                    );
+                    (
+                        format!(
+                            r#"{{"status":"ok","config":"point_to_point","start":{{"p1":[{},{}],"p2":[{},{}],"dir":{}}},"finish":{{"p1":[{},{}],"p2":[{},{}],"dir":{}}}}}"#,
+                            p1_x, p1_y, p2_x, p2_y, direction,
+                            f_p1_x, f_p1_y, f_p2_x, f_p2_y, f_direction
+                        ),
+                        200,
+                    )
+                }
+                _ => (
+                    r#"{"error":"missing parameters for point_to_point config (start: p1_x, p1_y, p2_x, p2_y, dir; finish: f_p1_x, f_p1_y, f_p2_x, f_p2_y, f_dir)"}"#
+                        .to_string(),
+                    400,
+                ),
+            }
+        }
+        _ => (
+            format!(r#"{{"error":"unknown type '{}', expected: clear, loop, point_to_point"}}"#, config_type),
+            400,
+        ),
+    }
 }
 
 /// Telemetry HTTP server
@@ -1125,6 +1316,33 @@ impl TelemetryServer {
                         ("Content-Length", &content_length),
                         ("Access-Control-Allow-Origin", "*"),
                         ("Cache-Control", "no-cache"),
+                    ],
+                )?;
+                response.write_all(json.as_bytes())?;
+                Ok(())
+            },
+        )?;
+
+        // Lap timer configuration endpoint
+        // GET /api/laptimer/configure?type=loop&p1_x=...&p1_y=...&p2_x=...&p2_y=...&dir=...
+        // GET /api/laptimer/configure?type=clear
+        // GET /api/laptimer/configure?type=point_to_point&p1_x=...&p1_y=...&p2_x=...&p2_y=...&dir=...&f_p1_x=...&f_p1_y=...&f_p2_x=...&f_p2_y=...&f_dir=...
+        let state_laptimer = state.clone();
+        server.fn_handler(
+            "/api/laptimer/configure",
+            esp_idf_svc::http::Method::Get,
+            move |req| -> Result<(), esp_idf_svc::io::EspIOError> {
+                let uri = req.uri();
+                let (json, status) = parse_lap_timer_config(uri, &state_laptimer);
+
+                let content_length = json.len().to_string();
+                let mut response = req.into_response(
+                    status,
+                    None,
+                    &[
+                        ("Content-Type", "application/json"),
+                        ("Content-Length", &content_length),
+                        ("Access-Control-Allow-Origin", "*"),
                     ],
                 )?;
                 response.write_all(json.as_bytes())?;

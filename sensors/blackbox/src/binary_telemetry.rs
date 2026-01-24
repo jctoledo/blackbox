@@ -1,18 +1,26 @@
 /// Binary telemetry encoding for high-speed MQTT publishing
-/// Reduces payload from ~300 bytes JSON to ~67 bytes binary
+/// Reduces payload from ~300 bytes JSON to ~74 bytes binary
 /// Target: 20 Hz (50ms intervals) sustainable over MQTT
 ///
-/// Protocol Version: 1
+/// Protocol Version: 2 (added lap timer fields)
 use core::mem;
 
 /// Current protocol version
-pub const PROTOCOL_VERSION: u8 = 1;
+pub const PROTOCOL_VERSION: u8 = 2;
 
-/// Telemetry packet structure (67 bytes total with version field)
+/// Telemetry packet structure (74 bytes total)
+///
+/// Layout:
+/// - Header (7 bytes): version, magic, timestamp
+/// - IMU data (24 bytes): ax, ay, az, wz, roll, pitch
+/// - EKF state (25 bytes): yaw, x, y, vx, vy, speed_kmh, mode
+/// - GPS data (9 bytes): lat, lon, gps_valid
+/// - Lap timer (7 bytes): lap_time_ms, lap_count, lap_flags
+/// - Checksum (2 bytes)
 #[repr(C, packed)]
 #[derive(Copy, Clone)]
 pub struct TelemetryPacket {
-    pub version: u8,       // Protocol version (1)
+    pub version: u8,       // Protocol version (2)
     pub header: u16,       // 0xAA55 magic
     pub timestamp_ms: u32, // milliseconds
 
@@ -24,7 +32,7 @@ pub struct TelemetryPacket {
     pub roll: f32, // radians
     pub pitch: f32,
 
-    // EKF state (28 bytes)
+    // EKF state (25 bytes)
     pub yaw: f32, // radians
     pub x: f32,   // meters
     pub y: f32,
@@ -37,6 +45,11 @@ pub struct TelemetryPacket {
     pub lat: f32, // degrees (f32 for size, ~1cm accuracy)
     pub lon: f32,
     pub gps_valid: u8, // 0/1
+
+    // Lap timer (7 bytes)
+    pub lap_time_ms: u32, // Current lap time in ms (0 if not timing)
+    pub lap_count: u16,   // Completed lap count
+    pub lap_flags: u8,    // Flags: 1=crossed_start, 2=crossed_finish, 4=new_lap, 8=new_best, 16=invalid
 
     pub checksum: u16, // Simple checksum
 }
@@ -63,6 +76,9 @@ impl TelemetryPacket {
             lat: 0.0,
             lon: 0.0,
             gps_valid: 0,
+            lap_time_ms: 0,
+            lap_count: 0,
+            lap_flags: 0,
             checksum: 0,
         }
     }
@@ -165,13 +181,25 @@ mod tests {
 
     #[test]
     fn test_packet_size() {
-        assert_eq!(mem::size_of::<TelemetryPacket>(), 67);
+        assert_eq!(mem::size_of::<TelemetryPacket>(), 74);
     }
 
     #[test]
     fn test_version_field() {
         let packet = TelemetryPacket::new();
         assert_eq!(packet.version, PROTOCOL_VERSION);
-        assert_eq!(packet.version, 1);
+        assert_eq!(packet.version, 2);
+    }
+
+    #[test]
+    fn test_lap_timer_fields() {
+        let mut packet = TelemetryPacket::new();
+        packet.lap_time_ms = 65432;
+        packet.lap_count = 5;
+        packet.lap_flags = 0x0F;
+
+        assert_eq!(packet.lap_time_ms, 65432);
+        assert_eq!(packet.lap_count, 5);
+        assert_eq!(packet.lap_flags, 0x0F);
     }
 }

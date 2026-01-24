@@ -332,12 +332,16 @@ impl TelemetryPublisher {
     }
 
     /// Publish binary telemetry packet via UDP and/or HTTP server state
+    ///
+    /// # Arguments
+    /// * `lap_timer_data` - Optional tuple of (lap_time_ms, lap_count, lap_flags)
     pub fn publish_telemetry(
         &mut self,
         sensors: &SensorManager,
         estimator: &StateEstimator,
         sensor_fusion: &crate::fusion::SensorFusion,
         now_ms: u32,
+        lap_timer_data: Option<(u32, u16, u8)>,
     ) -> Result<(), SystemError> {
         // Get accelerations for display
         // lon: GPS-derived when fresh (no vibration), otherwise blended with heavy
@@ -392,6 +396,13 @@ impl TelemetryPublisher {
             packet.gps_valid = 1;
         } else {
             packet.gps_valid = 0;
+        }
+
+        // Add lap timer data if available
+        if let Some((lap_time_ms, lap_count, lap_flags)) = lap_timer_data {
+            packet.lap_time_ms = lap_time_ms;
+            packet.lap_count = lap_count;
+            packet.lap_flags = lap_flags;
         }
 
         let bytes = packet.to_bytes();
