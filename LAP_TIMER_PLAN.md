@@ -6,10 +6,10 @@ Real-time lap timing with predictive delta display for the Blackbox dashboard. T
 
 **What Makes a Lap Timer Useful:**
 1. **Accurate timing** - Know your lap time to millisecond precision ✅ DONE
-2. **Delta to best** - Know if you're ahead or behind at every point on track ❌ NOT DONE
+2. **Delta to best** - Know if you're ahead or behind at every point on track ✅ DONE
 3. **Progress tracking** - See improvement across sessions ❌ NOT DONE
 
-Without delta, this is just a stopwatch with extra steps. Delta is THE killer feature.
+Delta is THE killer feature - now implemented!
 
 **Target Use Cases:**
 - Neighborhood block circuits for practice
@@ -47,7 +47,8 @@ Without delta, this is just a stopwatch with extra steps. Delta is THE killer fe
 | Phase | Description | Status | Priority |
 |-------|-------------|--------|----------|
 | 1-7 | Core Timing, UI, Track Recording | ✅ COMPLETE | - |
-| 8 | Reference Lap & Delta | ✅ COMPLETE | - |
+| 8 | Reference Lap & Predictive Delta | ✅ COMPLETE | - |
+| 8B | Delta Bar UX Polish | ✅ COMPLETE | - |
 | 9 | Data Management & Cleanup | ❌ NOT STARTED | HIGH |
 | 10 | Session History | ❌ NOT STARTED | MEDIUM |
 | 11 | Track Auto-Detection | ❌ NOT STARTED | LOW |
@@ -79,15 +80,43 @@ Without delta, this is just a stopwatch with extra steps. Delta is THE killer fe
 - IndexedDB persistence (`blackbox-tracks` database)
 - Recording overlay with live GPS quality, distance, corners
 
+### Reference Lap & Predictive Delta (Phase 8) ✅
+- `LapTracker` class: tracks cumulative distance and samples during lap
+- Arc-length based delta calculation with binary search + linear interpolation
+- Reference lap storage in IndexedDB (`reference_laps` object store)
+- Best lap automatically saved as new reference
+- Delta bar UI: racing-game inspired design with text above, bar below
+- Color coding: green (ahead), red (behind), glow effect for large deltas (>1s)
+- Trend arrows: ▲ gaining time, ▼ losing time (EMA-smoothed derivative)
+- Works for both loop tracks and point-to-point stages
+
+### Delta Bar UX Polish (Phase 8B) ✅
+- Bar scaling: 2000ms = full bar, graceful handling of larger deltas
+- Demo tracks: ephemeral references (not persisted to IndexedDB)
+- Speed variance simulation: creates realistic lap-to-lap variation for testing
+- Lap count display: always shows at least "Lap 1" (no confusing "Lap 0")
+- P2P terminology: "Run" instead of "Lap", "Running" instead of "Timing"
+- "Finished!" animation on P2P completion
+- Production and dashboard-dev synchronized
+
 ---
 
-## Phase 8: Reference Lap & Predictive Delta ❌
+## Phase 8: Reference Lap & Predictive Delta ✅
 
-**This is the most important remaining feature.** Without it, drivers can't see where they're gaining or losing time.
+**Completed!** Drivers can now see real-time delta to their best lap at every point on track.
 
-### The Problem
+### What Was Built
 
-Currently, the driver only sees their lap time after crossing the finish. They have no idea during the lap if they're ahead or behind their best. This is like running a race blindfolded - you only see results at the end.
+- **LapTracker class**: Accumulates distance traveled during lap, stores samples for potential reference
+- **Arc-length delta**: Binary search + interpolation finds reference time at current distance
+- **Delta bar UI**: Racing-game inspired design with large delta text and visual bar
+- **Auto-save reference**: Best lap automatically becomes the new reference
+- **IndexedDB storage**: `reference_laps` object store with `trackId` index
+- **Demo mode**: Speed variance simulation creates realistic lap-to-lap differences
+
+### The Problem (Solved)
+
+Previously, the driver only saw their lap time after crossing the finish. They had no idea during the lap if they're ahead or behind their best. This is like running a race blindfolded - you only see results at the end.
 
 ### The Solution: Arc-Length Delta
 
@@ -283,12 +312,19 @@ Track delta over last 3-5 seconds. If delta is decreasing (gaining time), show �
 4. **Distance mismatch**: If current distance > reference total distance, stop showing delta (lap is longer, maybe went off track)
 5. **Coordinate reset**: If GPS origin shifts between sessions, reference lap is invalid. Detect via total distance mismatch (>10% difference = invalid).
 
-### Testing
+### Testing ✅
 
-1. **Simulation test**: Run simulated laps, verify delta shows correctly
-2. **Binary search test**: Unit test with known samples, verify interpolation
-3. **Memory test**: Verify no leaks over many laps
-4. **Performance test**: Delta calculation should take <1ms
+1. **Simulation test**: Dashboard-dev has speed variance simulation that creates realistic lap-to-lap differences (0.87x-1.15x speed modifiers)
+2. **Delta verification**: Console logging verified delta matches actual lap time differences
+3. **Demo tracks**: Two built-in demo tracks (loop and P2P) for testing without GPS
+4. **Visual verification**: Delta bar, trend arrows, and color coding all verified working
+
+### Implementation Notes
+
+- **Bar scaling**: MAX_DELTA_MS = 2000ms gives good visual progression for 0-3s deltas
+- **Trend threshold**: 3ms derivative threshold works well for simulated variance
+- **Glow effect**: Triggers at 1000ms delta for dramatic visual feedback
+- **Lap count**: Always shows minimum "Lap 1" to avoid confusing "Lap 0" display
 
 ---
 
