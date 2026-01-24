@@ -28,7 +28,7 @@ Open http://localhost:8080 - you'll see a simulated aggressive canyon drive runn
 
 ### Auto-Drive Mode (Default)
 
-On load, the dashboard plays a 30-second simulated canyon drive on loop:
+On load, the dashboard plays a 20-second simulated canyon drive on loop:
 - Hairpin turns with trail braking
 - Hard acceleration and braking zones
 - Realistic mode transitions (ACCEL, BRAKE, CORNER, combined states)

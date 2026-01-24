@@ -320,6 +320,126 @@ body{
 .bbMenuItem:last-child{border-bottom:none}
 .bbMenuItem:active{background:var(--bg)}
 .bbMenuItem.destructive{color:var(--red)}
+
+/* LAP TIMER SECTION */
+.bbLapCard{
+    background:var(--surface);
+    border-radius:16px;
+    margin-bottom:8px;
+    overflow:hidden;
+}
+.bbLapCard.inactive{
+    padding:14px 18px;
+}
+.bbLapCard.active{
+    padding:0;
+}
+.bbLapSetup{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+}
+.bbLapSetupText{
+    font-size:13px;
+    color:var(--text-tertiary);
+}
+.bbLapSetupBtn{
+    background:var(--bg);
+    border:none;
+    border-radius:8px;
+    padding:8px 16px;
+    font-size:13px;
+    font-weight:600;
+    color:var(--text);
+    cursor:pointer;
+    font-family:inherit;
+}
+.bbLapSetupBtn:active{opacity:0.7}
+
+.bbLapActive{display:none}
+.bbLapCard.active .bbLapActive{display:block}
+.bbLapCard.active .bbLapSetup{display:none}
+
+.bbLapMain{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:16px 18px 12px;
+}
+.bbLapTime{
+    font-size:44px;
+    font-weight:600;
+    line-height:1;
+}
+.bbLapMeta{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    margin-top:6px;
+}
+.bbLapCount{
+    font-size:13px;
+    color:var(--text-tertiary);
+    opacity:0.7;
+}
+.bbLapState{
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+    color:var(--text-tertiary);
+    opacity:0.5;
+}
+.bbLapState.timing{color:var(--ok);opacity:0.9}
+
+.bbLapHistory{
+    display:flex;
+    justify-content:center;
+    gap:0;
+    padding:12px 18px;
+    border-top:1px solid var(--divider);
+}
+.bbLapHistItem{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+}
+.bbLapHistDivider{
+    width:1px;
+    height:36px;
+    background:var(--divider);
+}
+.bbLapHistLabel{
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:0.02em;
+    color:var(--text-tertiary);
+    opacity:0.55;
+}
+.bbLapHistValue{
+    font-size:20px;
+    font-weight:600;
+    margin-top:4px;
+}
+.bbLapHistValue.best{color:var(--ok)}
+.bbLapHistValue.delta{font-size:18px}
+.bbLapHistValue.delta.faster{color:var(--ok)}
+.bbLapHistValue.delta.slower{color:var(--red)}
+
+.bbLapFlash{
+    animation:lapFlash 0.6s ease-out;
+}
+@keyframes lapFlash{
+    0%{background:rgba(52,199,89,0.25)}
+    100%{background:var(--surface)}
+}
+.bbLapBestFlash{
+    animation:bestFlash 0.8s ease-out;
+}
+@keyframes bestFlash{
+    0%,30%{transform:scale(1.05)}
+    100%{transform:scale(1)}
+}
 </style></head>
 <body>
 
@@ -340,6 +460,39 @@ body{
 </header>
 
 <main class="bbApp">
+    <!-- Lap Timer Section -->
+    <section class="bbCard bbLapCard inactive" id="lap-section">
+        <div class="bbLapSetup" id="lap-setup">
+            <span class="bbLapSetupText">No track configured</span>
+            <button class="bbLapSetupBtn" id="btn-sim-track">Simulate Track</button>
+        </div>
+        <div class="bbLapActive" id="lap-active">
+            <div class="bbLapMain">
+                <div class="bbLapTime bbNum" id="lap-time">0:00.000</div>
+                <div class="bbLapMeta">
+                    <span class="bbLapCount" id="lap-count">Lap 0</span>
+                    <span class="bbLapState" id="lap-state">Armed</span>
+                </div>
+            </div>
+            <div class="bbLapHistory">
+                <div class="bbLapHistItem">
+                    <span class="bbLapHistLabel">Best</span>
+                    <span class="bbLapHistValue bbNum" id="best-lap">—:——</span>
+                </div>
+                <div class="bbLapHistDivider"></div>
+                <div class="bbLapHistItem">
+                    <span class="bbLapHistLabel">Last</span>
+                    <span class="bbLapHistValue bbNum" id="last-lap">—:——</span>
+                </div>
+                <div class="bbLapHistDivider"></div>
+                <div class="bbLapHistItem">
+                    <span class="bbLapHistLabel">Delta</span>
+                    <span class="bbLapHistValue bbNum delta" id="lap-delta">—</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
     <section class="bbCard bbGCard">
         <div class="bbGTop">
             <div class="bbGTopLeft">
@@ -399,6 +552,7 @@ body{
 
 <div class="bbMenuOverlay" id="menu-overlay">
     <div class="bbMenuPanel">
+        <button class="bbMenuItem" id="menu-lap">Simulate Track</button>
         <button class="bbMenuItem" id="menu-load">Load CSV</button>
         <button class="bbMenuItem" id="menu-sim">Back to Sim</button>
         <button class="bbMenuItem" id="menu-rec">Start Recording</button>
@@ -412,28 +566,28 @@ body{
 <script>
 const CANYON_KEYFRAMES = [
     [0,      55,    0.15,  0.05,  3],
-    [2000,   70,    0.30,  0.02,  1],
-    [3500,   75,    0.10,  0.05,  5],
-    [4500,   68,   -0.35,  0.10,  8],
-    [5500,   55,   -0.20,  0.35,  25],
-    [7000,   52,    0.05,  0.45,  32],
-    [8500,   58,    0.25,  0.30,  20],
-    [10000,  70,    0.30,  0.10,  6],
-    [11500,  78,    0.15,  0.02,  0],
-    [13000,  72,   -0.40,  -0.05, -3],
-    [14500,  55,   -0.25,  -0.40, -30],
-    [16500,  45,    0.05,  -0.55, -40],
-    [18500,  50,    0.30,  -0.40, -28],
-    [20000,  62,    0.25,  -0.15, -10],
-    [21500,  65,    0.10,  0.25,  18],
-    [22500,  60,    0.05,  -0.20, -15],
-    [23500,  62,    0.15,  0.20,  14],
-    [25000,  72,    0.30,  0.05,  2],
-    [26500,  78,   -0.25,  -0.10, -8],
-    [28000,  65,    0.05,  -0.42, -32],
-    [30000,  55,    0.15,  0.05,  3],
+    [1300,   70,    0.30,  0.02,  1],
+    [2300,   75,    0.10,  0.05,  5],
+    [3000,   68,   -0.35,  0.10,  8],
+    [3700,   55,   -0.20,  0.35,  25],
+    [4700,   52,    0.05,  0.45,  32],
+    [5700,   58,    0.25,  0.30,  20],
+    [6700,   70,    0.30,  0.10,  6],
+    [7700,   78,    0.15,  0.02,  0],
+    [8700,   72,   -0.40,  -0.05, -3],
+    [9700,   55,   -0.25,  -0.40, -30],
+    [11000,  45,    0.05,  -0.55, -40],
+    [12300,  50,    0.30,  -0.40, -28],
+    [13300,  62,    0.25,  -0.15, -10],
+    [14300,  65,    0.10,  0.25,  18],
+    [15000,  60,    0.05,  -0.20, -15],
+    [15700,  62,    0.15,  0.20,  14],
+    [16700,  72,    0.30,  0.05,  2],
+    [17700,  78,   -0.25,  -0.10, -8],
+    [18700,  65,    0.05,  -0.42, -32],
+    [20000,  55,    0.15,  0.05,  3],
 ];
-const LOOP_DURATION = 30000;
+const LOOP_DURATION = 20000;
 
 const $ = id => document.getElementById(id);
 const MODES = {0:'IDLE', 1:'ACCEL', 2:'BRAKE', 4:'CORNER', 5:'ACCEL', 6:'BRAKE'};
@@ -529,6 +683,8 @@ function loadCSVData(text, filename) {
     csvPlaybackIndex = 0;
     csvStartTime = Date.now();
     dataSource = 'csv';
+    // Deactivate lap timer when loading CSV (no simulated position data)
+    if (lapTimerActive) deactivateLapTimer();
     resetState();
     updateSourceUI();
 }
@@ -668,6 +824,174 @@ async function exportCSV() {
 let loopStartTime = Date.now();
 let sessionStart = Date.now();
 let rec = false, cnt = 0, drops = 0;
+
+// === LAP TIMER STATE ===
+let lapTimerActive = false;
+let lapTimerState = 'idle'; // 'idle', 'armed', 'timing'
+let lapStartTime = 0;
+let currentLapMs = 0;
+let lapCount = 0;
+let bestLapMs = null;
+let lastLapMs = null;
+let lapCrossingDebounce = 0;
+const LAP_DEBOUNCE_MS = 1000; // Prevent double-crossings
+const MIN_LAP_TIME_MS = 5000; // 5 second minimum lap
+
+function formatLapTime(ms) {
+    if (ms === null || ms === undefined) return '—:——';
+    const totalSec = ms / 1000;
+    const min = Math.floor(totalSec / 60);
+    const sec = totalSec % 60;
+    return min + ':' + sec.toFixed(3).padStart(6, '0');
+}
+
+function activateLapTimer() {
+    lapTimerActive = true;
+    lapTimerState = 'armed';
+    lapStartTime = 0;
+    currentLapMs = 0;
+    lapCount = 0;
+    bestLapMs = null;
+    lastLapMs = null;
+    lapCrossingDebounce = 0;
+
+    const section = $('lap-section');
+    section.classList.remove('inactive');
+    section.classList.add('active');
+
+    $('lap-state').textContent = 'Armed';
+    $('lap-state').classList.remove('timing');
+    $('lap-delta').textContent = '—';
+    $('lap-delta').className = 'bbLapHistValue bbNum delta';
+    $('menu-lap').textContent = 'Stop Lap Timer';
+
+    updateLapDisplay();
+}
+
+function deactivateLapTimer() {
+    lapTimerActive = false;
+    lapTimerState = 'idle';
+
+    const section = $('lap-section');
+    section.classList.remove('active');
+    section.classList.add('inactive');
+    $('menu-lap').textContent = 'Simulate Track';
+}
+
+function updateLapDisplay() {
+    $('lap-time').textContent = formatLapTime(currentLapMs);
+    $('lap-count').textContent = 'Lap ' + lapCount;
+
+    if (bestLapMs !== null) {
+        $('best-lap').textContent = formatLapTime(bestLapMs);
+        $('best-lap').classList.add('best');
+    } else {
+        $('best-lap').textContent = '—:——';
+        $('best-lap').classList.remove('best');
+    }
+
+    if (lastLapMs !== null) {
+        $('last-lap').textContent = formatLapTime(lastLapMs);
+    } else {
+        $('last-lap').textContent = '—:——';
+    }
+}
+
+function onLineCrossing(timestamp) {
+    if (!lapTimerActive) return;
+
+    // Debounce check
+    if (timestamp - lapCrossingDebounce < LAP_DEBOUNCE_MS) return;
+    lapCrossingDebounce = timestamp;
+
+    if (lapTimerState === 'armed') {
+        // First crossing - start timing
+        lapTimerState = 'timing';
+        lapStartTime = timestamp;
+        currentLapMs = 0;
+        $('lap-state').textContent = 'Timing';
+        $('lap-state').classList.add('timing');
+
+        // Flash to indicate crossing
+        const section = $('lap-section');
+        section.classList.add('bbLapFlash');
+        setTimeout(() => section.classList.remove('bbLapFlash'), 600);
+
+    } else if (lapTimerState === 'timing') {
+        // Complete lap
+        const lapTimeMs = timestamp - lapStartTime;
+
+        // Validate lap time
+        if (lapTimeMs < MIN_LAP_TIME_MS) {
+            // Invalid lap - too short
+            return;
+        }
+
+        lastLapMs = lapTimeMs;
+        lapCount++;
+
+        const isNewBest = bestLapMs === null || lapTimeMs < bestLapMs;
+        if (isNewBest) {
+            bestLapMs = lapTimeMs;
+        }
+
+        // Update delta display
+        const deltaEl = $('lap-delta');
+        if (isNewBest && lapCount > 1) {
+            // Just set a new best (and had a previous best to compare)
+            deltaEl.textContent = 'BEST';
+            deltaEl.className = 'bbLapHistValue bbNum delta faster';
+        } else if (!isNewBest) {
+            const deltaMs = lapTimeMs - bestLapMs;
+            const sign = deltaMs > 0 ? '+' : '';
+            deltaEl.textContent = sign + (deltaMs / 1000).toFixed(3);
+            deltaEl.className = 'bbLapHistValue bbNum delta slower';
+        } else {
+            // First lap, no comparison
+            deltaEl.textContent = '—';
+            deltaEl.className = 'bbLapHistValue bbNum delta';
+        }
+
+        // Flash animations
+        const section = $('lap-section');
+        section.classList.add('bbLapFlash');
+        setTimeout(() => section.classList.remove('bbLapFlash'), 600);
+
+        if (isNewBest) {
+            const bestEl = $('best-lap');
+            bestEl.classList.add('bbLapBestFlash');
+            setTimeout(() => bestEl.classList.remove('bbLapBestFlash'), 800);
+        }
+
+        // Start new lap
+        lapStartTime = timestamp;
+        currentLapMs = 0;
+
+        updateLapDisplay();
+    }
+}
+
+function simulateLapTimerUpdate(now) {
+    if (!lapTimerActive) return;
+
+    // Update current lap time if timing
+    if (lapTimerState === 'timing') {
+        currentLapMs = now - lapStartTime;
+        $('lap-time').textContent = formatLapTime(currentLapMs);
+    }
+
+    // In simulation mode, trigger a crossing at the loop point
+    // The canyon simulation loops every LOOP_DURATION (20 seconds)
+    if (dataSource === 'loop') {
+        const loopTime = (now - loopStartTime) % LOOP_DURATION;
+
+        // Detect when we're near the start of a new loop (within 100ms of t=0)
+        // This simulates crossing the start/finish line
+        if (loopTime < 100) {
+            onLineCrossing(now);
+        }
+    }
+}
 let trail = [], maxL = 0, maxR = 0, maxA = 0, maxB = 0, peak = 0;
 let emaGx = 0, emaGy = 0, lastT = 0, speed_ema = 0;
 const EMA_TAU = 0.10;
@@ -953,6 +1277,9 @@ function simulate() {
         chunkBuffer.push({ t: now, sp, ax: -longRaw * 9.81, ay: latRaw * 9.81, wz: yawRad, mo, latg: latRaw, lng: longRaw, lat: 37.82, lon: -122.48, gpsOk: 1 });
         if (now - lastSaveTime >= CHUNK_INTERVAL) saveChunk();
     }
+
+    // Update lap timer
+    simulateLapTimerUpdate(now);
 }
 
 setInterval(simulate, 33);
@@ -1007,6 +1334,20 @@ $('menu-clear').onclick = () => {
     $('menu-overlay').classList.remove('open');
     loopStartTime = Date.now();
     resetState();
+};
+
+// Lap timer controls
+$('btn-sim-track').onclick = () => {
+    activateLapTimer();
+};
+
+$('menu-lap').onclick = () => {
+    $('menu-overlay').classList.remove('open');
+    if (lapTimerActive) {
+        deactivateLapTimer();
+    } else {
+        activateLapTimer();
+    }
 };
 
 setTimeout(() => { resize(); drawG(); }, 50);
