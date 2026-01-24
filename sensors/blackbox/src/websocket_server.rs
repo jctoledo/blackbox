@@ -497,6 +497,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
 @keyframes lapFlash{0%{background:rgba(52,199,89,0.25)}100%{background:var(--surface)}}
 .bbLapBestFlash{animation:bestFlash 0.8s ease-out}
 @keyframes bestFlash{0%,30%{transform:scale(1.05)}100%{transform:scale(1)}}
+.bbStartLineIndicator{display:none;padding:10px 16px;border-top:1px solid var(--divider);text-align:center}
+.bbLapCard.active .bbStartLineIndicator{display:block}
+.bbLapCard.active.timing .bbStartLineIndicator{display:none}
+.bbStartLineText{font-size:14px;color:var(--text-secondary);font-weight:500}
+.bbStartLineText.approaching{color:var(--amber)}
+.bbStartLineText.close{color:var(--ok)}
+.bbStartLineText.at-line{color:var(--ok);font-weight:600;animation:pulseText 1s ease-in-out infinite}
+@keyframes pulseText{0%,100%{opacity:1}50%{opacity:0.5}}
 .bbModal{position:fixed;inset:0;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;opacity:0;visibility:hidden;transition:opacity 0.2s ease;z-index:200;padding:16px}
 .dark .bbModal{background:rgba(0,0,0,0.6)}
 .bbModal.open{opacity:1;visibility:visible}
@@ -588,6 +596,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
                     <span class="bbLapHistLabel">Delta</span>
                     <span class="bbLapHistValue bbNum delta" id="lap-delta">—</span>
                 </div>
+            </div>
+            <div class="bbStartLineIndicator" id="start-line-indicator">
+                <span class="bbStartLineText" id="start-line-text">Calculating...</span>
             </div>
         </div>
     </section>
@@ -878,7 +889,7 @@ async function exportCSV(){
 
 // Track Manager IndexedDB
 const TRACK_DB='blackbox-tracks',TRACK_DB_VER=1;
-let trackDb=null,activeTrack=null,currentPos=null;
+let trackDb=null,activeTrack=null,currentPos=null,suppressStartLineIndicator=false;
 
 function openTrackDB(){
     return new Promise((res,rej)=>{
@@ -1046,6 +1057,7 @@ async function setStartLineHere(){
     const track={id:genTrackId(),name,type:'loop',created:Date.now(),modified:Date.now(),startLine:line,origin:{x,y},bestLapMs:null,lapCount:0};
     await saveTrack(track);
     await activateTrack(track);
+    suppressStartLineIndicator=true; // Hide indicator for newly created track
     closeTrackModal();
 }
 
@@ -1061,6 +1073,52 @@ async function updateTrackBestLap(lapTimeMs){
     if(!activeTrack.bestLapMs||lapTimeMs<activeTrack.bestLapMs)activeTrack.bestLapMs=lapTimeMs;
     activeTrack.lapCount=(activeTrack.lapCount||0)+1;
     await saveTrack(activeTrack);
+}
+
+// Start line indicator
+function getDistanceToStartLine(){
+    if(!activeTrack||!activeTrack.startLine||!currentPos)return null;
+    const line=activeTrack.startLine;
+    const cx=(line.p1[0]+line.p2[0])/2,cy=(line.p1[1]+line.p2[1])/2;
+    const dx=cx-currentPos.x,dy=cy-currentPos.y;
+    const dist=Math.sqrt(dx*dx+dy*dy);
+    const bearing=Math.atan2(dy,dx);
+    return{distance:dist,bearing};
+}
+
+function bearingToArrow(bearing,heading){
+    let rel=bearing-heading;
+    while(rel>Math.PI)rel-=2*Math.PI;
+    while(rel<-Math.PI)rel+=2*Math.PI;
+    const deg=rel*180/Math.PI;
+    if(deg>-22.5&&deg<=22.5)return'↑';
+    if(deg>22.5&&deg<=67.5)return'↗';
+    if(deg>67.5&&deg<=112.5)return'→';
+    if(deg>112.5&&deg<=157.5)return'↘';
+    if(deg>157.5||deg<=-157.5)return'↓';
+    if(deg>-157.5&&deg<=-112.5)return'↙';
+    if(deg>-112.5&&deg<=-67.5)return'←';
+    if(deg>-67.5&&deg<=-22.5)return'↖';
+    return'•';
+}
+
+function updateStartLineIndicator(){
+    const el=$('start-line-indicator'),txt=$('start-line-text');
+    if(!el||!txt)return;
+    const sec=$('lap-section');
+    // Only show when armed (not timing)
+    if(!lapTimerActive||!activeTrack||sec.classList.contains('timing')){el.style.display='none';return}
+    el.style.display='block';
+    // For newly created tracks, show instruction instead of distance
+    if(suppressStartLineIndicator){txt.textContent='Drive track, cross start to begin';txt.className='bbStartLineText';return}
+    if(!currentPos||!currentPos.valid){txt.textContent='Position unavailable';txt.className='bbStartLineText';return}
+    const r=getDistanceToStartLine();
+    if(!r){el.style.display='none';return}
+    const arrow=bearingToArrow(r.bearing,currentPos.yaw);
+    if(r.distance>100){txt.textContent='Start: '+Math.round(r.distance)+'m '+arrow;txt.className='bbStartLineText'}
+    else if(r.distance>50){txt.textContent='Approaching: '+Math.round(r.distance)+'m '+arrow;txt.className='bbStartLineText approaching'}
+    else if(r.distance>15){txt.textContent='Getting close: '+Math.round(r.distance)+'m '+arrow;txt.className='bbStartLineText close'}
+    else{txt.textContent='Cross to begin! '+arrow;txt.className='bbStartLineText at-line'}
 }
 
 // G-meter
@@ -1151,15 +1209,15 @@ function fmtLapTime(ms){if(ms===0)return'0:00.000';const mins=Math.floor(ms/6000
 function updateLapTimer(lapTimeMs,lapCnt,lapFlags){
     const sec=$('lap-section'),active=(lapFlags&LAP_FLAG_INVALID)===0&&(lapTimeMs>0||lapCnt>0||(lapFlags&(LAP_FLAG_CROSSED_START|LAP_FLAG_CROSSED_FINISH)));
     if(active&&!lapTimerActive){sec.classList.remove('inactive');sec.classList.add('active');lapTimerActive=true}
-    else if(!active&&lapTimerActive){sec.classList.add('inactive');sec.classList.remove('active');lapTimerActive=false}
+    else if(!active&&lapTimerActive){sec.classList.add('inactive');sec.classList.remove('active','timing');lapTimerActive=false}
     if(!lapTimerActive)return;
     // Update current lap time
     $('lap-time').textContent=fmtLapTime(lapTimeMs);
     $('lap-count').textContent='Lap '+(lapCnt+(lapTimeMs>0?1:0));
     // Update state indicator
     const stateEl=$('lap-state');
-    if(lapTimeMs>0){stateEl.textContent='Timing';stateEl.classList.add('timing')}
-    else{stateEl.textContent='Armed';stateEl.classList.remove('timing')}
+    if(lapTimeMs>0){stateEl.textContent='Timing';stateEl.classList.add('timing');sec.classList.add('timing');suppressStartLineIndicator=false}
+    else{stateEl.textContent='Armed';stateEl.classList.remove('timing');sec.classList.remove('timing')}
     // Handle new lap flag - save completed lap time to track
     if((lapFlags&LAP_FLAG_NEW_LAP)&&!(prevLapFlags&LAP_FLAG_NEW_LAP)){
         sec.classList.add('bbLapFlash');setTimeout(()=>sec.classList.remove('bbLapFlash'),600);
@@ -1205,6 +1263,7 @@ function process(buf){
     // Update position for track manager
     currentPos={x:ekfX,y:ekfY,yaw:ekfYaw,speed:sp,valid:gpsOk===1};
     if($('track-modal').classList.contains('open'))updateTrackPos();
+    updateStartLineIndicator();
 
     const now=Date.now();
     const dt=lastT?Math.min((now-lastT)/1000,0.2):0.033;

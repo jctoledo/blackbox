@@ -441,6 +441,37 @@ body{
     100%{transform:scale(1)}
 }
 
+/* START LINE APPROACH INDICATOR */
+.bbStartLineIndicator{
+    display:none;
+    padding:10px 16px;
+    border-top:1px solid var(--divider);
+    text-align:center;
+}
+.bbLapCard.active .bbStartLineIndicator{display:block}
+.bbLapCard.active.timing .bbStartLineIndicator{display:none}
+.bbStartLineText{
+    font-size:14px;
+    color:var(--text-secondary);
+    font-weight:500;
+}
+.bbStartLineText.approaching{color:var(--yellow)}
+.bbStartLineText.close{color:var(--ok)}
+.bbStartLineText.at-line{
+    color:var(--ok);
+    font-weight:600;
+    animation:pulseText 1s ease-in-out infinite;
+}
+@keyframes pulseText{
+    0%,100%{opacity:1}
+    50%{opacity:0.6}
+}
+.bbStartLineArrow{
+    display:inline-block;
+    margin-left:6px;
+    font-size:16px;
+}
+
 /* TRACK MANAGER MODAL */
 .bbModal{
     position:fixed;
@@ -687,6 +718,9 @@ body{
                     <span class="bbLapHistLabel">Delta</span>
                     <span class="bbLapHistValue bbNum delta" id="lap-delta">—</span>
                 </div>
+            </div>
+            <div class="bbStartLineIndicator" id="start-line-indicator">
+                <span class="bbStartLineText" id="start-line-text">Calculating...</span>
             </div>
         </div>
     </section>
@@ -1586,6 +1620,9 @@ async function setStartLineHere() {
     // Activate the track
     activateTrack(track);
 
+    // Suppress start line indicator for newly created tracks (user is already at the line)
+    suppressStartLineIndicator = true;
+
     // Close modal
     closeTrackModal();
 
@@ -1618,6 +1655,7 @@ let rec = false, cnt = 0, drops = 0;
 // === LAP TIMER STATE ===
 let lapTimerActive = false;
 let lapTimerState = 'idle'; // 'idle', 'armed', 'timing'
+let suppressStartLineIndicator = false; // True after creating new track, cleared on first crossing
 let lapStartTime = 0;
 let currentLapMs = 0;
 let lapCount = 0;
@@ -1682,7 +1720,7 @@ function deactivateLapTimer() {
     simPrevPos = null;
 
     const section = $('lap-section');
-    section.classList.remove('active');
+    section.classList.remove('active', 'timing');
     section.classList.add('inactive');
     $('menu-lap').textContent = 'Simulate Track';
 }
@@ -1706,6 +1744,95 @@ function updateLapDisplay() {
     }
 }
 
+// Calculate distance and bearing from current position to timing line center
+function getDistanceToStartLine() {
+    if (!simTimingLine || !currentSimPos) return null;
+
+    // Center of timing line
+    const cx = (simTimingLine.p1[0] + simTimingLine.p2[0]) / 2;
+    const cy = (simTimingLine.p1[1] + simTimingLine.p2[1]) / 2;
+
+    // Vector from current position to timing line center
+    const dx = cx - currentSimPos.x;
+    const dy = cy - currentSimPos.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    // Bearing in radians (0 = east, π/2 = north)
+    const bearing = Math.atan2(dy, dx);
+
+    return { distance, bearing, cx, cy };
+}
+
+// Convert bearing to arrow character (cardinal direction relative to current heading)
+function bearingToArrow(bearing, currentHeading) {
+    // Relative bearing (how far to turn from current heading)
+    let relBearing = bearing - currentHeading;
+
+    // Normalize to [-π, π]
+    while (relBearing > Math.PI) relBearing -= 2 * Math.PI;
+    while (relBearing < -Math.PI) relBearing += 2 * Math.PI;
+
+    // Convert to 8-direction arrow
+    const deg = relBearing * 180 / Math.PI;
+    if (deg > -22.5 && deg <= 22.5) return '↑';      // Ahead
+    if (deg > 22.5 && deg <= 67.5) return '↗';      // Ahead-right
+    if (deg > 67.5 && deg <= 112.5) return '→';     // Right
+    if (deg > 112.5 && deg <= 157.5) return '↘';    // Behind-right
+    if (deg > 157.5 || deg <= -157.5) return '↓';   // Behind
+    if (deg > -157.5 && deg <= -112.5) return '↙';  // Behind-left
+    if (deg > -112.5 && deg <= -67.5) return '←';   // Left
+    if (deg > -67.5 && deg <= -22.5) return '↖';    // Ahead-left
+    return '•';
+}
+
+// Update the start line indicator UI
+function updateStartLineIndicator() {
+    const indicator = $('start-line-indicator');
+    const textEl = $('start-line-text');
+
+    if (!indicator || !textEl) return;
+
+    // Only show when armed (not timing or idle)
+    if (lapTimerState !== 'armed' || !simTimingLine || !currentSimPos) {
+        indicator.style.display = 'none';
+        return;
+    }
+
+    indicator.style.display = 'block';
+
+    // For newly created tracks, show instruction instead of distance
+    if (suppressStartLineIndicator) {
+        textEl.textContent = 'Drive track, cross start to begin';
+        textEl.className = 'bbStartLineText';
+        return;
+    }
+
+    const result = getDistanceToStartLine();
+    if (!result) {
+        textEl.textContent = 'Position unavailable';
+        textEl.className = 'bbStartLineText';
+        return;
+    }
+
+    const { distance, bearing } = result;
+    const arrow = bearingToArrow(bearing, currentSimPos.heading);
+
+    // Distance-based messaging for loaded tracks
+    if (distance > 100) {
+        textEl.textContent = 'Start: ' + Math.round(distance) + 'm ' + arrow;
+        textEl.className = 'bbStartLineText';
+    } else if (distance > 50) {
+        textEl.textContent = 'Approaching: ' + Math.round(distance) + 'm ' + arrow;
+        textEl.className = 'bbStartLineText approaching';
+    } else if (distance > 15) {
+        textEl.textContent = 'Getting close: ' + Math.round(distance) + 'm ' + arrow;
+        textEl.className = 'bbStartLineText close';
+    } else {
+        textEl.textContent = 'Cross to begin! ' + arrow;
+        textEl.className = 'bbStartLineText at-line';
+    }
+}
+
 function onLineCrossing(timestamp) {
     if (!lapTimerActive) return;
 
@@ -1718,11 +1845,15 @@ function onLineCrossing(timestamp) {
         lapTimerState = 'timing';
         lapStartTime = timestamp;
         currentLapMs = 0;
+        suppressStartLineIndicator = false; // Clear suppression on first crossing
         $('lap-state').textContent = 'Timing';
         $('lap-state').classList.add('timing');
 
-        // Flash to indicate crossing
+        // Add timing class to card (hides start line indicator via CSS)
         const section = $('lap-section');
+        section.classList.add('timing');
+
+        // Flash to indicate crossing
         section.classList.add('bbLapFlash');
         setTimeout(() => section.classList.remove('bbLapFlash'), 600);
 
@@ -2089,6 +2220,9 @@ function simulate() {
         if ($('track-modal').classList.contains('open')) {
             updateTrackModalPosition();
         }
+
+        // Update start line indicator
+        updateStartLineIndicator();
     }
 
     speed_ema = 0.7 * sp + 0.3 * speed_ema;

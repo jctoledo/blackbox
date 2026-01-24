@@ -234,7 +234,7 @@ const timingLine = { p1: [-10, 0], p2: [10, 0], direction: Math.PI/2 };
 | 4 | Production Dashboard Integration | ✅ COMPLETE |
 | 5 | Track Configuration UI | ✅ COMPLETE |
 | 6 | Track Persistence (IndexedDB) | ✅ COMPLETE |
-| 5A | Start Line Approach UX | ❌ NOT STARTED |
+| 5A | Start Line Approach UX | ✅ COMPLETE |
 | 7 | Track Recording | ❌ NOT STARTED |
 | 8 | Track Auto-Detection | ❌ NOT STARTED |
 | 9 | Reference Lap & Predictive Delta | ❌ NOT STARTED |
@@ -491,7 +491,7 @@ await fetch('/api/laptimer/configure?type=loop' +
 
 ---
 
-## Phase 5A: Start Line Approach UX ❌ NOT STARTED
+## Phase 5A: Start Line Approach UX ✅ COMPLETE
 
 ### Goal
 
@@ -613,6 +613,24 @@ Then countdown:
 | 5A.1 | Low | High - answers "where is my start line?" |
 | 5A.2 | Low | Medium - improves approach experience |
 | 5A.3 | Medium | Medium - nice for competitive use |
+
+### Implementation Notes (COMPLETE)
+
+**5A.1 & 5A.2 implemented:**
+- Start line indicator shows distance and directional arrow (↑↗→↘↓↙←↖) relative to heading
+- Progressive feedback with color changes:
+  - `> 100m`: Gray text "Start: Xm [arrow]"
+  - `50-100m`: Yellow text "Approaching: Xm [arrow]"
+  - `15-50m`: Green text "Getting close: Xm [arrow]"
+  - `< 15m`: Pulsing green "Cross to begin! [arrow]"
+- New track UX: Shows "Drive track, cross start to begin" instead of distance (user is already at the line)
+- Indicator hidden during active timing (CSS class `.timing`)
+
+**5A.3 Standing Start:** Not implemented (optional enhancement for future)
+
+**Files modified:**
+- `tools/dashboard-dev/index.html`: CSS, HTML, JavaScript for indicator
+- `sensors/blackbox/src/websocket_server.rs`: Production dashboard with same functionality
 
 ---
 
