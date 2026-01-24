@@ -440,6 +440,204 @@ body{
     0%,30%{transform:scale(1.05)}
     100%{transform:scale(1)}
 }
+
+/* TRACK MANAGER MODAL */
+.bbModal{
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,0.4);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    opacity:0;
+    visibility:hidden;
+    transition:opacity 0.2s ease;
+    z-index:200;
+    padding:16px;
+}
+.dark .bbModal{background:rgba(0,0,0,0.6)}
+.bbModal.open{opacity:1;visibility:visible}
+.bbModalContent{
+    background:var(--surface);
+    border-radius:16px;
+    width:100%;
+    max-width:400px;
+    max-height:calc(100vh - 32px);
+    overflow:hidden;
+    display:flex;
+    flex-direction:column;
+    transform:scale(0.95);
+    transition:transform 0.2s ease;
+}
+.bbModal.open .bbModalContent{transform:scale(1)}
+.bbModalHeader{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:16px 18px;
+    border-bottom:1px solid var(--divider);
+}
+.bbModalTitle{
+    font-size:17px;
+    font-weight:600;
+}
+.bbModalClose{
+    background:none;
+    border:none;
+    font-size:24px;
+    color:var(--text-tertiary);
+    cursor:pointer;
+    padding:0;
+    line-height:1;
+}
+.bbModalClose:active{opacity:0.5}
+.bbModalBody{
+    padding:16px 18px;
+    overflow-y:auto;
+    flex:1;
+}
+.bbModalSection{
+    margin-bottom:20px;
+}
+.bbModalSection:last-child{margin-bottom:0}
+.bbSectionTitle{
+    font-size:11px;
+    font-weight:600;
+    color:var(--text-tertiary);
+    text-transform:uppercase;
+    letter-spacing:0.08em;
+    margin-bottom:10px;
+}
+.bbPosDisplay{
+    background:var(--bg);
+    border-radius:12px;
+    padding:14px 16px;
+}
+.bbPosRow{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    padding:4px 0;
+}
+.bbPosLabel{
+    font-size:12px;
+    color:var(--text-tertiary);
+}
+.bbPosValue{
+    font-size:14px;
+    font-weight:600;
+    font-variant-numeric:tabular-nums;
+}
+.bbPosValue.waiting{
+    color:var(--text-tertiary);
+    font-weight:400;
+}
+.bbActionBtn{
+    display:block;
+    width:100%;
+    padding:14px 18px;
+    border:none;
+    border-radius:12px;
+    font-size:15px;
+    font-weight:600;
+    cursor:pointer;
+    font-family:inherit;
+    margin-bottom:10px;
+    transition:opacity 0.15s;
+}
+.bbActionBtn:last-child{margin-bottom:0}
+.bbActionBtn:active{opacity:0.7}
+.bbActionBtn.primary{
+    background:var(--ok);
+    color:#fff;
+}
+.bbActionBtn.secondary{
+    background:var(--bg);
+    color:var(--text);
+}
+.bbActionBtn:disabled{
+    opacity:0.4;
+    cursor:not-allowed;
+}
+.bbTrackList{
+    border-radius:12px;
+    overflow:hidden;
+    background:var(--bg);
+}
+.bbTrackEmpty{
+    padding:20px;
+    text-align:center;
+    color:var(--text-tertiary);
+    font-size:13px;
+}
+.bbTrackItem{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:12px 14px;
+    border-bottom:1px solid var(--divider);
+}
+.bbTrackItem:last-child{border-bottom:none}
+.bbTrackInfo{flex:1;min-width:0}
+.bbTrackName{
+    font-size:14px;
+    font-weight:600;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+}
+.bbTrackMeta{
+    font-size:11px;
+    color:var(--text-tertiary);
+    margin-top:2px;
+}
+.bbTrackMeta span{margin-right:10px}
+.bbTrackActions{
+    display:flex;
+    gap:8px;
+    margin-left:10px;
+}
+.bbTrackBtn{
+    background:var(--surface);
+    border:none;
+    border-radius:6px;
+    padding:6px 12px;
+    font-size:12px;
+    font-weight:600;
+    color:var(--text);
+    cursor:pointer;
+    font-family:inherit;
+}
+.bbTrackBtn:active{opacity:0.7}
+.bbTrackBtn.primary{
+    background:var(--ok);
+    color:#fff;
+}
+.bbTrackBtn.danger{
+    color:var(--red);
+}
+.bbActiveTrack{
+    background:var(--bg);
+    border-radius:12px;
+    padding:14px 16px;
+    margin-bottom:16px;
+}
+.bbActiveTrackLabel{
+    font-size:11px;
+    color:var(--text-tertiary);
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+}
+.bbActiveTrackName{
+    font-size:15px;
+    font-weight:600;
+    margin-top:4px;
+}
+.bbActiveTrackMeta{
+    font-size:12px;
+    color:var(--text-tertiary);
+    margin-top:2px;
+}
 </style></head>
 <body>
 
@@ -463,8 +661,8 @@ body{
     <!-- Lap Timer Section -->
     <section class="bbCard bbLapCard inactive" id="lap-section">
         <div class="bbLapSetup" id="lap-setup">
-            <span class="bbLapSetupText">No track configured</span>
-            <button class="bbLapSetupBtn" id="btn-sim-track">Simulate Track</button>
+            <span class="bbLapSetupText" id="lap-setup-text">No track configured</span>
+            <button class="bbLapSetupBtn" id="btn-open-tracks">Tracks</button>
         </div>
         <div class="bbLapActive" id="lap-active">
             <div class="bbLapMain">
@@ -552,12 +750,69 @@ body{
 
 <div class="bbMenuOverlay" id="menu-overlay">
     <div class="bbMenuPanel">
+        <button class="bbMenuItem" id="menu-tracks">Tracks</button>
         <button class="bbMenuItem" id="menu-lap">Simulate Track</button>
         <button class="bbMenuItem" id="menu-load">Load CSV</button>
         <button class="bbMenuItem" id="menu-sim">Back to Sim</button>
         <button class="bbMenuItem" id="menu-rec">Start Recording</button>
         <button class="bbMenuItem" id="menu-export">Export CSV</button>
         <button class="bbMenuItem destructive" id="menu-clear">Clear Session</button>
+    </div>
+</div>
+
+<!-- Track Manager Modal -->
+<div class="bbModal" id="track-modal">
+    <div class="bbModalContent">
+        <div class="bbModalHeader">
+            <span class="bbModalTitle">Track Manager</span>
+            <button class="bbModalClose" id="track-modal-close">&times;</button>
+        </div>
+        <div class="bbModalBody">
+            <!-- Active Track (if any) -->
+            <div id="active-track-section" class="bbActiveTrack" style="display:none">
+                <div class="bbActiveTrackLabel">Active Track</div>
+                <div class="bbActiveTrackName" id="active-track-name">—</div>
+                <div class="bbActiveTrackMeta" id="active-track-meta">—</div>
+            </div>
+
+            <!-- Current Position -->
+            <div class="bbModalSection">
+                <div class="bbSectionTitle">Current Position</div>
+                <div class="bbPosDisplay">
+                    <div class="bbPosRow">
+                        <span class="bbPosLabel">Local X, Y</span>
+                        <span class="bbPosValue" id="pos-xy">0.0, 0.0 m</span>
+                    </div>
+                    <div class="bbPosRow">
+                        <span class="bbPosLabel">Heading</span>
+                        <span class="bbPosValue" id="pos-heading">0°</span>
+                    </div>
+                    <div class="bbPosRow">
+                        <span class="bbPosLabel">Speed</span>
+                        <span class="bbPosValue" id="pos-speed">0 km/h</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="bbModalSection">
+                <div class="bbSectionTitle">Quick Actions</div>
+                <button class="bbActionBtn primary" id="btn-set-start" disabled>
+                    Set Start Line Here
+                </button>
+                <button class="bbActionBtn secondary" id="btn-clear-track">
+                    Clear Active Track
+                </button>
+            </div>
+
+            <!-- Saved Tracks -->
+            <div class="bbModalSection">
+                <div class="bbSectionTitle">Saved Tracks</div>
+                <div class="bbTrackList" id="track-list">
+                    <div class="bbTrackEmpty">No saved tracks</div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -1072,6 +1327,289 @@ async function exportCSV() {
     a.download = 'blackbox_' + new Date(latest.sessionId).toISOString().slice(0, 19).replace(/[T:]/g, '-') + '.csv'; a.click();
 }
 
+// ========== TRACK DATABASE (IndexedDB) ==========
+const TRACK_DB_NAME = 'blackbox-tracks', TRACK_DB_VERSION = 1;
+let trackDb = null;
+
+function openTrackDB() {
+    return new Promise((resolve, reject) => {
+        const req = indexedDB.open(TRACK_DB_NAME, TRACK_DB_VERSION);
+        req.onerror = () => reject(req.error);
+        req.onsuccess = () => { trackDb = req.result; resolve(trackDb); };
+        req.onupgradeneeded = (e) => {
+            const d = e.target.result;
+            if (!d.objectStoreNames.contains('tracks')) {
+                const store = d.createObjectStore('tracks', { keyPath: 'id' });
+                store.createIndex('modified', 'modified', { unique: false });
+            }
+        };
+    });
+}
+
+async function saveTrack(track) {
+    if (!trackDb) await openTrackDB();
+    track.modified = Date.now();
+    return new Promise((resolve, reject) => {
+        const tx = trackDb.transaction('tracks', 'readwrite');
+        const req = tx.objectStore('tracks').put(track);
+        req.onsuccess = () => resolve(track);
+        req.onerror = () => reject(req.error);
+    });
+}
+
+async function getTrack(id) {
+    if (!trackDb) await openTrackDB();
+    return new Promise((resolve, reject) => {
+        const tx = trackDb.transaction('tracks', 'readonly');
+        const req = tx.objectStore('tracks').get(id);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+}
+
+async function getAllTracks() {
+    if (!trackDb) await openTrackDB();
+    return new Promise((resolve, reject) => {
+        const tx = trackDb.transaction('tracks', 'readonly');
+        const req = tx.objectStore('tracks').getAll();
+        req.onsuccess = () => resolve(req.result || []);
+        req.onerror = () => reject(req.error);
+    });
+}
+
+async function deleteTrack(id) {
+    if (!trackDb) await openTrackDB();
+    return new Promise((resolve, reject) => {
+        const tx = trackDb.transaction('tracks', 'readwrite');
+        const req = tx.objectStore('tracks').delete(id);
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+    });
+}
+
+// ========== TRACK MANAGER STATE ==========
+let activeTrack = null;
+let currentSimPos = null;  // Updated by simulation loop
+
+function generateTrackId() {
+    return 'track_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+}
+
+// ========== TRACK MANAGER UI ==========
+function openTrackModal() {
+    $('track-modal').classList.add('open');
+    renderTrackList();
+    updateActiveTrackDisplay();
+}
+
+function closeTrackModal() {
+    $('track-modal').classList.remove('open');
+}
+
+function updateActiveTrackDisplay() {
+    const section = $('active-track-section');
+    if (activeTrack) {
+        section.style.display = 'block';
+        $('active-track-name').textContent = activeTrack.name;
+        const bestStr = activeTrack.bestLapMs ? formatLapTime(activeTrack.bestLapMs) : '—';
+        $('active-track-meta').textContent = 'Best: ' + bestStr + ' · ' + (activeTrack.lapCount || 0) + ' laps';
+    } else {
+        section.style.display = 'none';
+    }
+}
+
+function updateTrackModalPosition() {
+    // Update position display in modal from current simulation state
+    if (currentSimPos) {
+        $('pos-xy').textContent = currentSimPos.x.toFixed(1) + ', ' + currentSimPos.y.toFixed(1) + ' m';
+        $('pos-heading').textContent = (currentSimPos.heading * 180 / Math.PI).toFixed(0) + '°';
+        $('pos-speed').textContent = (currentSimPos.speed * 3.6).toFixed(0) + ' km/h';
+        $('btn-set-start').disabled = false;
+    } else {
+        $('pos-xy').textContent = 'Waiting...';
+        $('pos-heading').textContent = '—';
+        $('pos-speed').textContent = '—';
+        $('btn-set-start').disabled = true;
+    }
+}
+
+async function renderTrackList() {
+    const listEl = $('track-list');
+    try {
+        const tracks = await getAllTracks();
+
+        if (tracks.length === 0) {
+            listEl.innerHTML = '<div class="bbTrackEmpty">No saved tracks</div>';
+            return;
+        }
+
+        // Sort by most recently modified
+        tracks.sort((a, b) => b.modified - a.modified);
+
+        listEl.innerHTML = tracks.map(track => {
+            const bestStr = track.bestLapMs ? formatLapTime(track.bestLapMs) : '—';
+            const isActive = activeTrack && activeTrack.id === track.id;
+            return '<div class="bbTrackItem" data-track-id="' + track.id + '">' +
+                '<div class="bbTrackInfo">' +
+                    '<div class="bbTrackName">' + escapeHtml(track.name) + (isActive ? ' ✓' : '') + '</div>' +
+                    '<div class="bbTrackMeta">' +
+                        '<span>Best: ' + bestStr + '</span>' +
+                        '<span>' + (track.lapCount || 0) + ' laps</span>' +
+                    '</div>' +
+                '</div>' +
+                '<div class="bbTrackActions">' +
+                    '<button class="bbTrackBtn primary" data-action="use">Use</button>' +
+                    '<button class="bbTrackBtn danger" data-action="delete">×</button>' +
+                '</div>' +
+            '</div>';
+        }).join('');
+
+        // Add event listeners
+        listEl.querySelectorAll('.bbTrackBtn').forEach(btn => {
+            btn.onclick = () => handleTrackAction(btn.dataset.action, btn.closest('.bbTrackItem').dataset.trackId);
+        });
+    } catch (e) {
+        console.error('Failed to load tracks:', e);
+        listEl.innerHTML = '<div class="bbTrackEmpty">Error loading tracks</div>';
+    }
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+async function handleTrackAction(action, trackId) {
+    if (action === 'use') {
+        const track = await getTrack(trackId);
+        if (track) {
+            activateTrack(track);
+            closeTrackModal();
+        }
+    } else if (action === 'delete') {
+        if (confirm('Delete this track?')) {
+            await deleteTrack(trackId);
+            if (activeTrack && activeTrack.id === trackId) {
+                deactivateTrack();
+            }
+            renderTrackList();
+        }
+    }
+}
+
+function activateTrack(track) {
+    activeTrack = track;
+
+    // Set up the timing line from the track
+    simTimingLine = {
+        p1: track.startLine.p1,
+        p2: track.startLine.p2,
+        direction: track.startLine.direction
+    };
+    simPrevPos = null;
+
+    // Activate lap timer
+    lapTimerActive = true;
+    lapTimerState = 'armed';
+    lapStartTime = 0;
+    currentLapMs = 0;
+    lapCount = 0;
+    bestLapMs = track.bestLapMs || null;
+    lastLapMs = null;
+
+    // Update UI
+    const section = $('lap-section');
+    section.classList.remove('inactive');
+    section.classList.add('active');
+    $('lap-time').textContent = '0:00.000';
+    $('lap-count').textContent = 'Lap 0';
+    $('lap-state').textContent = 'Armed';
+    $('lap-state').classList.remove('timing');
+    $('best-lap').textContent = bestLapMs ? formatLapTime(bestLapMs) : '—:——';
+    $('best-lap').classList.toggle('best', !!bestLapMs);
+    $('last-lap').textContent = '—:——';
+    $('lap-delta').textContent = '—';
+    $('lap-delta').className = 'bbLapHistValue bbNum delta';
+
+    // Update setup text
+    $('lap-setup-text').textContent = track.name;
+
+    console.log('Track activated:', track.name, 'Timing line:', simTimingLine);
+}
+
+function deactivateTrack() {
+    activeTrack = null;
+    deactivateLapTimer();
+    $('lap-setup-text').textContent = 'No track configured';
+}
+
+async function setStartLineHere() {
+    if (!currentSimPos) {
+        alert('Position not available. Start the simulation first.');
+        return;
+    }
+
+    const x = currentSimPos.x;
+    const y = currentSimPos.y;
+    const heading = currentSimPos.heading;
+
+    // Create perpendicular timing line (20m wide, 10m each side)
+    const width = 10;
+    const perpAngle = heading + Math.PI / 2;  // Perpendicular to heading
+
+    const timingLine = {
+        p1: [x + Math.cos(perpAngle) * width, y + Math.sin(perpAngle) * width],
+        p2: [x - Math.cos(perpAngle) * width, y - Math.sin(perpAngle) * width],
+        direction: heading  // Valid crossing direction = current heading
+    };
+
+    // Create track object
+    const trackName = prompt('Enter track name:', 'Track ' + new Date().toLocaleDateString());
+    if (!trackName) return;  // User cancelled
+
+    const track = {
+        id: generateTrackId(),
+        name: trackName,
+        type: 'loop',
+        created: Date.now(),
+        modified: Date.now(),
+        startLine: timingLine,
+        origin: { x, y },
+        bestLapMs: null,
+        lapCount: 0
+    };
+
+    // Save to IndexedDB
+    await saveTrack(track);
+
+    // Activate the track
+    activateTrack(track);
+
+    // Close modal
+    closeTrackModal();
+
+    console.log('Track created:', track);
+}
+
+async function clearActiveTrack() {
+    if (!activeTrack) return;
+    deactivateTrack();
+    updateActiveTrackDisplay();
+    renderTrackList();
+}
+
+// Update track's best lap when a new best is set
+async function updateTrackBestLap(lapTimeMs) {
+    if (!activeTrack) return;
+
+    if (!activeTrack.bestLapMs || lapTimeMs < activeTrack.bestLapMs) {
+        activeTrack.bestLapMs = lapTimeMs;
+    }
+    activeTrack.lapCount = (activeTrack.lapCount || 0) + 1;
+    await saveTrack(activeTrack);
+}
+
 // State
 let loopStartTime = Date.now();
 let sessionStart = Date.now();
@@ -1233,6 +1771,9 @@ function onLineCrossing(timestamp) {
             bestEl.classList.add('bbLapBestFlash');
             setTimeout(() => bestEl.classList.remove('bbLapBestFlash'), 800);
         }
+
+        // Update track's best lap in IndexedDB
+        updateTrackBestLap(lapTimeMs);
 
         // Start new lap
         lapStartTime = timestamp;
@@ -1535,6 +2076,19 @@ function simulate() {
             vy: pos.vy,
             speed: pos.speed
         };
+
+        // Update current position for track manager
+        currentSimPos = {
+            x: pos.x,
+            y: pos.y,
+            heading: pos.heading,
+            speed: pos.speed
+        };
+
+        // Update track modal position display if open
+        if ($('track-modal').classList.contains('open')) {
+            updateTrackModalPosition();
+        }
     }
 
     speed_ema = 0.7 * sp + 0.3 * speed_ema;
@@ -1656,20 +2210,47 @@ $('menu-clear').onclick = () => {
 };
 
 // Lap timer controls
-$('btn-sim-track').onclick = () => {
-    activateLapTimer();
+// Open track manager from lap card button
+$('btn-open-tracks').onclick = () => {
+    openTrackModal();
 };
 
+// Open track manager from menu
+$('menu-tracks').onclick = () => {
+    $('menu-overlay').classList.remove('open');
+    openTrackModal();
+};
+
+// Legacy: "Simulate Track" in menu - quick activate with simulated block track
 $('menu-lap').onclick = () => {
     $('menu-overlay').classList.remove('open');
     if (lapTimerActive) {
         deactivateLapTimer();
+        activeTrack = null;
+        $('lap-setup-text').textContent = 'No track configured';
     } else {
+        // Quick simulate with default block track timing line
         activateLapTimer();
     }
 };
 
+// Track modal close button
+$('track-modal-close').onclick = closeTrackModal;
+
+// Close modal when clicking outside
+$('track-modal').onclick = (e) => {
+    if (e.target === $('track-modal')) closeTrackModal();
+};
+
+// Set start line button
+$('btn-set-start').onclick = setStartLineHere;
+
+// Clear active track button
+$('btn-clear-track').onclick = clearActiveTrack;
+
+// Initialize
 setTimeout(() => { resize(); drawG(); }, 50);
 openDB().catch(e => console.log('IndexedDB error:', e));
+openTrackDB().catch(e => console.log('Track DB error:', e));
 </script>
 </body></html>

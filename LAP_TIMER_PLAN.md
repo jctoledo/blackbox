@@ -230,10 +230,11 @@ const timingLine = { p1: [-10, 0], p2: [10, 0], direction: Math.PI/2 };
 |-------|-------------|--------|
 | 1 | Core Timing Engine (Firmware) | ✅ COMPLETE |
 | 2 | Telemetry Protocol Extension | ✅ COMPLETE |
-| 3 | Basic Lap Timer Display | ✅ COMPLETE (dashboard-dev) |
+| 3 | Basic Lap Timer Display | ✅ COMPLETE |
 | 4 | Production Dashboard Integration | ✅ COMPLETE |
-| 5 | Track Configuration UI | ❌ NOT STARTED |
-| 6 | Track Persistence (IndexedDB) | ❌ NOT STARTED |
+| 5 | Track Configuration UI | ✅ COMPLETE |
+| 6 | Track Persistence (IndexedDB) | ✅ COMPLETE |
+| 5A | Start Line Approach UX | ❌ NOT STARTED |
 | 7 | Track Recording | ❌ NOT STARTED |
 | 8 | Track Auto-Detection | ❌ NOT STARTED |
 | 9 | Reference Lap & Predictive Delta | ❌ NOT STARTED |
@@ -436,419 +437,207 @@ When firmware sends lap timer data in telemetry (protocol v2, 74 bytes):
 
 ---
 
-## Phase 5: Track Configuration UI ❌ NOT STARTED
+## Phase 5: Track Configuration UI ✅ COMPLETE
 
-### Goal
-Allow user to set a timing line at their current position without manual coordinate entry.
+### Implementation Complete
 
-### UI Design
+**Dashboard-dev (`tools/dashboard-dev/index.html`):** ✅ Full Implementation
+- Track Manager modal with position display
+- "Set Start Line Here" creates perpendicular timing line at current position
+- Track list with Use/Delete actions
+- Active track display with best lap and lap count
+- IndexedDB persistence for tracks
 
-**Track Manager Modal:**
-```html
-<div class="bbModal" id="track-modal">
-    <div class="bbModalContent">
-        <div class="bbModalHeader">
-            <h2>Track Manager</h2>
-            <button class="bbModalClose" id="modal-close">×</button>
-        </div>
+**Production (`sensors/blackbox/src/websocket_server.rs`):** ✅ Full Implementation
+- Track Manager modal matching dashboard-dev
+- Position display from telemetry (EKF x, y, yaw, speed)
+- API integration: calls `/api/laptimer/configure` when track activated
+- Track persistence via IndexedDB (shared schema)
+- Best lap tracking: saves to track when lap completes
 
-        <div class="bbModalBody">
-            <!-- Current Position Display -->
-            <div class="bbPositionDisplay">
-                <div class="bbPosLabel">Current Position</div>
-                <div class="bbPosValue">
-                    <span id="pos-x">0.0</span>, <span id="pos-y">0.0</span> m
-                </div>
-                <div class="bbPosGps">
-                    <span id="pos-lat">0.000000</span>°, <span id="pos-lon">0.000000</span>°
-                </div>
-            </div>
+### Key Implementation Details
 
-            <!-- Quick Actions -->
-            <div class="bbTrackActions">
-                <button class="bbActionBtn primary" id="btn-set-start">
-                    Set Start Line Here
-                </button>
-                <button class="bbActionBtn" id="btn-record-track">
-                    Record Track by Driving
-                </button>
-            </div>
-
-            <!-- Saved Tracks List -->
-            <div class="bbTrackList" id="track-list">
-                <div class="bbTrackListHeader">Saved Tracks</div>
-                <!-- Populated dynamically -->
-            </div>
-        </div>
-    </div>
-</div>
-```
-
-### "Set Start Line Here" Flow
-
-**Step 1: Capture Current State**
+**Track Data Structure:**
 ```javascript
-async function setStartLineHere() {
-    // Get current telemetry
-    const telemetry = await fetchTelemetry();
-
-    if (!telemetry.gps_valid) {
-        showError('GPS not locked. Wait for GPS fix before setting start line.');
-        return;
-    }
-
-    const x = telemetry.x;
-    const y = telemetry.y;
-    const yaw = telemetry.yaw;  // Current heading
-
-    // Store GPS origin for this track
-    const gpsOrigin = { lat: telemetry.lat, lon: telemetry.lon };
-
-    // Create perpendicular timing line (20m wide)
-    const width = 10;  // 10m each side
-    const perpAngle = yaw + Math.PI / 2;  // Perpendicular to heading
-
-    const timingLine = {
-        p1: [x + Math.cos(perpAngle) * width, y + Math.sin(perpAngle) * width],
-        p2: [x - Math.cos(perpAngle) * width, y - Math.sin(perpAngle) * width],
-        direction: yaw  // Valid crossing direction = current heading
-    };
-
-    // Show confirmation
-    showTimingLinePreview(timingLine, gpsOrigin);
+{
+    id: "track_1234567890_abc123xyz",
+    name: "My Track",
+    type: "loop",
+    created: timestamp,
+    modified: timestamp,
+    startLine: {
+        p1: [x + 10*cos(heading+π/2), y + 10*sin(heading+π/2)],
+        p2: [x - 10*cos(heading+π/2), y - 10*sin(heading+π/2)],
+        direction: heading  // Valid crossing direction
+    },
+    origin: { x, y },  // Where track was created
+    bestLapMs: null,
+    lapCount: 0
 }
 ```
 
-**Step 2: Preview and Confirm**
+**Timing Line Creation:**
+- 20m wide (10m each side of center)
+- Perpendicular to current heading
+- Direction = current heading (valid crossing direction)
+
+**Production API Integration:**
 ```javascript
-function showTimingLinePreview(line, gpsOrigin) {
-    // Show mini-map with:
-    // - Current position marker
-    // - Timing line visualization
-    // - Arrow showing valid crossing direction
-
-    // Confirmation buttons:
-    // - "Confirm & Start" - saves track and activates timer
-    // - "Adjust" - allow manual tweaks
-    // - "Cancel"
-}
-```
-
-**Step 3: Save and Activate**
-```javascript
-async function confirmStartLine(line, gpsOrigin, trackName) {
-    const track = {
-        id: crypto.randomUUID(),
-        name: trackName || `Track ${new Date().toLocaleDateString()}`,
-        type: 'loop',
-        created: Date.now(),
-        modified: Date.now(),
-        startLine: line,
-        finishLine: null,
-        gpsOrigin: gpsOrigin,
-        bounds: calculateBounds([line.p1, line.p2], 100),  // 100m margin
-        path: null,
-        bestLapMs: null,
-        lapCount: 0
-    };
-
-    // Save to IndexedDB
-    await trackDb.saveTrack(track);
-
-    // Send to ESP32
-    await configureEspLapTimer(track);
-
-    // Activate lap timer UI
-    activateLapTimer(track);
-}
-```
-
-**Step 4: Configure ESP32**
-```javascript
-async function configureEspLapTimer(track) {
-    const params = new URLSearchParams({
-        type: track.type,
-        p1_x: track.startLine.p1[0],
-        p1_y: track.startLine.p1[1],
-        p2_x: track.startLine.p2[0],
-        p2_y: track.startLine.p2[1],
-        dir: track.startLine.direction
-    });
-
-    const response = await fetch(`/api/laptimer/configure?${params}`);
-    if (!response.ok) {
-        throw new Error('Failed to configure lap timer');
-    }
-}
-```
-
-### Position Display Requirements
-
-The UI needs to show current position to help user understand where they're setting the line:
-
-```javascript
-function updatePositionDisplay(telemetry) {
-    $('pos-x').textContent = telemetry.x.toFixed(1);
-    $('pos-y').textContent = telemetry.y.toFixed(1);
-
-    if (telemetry.gps_valid) {
-        $('pos-lat').textContent = telemetry.lat.toFixed(6);
-        $('pos-lon').textContent = telemetry.lon.toFixed(6);
-    }
-}
+await fetch('/api/laptimer/configure?type=loop' +
+    '&p1_x=' + line.p1[0] + '&p1_y=' + line.p1[1] +
+    '&p2_x=' + line.p2[0] + '&p2_y=' + line.p2[1] +
+    '&dir=' + line.direction);
 ```
 
 ---
 
-## Phase 6: Track Persistence (IndexedDB) ❌ NOT STARTED
+## Phase 5A: Start Line Approach UX ❌ NOT STARTED
 
 ### Goal
-Save and load tracks across sessions.
 
-### Implementation: `TrackDatabase` Class
+Provide clear UX for users returning to a saved track. Answer: "I loaded my track, now what?"
 
+### Problem Statement
+
+When a user loads a saved track:
+1. Lap timer shows "Armed" - good
+2. User must drive to the start line - but where is it?
+3. User must cross the line to start timing - but there's no feedback
+
+**Current State:** User is left guessing where their start line is and gets no feedback until they accidentally cross it.
+
+### Proposed Solution
+
+#### 5A.1 Distance to Start Line Display
+
+When a track is active but not timing, show distance and direction to start line:
+
+```
+┌──────────────────────────────┐
+│  LAP TIMER                   │
+│  ─────────────────           │
+│  Track: My Block Loop        │
+│  Status: Armed               │
+│                              │
+│  ┌────────────────────────┐  │
+│  │ Start Line: 127m NE    │  │
+│  │ ────────→              │  │
+│  └────────────────────────┘  │
+│                              │
+│  Cross start line to begin   │
+└──────────────────────────────┘
+```
+
+**Implementation:**
 ```javascript
-class TrackDatabase {
-    constructor() {
-        this.db = null;
-        this.DB_NAME = 'blackbox-tracks';
-        this.DB_VERSION = 1;
-    }
+function getDistanceToStartLine(currentX, currentY, track) {
+    // Center of timing line
+    const cx = (track.startLine.p1[0] + track.startLine.p2[0]) / 2;
+    const cy = (track.startLine.p1[1] + track.startLine.p2[1]) / 2;
 
-    async init() {
-        return new Promise((resolve, reject) => {
-            const request = indexedDB.open(this.DB_NAME, this.DB_VERSION);
+    const dx = cx - currentX;
+    const dy = cy - currentY;
+    const distance = Math.sqrt(dx*dx + dy*dy);
+    const bearing = Math.atan2(dy, dx);  // Radians
 
-            request.onerror = () => reject(request.error);
-            request.onsuccess = () => {
-                this.db = request.result;
-                resolve(this);
-            };
+    return { distance, bearing };
+}
 
-            request.onupgradeneeded = (event) => {
-                const db = event.target.result;
-
-                // Tracks store
-                if (!db.objectStoreNames.contains('tracks')) {
-                    const tracks = db.createObjectStore('tracks', { keyPath: 'id' });
-                    tracks.createIndex('name', 'name', { unique: false });
-                    tracks.createIndex('modified', 'modified', { unique: false });
-                }
-
-                // Reference laps store
-                if (!db.objectStoreNames.contains('reference_laps')) {
-                    const laps = db.createObjectStore('reference_laps', { keyPath: 'id' });
-                    laps.createIndex('trackId', 'trackId', { unique: false });
-                    laps.createIndex('isBest', ['trackId', 'isBest'], { unique: false });
-                }
-
-                // Sessions store
-                if (!db.objectStoreNames.contains('sessions')) {
-                    const sessions = db.createObjectStore('sessions', { keyPath: 'id' });
-                    sessions.createIndex('trackId', 'trackId', { unique: false });
-                    sessions.createIndex('date', 'date', { unique: false });
-                }
-            };
-        });
-    }
-
-    // ========== TRACKS ==========
-
-    async saveTrack(track) {
-        track.modified = Date.now();
-        return this._put('tracks', track);
-    }
-
-    async getTrack(id) {
-        return this._get('tracks', id);
-    }
-
-    async getAllTracks() {
-        return this._getAll('tracks');
-    }
-
-    async deleteTrack(id) {
-        // Also delete associated reference laps and sessions
-        const laps = await this.getReferenceLaps(id);
-        for (const lap of laps) {
-            await this._delete('reference_laps', lap.id);
-        }
-
-        const sessions = await this.getSessions(id);
-        for (const session of sessions) {
-            await this._delete('sessions', session.id);
-        }
-
-        return this._delete('tracks', id);
-    }
-
-    // ========== REFERENCE LAPS ==========
-
-    async saveReferenceLap(trackId, lapTimeMs, samples) {
-        const lap = {
-            id: crypto.randomUUID(),
-            trackId,
-            lapTimeMs,
-            created: Date.now(),
-            isBest: false,
-            samples  // ArrayBuffer
-        };
-
-        // Check if this is new best
-        const existingBest = await this.getBestLap(trackId);
-        if (!existingBest || lapTimeMs < existingBest.lapTimeMs) {
-            lap.isBest = true;
-
-            // Clear previous best flag
-            if (existingBest) {
-                existingBest.isBest = false;
-                await this._put('reference_laps', existingBest);
-            }
-
-            // Update track's best time
-            const track = await this.getTrack(trackId);
-            if (track) {
-                track.bestLapMs = lapTimeMs;
-                await this.saveTrack(track);
-            }
-        }
-
-        return this._put('reference_laps', lap);
-    }
-
-    async getBestLap(trackId) {
-        const tx = this.db.transaction('reference_laps', 'readonly');
-        const index = tx.objectStore('reference_laps').index('isBest');
-
-        return new Promise((resolve, reject) => {
-            const request = index.get([trackId, true]);
-            request.onsuccess = () => resolve(request.result || null);
-            request.onerror = () => reject(request.error);
-        });
-    }
-
-    async getReferenceLaps(trackId) {
-        const tx = this.db.transaction('reference_laps', 'readonly');
-        const index = tx.objectStore('reference_laps').index('trackId');
-
-        return new Promise((resolve, reject) => {
-            const request = index.getAll(trackId);
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
-    }
-
-    // ========== SESSIONS ==========
-
-    async saveSession(session) {
-        return this._put('sessions', session);
-    }
-
-    async getSessions(trackId) {
-        const tx = this.db.transaction('sessions', 'readonly');
-        const index = tx.objectStore('sessions').index('trackId');
-
-        return new Promise((resolve, reject) => {
-            const request = index.getAll(trackId);
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
-    }
-
-    // ========== HELPERS ==========
-
-    _put(store, value) {
-        return new Promise((resolve, reject) => {
-            const tx = this.db.transaction(store, 'readwrite');
-            const request = tx.objectStore(store).put(value);
-            request.onsuccess = () => resolve(value);
-            request.onerror = () => reject(request.error);
-        });
-    }
-
-    _get(store, key) {
-        return new Promise((resolve, reject) => {
-            const tx = this.db.transaction(store, 'readonly');
-            const request = tx.objectStore(store).get(key);
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
-    }
-
-    _getAll(store) {
-        return new Promise((resolve, reject) => {
-            const tx = this.db.transaction(store, 'readonly');
-            const request = tx.objectStore(store).getAll();
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
-    }
-
-    _delete(store, key) {
-        return new Promise((resolve, reject) => {
-            const tx = this.db.transaction(store, 'readwrite');
-            const request = tx.objectStore(store).delete(key);
-            request.onsuccess = () => resolve();
-            request.onerror = () => reject(request.error);
-        });
-    }
+function bearingToCardinal(rad) {
+    const deg = (rad * 180 / Math.PI + 360) % 360;
+    const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+    return dirs[Math.round(deg / 45) % 8];
 }
 ```
 
-### Track List UI
+#### 5A.2 Approach Detection
 
-```html
-<div class="bbTrackItem" data-track-id="uuid">
-    <div class="bbTrackInfo">
-        <div class="bbTrackName">My Block Loop</div>
-        <div class="bbTrackMeta">
-            <span>Best: 1:23.456</span>
-            <span>12 laps</span>
-        </div>
-    </div>
-    <div class="bbTrackActions">
-        <button class="bbTrackBtn" data-action="activate">Use</button>
-        <button class="bbTrackBtn" data-action="edit">Edit</button>
-        <button class="bbTrackBtn danger" data-action="delete">×</button>
-    </div>
-</div>
+As user gets closer, provide progressive feedback:
+
+| Distance | Feedback |
+|----------|----------|
+| > 100m | "Start Line: 127m NE" |
+| 50-100m | "Approaching... 67m" |
+| 20-50m | "Getting close! 35m" |
+| < 20m | "At start line - cross to begin!" |
+
+**Visual Indicator:**
+- Progress bar or proximity indicator
+- Color change: gray → yellow → green
+
+#### 5A.3 Standing Start Mode (Optional Enhancement)
+
+For users who want to start from a standstill at the start line:
+
+1. Detect: Stationary (speed < 2 km/h) AND within 15m of start line
+2. After 2 seconds stationary, offer: "Ready for standing start?"
+3. Show countdown: 3... 2... 1... GO!
+4. Timing begins when:
+   - User crosses line, OR
+   - Speed exceeds 5 km/h (movement detected)
+
+**UI:**
+```
+┌──────────────────────────────┐
+│  STANDING START              │
+│  ─────────────────           │
+│                              │
+│          ◉ READY             │
+│                              │
+│    Hold position for         │
+│    countdown...              │
+│                              │
+│    [Cancel Standing Start]   │
+└──────────────────────────────┘
 ```
 
-```javascript
-async function renderTrackList() {
-    const tracks = await trackDb.getAllTracks();
-    const listEl = $('track-list');
-
-    if (tracks.length === 0) {
-        listEl.innerHTML = '<div class="bbTrackEmpty">No saved tracks</div>';
-        return;
-    }
-
-    // Sort by most recently modified
-    tracks.sort((a, b) => b.modified - a.modified);
-
-    listEl.innerHTML = tracks.map(track => `
-        <div class="bbTrackItem" data-track-id="${track.id}">
-            <div class="bbTrackInfo">
-                <div class="bbTrackName">${escapeHtml(track.name)}</div>
-                <div class="bbTrackMeta">
-                    <span>Best: ${track.bestLapMs ? formatLapTime(track.bestLapMs) : '—'}</span>
-                    <span>${track.lapCount} laps</span>
-                </div>
-            </div>
-            <div class="bbTrackActions">
-                <button class="bbTrackBtn" data-action="activate">Use</button>
-                <button class="bbTrackBtn danger" data-action="delete">×</button>
-            </div>
-        </div>
-    `).join('');
-
-    // Add event listeners
-    listEl.querySelectorAll('.bbTrackBtn').forEach(btn => {
-        btn.onclick = () => handleTrackAction(btn.dataset.action, btn.closest('.bbTrackItem').dataset.trackId);
-    });
-}
+Then countdown:
 ```
+┌──────────────────────────────┐
+│                              │
+│            3                 │
+│                              │
+└──────────────────────────────┘
+```
+
+### Implementation Order
+
+1. **5A.1 Distance Display** - Simple, high value
+2. **5A.2 Approach Detection** - Progressive feedback
+3. **5A.3 Standing Start** - Nice to have, more complex
+
+### Complexity Assessment
+
+| Sub-phase | Complexity | Value |
+|-----------|------------|-------|
+| 5A.1 | Low | High - answers "where is my start line?" |
+| 5A.2 | Low | Medium - improves approach experience |
+| 5A.3 | Medium | Medium - nice for competitive use |
+
+---
+
+## Phase 6: Track Persistence (IndexedDB) ✅ COMPLETE
+
+### Implementation Complete
+
+Track persistence is implemented as part of Phase 5. Key functionality:
+
+**IndexedDB Schema:**
+- Database: `blackbox-tracks`, version 1
+- Object store: `tracks` with keyPath `id`
+- Index: `modified` for sorting by recency
+
+**CRUD Operations:**
+- `saveTrack(track)` - Create/update with auto-modified timestamp
+- `getTrack(id)` - Get single track by ID
+- `getAllTracks()` - List all tracks
+- `deleteTrackFromDB(id)` - Remove track (production uses different name to avoid collision)
+
+**Best Lap Tracking:**
+- `updateTrackBestLap(lapTimeMs)` called when lap completes
+- Updates track's bestLapMs if new best
+- Increments lapCount
+- Saves to IndexedDB
 
 ---
 
