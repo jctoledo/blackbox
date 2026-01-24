@@ -434,6 +434,127 @@ body{
 .bbLapState.finished{color:var(--ok);opacity:1;animation:finishedPulse 0.5s ease-in-out 2}
 @keyframes finishedPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
 
+/* ==========================================================================
+   RACING-GAME INSPIRED DELTA BAR
+   Layout: Text ABOVE, Bar BELOW (like GT/Forza/iRacing)
+   Bar extends left (ahead/green) or right (behind/red) from center
+   EXAGGERATED for dashboard-dev testing to feel the deltas during 20s laps
+   ========================================================================== */
+
+.bbDeltaBar{
+    display:none;
+    position:relative;
+    width:100%;
+    margin:6px 0 8px;
+    /* Flexbox column: text on top, bar below */
+    flex-direction:column;
+    align-items:center;
+    gap:4px;
+}
+/* Only show delta bar when timing AND we have a reference to compare against */
+.bbLapCard.timing.has-ref .bbDeltaBar{display:flex}
+
+/* Delta text - ABOVE the bar, large and prominent */
+.bbDeltaText{
+    font-size:28px;
+    font-weight:800;
+    font-variant-numeric:tabular-nums;
+    letter-spacing:-0.02em;
+    color:var(--text);
+    text-shadow:0 2px 6px rgba(0,0,0,0.25);
+    transition:color 0.12s ease;
+    line-height:1;
+}
+.bbDeltaText.ahead{
+    color:var(--ok);
+    text-shadow:0 0 16px rgba(52,199,89,0.5), 0 2px 6px rgba(0,0,0,0.2);
+}
+.bbDeltaText.behind{
+    color:var(--red);
+    text-shadow:0 0 16px rgba(255,59,48,0.5), 0 2px 6px rgba(0,0,0,0.2);
+}
+
+/* Bar track - the background groove BELOW the text */
+.bbDeltaTrack{
+    position:relative;
+    width:84%;
+    height:10px;
+    background:linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(0,0,0,0.12) 100%);
+    border:1px solid rgba(255,255,255,0.06);
+    border-radius:5px;
+    overflow:hidden;
+}
+
+/* Center marker - zero point (prominent vertical line) */
+.bbDeltaCenter{
+    position:absolute;
+    left:50%;
+    top:-1px;
+    bottom:-1px;
+    width:2px;
+    background:rgba(255,255,255,0.3);
+    transform:translateX(-50%);
+    border-radius:1px;
+    z-index:1;
+}
+
+/* The fill bar that extends from center */
+.bbDeltaFill{
+    position:absolute;
+    top:0;
+    height:100%;
+    width:0%;
+    left:50%;
+    background:var(--ok);
+    transition:width 0.08s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+               left 0.08s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+               background 0.12s ease,
+               box-shadow 0.15s ease;
+    border-radius:5px;
+}
+
+/* Ahead - GREEN (extending LEFT from center) */
+.bbDeltaFill.ahead{
+    background:linear-gradient(90deg, var(--ok) 0%, rgba(52,199,89,0.8) 100%);
+}
+
+/* Behind - RED (extending RIGHT from center) */
+.bbDeltaFill.behind{
+    background:linear-gradient(270deg, var(--red) 0%, rgba(255,59,48,0.8) 100%);
+}
+
+/* No reference state - subtle, waiting for first lap */
+.bbDeltaBar.no-ref .bbDeltaTrack{opacity:0.2}
+.bbDeltaBar.no-ref .bbDeltaCenter{opacity:0.2}
+.bbDeltaBar.no-ref .bbDeltaText{
+    font-size:14px;
+    font-weight:500;
+    color:var(--text-tertiary);
+    opacity:0.5;
+    text-shadow:none;
+}
+.bbDeltaBar.no-ref .bbDeltaFill{display:none}
+
+/* Glow effects for dramatic deltas */
+.bbDeltaFill.glow-ahead{
+    box-shadow:0 0 16px rgba(52,199,89,0.7),
+               0 0 32px rgba(52,199,89,0.3);
+}
+.bbDeltaFill.glow-behind{
+    box-shadow:0 0 16px rgba(255,59,48,0.7),
+               0 0 32px rgba(255,59,48,0.3);
+}
+
+/* Pulse animation for extreme deltas */
+@keyframes deltaBarPulse{
+    0%,100%{opacity:1}
+    50%{opacity:0.85}
+}
+.bbDeltaFill.glow-ahead,
+.bbDeltaFill.glow-behind{
+    animation:deltaBarPulse 0.4s ease-in-out infinite;
+}
+
 /* First run badge */
 .bbLapCard.first-run .bbLapMeta::after{
     content:'NEW';
@@ -448,10 +569,8 @@ body{
     letter-spacing:0.05em;
 }
 
-/* P2P track styling */
-.bbLapCard.p2p .bbLapHistLabel:first-child::before{content:'Best '}
-.bbLapCard.p2p .bbLapHistLabel:first-child{font-size:0}
-.bbLapCard.p2p .bbLapHistLabel:first-child::before{font-size:11px}
+/* P2P track styling - change "Lap" terminology to "Run" */
+/* Note: History shows Best/Last/Delta which works for both - no changes needed */
 
 .bbLapHistory{
     display:flex;
@@ -1124,9 +1243,17 @@ body{
             <button class="bbLapStop" id="btn-lap-stop" onclick="event.stopPropagation(); confirmStopTiming();" title="Stop timing">×</button>
             <div class="bbLapMain">
                 <div class="bbLapTime bbNum" id="lap-time">0:00.000</div>
+                <!-- Racing-game inspired delta bar (text above, bar below) -->
+                <div class="bbDeltaBar no-ref" id="delta-bar">
+                    <div class="bbDeltaText" id="delta-text">Set best lap</div>
+                    <div class="bbDeltaTrack">
+                        <div class="bbDeltaCenter"></div>
+                        <div class="bbDeltaFill" id="delta-fill"></div>
+                    </div>
+                </div>
                 <div class="bbLapTrackName" id="lap-track-name"></div>
                 <div class="bbLapMeta">
-                    <span class="bbLapCount" id="lap-count">Lap 0</span>
+                    <span class="bbLapCount" id="lap-count">Lap 1</span>
                     <span class="bbLapState" id="lap-state">Armed</span>
                 </div>
             </div>
@@ -1958,7 +2085,7 @@ async function exportCSV() {
 }
 
 // ========== TRACK DATABASE (IndexedDB) ==========
-const TRACK_DB_NAME = 'blackbox-tracks', TRACK_DB_VERSION = 1;
+const TRACK_DB_NAME = 'blackbox-tracks', TRACK_DB_VERSION = 2;
 let trackDb = null;
 
 function openTrackDB() {
@@ -1968,9 +2095,20 @@ function openTrackDB() {
         req.onsuccess = () => { trackDb = req.result; resolve(trackDb); };
         req.onupgradeneeded = (e) => {
             const d = e.target.result;
+            const oldVersion = e.oldVersion;
+
+            // Version 1: tracks store
             if (!d.objectStoreNames.contains('tracks')) {
                 const store = d.createObjectStore('tracks', { keyPath: 'id' });
                 store.createIndex('modified', 'modified', { unique: false });
+            }
+
+            // Version 2: reference_laps store for predictive delta
+            if (oldVersion < 2) {
+                if (!d.objectStoreNames.contains('reference_laps')) {
+                    const refStore = d.createObjectStore('reference_laps', { keyPath: 'id' });
+                    refStore.createIndex('trackId', 'trackId', { unique: true });
+                }
             }
         };
     });
@@ -2016,6 +2154,384 @@ async function deleteTrack(id) {
         req.onerror = () => reject(req.error);
     });
 }
+
+// ========== REFERENCE LAP DATABASE ==========
+/**
+ * Reference lap format:
+ * {
+ *   id: string,
+ *   trackId: string,           // Foreign key to tracks
+ *   lapTimeMs: number,         // Total lap time
+ *   created: number,           // Timestamp
+ *   samples: ArrayBuffer,      // Float32Array: [distance0, time0, distance1, time1, ...]
+ *   sampleCount: number,
+ *   totalDistance: number      // Final distance for validation
+ * }
+ */
+
+async function saveReferenceLap(refLap) {
+    if (!trackDb) await openTrackDB();
+    return new Promise((resolve, reject) => {
+        const tx = trackDb.transaction('reference_laps', 'readwrite');
+        const req = tx.objectStore('reference_laps').put(refLap);
+        req.onsuccess = () => resolve(refLap);
+        req.onerror = () => reject(req.error);
+    });
+}
+
+async function getReferenceLap(trackId) {
+    if (!trackDb) await openTrackDB();
+    return new Promise((resolve, reject) => {
+        const tx = trackDb.transaction('reference_laps', 'readonly');
+        const index = tx.objectStore('reference_laps').index('trackId');
+        const req = index.get(trackId);
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => reject(req.error);
+    });
+}
+
+async function deleteReferenceLap(trackId) {
+    if (!trackDb) await openTrackDB();
+    return new Promise((resolve, reject) => {
+        const tx = trackDb.transaction('reference_laps', 'readwrite');
+        const index = tx.objectStore('reference_laps').index('trackId');
+        const req = index.openCursor(IDBKeyRange.only(trackId));
+        req.onsuccess = () => {
+            const cursor = req.result;
+            if (cursor) {
+                cursor.delete();
+                cursor.continue();
+            } else {
+                resolve();
+            }
+        };
+        req.onerror = () => reject(req.error);
+    });
+}
+
+// ========== LAP TRACKER (Distance + Delta) ==========
+/**
+ * LapTracker - Tracks cumulative distance during a lap and collects samples
+ * for potential reference lap storage. Used for predictive delta calculation.
+ */
+class LapTracker {
+    constructor() {
+        this.reset();
+    }
+
+    reset() {
+        this.distance = 0;           // Cumulative distance this lap (meters)
+        this.lastPos = null;         // Previous position {x, y}
+        this.samples = [];           // [{distance, time}, ...] for potential new reference
+        this.startTime = null;
+        this.sampleInterval = 100;   // Downsample to ~10 Hz (100ms min between samples)
+        this.lastSampleTime = 0;
+    }
+
+    /**
+     * Update with new position - call every telemetry frame
+     * @param {number} x - Position X in meters
+     * @param {number} y - Position Y in meters
+     * @param {number} lapTimeMs - Current lap time in ms
+     * @returns {number} Current cumulative distance
+     */
+    update(x, y, lapTimeMs) {
+        if (this.startTime === null) {
+            this.startTime = lapTimeMs;
+        }
+
+        // Calculate distance traveled since last update
+        if (this.lastPos !== null) {
+            const dx = x - this.lastPos.x;
+            const dy = y - this.lastPos.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            // Sanity check: reject teleports (GPS glitch)
+            // Max 50m between samples at 30Hz = 1500 m/s = impossible
+            if (dist < 50 && dist > 0.01) {  // Also reject micro-movements
+                this.distance += dist;
+            }
+        }
+        this.lastPos = { x, y };
+
+        // Store sample for potential new reference lap (downsampled to ~10 Hz)
+        if (lapTimeMs - this.lastSampleTime >= this.sampleInterval) {
+            this.samples.push({
+                distance: this.distance,
+                time: lapTimeMs
+            });
+            this.lastSampleTime = lapTimeMs;
+        }
+
+        return this.distance;
+    }
+
+    /**
+     * Convert collected samples to binary format for storage
+     * @returns {ArrayBuffer} Float32Array buffer with [dist, time] pairs
+     */
+    toBinaryFormat() {
+        const buffer = new ArrayBuffer(this.samples.length * 8);  // 4 bytes each for distance and time
+        const view = new Float32Array(buffer);
+        for (let i = 0; i < this.samples.length; i++) {
+            view[i * 2] = this.samples[i].distance;
+            view[i * 2 + 1] = this.samples[i].time;
+        }
+        return buffer;
+    }
+
+    /**
+     * Check if we have enough samples for a valid reference lap
+     * @returns {boolean}
+     */
+    isValid() {
+        return this.samples.length >= 10 && this.distance > 50;  // At least 10 samples and 50m
+    }
+}
+
+/**
+ * Calculate delta to reference lap using binary search + interpolation
+ * @param {number} currentDistance - Current cumulative distance in meters
+ * @param {number} currentTime - Current lap time in ms
+ * @param {Object} refLap - Reference lap object with samples ArrayBuffer
+ * @returns {Object} { deltaMs, valid, gaining }
+ */
+function calculateDelta(currentDistance, currentTime, refLap) {
+    if (!refLap || !refLap.samples) {
+        return { deltaMs: 0, valid: false, gaining: false };
+    }
+
+    const samples = new Float32Array(refLap.samples);
+    const n = samples.length / 2;  // Number of [distance, time] pairs
+
+    if (n < 2) {
+        return { deltaMs: 0, valid: false, gaining: false };
+    }
+
+    // Check if current distance exceeds reference lap (went off track?)
+    const refTotalDistance = samples[(n - 1) * 2];
+    if (currentDistance > refTotalDistance * 1.1) {
+        return { deltaMs: 0, valid: false, gaining: false };
+    }
+
+    // Handle before first sample
+    if (currentDistance < samples[0]) {
+        return { deltaMs: 0, valid: false, gaining: false };
+    }
+
+    // Binary search to find bracketing samples
+    let lo = 0, hi = n - 1;
+    while (hi - lo > 1) {
+        const mid = Math.floor((lo + hi) / 2);
+        const refDist = samples[mid * 2];
+        if (refDist < currentDistance) {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+
+    // Get bracketing samples
+    const d0 = samples[lo * 2], t0 = samples[lo * 2 + 1];
+    const d1 = samples[hi * 2], t1 = samples[hi * 2 + 1];
+
+    // Handle edge case where we're exactly at a sample point
+    if (d1 === d0) {
+        return {
+            deltaMs: currentTime - t0,
+            valid: true,
+            gaining: false
+        };
+    }
+
+    // Linear interpolation to get reference time at current distance
+    const frac = (currentDistance - d0) / (d1 - d0);
+    const refTime = t0 + frac * (t1 - t0);
+
+    const deltaMs = currentTime - refTime;  // Positive = behind, negative = ahead
+
+    return {
+        deltaMs: deltaMs,
+        valid: true,
+        gaining: false  // Will be calculated by trend tracking
+    };
+}
+
+/**
+ * Format delta for display
+ * @param {number} deltaMs - Delta in milliseconds
+ * @returns {string} Formatted delta string
+ */
+function formatDelta(deltaMs) {
+    const sign = deltaMs > 0 ? '+' : '';
+    const seconds = deltaMs / 1000;
+    if (Math.abs(seconds) < 10) {
+        return sign + seconds.toFixed(2);
+    } else {
+        return sign + seconds.toFixed(1);
+    }
+}
+
+/**
+ * Update delta bar visualization (racing-game inspired)
+ *
+ * Design philosophy (Gran Turismo, Forza, iRacing):
+ * - Bar extends from center: LEFT = ahead (green), RIGHT = behind (red)
+ * - Glow effects for dramatic deltas (>1 second)
+ * - Smooth transitions for responsive feel
+ * - Trend arrows show if gaining/losing
+ * - EXAGGERATED for dashboard-dev testing (3x sensitivity)
+ *
+ * @param {Object} opts - Options
+ * @param {number|null} opts.deltaMs - Delta in ms (null = no reference)
+ * @param {number} opts.trend - Trend value (positive = losing, negative = gaining)
+ * @param {boolean} opts.hasReference - Whether a reference lap exists
+ * @param {boolean} opts.isP2P - Whether this is a point-to-point track
+ */
+function updateDeltaBar(opts) {
+    const { deltaMs, trend = 0, hasReference = false, isP2P = false } = opts;
+
+    const barEl = $('delta-bar');
+    const fillEl = $('delta-fill');
+    const textEl = $('delta-text');
+
+    if (!barEl || !fillEl || !textEl) return;
+
+    // No reference state
+    if (!hasReference) {
+        barEl.classList.add('no-ref');
+        barEl.classList.remove('ahead', 'behind');
+        fillEl.className = 'bbDeltaFill';
+        fillEl.style.width = '0%';
+        fillEl.style.left = '50%';
+        // Use appropriate terminology for track type
+        textEl.textContent = isP2P ? 'Set best run' : 'Set best lap';
+        textEl.className = 'bbDeltaText';
+        return;
+    }
+
+    // Reset display at lap start (deltaMs = 0)
+    if (deltaMs === 0) {
+        barEl.classList.remove('no-ref');
+        fillEl.className = 'bbDeltaFill';
+        fillEl.style.width = '0%';
+        fillEl.style.left = '50%';
+        textEl.textContent = '±0.00';
+        textEl.className = 'bbDeltaText';
+        return;
+    }
+
+    // Active delta display
+    barEl.classList.remove('no-ref');
+
+    // === BAR SCALING FOR DASHBOARD-DEV ===
+    // Variance system generates deltas up to ~3 seconds on 20-second laps:
+    //   - Faster laps (1.05-1.15x): up to -2.6s ahead
+    //   - Slower laps (0.87-0.97x): up to +3.0s behind
+    // Bar should grow meaningfully throughout lap, not peg at max immediately
+    // Scale: 2000ms = 50% fill (full bar), giving nice progression for 0-3s deltas
+    const MAX_DELTA_MS = 2000; // Full bar at ±2 seconds, caps above that
+
+    // Calculate fill percentage (0-50% range, extends from center)
+    const absDelta = Math.abs(deltaMs);
+    const fillPercent = Math.min(50, (absDelta / MAX_DELTA_MS) * 50);
+
+    // Determine ahead/behind state
+    const isAhead = deltaMs < 0;
+    const isBehind = deltaMs > 0;
+    const isNeutral = Math.abs(deltaMs) < 30; // Within 30ms = neutral
+
+    // Position the fill bar
+    // Ahead (negative delta): bar extends LEFT from center
+    // Behind (positive delta): bar extends RIGHT from center
+    if (isAhead) {
+        fillEl.style.left = (50 - fillPercent) + '%';
+        fillEl.style.width = fillPercent + '%';
+    } else {
+        fillEl.style.left = '50%';
+        fillEl.style.width = fillPercent + '%';
+    }
+
+    // Build fill class list
+    let fillClass = 'bbDeltaFill';
+    if (!isNeutral) {
+        fillClass += isAhead ? ' ahead' : ' behind';
+
+        // Glow effect for dramatic deltas (>1 second)
+        const GLOW_THRESHOLD = 1000;
+        if (absDelta > GLOW_THRESHOLD) {
+            fillClass += isAhead ? ' glow-ahead' : ' glow-behind';
+        }
+    }
+    fillEl.className = fillClass;
+
+    // Format delta text with trend arrow
+    let deltaStr = formatDelta(deltaMs);
+
+    // Trend arrows: show if consistently gaining/losing
+    // With larger variance, trend rate is higher, so 3ms threshold is good
+    const TREND_THRESHOLD = 3;
+    if (trend < -TREND_THRESHOLD) {
+        deltaStr += ' ▲'; // Gaining (delta getting more negative = faster)
+    } else if (trend > TREND_THRESHOLD) {
+        deltaStr += ' ▼'; // Losing (delta getting more positive = slower)
+    }
+
+    textEl.textContent = deltaStr;
+
+    // Text color
+    let textClass = 'bbDeltaText';
+    if (!isNeutral) {
+        textClass += isAhead ? ' ahead' : ' behind';
+    }
+    textEl.className = textClass;
+}
+
+/**
+ * Save a new reference lap (helper function)
+ * Deletes any existing reference for this track, then saves the new one
+ * @param {string} trackId - Track ID
+ * @param {number} lapTimeMs - Lap time in ms
+ * @param {LapTracker} tracker - LapTracker instance with samples
+ */
+async function saveNewReferenceLap(trackId, lapTimeMs, tracker) {
+    try {
+        // Create new reference lap FIRST (synchronously available for next lap)
+        const refLap = {
+            id: 'ref_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+            trackId: trackId,
+            lapTimeMs: lapTimeMs,
+            created: Date.now(),
+            samples: tracker.toBinaryFormat(),
+            sampleCount: tracker.samples.length,
+            totalDistance: tracker.distance
+        };
+
+        // Set immediately so next lap can use it
+        referenceLap = refLap;
+
+        // Enable delta bar for next lap (has-ref class controls visibility)
+        const section = $('lap-section');
+        if (section) section.classList.add('has-ref');
+
+        // Demo tracks don't persist to IndexedDB - reference exists only for current session
+        if (activeTrack && activeTrack.isDemo) {
+            return;
+        }
+
+        // Delete old reference and save new one asynchronously
+        await deleteReferenceLap(trackId);
+        await saveReferenceLap(refLap);
+    } catch (err) {
+        console.error('Failed to save reference lap:', err);
+    }
+}
+
+// Global state for lap tracking and delta
+let lapTracker = new LapTracker();
+let referenceLap = null;
+let lastDeltaMs = 0;        // For trend calculation
+let deltaTrend = 0;         // Smoothed trend: positive = losing time, negative = gaining
 
 // ========== TRACK RECORDER CLASS ==========
 /**
@@ -3178,7 +3694,7 @@ async function handleTrackAction(action, trackId) {
     }
 }
 
-function activateTrack(track) {
+async function activateTrack(track) {
     activeTrack = track;
     suppressStartLineIndicator = false; // Reset indicator suppression
 
@@ -3201,6 +3717,25 @@ function activateTrack(track) {
     // This prevents immediate timing start when the simulation car is already near the start
     p2pNeedsWarmup = isP2P && track.isNew;
 
+    // Load reference lap for predictive delta
+    // Demo tracks start fresh each session (educational purpose)
+    // User-created tracks persist references across sessions
+    if (track.isDemo) {
+        referenceLap = null;
+    } else {
+        try {
+            referenceLap = await getReferenceLap(track.id);
+        } catch (err) {
+            console.error('Failed to load reference lap:', err);
+            referenceLap = null;
+        }
+    }
+
+    // Reset lap tracker
+    lapTracker.reset();
+    lastDeltaMs = 0;
+    deltaTrend = 0;
+
     // Activate lap timer
     lapTimerActive = true;
     lapTimerState = 'armed';
@@ -3216,11 +3751,13 @@ function activateTrack(track) {
     section.classList.add('active');
     section.classList.toggle('p2p', isP2P);
     section.classList.toggle('first-run', !track.lapCount);
+    section.classList.toggle('has-ref', !!referenceLap);
     $('lap-time').textContent = '0:00.000';
 
     // Terminology: "Run" for P2P, "Lap" for loops
+    // Show lapCount for loaded tracks, or 1 for new tracks (avoids "Lap 0")
     const unit = isP2P ? 'Run' : 'Lap';
-    $('lap-count').textContent = unit + ' 0';
+    $('lap-count').textContent = unit + ' ' + Math.max(1, lapCount);
     $('lap-state').textContent = 'Armed';
     $('lap-state').classList.remove('timing');
 
@@ -3237,15 +3774,18 @@ function activateTrack(track) {
     $('lap-delta').textContent = '—';
     $('lap-delta').className = 'bbLapHistValue bbNum delta';
 
+    // Initialize delta bar display (isP2P already declared at function start)
+    updateDeltaBar({ deltaMs: null, hasReference: !!referenceLap, isP2P });
+
     // Update track name displays
     $('lap-setup-text').textContent = track.name;
     $('lap-track-name').textContent = track.name;
-
-    console.log('Track activated:', track.name, 'Type:', track.type, 'Timing line:', simTimingLine, 'Finish:', simFinishLine);
 }
 
 function deactivateTrack() {
     activeTrack = null;
+    referenceLap = null;
+    lapTracker.reset();
     deactivateLapTimer();
     $('lap-setup-text').textContent = 'No track configured';
     $('lap-track-name').textContent = '';
@@ -3271,6 +3811,16 @@ function confirmStopTiming() {
 // Update track's best lap when a new best is set
 async function updateTrackBestLap(lapTimeMs) {
     if (!activeTrack) return;
+
+    // Demo tracks don't persist to IndexedDB - they start fresh each session
+    if (activeTrack.isDemo) {
+        // Still update in-memory for current session
+        if (!activeTrack.bestLapMs || lapTimeMs < activeTrack.bestLapMs) {
+            activeTrack.bestLapMs = lapTimeMs;
+        }
+        activeTrack.lapCount = (activeTrack.lapCount || 0) + 1;
+        return;
+    }
 
     if (!activeTrack.bestLapMs || lapTimeMs < activeTrack.bestLapMs) {
         activeTrack.bestLapMs = lapTimeMs;
@@ -3298,6 +3848,78 @@ let lapCrossingDebounce = 0;
 const LAP_DEBOUNCE_MS = 1000; // Prevent double-crossings
 const MIN_LAP_TIME_MS = 5000; // 5 second minimum lap
 
+// === LAP SPEED VARIANCE ===
+// Creates realistic lap-to-lap variation for meaningful delta display
+// Without this, every lap is identical and delta is always ~0
+let lapSpeedModifier = 1.0;      // Overall speed modifier for current lap (0.85-1.15)
+let lapSectorVariance = [];      // Per-sector speed modifiers for within-lap variation
+
+/**
+ * Generate new speed variance for a lap
+ * Creates meaningful lap-to-lap differences for the delta display
+ *
+ * DEMO EXPLANATION:
+ * - Lap 1: Near-baseline (~20s) to set a fair reference
+ * - Lap 2+: Random variance creates faster/slower laps
+ * - Speed modifier 1.10 = 10% faster = ~18.2s lap (was 20s) = -1.8s delta
+ * - Speed modifier 0.90 = 10% slower = ~22.2s lap (was 20s) = +2.2s delta
+ */
+function generateLapVariance() {
+    const BASE_LAP_TIME = 20.0; // seconds (LOOP_DURATION / 1000)
+    let expectedLapTime, description;
+
+    if (lapCount === 0) {
+        // First lap: near-baseline for reference
+        lapSpeedModifier = 0.98 + Math.random() * 0.04;  // 0.98-1.02
+        expectedLapTime = BASE_LAP_TIME / lapSpeedModifier;
+        description = 'REFERENCE LAP (baseline)';
+    } else {
+        // Subsequent laps: meaningful variance
+        const roll = Math.random();
+        if (roll < 0.4) {
+            // Faster lap - will show NEGATIVE delta (green, ahead)
+            lapSpeedModifier = 1.05 + Math.random() * 0.10;  // 1.05-1.15
+            expectedLapTime = BASE_LAP_TIME / lapSpeedModifier;
+            description = 'FASTER LAP (expect green/ahead delta)';
+        } else if (roll < 0.8) {
+            // Slower lap - will show POSITIVE delta (red, behind)
+            lapSpeedModifier = 0.87 + Math.random() * 0.10;  // 0.87-0.97
+            expectedLapTime = BASE_LAP_TIME / lapSpeedModifier;
+            description = 'SLOWER LAP (expect red/behind delta)';
+        } else {
+            // Similar - small delta
+            lapSpeedModifier = 0.98 + Math.random() * 0.04;  // 0.98-1.02
+            expectedLapTime = BASE_LAP_TIME / lapSpeedModifier;
+            description = 'SIMILAR LAP (small delta)';
+        }
+    }
+
+    // Generate 4 sector modifiers for within-lap variation
+    // This makes deltas evolve during the lap (not just flat)
+    lapSectorVariance = [
+        0.96 + Math.random() * 0.08,  // Sector 1
+        0.96 + Math.random() * 0.08,  // Sector 2
+        0.96 + Math.random() * 0.08,  // Sector 3
+        0.96 + Math.random() * 0.08   // Sector 4
+    ];
+
+}
+
+/**
+ * Get the current speed modifier based on lap progress
+ * Combines overall lap modifier with sector-specific variance
+ */
+function getCurrentSpeedModifier(lapProgress) {
+    if (lapSectorVariance.length === 0) return lapSpeedModifier;
+
+    // Determine which sector we're in (0-3)
+    const sectorIndex = Math.min(3, Math.floor(lapProgress * 4));
+    const sectorMod = lapSectorVariance[sectorIndex];
+
+    // Combine with overall lap modifier
+    return lapSpeedModifier * sectorMod;
+}
+
 function formatLapTime(ms) {
     if (ms === null || ms === undefined) return '—:——';
     const totalSec = ms / 1000;
@@ -3317,7 +3939,7 @@ function deactivateLapTimer() {
     p2pNeedsWarmup = false;
 
     const section = $('lap-section');
-    section.classList.remove('active', 'timing', 'p2p', 'first-run');
+    section.classList.remove('active', 'timing', 'p2p', 'first-run', 'has-ref');
     section.classList.add('inactive');
 }
 
@@ -3326,7 +3948,12 @@ function updateLapDisplay() {
     const unit = isP2P ? 'Run' : 'Lap';
 
     $('lap-time').textContent = formatLapTime(currentLapMs);
-    $('lap-count').textContent = unit + ' ' + lapCount;
+    // Show current lap/run being timed, or completed count when not timing
+    // During timing: lapCount + 1 (current lap)
+    // Armed/idle: lapCount (completed laps), minimum 1 to avoid "Lap 0"
+    const isTiming = lapTimerState === 'timing';
+    const displayNum = Math.max(1, lapCount + (isTiming ? 1 : 0));
+    $('lap-count').textContent = unit + ' ' + displayNum;
 
     if (bestLapMs !== null) {
         $('best-lap').textContent = formatLapTime(bestLapMs);
@@ -3553,6 +4180,17 @@ function onStartLineCrossing(timestamp) {
         $('lap-state').textContent = isP2P ? 'Running' : 'Timing';
         $('lap-state').classList.add('timing');
 
+        // Reset lap tracker for delta calculation
+        lapTracker.reset();
+        lastDeltaMs = 0;
+        deltaTrend = 0;
+
+        // Generate new speed variance for this lap (creates meaningful deltas)
+        generateLapVariance();
+
+        // Reset delta bar for new lap/run
+        updateDeltaBar({ deltaMs: 0, trend: 0, hasReference: !!referenceLap, isP2P });
+
         // Add timing class to card (hides start line indicator via CSS)
         const section = $('lap-section');
         section.classList.add('timing');
@@ -3605,6 +4243,11 @@ function completeLapOrRun(timestamp, isFinishLine = false) {
     const isNewBest = bestLapMs === null || lapTimeMs < bestLapMs;
     if (isNewBest) {
         bestLapMs = lapTimeMs;
+
+        // Save as new reference lap for predictive delta
+        if (activeTrack && lapTracker.isValid()) {
+            saveNewReferenceLap(activeTrack.id, lapTimeMs, lapTracker);
+        }
     }
 
     // Update delta display
@@ -3658,6 +4301,17 @@ function completeLapOrRun(timestamp, isFinishLine = false) {
         // Loop: Start new lap immediately
         lapStartTime = timestamp;
         currentLapMs = 0;
+
+        // Reset lap tracker for next lap
+        lapTracker.reset();
+        lastDeltaMs = 0;
+        deltaTrend = 0;
+
+        // Generate new speed variance for this lap (creates meaningful deltas)
+        generateLapVariance();
+
+        // Reset delta bar for next lap
+        updateDeltaBar({ deltaMs: 0, trend: 0, hasReference: !!referenceLap, isP2P: false });
     }
 
     updateLapDisplay();
@@ -3675,6 +4329,33 @@ function simulateLapTimerUpdate(now, posData) {
     if (lapTimerState === 'timing') {
         currentLapMs = now - lapStartTime;
         $('lap-time').textContent = formatLapTime(currentLapMs);
+
+        // Update lap tracker for delta calculation (requires position data)
+        if (posData) {
+            const currentDistance = lapTracker.update(posData.x, posData.y, currentLapMs);
+            const isP2P = activeTrack && activeTrack.type === 'point_to_point';
+
+            // Calculate and display live delta via delta bar
+            if (referenceLap) {
+                const delta = calculateDelta(currentDistance, currentLapMs, referenceLap);
+                if (delta.valid) {
+                    // Calculate trend (smoothed derivative of delta)
+                    const trendAlpha = 0.15;
+                    deltaTrend = trendAlpha * (delta.deltaMs - lastDeltaMs) + (1 - trendAlpha) * deltaTrend;
+                    lastDeltaMs = delta.deltaMs;
+
+                    // Update delta bar (scale: 2000ms = full bar)
+                    updateDeltaBar({
+                        deltaMs: delta.deltaMs,
+                        trend: deltaTrend,
+                        hasReference: true,
+                        isP2P
+                    });
+                }
+            } else {
+                updateDeltaBar({ deltaMs: null, hasReference: false, isP2P });
+            }
+        }
     }
 
     // Geometry-based crossing detection (requires position data and timing line)
@@ -3689,7 +4370,6 @@ function simulateLapTimerUpdate(now, posData) {
             // Once car is 50m away, allow crossings
             if (distToStart > 50) {
                 p2pNeedsWarmup = false;
-                console.log('P2P warmup complete - crossings now enabled');
             }
         }
 
@@ -3972,8 +4652,35 @@ function simulate() {
             };
         }
     } else {
-        const elapsed = Date.now() - loopStartTime;
-        const auto = getAutoValues(elapsed);
+        const realElapsed = Date.now() - loopStartTime;
+
+        // Calculate simulated elapsed time for position
+        let simElapsed = realElapsed;
+
+        if (lapTimerState === 'timing' && lapStartTime > 0) {
+            // During lap timing: position based on SCALED lap elapsed time
+            // This makes the car actually take longer/shorter to complete the track
+            //
+            // With modifier 0.884 (slower):
+            //   - At real lapElapsed 10s: scaled = 8.84s → car at 8.84s position
+            //   - At real lapElapsed 20s: scaled = 17.68s → car at 17.68s position (NOT finished)
+            //   - At real lapElapsed 22.6s: scaled = 20s → car crosses finish
+            //
+            // With modifier 1.15 (faster):
+            //   - At real lapElapsed 10s: scaled = 11.5s → car at 11.5s position
+            //   - At real lapElapsed 17.4s: scaled = 20s → car crosses finish
+            const lapElapsed = Date.now() - lapStartTime;
+
+            // Calculate progress through lap (0-1) for sector variance lookup
+            const approxProgress = Math.min(0.999, (lapElapsed * lapSpeedModifier) / LOOP_DURATION);
+            const sectorMod = getCurrentSpeedModifier(approxProgress);
+
+            // Car position = scaled lap elapsed time
+            // getSimulatedPosition will use this % LOOP_DURATION for track position
+            simElapsed = lapElapsed * sectorMod;
+        }
+
+        const auto = getAutoValues(simElapsed);
         sp = addNoise(auto.speed, 2);
         longRaw = addNoise(auto.lonG, 0.02);
         latRaw = addNoise(auto.latG, 0.02);
@@ -3983,7 +4690,7 @@ function simulate() {
         mo = classifyMode(longRaw, latRaw, yawRad, speedMs);
 
         // Get position data for lap timer from track simulation
-        const pos = getSimulatedPosition(elapsed);
+        const pos = getSimulatedPosition(simElapsed);
         posData = {
             x: pos.x,
             y: pos.y,

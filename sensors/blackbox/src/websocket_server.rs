@@ -488,6 +488,22 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
 .bbLapCount{font-size:17px;font-weight:600;color:var(--text);opacity:0.6}
 .bbLapState{font-size:11px;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-tertiary);opacity:0.5}
 .bbLapState.timing{color:var(--ok);opacity:0.9}
+.bbDeltaBar{display:none;flex-direction:column;align-items:center;gap:4px;margin:6px 0 8px}
+.bbLapCard.timing.has-ref .bbDeltaBar{display:flex}
+.bbDeltaText{font-size:28px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-0.02em;color:var(--text);text-shadow:0 2px 6px rgba(0,0,0,0.25);transition:color 0.12s ease;line-height:1}
+.bbDeltaText.ahead{color:var(--ok);text-shadow:0 0 16px rgba(52,199,89,0.5),0 2px 6px rgba(0,0,0,0.2)}
+.bbDeltaText.behind{color:var(--red);text-shadow:0 0 16px rgba(255,59,48,0.5),0 2px 6px rgba(0,0,0,0.2)}
+.bbDeltaTrack{position:relative;width:84%;height:10px;background:linear-gradient(180deg,rgba(255,255,255,0.04) 0%,rgba(0,0,0,0.12) 100%);border:1px solid rgba(255,255,255,0.06);border-radius:5px;overflow:hidden}
+.bbDeltaCenter{position:absolute;left:50%;top:-1px;bottom:-1px;width:2px;background:rgba(255,255,255,0.3);transform:translateX(-50%);border-radius:1px;z-index:1}
+.bbDeltaFill{position:absolute;top:0;height:100%;width:0%;left:50%;background:var(--ok);transition:width 0.08s cubic-bezier(0.25,0.46,0.45,0.94),left 0.08s cubic-bezier(0.25,0.46,0.45,0.94),background 0.12s ease,box-shadow 0.15s ease;border-radius:5px}
+.bbDeltaFill.ahead{background:linear-gradient(90deg,var(--ok) 0%,rgba(52,199,89,0.8) 100%)}
+.bbDeltaFill.behind{background:linear-gradient(270deg,var(--red) 0%,rgba(255,59,48,0.8) 100%)}
+.bbDeltaBar.no-ref .bbDeltaTrack{opacity:0.2}
+.bbDeltaBar.no-ref .bbDeltaCenter{opacity:0.2}
+.bbDeltaBar.no-ref .bbDeltaText{font-size:14px;font-weight:500;color:var(--text-tertiary);opacity:0.5;text-shadow:none}
+.bbDeltaBar.no-ref .bbDeltaFill{display:none}
+.bbDeltaFill.glow-ahead{box-shadow:0 0 16px rgba(52,199,89,0.7),0 0 32px rgba(52,199,89,0.3)}
+.bbDeltaFill.glow-behind{box-shadow:0 0 16px rgba(255,59,48,0.7),0 0 32px rgba(255,59,48,0.3)}
 .bbLapState.finished{color:var(--ok);opacity:1;animation:finishedPulse 0.5s ease-in-out 2}
 @keyframes finishedPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
 .bbLapCard.first-run .bbLapMeta::after{content:'NEW';display:inline-block;margin-left:8px;padding:2px 6px;background:var(--amber);color:#fff;font-size:9px;font-weight:700;border-radius:4px;letter-spacing:0.05em}
@@ -635,9 +651,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
             <button class="bbLapStop" id="btn-lap-stop" onclick="event.stopPropagation();confirmStopTiming();" title="Stop timing">×</button>
             <div class="bbLapMain">
                 <div class="bbLapTime bbNum" id="lap-time">0:00.000</div>
+                <div class="bbDeltaBar no-ref" id="delta-bar"><div class="bbDeltaText" id="delta-text">Set best lap</div><div class="bbDeltaTrack"><div class="bbDeltaCenter"></div><div class="bbDeltaFill" id="delta-fill"></div></div></div>
                 <div class="bbLapTrackName" id="lap-track-name"></div>
                 <div class="bbLapMeta">
-                    <span class="bbLapCount" id="lap-count">Lap 0</span>
+                    <span class="bbLapCount" id="lap-count">Lap 1</span>
                     <span class="bbLapState" id="lap-state">Armed</span>
                 </div>
             </div>
@@ -1038,10 +1055,11 @@ class TrackRecorder{
     _assessQuality(){if(this.keyPoints.length===0)return{rating:'poor',avgUncertainty:5.0,goodSampleRatio:0,corners:0,totalPoints:0};const vp=this.keyPoints.filter(p=>p.sigma<3.0);const ts=this.keyPoints.reduce((s,p)=>s+(p.sigma||3.0),0);const as=ts/this.keyPoints.length;const displayCorners=this.inCorner?this.cornerCount+1:this.cornerCount;const gr=vp.length/this.keyPoints.length;let rating='good';if(isNaN(as)||as>3.5||gr<0.7)rating='fair';if(isNaN(as)||as>4.5||gr<0.5)rating='poor';return{rating:rating,avgUncertainty:isNaN(as)?3.0:as,goodSampleRatio:isNaN(gr)?0.5:gr,corners:displayCorners,totalPoints:this.keyPoints.length}}
 }
 
-// Track Manager IndexedDB
-const TRACK_DB='blackbox-tracks',TRACK_DB_VER=1;
+// Track Manager IndexedDB (v2 adds reference_laps for predictive delta)
+const TRACK_DB='blackbox-tracks',TRACK_DB_VER=2;
 let trackDb=null,activeTrack=null,currentPos=null,suppressStartLineIndicator=false;
 let p2pNeedsWarmup=false,trackRecorder=null;
+let referenceLap=null,lapTracker=null,lastDeltaMs=0,deltaTrend=0;
 
 function openTrackDB(){
     return new Promise((res,rej)=>{
@@ -1049,13 +1067,60 @@ function openTrackDB(){
         r.onerror=()=>rej(r.error);
         r.onsuccess=()=>{trackDb=r.result;res(trackDb)};
         r.onupgradeneeded=e=>{
-            const d=e.target.result;
+            const d=e.target.result,oldVer=e.oldVersion;
             if(!d.objectStoreNames.contains('tracks')){
                 const s=d.createObjectStore('tracks',{keyPath:'id'});
                 s.createIndex('modified','modified',{unique:false});
             }
+            if(oldVer<2&&!d.objectStoreNames.contains('reference_laps')){
+                const rs=d.createObjectStore('reference_laps',{keyPath:'id'});
+                rs.createIndex('trackId','trackId',{unique:true});
+            }
         };
     });
+}
+
+// Reference lap CRUD
+async function saveRefLap(ref){if(!trackDb)await openTrackDB();return new Promise((res,rej)=>{const tx=trackDb.transaction('reference_laps','readwrite');const r=tx.objectStore('reference_laps').put(ref);r.onsuccess=()=>res(ref);r.onerror=()=>rej(r.error)})}
+async function getRefLap(trackId){if(!trackDb)await openTrackDB();return new Promise((res,rej)=>{const tx=trackDb.transaction('reference_laps','readonly');const r=tx.objectStore('reference_laps').index('trackId').get(trackId);r.onsuccess=()=>res(r.result||null);r.onerror=()=>rej(r.error)})}
+async function deleteRefLap(trackId){if(!trackDb)await openTrackDB();return new Promise((res,rej)=>{const tx=trackDb.transaction('reference_laps','readwrite');const r=tx.objectStore('reference_laps').index('trackId').openCursor(IDBKeyRange.only(trackId));r.onsuccess=()=>{const c=r.result;if(c){c.delete();c.continue()}else res()};r.onerror=()=>rej(r.error)})}
+
+// LapTracker - tracks distance and samples during lap for delta calculation
+class LapTracker{
+    constructor(){this.reset()}
+    reset(){this.dist=0;this.lastPos=null;this.samples=[];this.startTime=null;this.lastSampleT=0}
+    update(x,y,lapTimeMs){
+        if(this.startTime===null)this.startTime=lapTimeMs;
+        if(this.lastPos){const dx=x-this.lastPos.x,dy=y-this.lastPos.y,d=Math.sqrt(dx*dx+dy*dy);if(d<50&&d>0.01)this.dist+=d}
+        this.lastPos={x,y};
+        if(lapTimeMs-this.lastSampleT>=100){this.samples.push({d:this.dist,t:lapTimeMs});this.lastSampleT=lapTimeMs}
+        return this.dist
+    }
+    toBinary(){const buf=new ArrayBuffer(this.samples.length*8),v=new Float32Array(buf);for(let i=0;i<this.samples.length;i++){v[i*2]=this.samples[i].d;v[i*2+1]=this.samples[i].t}return buf}
+    isValid(){return this.samples.length>=10&&this.dist>50}
+}
+
+function calcDelta(dist,time,ref){
+    if(!ref||!ref.samples)return{deltaMs:0,valid:false};
+    const s=new Float32Array(ref.samples),n=s.length/2;
+    if(n<2||dist>s[(n-1)*2]*1.1||dist<s[0])return{deltaMs:0,valid:false};
+    let lo=0,hi=n-1;while(hi-lo>1){const mid=Math.floor((lo+hi)/2);if(s[mid*2]<dist)lo=mid;else hi=mid}
+    const d0=s[lo*2],t0=s[lo*2+1],d1=s[hi*2],t1=s[hi*2+1];
+    if(d1===d0)return{deltaMs:time-t0,valid:true};
+    const frac=(dist-d0)/(d1-d0),refT=t0+frac*(t1-t0);
+    return{deltaMs:time-refT,valid:true}
+}
+
+function fmtDelta(ms){const sign=ms>0?'+':'',sec=ms/1000;return sign+(Math.abs(sec)<10?sec.toFixed(2):sec.toFixed(1))}
+
+function updateDeltaBar(opts){const{deltaMs,trend=0,hasRef=false,isP2P=false}=opts;const bar=$('delta-bar'),fill=$('delta-fill'),txt=$('delta-text');if(!bar||!fill||!txt)return;if(!hasRef){bar.classList.add('no-ref');fill.className='bbDeltaFill';fill.style.width='0%';fill.style.left='50%';txt.textContent=isP2P?'Set best run':'Set best lap';txt.className='bbDeltaText';return}if(deltaMs===0){bar.classList.remove('no-ref');fill.className='bbDeltaFill';fill.style.width='0%';fill.style.left='50%';txt.textContent='±0.00';txt.className='bbDeltaText';return}bar.classList.remove('no-ref');const MAX=2000,abs=Math.abs(deltaMs),pct=Math.min(50,(abs/MAX)*50),ahead=deltaMs<0;if(ahead){fill.style.left=(50-pct)+'%';fill.style.width=pct+'%'}else{fill.style.left='50%';fill.style.width=pct+'%'}let fc='bbDeltaFill';if(abs>30)fc+=ahead?' ahead':' behind';if(abs>1000)fc+=ahead?' glow-ahead':' glow-behind';fill.className=fc;let ds=fmtDelta(deltaMs);if(trend<-5)ds+=' ▲';else if(trend>5)ds+=' ▼';txt.textContent=ds;txt.className='bbDeltaText'+(abs>30?(ahead?' ahead':' behind'):'')}
+
+async function saveNewRefLap(trackId,lapTimeMs,tracker){
+    try{
+        const ref={id:'ref_'+Date.now()+'_'+Math.random().toString(36).substr(2,9),trackId,lapTimeMs,created:Date.now(),samples:tracker.toBinary(),sampleCount:tracker.samples.length,totalDistance:tracker.dist};
+        referenceLap=ref;const sec=$('lap-section');if(sec)sec.classList.add('has-ref');console.log('Reference lap created:',fmtLapTime(lapTimeMs),'('+ref.sampleCount+' samples)');
+        await deleteRefLap(trackId);await saveRefLap(ref);console.log('Reference lap saved to IndexedDB')
+    }catch(e){console.error('Failed to save ref lap:',e)}
 }
 
 async function saveTrack(track){
@@ -1183,9 +1248,16 @@ async function activateTrack(track){
         activeTrack=track;
         suppressStartLineIndicator=false;
         p2pNeedsWarmup=isP2P&&track.isNew;
+        // Load reference lap for delta calculation
+        try{referenceLap=await getRefLap(track.id);if(referenceLap)console.log('Reference lap loaded:',fmtLapTime(referenceLap.lapTimeMs))}catch(e){referenceLap=null}
+        // Initialize lap tracker
+        if(!lapTracker)lapTracker=new LapTracker();lapTracker.reset();lastDeltaMs=0;deltaTrend=0;
+        // Update delta bar display
+        updateDeltaBar({deltaMs:null,hasRef:!!referenceLap,isP2P})
         const sec=$('lap-section');
         sec.classList.toggle('p2p',isP2P);
         sec.classList.toggle('first-run',!track.lapCount);
+        sec.classList.toggle('has-ref',!!referenceLap);
         $('lap-setup-text').textContent=track.name;
         $('lap-track-name').textContent=track.name;
         const unit=isP2P?'Run':'Lap';
@@ -1198,7 +1270,8 @@ async function activateTrack(track){
 
 async function deactivateTrack(){
     try{await fetch('/api/laptimer/configure?type=clear')}catch(e){}
-    activeTrack=null;
+    activeTrack=null;referenceLap=null;
+    if(lapTracker)lapTracker.reset();
     p2pNeedsWarmup=false;
     $('lap-setup-text').textContent='Tap to configure';
     $('lap-track-name').textContent='';
@@ -1465,26 +1538,48 @@ function fmtLapTime(ms){if(ms===0)return'0:00.000';const mins=Math.floor(ms/6000
 function updateLapTimer(lapTimeMs,lapCnt,lapFlags){
     const sec=$('lap-section'),active=(lapFlags&LAP_FLAG_INVALID)===0&&(lapTimeMs>0||lapCnt>0||(lapFlags&(LAP_FLAG_CROSSED_START|LAP_FLAG_CROSSED_FINISH)));
     if(active&&!lapTimerActive){sec.classList.remove('inactive');sec.classList.add('active');lapTimerActive=true}
-    else if(!active&&lapTimerActive){sec.classList.add('inactive');sec.classList.remove('active','timing');lapTimerActive=false}
+    else if(!active&&lapTimerActive){sec.classList.add('inactive');sec.classList.remove('active','timing','has-ref');lapTimerActive=false}
     if(!lapTimerActive)return;
     // Update current lap time
     $('lap-time').textContent=fmtLapTime(lapTimeMs);
-    $('lap-count').textContent='Lap '+(lapCnt+(lapTimeMs>0?1:0));
+    const isP2P=activeTrack&&activeTrack.type==='point_to_point';
+    const unit=isP2P?'Run':'Lap';
+    $('lap-count').textContent=unit+' '+Math.max(1,lapCnt+(lapTimeMs>0?1:0));
     // Update state indicator
     const stateEl=$('lap-state');
-    if(lapTimeMs>0){stateEl.textContent='Timing';stateEl.classList.add('timing');sec.classList.add('timing');suppressStartLineIndicator=false}
-    else{stateEl.textContent='Armed';stateEl.classList.remove('timing');sec.classList.remove('timing')}
-    // Handle new lap flag - save completed lap time to track
+    if(lapTimeMs>0){
+        stateEl.textContent=isP2P?'Running':'Timing';stateEl.classList.add('timing');sec.classList.add('timing');suppressStartLineIndicator=false;
+        // Track distance and calculate delta
+        if(lapTracker&&currentPos&&currentPos.valid){
+            const dist=lapTracker.update(currentPos.x,currentPos.y,lapTimeMs);
+            const isP2P=activeTrack&&activeTrack.type==='point_to_point';
+            if(referenceLap){
+                const delta=calcDelta(dist,lapTimeMs,referenceLap);
+                if(delta.valid){
+                    deltaTrend=0.15*(delta.deltaMs-lastDeltaMs)+0.85*deltaTrend;lastDeltaMs=delta.deltaMs;
+                    updateDeltaBar({deltaMs:delta.deltaMs,trend:deltaTrend,hasRef:true,isP2P});
+                }
+            }else{updateDeltaBar({deltaMs:null,hasRef:false,isP2P})}
+        }
+    }else{stateEl.textContent='Armed';stateEl.classList.remove('timing');sec.classList.remove('timing')}
+    // Handle new best flag FIRST - save as reference lap before reset
+    if((lapFlags&LAP_FLAG_NEW_BEST)&&!(prevLapFlags&LAP_FLAG_NEW_BEST)){
+        const bestEl=$('best-lap');bestEl.classList.add('bbLapBestFlash');setTimeout(()=>bestEl.classList.remove('bbLapBestFlash'),800);
+        // Save reference lap for delta (use prevLapTimeMs which is the completed lap time)
+        if(activeTrack&&lapTracker&&lapTracker.isValid()&&prevLapTimeMs>0){saveNewRefLap(activeTrack.id,prevLapTimeMs,lapTracker)}
+    }
+    // Handle new lap flag - save completed lap time to track and reset lap tracker
     if((lapFlags&LAP_FLAG_NEW_LAP)&&!(prevLapFlags&LAP_FLAG_NEW_LAP)){
         sec.classList.add('bbLapFlash');setTimeout(()=>sec.classList.remove('bbLapFlash'),600);
         // prevLapTimeMs contains the completed lap time (before reset)
         if(prevLapTimeMs>0)updateTrackBestLap(prevLapTimeMs);
+        // Reset lap tracker for next lap
+        if(lapTracker){lapTracker.reset();lastDeltaMs=0;deltaTrend=0}
+        updateDeltaBar({deltaMs:0,trend:0,hasRef:!!referenceLap,isP2P:activeTrack&&activeTrack.type==='point_to_point'})
+        // P2P: Show "Finished!" briefly then return to "Armed"
+        if(isP2P){stateEl.textContent='Finished!';stateEl.classList.add('finished');setTimeout(()=>{stateEl.textContent='Armed';stateEl.classList.remove('finished','timing');sec.classList.remove('timing')},1500)}
     }
     prevLapTimeMs=lapTimeMs;
-    // Handle new best flag
-    if((lapFlags&LAP_FLAG_NEW_BEST)&&!(prevLapFlags&LAP_FLAG_NEW_BEST)){
-        const bestEl=$('best-lap');bestEl.classList.add('bbLapBestFlash');setTimeout(()=>bestEl.classList.remove('bbLapBestFlash'),800);
-    }
     prevLapFlags=lapFlags;
 }
 
