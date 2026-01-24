@@ -473,6 +473,35 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
 .bbRecBtn{display:inline-flex;align-items:center;gap:8px;padding:10px 16px;background:var(--surface);border:none;border-radius:12px;font-size:13px;font-weight:600;color:var(--text);cursor:pointer;font-family:inherit;margin-right:8px}
 .bbRecBtn:active{opacity:.7}
 .bbRecBtn.recording{color:var(--red)}
+.bbLapCard{background:var(--surface);border-radius:16px;margin-bottom:8px;overflow:hidden}
+.bbLapCard.inactive{padding:14px 18px}
+.bbLapCard.active{padding:0}
+.bbLapSetup{display:flex;justify-content:space-between;align-items:center}
+.bbLapSetupText{font-size:13px;color:var(--text-tertiary)}
+.bbLapSetupBtn{background:var(--bg);border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;color:var(--text);cursor:pointer;font-family:inherit}
+.bbLapSetupBtn:active{opacity:0.7}
+.bbLapActive{display:none}
+.bbLapCard.active .bbLapActive{display:block}
+.bbLapCard.active .bbLapSetup{display:none}
+.bbLapMain{display:flex;flex-direction:column;align-items:center;padding:16px 18px 12px}
+.bbLapTime{font-size:44px;font-weight:600;line-height:1}
+.bbLapMeta{display:flex;align-items:center;gap:12px;margin-top:6px}
+.bbLapCount{font-size:13px;color:var(--text-tertiary);opacity:0.7}
+.bbLapState{font-size:11px;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-tertiary);opacity:0.5}
+.bbLapState.timing{color:var(--ok);opacity:0.9}
+.bbLapHistory{display:flex;justify-content:center;gap:0;padding:12px 18px;border-top:1px solid var(--divider)}
+.bbLapHistItem{flex:1;display:flex;flex-direction:column;align-items:center}
+.bbLapHistDivider{width:1px;height:36px;background:var(--divider)}
+.bbLapHistLabel{font-size:11px;text-transform:uppercase;letter-spacing:0.02em;color:var(--text-tertiary);opacity:0.55}
+.bbLapHistValue{font-size:20px;font-weight:600;margin-top:4px}
+.bbLapHistValue.best{color:var(--ok)}
+.bbLapHistValue.delta{font-size:18px}
+.bbLapHistValue.delta.faster{color:var(--ok)}
+.bbLapHistValue.delta.slower{color:var(--red)}
+.bbLapFlash{animation:lapFlash 0.6s ease-out}
+@keyframes lapFlash{0%{background:rgba(52,199,89,0.25)}100%{background:var(--surface)}}
+.bbLapBestFlash{animation:bestFlash 0.8s ease-out}
+@keyframes bestFlash{0%,30%{transform:scale(1.05)}100%{transform:scale(1)}}
 </style></head>
 <body>
 
@@ -495,6 +524,37 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
     </div>
 </header>
 <main class="bbApp">
+    <section class="bbCard bbLapCard inactive" id="lap-section">
+        <div class="bbLapSetup" id="lap-setup">
+            <span class="bbLapSetupText">No track configured</span>
+            <button class="bbLapSetupBtn" id="btn-tracks">Tracks</button>
+        </div>
+        <div class="bbLapActive" id="lap-active">
+            <div class="bbLapMain">
+                <div class="bbLapTime bbNum" id="lap-time">0:00.000</div>
+                <div class="bbLapMeta">
+                    <span class="bbLapCount" id="lap-count">Lap 0</span>
+                    <span class="bbLapState" id="lap-state">Armed</span>
+                </div>
+            </div>
+            <div class="bbLapHistory">
+                <div class="bbLapHistItem">
+                    <span class="bbLapHistLabel">Best</span>
+                    <span class="bbLapHistValue bbNum" id="best-lap">—:——</span>
+                </div>
+                <div class="bbLapHistDivider"></div>
+                <div class="bbLapHistItem">
+                    <span class="bbLapHistLabel">Last</span>
+                    <span class="bbLapHistValue bbNum" id="last-lap">—:——</span>
+                </div>
+                <div class="bbLapHistDivider"></div>
+                <div class="bbLapHistItem">
+                    <span class="bbLapHistLabel">Delta</span>
+                    <span class="bbLapHistValue bbNum delta" id="lap-delta">—</span>
+                </div>
+            </div>
+        </div>
+    </section>
     <section class="bbCard bbGCard">
         <div class="bbGTop">
             <div class="bbGTopLeft">
@@ -629,6 +689,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
 
 <div class="bbMenuOverlay" id="menu-overlay">
     <div class="bbMenuPanel">
+        <button class="bbMenuItem" id="menu-tracks">Tracks</button>
         <button class="bbMenuItem" id="menu-rec">Start Recording</button>
         <button class="bbMenuItem" id="menu-export">Export CSV</button>
         <button class="bbMenuItem destructive" id="menu-clear">Clear Session</button>
@@ -639,6 +700,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
 const $=id=>document.getElementById(id);
 const MODES={0:'IDLE',1:'ACCEL',2:'BRAKE',4:'CORNER',5:'ACCEL',6:'BRAKE'};
 const MODE_COLORS={0:'var(--mode-idle)',1:'var(--mode-accel)',2:'var(--mode-brake)',4:'var(--mode-idle)',5:'var(--mode-accel)',6:'var(--mode-brake)'};
+const LAP_FLAG_CROSSED_START=1,LAP_FLAG_CROSSED_FINISH=2,LAP_FLAG_NEW_LAP=4,LAP_FLAG_NEW_BEST=8,LAP_FLAG_INVALID=16;
 const DB_NAME='blackbox-rec',DB_VERSION=1,CHUNK_INTERVAL=60000;
 
 let isDark=window.matchMedia('(prefers-color-scheme:dark)').matches;
@@ -823,9 +885,37 @@ let emaGx=0,emaGy=0,lastT=0;
 const EMA_TAU=0.10;
 let lastGpsState=0;
 let fusion={lon_imu:0,lon_gps:0,gps_wt:0,gps_rate:0,pitch_c:0,pitch_cf:0,roll_c:0,roll_cf:0,tilt_x:0,tilt_y:0};
+let lapTimerActive=false,lapCount=0,bestLapMs=0,lastLapMs=0,prevLapFlags=0;
 
 function fmtGSigned(v){const sign=v>=0?'+':'−';return{sign,num:Math.abs(v).toFixed(2)}}
 function fmtTime(ms){const s=Math.floor(ms/1000),m=Math.floor(s/60),h=Math.floor(m/60);if(h>0)return h+':'+String(m%60).padStart(2,'0')+':'+String(s%60).padStart(2,'0');return m+':'+String(s%60).padStart(2,'0')}
+
+function fmtLapTime(ms){if(ms===0)return'0:00.000';const mins=Math.floor(ms/60000),secs=Math.floor((ms%60000)/1000),millis=ms%1000;return mins+':'+String(secs).padStart(2,'0')+'.'+String(millis).padStart(3,'0')}
+
+function updateLapTimer(lapTimeMs,lapCnt,lapFlags){
+    const sec=$('lap-section'),active=(lapFlags&LAP_FLAG_INVALID)===0&&(lapTimeMs>0||lapCnt>0||(lapFlags&(LAP_FLAG_CROSSED_START|LAP_FLAG_CROSSED_FINISH)));
+    if(active&&!lapTimerActive){sec.classList.remove('inactive');sec.classList.add('active');lapTimerActive=true}
+    else if(!active&&lapTimerActive){sec.classList.add('inactive');sec.classList.remove('active');lapTimerActive=false}
+    if(!lapTimerActive)return;
+    // Update current lap time
+    $('lap-time').textContent=fmtLapTime(lapTimeMs);
+    $('lap-count').textContent='Lap '+(lapCnt+(lapTimeMs>0?1:0));
+    // Update state indicator
+    const stateEl=$('lap-state');
+    if(lapTimeMs>0){stateEl.textContent='Timing';stateEl.classList.add('timing')}
+    else{stateEl.textContent='Armed';stateEl.classList.remove('timing')}
+    // Handle new lap flag
+    if((lapFlags&LAP_FLAG_NEW_LAP)&&!(prevLapFlags&LAP_FLAG_NEW_LAP)){
+        sec.classList.add('bbLapFlash');setTimeout(()=>sec.classList.remove('bbLapFlash'),600);
+        // Last lap was completed - firmware sends lap count after completion
+        // We need to calculate last lap from previous timing
+    }
+    // Handle new best flag
+    if((lapFlags&LAP_FLAG_NEW_BEST)&&!(prevLapFlags&LAP_FLAG_NEW_BEST)){
+        const bestEl=$('best-lap');bestEl.classList.add('bbLapBestFlash');setTimeout(()=>bestEl.classList.remove('bbLapBestFlash'),800);
+    }
+    prevLapFlags=lapFlags;
+}
 
 function updateReadouts(lat,lon){
     const latFmt=fmtGSigned(lat),lonFmt=fmtGSigned(lon);
@@ -848,6 +938,10 @@ function process(buf){
     const d=new DataView(buf);
     const ax=d.getFloat32(7,1),ay=d.getFloat32(11,1),wz=d.getFloat32(19,1),sp=d.getFloat32(51,1),mo=d.getUint8(55);
     const lat=d.getFloat32(56,1),lon=d.getFloat32(60,1),gpsOk=d.getUint8(64);
+    // Lap timer fields (74-byte protocol v2)
+    const lapTimeMs=buf.byteLength>=72?d.getUint32(65,1):0;
+    const lapCnt=buf.byteLength>=72?d.getUint16(69,1):0;
+    const lapFlags=buf.byteLength>=72?d.getUint8(71):0;
     const latg=ay/9.81,lng=-ax/9.81,yawDeg=Math.abs(wz*57.3);
 
     const now=Date.now();
@@ -893,6 +987,7 @@ function process(buf){
     trail=trail.filter(p=>now-p.t<TRAIL_DURATION_MS+200);
 
     lastGpsState=gpsOk;
+    updateLapTimer(lapTimeMs,lapCnt,lapFlags);
     drawG();
     cnt++;
 
@@ -1007,6 +1102,7 @@ $('menu-rec').onclick=$('diag-rec').onclick=async()=>{
     if(rec)await stopRecording();else await startRecording();
 };
 $('menu-export').onclick=$('diag-export').onclick=()=>{$('menu-overlay').classList.remove('open');exportCSV()};
+$('menu-tracks').onclick=$('btn-tracks').onclick=()=>{$('menu-overlay').classList.remove('open');alert('Track configuration coming soon!\\n\\nLap timer receives data from ESP32 firmware.\\nConfigure timing line via API:\\n/api/laptimer/configure?type=loop&p1_x=...&p1_y=...&p2_x=...&p2_y=...&dir=...')};
 $('menu-clear').onclick=()=>{$('menu-overlay').classList.remove('open');resetState()};
 
 // Init

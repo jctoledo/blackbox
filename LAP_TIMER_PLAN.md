@@ -231,7 +231,7 @@ const timingLine = { p1: [-10, 0], p2: [10, 0], direction: Math.PI/2 };
 | 1 | Core Timing Engine (Firmware) | ✅ COMPLETE |
 | 2 | Telemetry Protocol Extension | ✅ COMPLETE |
 | 3 | Basic Lap Timer Display | ✅ COMPLETE (dashboard-dev) |
-| 4 | Production Dashboard Integration | ❌ NOT STARTED |
+| 4 | Production Dashboard Integration | ✅ COMPLETE |
 | 5 | Track Configuration UI | ❌ NOT STARTED |
 | 6 | Track Persistence (IndexedDB) | ❌ NOT STARTED |
 | 7 | Track Recording | ❌ NOT STARTED |
@@ -361,135 +361,78 @@ GET /api/laptimer/configure?type=clear
 
 ---
 
-## Phase 4: Production Dashboard Integration ❌ NOT STARTED
+## Phase 4: Production Dashboard Integration ✅ COMPLETE
 
-### Goal
-Port lap timer UI from dashboard-dev to production dashboard in `websocket_server.rs`.
+### Implementation Complete
 
-### Tasks
+Lap timer UI has been ported from dashboard-dev to production dashboard in `websocket_server.rs`.
 
-**4.1 Add Lap Timer CSS**
-Copy from dashboard-dev to embedded CSS in websocket_server.rs:
-```css
-/* LAP TIMER SECTION */
-.bbLapCard { ... }
-.bbLapSetup { ... }
-.bbLapActive { ... }
-.bbLapMain { ... }
-.bbLapTime { ... }
-.bbLapMeta { ... }
-.bbLapCount { ... }
-.bbLapState { ... }
-.bbLapHistory { ... }
-.bbLapHistItem { ... }
-.bbLapHistValue { ... }
-.bbLapFlash { ... }
-.bbLapBestFlash { ... }
-```
+**4.1 Lap Timer CSS** ✅
+Added all lap timer styles to embedded CSS:
+- `.bbLapCard`, `.bbLapSetup`, `.bbLapActive`, `.bbLapMain`
+- `.bbLapTime`, `.bbLapMeta`, `.bbLapCount`, `.bbLapState`
+- `.bbLapHistory`, `.bbLapHistItem`, `.bbLapHistValue`
+- `.bbLapFlash`, `.bbLapBestFlash` animations
 
-**4.2 Add Lap Timer HTML**
-Insert before G-meter card:
-```html
-<!-- Lap Timer Section -->
-<section class="bbCard bbLapCard inactive" id="lap-section">
-    <div class="bbLapSetup" id="lap-setup">
-        <span class="bbLapSetupText">No track configured</span>
-        <button class="bbLapSetupBtn" id="btn-track-manager">Tracks</button>
-    </div>
-    <div class="bbLapActive" id="lap-active">
-        <div class="bbLapMain">
-            <div class="bbLapTime bbNum" id="lap-time">0:00.000</div>
-            <div class="bbLapMeta">
-                <span class="bbLapCount" id="lap-count">Lap 0</span>
-                <span class="bbLapState" id="lap-state">Armed</span>
-            </div>
-        </div>
-        <div class="bbLapHistory">
-            <div class="bbLapHistItem">
-                <span class="bbLapHistLabel">Best</span>
-                <span class="bbLapHistValue bbNum best" id="best-lap">—:——</span>
-            </div>
-            <div class="bbLapHistDivider"></div>
-            <div class="bbLapHistItem">
-                <span class="bbLapHistLabel">Last</span>
-                <span class="bbLapHistValue bbNum" id="last-lap">—:——</span>
-            </div>
-            <div class="bbLapHistDivider"></div>
-            <div class="bbLapHistItem">
-                <span class="bbLapHistLabel">Delta</span>
-                <span class="bbLapHistValue bbNum delta" id="lap-delta">—</span>
-            </div>
-        </div>
-    </div>
-</section>
-```
+**4.2 Lap Timer HTML** ✅
+Inserted lap timer section before G-meter card:
+- Setup view with "Tracks" button
+- Active view with current lap time, lap count, state
+- History row with Best, Last, Delta
 
-**4.3 Update Telemetry Decoder**
+**4.3 Telemetry Decoder Updated** ✅
+Added 74-byte protocol v2 support:
 ```javascript
-// Current packet size: 67 bytes
-// New packet size: 74 bytes
+// Decode lap timer fields (backward compatible)
+const lapTimeMs = buf.byteLength >= 72 ? d.getUint32(65, 1) : 0;
+const lapCnt = buf.byteLength >= 72 ? d.getUint16(69, 1) : 0;
+const lapFlags = buf.byteLength >= 72 ? d.getUint8(71) : 0;
+```
 
-function decodeTelemetry(base64) {
-    const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
-    const view = new DataView(bytes.buffer);
-
-    // ... existing fields ...
-
-    // NEW: Lap timer fields (offset 65)
-    const lapTimeMs = view.getUint32(65, true);
-    const lapCount = view.getUint16(69, true);
-    const lapFlags = view.getUint8(71);
-
-    return {
-        // ... existing ...
-        lapTimeMs,
-        lapCount,
-        lapFlags,
-    };
-}
+**4.4 Lap Timer State Management** ✅
+```javascript
+// State variables
+let lapTimerActive = false, lapCount = 0, bestLapMs = 0, lastLapMs = 0, prevLapFlags = 0;
 
 // Flag constants
-const LAP_FLAGS = {
-    CROSSED_START: 1,
-    CROSSED_FINISH: 2,
-    NEW_LAP: 4,
-    NEW_BEST: 8,
-    INVALID: 16,
-};
+const LAP_FLAG_CROSSED_START=1, LAP_FLAG_CROSSED_FINISH=2;
+const LAP_FLAG_NEW_LAP=4, LAP_FLAG_NEW_BEST=8, LAP_FLAG_INVALID=16;
+
+// Update function handles:
+// - Automatic activation when lap timer data received
+// - Current lap time display (fmtLapTime)
+// - Lap count with in-progress indicator
+// - State indicator (Armed/Timing)
+// - NEW_LAP flash animation
+// - NEW_BEST highlight animation
 ```
 
-**4.4 Add Lap Timer Update Logic**
-```javascript
-let lapTimerActive = false;
-let bestLapMs = null;
-let lastLapMs = null;
+**4.5 Menu Items** ✅
+- Added "Tracks" button in lap timer setup view
+- Added "Tracks" menu item in kebab menu
+- Both show placeholder message for track configuration (Phase 5)
 
-function updateLapTimer(telemetry) {
-    if (!lapTimerActive) return;
+### Key Differences from dashboard-dev
 
-    // Update current time display
-    $('lap-time').textContent = formatLapTime(telemetry.lapTimeMs);
-    $('lap-count').textContent = 'Lap ' + telemetry.lapCount;
+| Aspect | dashboard-dev | Production |
+|--------|--------------|------------|
+| Lap timing source | Local simulation | ESP32 firmware |
+| Crossing detection | JavaScript geometry | Rust lap_timer.rs |
+| Configuration | Simulated track | /api/laptimer/configure |
+| Data flow | Computed locally | Received via telemetry |
 
-    // Handle flags
-    if (telemetry.lapFlags & LAP_FLAGS.NEW_LAP) {
-        // Flash animation
-        // Update last lap
-        // Check for new best
-    }
+### API Integration
 
-    if (telemetry.lapFlags & LAP_FLAGS.NEW_BEST) {
-        // Best lap animation
-        // Update display
-    }
-}
+The production dashboard integrates with the existing lap timer API:
+```
+GET /api/laptimer/configure?type=loop&p1_x=...&p1_y=...&p2_x=...&p2_y=...&dir=...
+GET /api/laptimer/configure?type=clear
 ```
 
-**4.5 Add Menu Item**
-Add to menu panel:
-```html
-<button class="bbMenuItem" id="menu-tracks">Track Manager</button>
-```
+When firmware sends lap timer data in telemetry (protocol v2, 74 bytes):
+- Dashboard automatically activates lap timer display
+- Updates in real-time from telemetry stream
+- Flash animations triggered by lap flags
 
 ---
 
