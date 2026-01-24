@@ -236,12 +236,22 @@ const timingLine = { p1: [-10, 0], p2: [10, 0], direction: Math.PI/2 };
 | 6 | Track Persistence (IndexedDB) | ✅ COMPLETE |
 | 5A | Start Line Approach UX | ✅ COMPLETE |
 | 5B | Point-to-Point Track Creation | ✅ COMPLETE |
-| 7 | Track Recording | ❌ NOT STARTED |
+| **7** | **Track Recording (Enhanced)** | ❌ NOT STARTED |
+| **7B** | **Track Learning** | ❌ NOT STARTED |
 | 8 | Track Auto-Detection | ❌ NOT STARTED |
 | 9 | Reference Lap & Predictive Delta | ❌ NOT STARTED |
 | 10 | Session History | ❌ NOT STARTED |
 | 11 | Polish & Testing | ❌ NOT STARTED |
 | 12 | Documentation Updates | ❌ NOT STARTED |
+
+### Technical Capabilities Summary
+
+| Capability | Source | Resolution |
+|------------|--------|------------|
+| Position (x, y) | EKF @ 200Hz | ±1-2m (good GPS) |
+| Heading (ψ) | EKF yaw | ±2-5° |
+| Position uncertainty (σ) | Diagnostics API | Quality indicator |
+| GPS updates | NEO-M9N @ 25Hz | 40ms interval |
 
 ---
 
@@ -1054,28 +1064,68 @@ After comprehensive UX review, the following improvements were made:
 
 ---
 
-## Phase 7: Track Recording ❌ NOT STARTED
+## Phase 7: Track Recording (Enhanced) ❌ NOT STARTED
 
 ### Goal
-Allow user to define a track by driving it once. Supports both loop and point-to-point tracks.
+Allow user to define a track by driving it once, with high-quality position capture that preserves corners and filters GPS noise.
+
+### Technical Background
+
+**Available Data (from EKF + GPS):**
+| Field | Source | Update Rate | Typical Accuracy |
+|-------|--------|-------------|------------------|
+| Position (x, y) | EKF state | 200 Hz (predicted), 25 Hz (GPS corrected) | ±1-2m (good GPS) |
+| Heading (ψ) | EKF yaw | 200 Hz | ±2-5° |
+| Speed | EKF velocity | 200 Hz | ±0.5 m/s |
+| Position σ | Diagnostics API | 1 Hz (polled) | Quality indicator |
+
+**Resolution Analysis:**
+- At 50 km/h (14 m/s): GPS updates every 0.56m
+- At 100 km/h (28 m/s): GPS updates every 1.12m
+- Corner detection requires heading changes, not just position
+- EKF provides smoother positions than raw GPS
+
+### Enhanced Sample Structure
+
+```javascript
+// Raw sample during recording (full detail)
+{
+    x: f32,           // EKF position X (meters)
+    y: f32,           // EKF position Y (meters)
+    heading: f32,     // EKF yaw (radians) - CRITICAL for corners
+    speed: f32,       // Speed (m/s) - for adaptive sampling
+    sigma: f32,       // Position uncertainty (meters) - quality filter
+    t: u32            // Timestamp (ms since recording start)
+}
+
+// Centerline point (processed, stored)
+{
+    x: f32,           // Smoothed position X
+    y: f32,           // Smoothed position Y
+    heading: f32,     // Direction of travel
+    curvature: f32,   // Local curvature (rad/m) - identifies corners
+    confidence: f32,  // Quality score (0-1)
+    lapCount: u16     // How many laps contributed (for learning)
+}
+```
 
 ### User Flow
 
 **Loop Track Recording:**
-1. User taps "Record Track by Driving" and selects "Loop"
-2. Dashboard shows recording overlay with instructions
+1. User taps "Record Track" and selects "Loop"
+2. Dashboard shows recording overlay with GPS quality indicator
 3. User drives around their intended circuit
-4. Dashboard detects loop closure (returned near start)
+4. Dashboard detects loop closure (near start + heading aligned)
 5. User confirms or continues driving
-6. Dashboard calculates timing line automatically from start/end heading
+6. Dashboard processes samples, calculates timing line
 7. User names and saves the track
 
 **Point-to-Point Track Recording:**
-1. User taps "Record Track by Driving" and selects "Point-to-Point"
-2. Dashboard shows recording overlay: "Drive from start to finish"
-3. User drives the route (no loop closure detection)
+1. User taps "Record Track" and selects "Point-to-Point"
+2. Dashboard shows "Drive from start to finish"
+3. User drives the route
 4. User taps "Mark Finish" when done
-5. Dashboard calculates start line from initial heading, finish line from final heading
+5. Dashboard processes samples, calculates start/finish lines
 6. User names and saves the track
 
 ### Implementation: `TrackRecorder` Class
@@ -1084,177 +1134,461 @@ Allow user to define a track by driving it once. Supports both loop and point-to
 class TrackRecorder {
     constructor() {
         this.recording = false;
-        this.path = [];           // [{x, y, t}, ...]
+        this.trackType = 'loop';      // 'loop' or 'point_to_point'
+        this.rawSamples = [];         // All samples during recording
+        this.keyPoints = [];          // Adaptive-sampled key points
         this.startPos = null;
+        this.startHeading = null;
         this.totalDistance = 0;
         this.loopDetected = false;
+        this.lastSigma = 5.0;         // Track GPS quality
 
-        // Configuration
-        this.minLoopDistance = 500;     // Minimum track length (meters)
-        this.closeProximity = 30;       // Distance to detect loop closure (meters)
-        this.sampleInterval = 2;        // Minimum distance between samples (meters)
+        // Adaptive sampling thresholds
+        this.maxSigma = 5.0;          // Reject samples with worse uncertainty
+        this.minDistance = 1.0;       // Minimum 1m between stored points
+        this.headingThreshold = 0.05; // ~3° triggers a sample
+        this.cornerCurvature = 0.02;  // rad/m = definitely a corner
+
+        // Loop detection
+        this.minLoopDistance = 200;   // Minimum track length (meters)
+        this.closeProximity = 25;     // Distance to detect loop closure (meters)
+        this.headingTolerance = 0.5;  // ~30° heading match for loop closure
     }
 
-    start(currentPos) {
+    start(pos, trackType = 'loop') {
         this.recording = true;
-        this.path = [];
-        this.startPos = { x: currentPos.x, y: currentPos.y };
+        this.trackType = trackType;
+        this.rawSamples = [];
+        this.keyPoints = [];
+        this.startPos = { x: pos.x, y: pos.y };
+        this.startHeading = pos.heading;
         this.totalDistance = 0;
         this.loopDetected = false;
 
-        this.path.push({
-            x: currentPos.x,
-            y: currentPos.y,
-            t: Date.now()
+        // First sample is always a key point
+        this.keyPoints.push({
+            x: pos.x,
+            y: pos.y,
+            heading: pos.heading,
+            speed: pos.speed,
+            sigma: pos.sigma || 3.0,
+            t: 0,
+            curvature: 0,
+            isCorner: false
         });
+
+        this.startTime = Date.now();
     }
 
-    addSample(x, y) {
-        if (!this.recording) return { loopDetected: false };
+    /**
+     * Add a position sample during recording
+     * @param {Object} pos - { x, y, heading, speed, sigma }
+     * @returns {Object} - { stored, loopDetected, stats }
+     */
+    addSample(pos) {
+        if (!this.recording) return { stored: false };
 
-        // Check distance from last sample
-        const last = this.path[this.path.length - 1];
-        const dx = x - last.x;
-        const dy = y - last.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
+        const t = Date.now() - this.startTime;
+        this.lastSigma = pos.sigma || 5.0;
 
-        // Only add if moved enough
-        if (dist < this.sampleInterval) {
-            return { loopDetected: false };
+        // Always store raw sample for post-processing
+        this.rawSamples.push({
+            x: pos.x,
+            y: pos.y,
+            heading: pos.heading,
+            speed: pos.speed,
+            sigma: pos.sigma || 5.0,
+            t
+        });
+
+        // Quality gate - don't store poor GPS as key points
+        if (pos.sigma > this.maxSigma) {
+            return {
+                stored: false,
+                reason: 'poor_gps',
+                stats: this.getStats()
+            };
         }
 
+        // Check if this should be a key point
+        const last = this.keyPoints[this.keyPoints.length - 1];
+        const dx = pos.x - last.x;
+        const dy = pos.y - last.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const headingChange = Math.abs(this.wrapAngle(pos.heading - last.heading));
+
+        // Update total distance
         this.totalDistance += dist;
-        this.path.push({ x, y, t: Date.now() });
 
-        // Check for loop closure
-        if (this.totalDistance > this.minLoopDistance) {
-            const distToStart = Math.sqrt(
-                (x - this.startPos.x) ** 2 +
-                (y - this.startPos.y) ** 2
-            );
+        // Adaptive distance threshold based on speed
+        // At higher speeds, sample less frequently (by distance)
+        const adaptiveMinDist = Math.max(
+            this.minDistance,
+            pos.speed * 0.08  // 80ms of travel
+        );
 
-            if (distToStart < this.closeProximity) {
-                this.loopDetected = true;
-                return { loopDetected: true, distToStart };
+        // Sample if: moved enough distance OR turned enough
+        const shouldStore =
+            dist >= adaptiveMinDist ||
+            headingChange >= this.headingThreshold;
+
+        if (shouldStore) {
+            // Compute local curvature (heading change per meter)
+            const curvature = dist > 0.1 ? headingChange / dist : 0;
+            const isCorner = curvature > this.cornerCurvature;
+
+            this.keyPoints.push({
+                x: pos.x,
+                y: pos.y,
+                heading: pos.heading,
+                speed: pos.speed,
+                sigma: pos.sigma || 3.0,
+                t,
+                curvature,
+                isCorner
+            });
+
+            // Check for loop closure (loop tracks only)
+            if (this.trackType === 'loop') {
+                const loopResult = this.checkLoopClosure(pos);
+                if (loopResult.detected) {
+                    this.loopDetected = true;
+                    return {
+                        stored: true,
+                        loopDetected: true,
+                        loopQuality: loopResult.quality,
+                        stats: this.getStats()
+                    };
+                }
             }
+
+            return {
+                stored: true,
+                curvature,
+                isCorner,
+                stats: this.getStats()
+            };
         }
 
         return {
-            loopDetected: false,
-            totalDistance: this.totalDistance,
-            pointCount: this.path.length
+            stored: false,
+            reason: 'too_close',
+            stats: this.getStats()
         };
     }
 
+    checkLoopClosure(pos) {
+        if (this.totalDistance < this.minLoopDistance) {
+            return { detected: false };
+        }
+
+        const distToStart = Math.sqrt(
+            (pos.x - this.startPos.x) ** 2 +
+            (pos.y - this.startPos.y) ** 2
+        );
+
+        // Must be close AND heading aligned (same direction as start)
+        const headingDiff = Math.abs(this.wrapAngle(pos.heading - this.startHeading));
+        const headingMatch = headingDiff < this.headingTolerance;
+
+        if (distToStart < this.closeProximity && headingMatch) {
+            return {
+                detected: true,
+                distToStart,
+                headingDiff,
+                quality: this.assessQuality()
+            };
+        }
+
+        return { detected: false };
+    }
+
+    assessQuality() {
+        const validPoints = this.keyPoints.filter(p => p.sigma < 3.0);
+        const avgSigma = this.keyPoints.reduce((s, p) => s + p.sigma, 0) / this.keyPoints.length;
+        const cornerCount = this.keyPoints.filter(p => p.isCorner).length;
+
+        let rating = 'good';
+        if (avgSigma > 3.5 || validPoints.length < this.keyPoints.length * 0.7) {
+            rating = 'fair';
+        }
+        if (avgSigma > 4.5 || validPoints.length < this.keyPoints.length * 0.5) {
+            rating = 'poor';
+        }
+
+        return {
+            rating,
+            avgUncertainty: avgSigma,
+            goodSampleRatio: validPoints.length / this.keyPoints.length,
+            corners: cornerCount,
+            totalPoints: this.keyPoints.length
+        };
+    }
+
+    /**
+     * Finish recording and process into final track
+     */
     finish(trackName, gpsOrigin) {
         this.recording = false;
 
-        if (this.path.length < 10) {
-            throw new Error('Not enough points recorded');
+        if (this.keyPoints.length < 20) {
+            throw new Error('Not enough points recorded (minimum 20)');
         }
 
-        // Calculate timing line from first few points
-        const timingLine = this.calculateTimingLine();
+        // 1. Smooth the path (reduces GPS jitter)
+        const smoothed = this.smoothPath(this.keyPoints, 3);
 
-        // Calculate bounding box
-        const bounds = this.calculateBounds();
+        // 2. Recompute curvatures on smoothed path
+        const withCurvature = this.computeCurvatures(smoothed);
 
-        // Downsample path for storage
-        const storedPath = this.downsamplePath(500);
+        // 3. Intelligent downsampling (preserves corners)
+        const centerline = this.curvaturePreservingDownsample(withCurvature, 500);
+
+        // 4. Calculate timing line(s)
+        const startLine = this.calculateTimingLine(centerline, 'start');
+        let finishLine = null;
+        if (this.trackType === 'point_to_point') {
+            finishLine = this.calculateTimingLine(centerline, 'finish');
+        }
+
+        // 5. Calculate bounds with margin
+        const bounds = this.calculateBounds(centerline, 30);
+
+        // 6. Calculate total track distance
+        const totalDistance = this.calculatePathLength(centerline);
 
         return {
             id: crypto.randomUUID(),
             name: trackName,
-            type: 'loop',
+            type: this.trackType,
             created: Date.now(),
             modified: Date.now(),
-            startLine: timingLine,
-            finishLine: null,
+            startLine,
+            finishLine,
             gpsOrigin,
             bounds,
-            path: storedPath,
+            centerline,  // Full centerline with heading/curvature
+            displayPath: centerline.map(p => [p.x, p.y]),  // Simple path for display
             bestLapMs: null,
-            lapCount: 0
+            lapCount: 0,
+            totalDistance,
+            learningEnabled: true,
+            lastLearnedLap: null,
+            quality: this.assessQuality()
         };
     }
 
-    calculateTimingLine() {
-        // Use first ~5 points to determine direction
-        const p0 = this.path[0];
-        const pN = this.path[Math.min(5, this.path.length - 1)];
+    smoothPath(points, windowSize) {
+        const result = [];
+        const halfWindow = Math.floor(windowSize / 2);
 
-        const dx = pN.x - p0.x;
-        const dy = pN.y - p0.y;
-        const len = Math.sqrt(dx * dx + dy * dy);
+        for (let i = 0; i < points.length; i++) {
+            const start = Math.max(0, i - halfWindow);
+            const end = Math.min(points.length - 1, i + halfWindow);
+            const window = points.slice(start, end + 1);
 
-        if (len < 0.1) {
-            throw new Error('Could not determine direction');
+            // Weighted average favoring center and low-sigma points
+            let sumX = 0, sumY = 0, sumWeight = 0;
+
+            for (let j = 0; j < window.length; j++) {
+                const distFromCenter = Math.abs(j - (i - start));
+                const positionWeight = 1.0 / (1 + distFromCenter * 0.5);
+                const qualityWeight = 1.0 / (window[j].sigma + 0.5);
+                const weight = positionWeight * qualityWeight;
+
+                sumX += window[j].x * weight;
+                sumY += window[j].y * weight;
+                sumWeight += weight;
+            }
+
+            result.push({
+                x: sumX / sumWeight,
+                y: sumY / sumWeight,
+                heading: points[i].heading,  // Keep original heading
+                speed: points[i].speed,
+                sigma: points[i].sigma,
+                t: points[i].t
+            });
         }
 
-        // Direction of travel
-        const direction = Math.atan2(dy, dx);
+        return result;
+    }
 
-        // Perpendicular direction
-        const perpX = -dy / len;
-        const perpY = dx / len;
+    computeCurvatures(points) {
+        const result = [];
 
-        // 15m line on each side
-        const width = 15;
+        for (let i = 0; i < points.length; i++) {
+            let curvature = 0;
+
+            if (i > 0 && i < points.length - 1) {
+                // Central difference for heading rate
+                const dHeading = this.wrapAngle(points[i + 1].heading - points[i - 1].heading);
+                const dx = points[i + 1].x - points[i - 1].x;
+                const dy = points[i + 1].y - points[i - 1].y;
+                const ds = Math.sqrt(dx * dx + dy * dy);
+
+                if (ds > 0.5) {
+                    curvature = Math.abs(dHeading / ds);
+                }
+            }
+
+            result.push({
+                ...points[i],
+                curvature,
+                isCorner: curvature > this.cornerCurvature
+            });
+        }
+
+        return result;
+    }
+
+    curvaturePreservingDownsample(points, maxPoints) {
+        if (points.length <= maxPoints) {
+            return points.map(p => ({
+                x: p.x,
+                y: p.y,
+                heading: p.heading,
+                curvature: p.curvature,
+                confidence: 1.0 / (p.sigma + 0.5),
+                lapCount: 1
+            }));
+        }
+
+        // Score each point by importance (curvature)
+        const scored = points.map((p, i) => ({
+            point: p,
+            index: i,
+            score: p.curvature || 0
+        }));
+
+        // Always keep first and last
+        const kept = new Set([0, points.length - 1]);
+
+        // Keep top curvature points (corners) - 30% of budget
+        const cornerBudget = Math.floor(maxPoints * 0.3);
+        const sortedByScore = scored.slice(1, -1).sort((a, b) => b.score - a.score);
+        for (let i = 0; i < Math.min(cornerBudget, sortedByScore.length); i++) {
+            kept.add(sortedByScore[i].index);
+        }
+
+        // Fill remaining with evenly spaced points
+        const remaining = maxPoints - kept.size;
+        const step = Math.floor(points.length / remaining);
+        for (let i = 0; i < points.length && kept.size < maxPoints; i += step) {
+            kept.add(i);
+        }
+
+        // Return in original order
+        return Array.from(kept)
+            .sort((a, b) => a - b)
+            .map(i => ({
+                x: points[i].x,
+                y: points[i].y,
+                heading: points[i].heading,
+                curvature: points[i].curvature,
+                confidence: 1.0 / (points[i].sigma + 0.5),
+                lapCount: 1
+            }));
+    }
+
+    calculateTimingLine(centerline, which = 'start') {
+        // Use first or last N points depending on which line
+        const windowSize = Math.min(10, Math.floor(centerline.length * 0.02));
+        const window = which === 'start'
+            ? centerline.slice(0, windowSize)
+            : centerline.slice(-windowSize);
+
+        // Weighted average position and heading (favor low sigma)
+        let sumX = 0, sumY = 0, sumWeight = 0;
+        let sumSin = 0, sumCos = 0;
+
+        for (const p of window) {
+            const weight = p.confidence || 0.5;
+            sumX += p.x * weight;
+            sumY += p.y * weight;
+            sumSin += Math.sin(p.heading) * weight;
+            sumCos += Math.cos(p.heading) * weight;
+            sumWeight += weight;
+        }
+
+        const centerX = sumX / sumWeight;
+        const centerY = sumY / sumWeight;
+        const direction = Math.atan2(sumSin / sumWeight, sumCos / sumWeight);
+
+        // For finish line, direction should be reversed (entering from opposite side)
+        const lineDirection = which === 'finish'
+            ? this.wrapAngle(direction + Math.PI)
+            : direction;
+
+        // Perpendicular direction for line endpoints
+        const perpAngle = direction + Math.PI / 2;
+        const halfWidth = 12;  // 24m total width
 
         return {
-            p1: [p0.x + perpX * width, p0.y + perpY * width],
-            p2: [p0.x - perpX * width, p0.y - perpY * width],
-            direction
+            p1: [
+                centerX + Math.cos(perpAngle) * halfWidth,
+                centerY + Math.sin(perpAngle) * halfWidth
+            ],
+            p2: [
+                centerX - Math.cos(perpAngle) * halfWidth,
+                centerY - Math.sin(perpAngle) * halfWidth
+            ],
+            direction: lineDirection
         };
     }
 
-    calculateBounds() {
+    calculateBounds(centerline, margin = 30) {
         let minX = Infinity, maxX = -Infinity;
         let minY = Infinity, maxY = -Infinity;
 
-        for (const p of this.path) {
+        for (const p of centerline) {
             minX = Math.min(minX, p.x);
             maxX = Math.max(maxX, p.x);
             minY = Math.min(minY, p.y);
             maxY = Math.max(maxY, p.y);
         }
 
-        // Add 50m margin
         return {
-            minX: minX - 50,
-            maxX: maxX + 50,
-            minY: minY - 50,
-            maxY: maxY + 50
+            minX: minX - margin,
+            maxX: maxX + margin,
+            minY: minY - margin,
+            maxY: maxY + margin
         };
     }
 
-    downsamplePath(maxPoints) {
-        if (this.path.length <= maxPoints) {
-            return this.path.map(p => [p.x, p.y]);
+    calculatePathLength(centerline) {
+        let total = 0;
+        for (let i = 1; i < centerline.length; i++) {
+            const dx = centerline[i].x - centerline[i - 1].x;
+            const dy = centerline[i].y - centerline[i - 1].y;
+            total += Math.sqrt(dx * dx + dy * dy);
         }
-
-        const step = Math.ceil(this.path.length / maxPoints);
-        const result = [];
-
-        for (let i = 0; i < this.path.length; i += step) {
-            result.push([this.path[i].x, this.path[i].y]);
-        }
-
-        return result;
+        return total;
     }
 
     cancel() {
         this.recording = false;
-        this.path = [];
+        this.rawSamples = [];
+        this.keyPoints = [];
     }
 
     getStats() {
         return {
             recording: this.recording,
-            pointCount: this.path.length,
+            trackType: this.trackType,
+            pointCount: this.keyPoints.length,
+            rawSampleCount: this.rawSamples.length,
             totalDistance: this.totalDistance,
-            loopDetected: this.loopDetected
+            loopDetected: this.loopDetected,
+            gpsQuality: this.lastSigma < 2.5 ? 'good' : (this.lastSigma < 4 ? 'fair' : 'poor'),
+            corners: this.keyPoints.filter(p => p.isCorner).length
         };
+    }
+
+    wrapAngle(a) {
+        while (a > Math.PI) a -= 2 * Math.PI;
+        while (a < -Math.PI) a += 2 * Math.PI;
+        return a;
     }
 }
 ```
@@ -1262,34 +1596,59 @@ class TrackRecorder {
 ### Recording UI Overlay
 
 ```html
-<div class="bbRecordOverlay" id="record-overlay">
-    <div class="bbRecordStatus">
+<div class="bbRecordOverlay" id="record-overlay" style="display:none">
+    <div class="bbRecordHeader">
         <div class="bbRecordIndicator"></div>
-        <span>Recording Track...</span>
+        <span class="bbRecordTitle">Recording Track</span>
+        <span class="bbRecordType" id="rec-type">Loop</span>
     </div>
 
     <div class="bbRecordStats">
         <div class="bbRecordStat">
+            <span class="bbRecordValue" id="rec-distance">0m</span>
             <span class="bbRecordLabel">Distance</span>
-            <span class="bbRecordValue" id="rec-distance">0 m</span>
         </div>
         <div class="bbRecordStat">
-            <span class="bbRecordLabel">Points</span>
+            <span class="bbRecordValue" id="rec-corners">0</span>
+            <span class="bbRecordLabel">Corners</span>
+        </div>
+        <div class="bbRecordStat">
             <span class="bbRecordValue" id="rec-points">0</span>
+            <span class="bbRecordLabel">Points</span>
         </div>
     </div>
 
-    <div class="bbRecordInstructions">
+    <div class="bbRecordQuality">
+        <span class="bbRecordQualityLabel">GPS Quality:</span>
+        <div class="bbRecordQualityBar">
+            <div class="bbRecordQualityFill" id="rec-quality-fill"></div>
+        </div>
+        <span class="bbRecordQualityText" id="rec-quality-text">Good</span>
+    </div>
+
+    <div class="bbRecordInstructions" id="rec-instructions">
         Drive around your circuit once. Return to starting point to complete.
     </div>
 
-    <div class="bbRecordLoop hidden" id="loop-detected">
+    <div class="bbRecordLoop" id="loop-detected" style="display:none">
+        <div class="bbLoopIcon">✓</div>
         <div class="bbLoopMessage">Loop detected!</div>
-        <button class="bbRecordBtn primary" id="btn-finish-recording">Save Track</button>
-        <button class="bbRecordBtn" id="btn-continue-recording">Continue Driving</button>
+        <div class="bbLoopQuality" id="loop-quality">Quality: Good</div>
     </div>
 
-    <button class="bbRecordBtn danger" id="btn-cancel-recording">Cancel</button>
+    <div class="bbRecordButtons">
+        <button class="bbRecordBtn" id="btn-cancel-recording">Cancel</button>
+        <button class="bbRecordBtn primary" id="btn-finish-recording" style="display:none">
+            Save Track
+        </button>
+        <button class="bbRecordBtn" id="btn-continue-recording" style="display:none">
+            Continue
+        </button>
+        <!-- P2P only -->
+        <button class="bbRecordBtn primary" id="btn-mark-finish" style="display:none">
+            Mark Finish
+        </button>
+    </div>
 </div>
 ```
 
@@ -1302,8 +1661,15 @@ class TrackRecorder {
     background: var(--surface);
     padding: 20px;
     border-radius: 16px 16px 0 0;
-    box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.2);
     z-index: 200;
+}
+
+.bbRecordHeader {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
 }
 
 .bbRecordIndicator {
@@ -1316,218 +1682,397 @@ class TrackRecorder {
 
 @keyframes recordPulse {
     0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
+    50% { opacity: 0.4; }
+}
+
+.bbRecordTitle {
+    font-weight: 600;
+    font-size: 16px;
+}
+
+.bbRecordType {
+    background: var(--text);
+    color: var(--surface);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.bbRecordStats {
+    display: flex;
+    justify-content: space-around;
+    margin-bottom: 16px;
+}
+
+.bbRecordStat {
+    text-align: center;
+}
+
+.bbRecordValue {
+    font-size: 24px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    display: block;
+}
+
+.bbRecordLabel {
+    font-size: 12px;
+    opacity: 0.6;
+}
+
+.bbRecordQuality {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.bbRecordQualityLabel {
+    font-size: 13px;
+    opacity: 0.7;
+}
+
+.bbRecordQualityBar {
+    flex: 1;
+    height: 6px;
+    background: rgba(128,128,128,0.2);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.bbRecordQualityFill {
+    height: 100%;
+    background: #34c759;
+    transition: width 0.3s, background 0.3s;
+}
+
+.bbRecordQualityFill.fair { background: #ff9500; }
+.bbRecordQualityFill.poor { background: #ff3b30; }
+
+.bbRecordQualityText {
+    font-size: 13px;
+    font-weight: 500;
+    min-width: 40px;
+}
+
+.bbRecordInstructions {
+    text-align: center;
+    font-size: 14px;
+    opacity: 0.7;
+    margin-bottom: 16px;
+}
+
+.bbRecordLoop {
+    text-align: center;
+    padding: 16px;
+    background: rgba(52, 199, 89, 0.1);
+    border-radius: 12px;
+    margin-bottom: 16px;
+}
+
+.bbLoopIcon {
+    font-size: 32px;
+    color: #34c759;
+    margin-bottom: 8px;
+}
+
+.bbLoopMessage {
+    font-size: 18px;
+    font-weight: 600;
+    color: #34c759;
+}
+
+.bbLoopQuality {
+    font-size: 13px;
+    opacity: 0.7;
+    margin-top: 4px;
+}
+
+.bbRecordButtons {
+    display: flex;
+    gap: 10px;
+}
+
+.bbRecordBtn {
+    flex: 1;
+    padding: 14px;
+    border: none;
+    border-radius: 10px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    background: rgba(128,128,128,0.15);
+    color: var(--text);
+}
+
+.bbRecordBtn.primary {
+    background: #007aff;
+    color: white;
+}
+
+.bbRecordBtn.danger {
+    color: #ff3b30;
+}
+```
+
+### Integration with Track Manager
+
+```javascript
+// Add to track manager modal
+let trackRecorder = null;
+let diagnosticsInterval = null;
+
+function startTrackRecording(trackType) {
+    if (!currentPos || !currentPos.valid) {
+        alert('GPS position not available. Please wait for GPS lock.');
+        return;
+    }
+
+    trackRecorder = new TrackRecorder();
+    trackRecorder.start({
+        x: currentPos.x,
+        y: currentPos.y,
+        heading: currentPos.yaw,
+        speed: currentPos.speed / 3.6,  // Convert km/h to m/s
+        sigma: lastDiagnostics?.ekf?.pos_sigma || 3.0
+    }, trackType);
+
+    // Show recording overlay
+    $('record-overlay').style.display = 'block';
+    $('rec-type').textContent = trackType === 'loop' ? 'Loop' : 'Point-to-Point';
+    $('rec-instructions').textContent = trackType === 'loop'
+        ? 'Drive around your circuit once. Return to starting point to complete.'
+        : 'Drive from start to finish. Tap "Mark Finish" when done.';
+
+    // Show appropriate buttons
+    $('btn-mark-finish').style.display = trackType === 'point_to_point' ? 'block' : 'none';
+
+    // Close track manager modal
+    $('track-modal').style.display = 'none';
+
+    // Poll diagnostics for GPS quality
+    diagnosticsInterval = setInterval(fetchDiagnosticsForRecording, 1000);
+}
+
+async function fetchDiagnosticsForRecording() {
+    try {
+        const r = await fetch('/api/diagnostics');
+        const d = await r.json();
+        lastDiagnostics = d;
+    } catch (e) {
+        // Ignore fetch errors during recording
+    }
+}
+
+// Called from telemetry update loop
+function updateTrackRecording() {
+    if (!trackRecorder || !trackRecorder.recording) return;
+    if (!currentPos || !currentPos.valid) return;
+
+    const result = trackRecorder.addSample({
+        x: currentPos.x,
+        y: currentPos.y,
+        heading: currentPos.yaw,
+        speed: currentPos.speed / 3.6,
+        sigma: lastDiagnostics?.ekf?.pos_sigma || 3.0
+    });
+
+    // Update UI
+    const stats = result.stats;
+    $('rec-distance').textContent = formatDistance(stats.totalDistance);
+    $('rec-corners').textContent = stats.corners;
+    $('rec-points').textContent = stats.pointCount;
+
+    // GPS quality indicator
+    const quality = stats.gpsQuality;
+    const qualityPercent = quality === 'good' ? 90 : (quality === 'fair' ? 60 : 30);
+    $('rec-quality-fill').style.width = qualityPercent + '%';
+    $('rec-quality-fill').className = 'bbRecordQualityFill ' + quality;
+    $('rec-quality-text').textContent = quality.charAt(0).toUpperCase() + quality.slice(1);
+
+    // Loop detection
+    if (result.loopDetected) {
+        $('loop-detected').style.display = 'block';
+        $('loop-quality').textContent = 'Quality: ' +
+            result.loopQuality.rating.charAt(0).toUpperCase() +
+            result.loopQuality.rating.slice(1);
+        $('btn-finish-recording').style.display = 'block';
+        $('btn-continue-recording').style.display = 'block';
+        $('rec-instructions').style.display = 'none';
+    }
+}
+
+function finishTrackRecording() {
+    if (!trackRecorder) return;
+
+    clearInterval(diagnosticsInterval);
+
+    const trackName = prompt('Enter track name:', 'My Track');
+    if (!trackName) {
+        // User cancelled - keep recording
+        return;
+    }
+
+    try {
+        const track = trackRecorder.finish(trackName, {
+            lat: lastGpsLat,
+            lon: lastGpsLon
+        });
+
+        // Save to IndexedDB
+        saveTrack(track).then(() => {
+            // Activate the new track
+            activateTrack(track);
+
+            // Hide recording overlay
+            $('record-overlay').style.display = 'none';
+            trackRecorder = null;
+        });
+    } catch (e) {
+        alert('Error saving track: ' + e.message);
+    }
+}
+
+function cancelTrackRecording() {
+    if (trackRecorder) {
+        trackRecorder.cancel();
+    }
+    trackRecorder = null;
+    clearInterval(diagnosticsInterval);
+    $('record-overlay').style.display = 'none';
+}
+
+// P2P: Mark finish
+function markFinishLine() {
+    if (!trackRecorder || trackRecorder.trackType !== 'point_to_point') return;
+
+    // Manually trigger finish UI
+    $('loop-detected').style.display = 'block';
+    $('loop-detected').querySelector('.bbLoopIcon').textContent = '🏁';
+    $('loop-detected').querySelector('.bbLoopMessage').textContent = 'Finish marked!';
+    $('loop-quality').textContent = 'Quality: ' + trackRecorder.assessQuality().rating;
+    $('btn-finish-recording').style.display = 'block';
+    $('btn-mark-finish').style.display = 'none';
+    $('rec-instructions').style.display = 'none';
 }
 ```
 
 ---
 
-## Phase 8: Track Auto-Detection ❌ NOT STARTED
+## Phase 7B: Track Learning ❌ NOT STARTED
 
 ### Goal
-Automatically offer to activate a saved track when the user is within its bounds.
+Improve track accuracy over multiple laps by averaging GPS positions. Each lap refines the centerline, reducing noise and improving timing line precision.
 
-### Implementation
+### How It Works
 
-```javascript
-class TrackAutoDetector {
-    constructor(trackDb) {
-        this.trackDb = trackDb;
-        this.currentTrack = null;
-        this.lastCheckTime = 0;
-        this.checkInterval = 5000;  // Check every 5 seconds
-        this.enabled = true;
-    }
+1. **During each lap**, position observations are matched to the stored centerline
+2. **Running average** updates each centerline point with new observations
+3. **Confidence increases** as more laps are recorded
+4. **GPS quality weighting** gives more influence to low-sigma samples
 
-    async checkPosition(x, y) {
-        // Don't check too frequently
-        const now = Date.now();
-        if (now - this.lastCheckTime < this.checkInterval) return null;
-        this.lastCheckTime = now;
+### Benefits
+- Single lap recording has ~2m GPS noise
+- After 10 laps: noise reduced to ~0.6m (√10 improvement)
+- Timing line position becomes more accurate
+- Corners become sharper and more precise
 
-        // Skip if already on a track
-        if (this.currentTrack) return null;
-
-        // Skip if disabled
-        if (!this.enabled) return null;
-
-        const tracks = await this.trackDb.getAllTracks();
-        const candidates = [];
-
-        for (const track of tracks) {
-            if (this.isWithinBounds(x, y, track.bounds)) {
-                const centerX = (track.bounds.minX + track.bounds.maxX) / 2;
-                const centerY = (track.bounds.minY + track.bounds.maxY) / 2;
-                const dist = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2);
-                candidates.push({ track, dist });
-            }
-        }
-
-        if (candidates.length === 0) return null;
-
-        // Return closest track
-        candidates.sort((a, b) => a.dist - b.dist);
-        return candidates[0].track;
-    }
-
-    isWithinBounds(x, y, bounds) {
-        return x >= bounds.minX && x <= bounds.maxX &&
-               y >= bounds.minY && y <= bounds.maxY;
-    }
-
-    setCurrentTrack(track) {
-        this.currentTrack = track;
-    }
-
-    clearCurrentTrack() {
-        this.currentTrack = null;
-    }
-}
-
-// Usage in main update loop
-async function onTelemetryUpdate(telemetry) {
-    // ... other updates ...
-
-    // Check for track auto-detection
-    const detectedTrack = await autoDetector.checkPosition(telemetry.x, telemetry.y);
-    if (detectedTrack) {
-        showTrackDetectedPrompt(detectedTrack);
-    }
-}
-
-function showTrackDetectedPrompt(track) {
-    // Show toast/notification:
-    // "Track detected: {track.name}"
-    // [Activate] [Dismiss]
-}
-```
-
----
-
-## Phase 9: Reference Lap & Predictive Delta ❌ NOT STARTED
-
-### Goal
-Record position samples during each lap and use best lap as reference for real-time delta calculation.
-
-### Lap Sample Recording
+### Implementation: `TrackLearner` Class
 
 ```javascript
-class LapRecorder {
-    constructor() {
-        this.samples = [];
-        this.recording = false;
-    }
+class TrackLearner {
+    constructor(track) {
+        this.track = track;
+        this.enabled = track.learningEnabled !== false;
 
-    startLap() {
-        this.samples = [];
-        this.recording = true;
-    }
+        // Initialize learning state from centerline
+        this.centerline = track.centerline.map(p => ({
+            ...p,
+            sumX: p.x * (p.lapCount || 1),
+            sumY: p.y * (p.lapCount || 1),
+            sumHeadingSin: Math.sin(p.heading) * (p.lapCount || 1),
+            sumHeadingCos: Math.cos(p.heading) * (p.lapCount || 1),
+            sumWeight: p.lapCount || 1
+        }));
 
-    addSample(x, y, lapTimeMs) {
-        if (!this.recording) return;
-
-        // Record at ~25Hz (every ~40ms)
-        const lastT = this.samples.length > 0
-            ? this.samples[this.samples.length - 1].t
-            : -40;
-
-        if (lapTimeMs - lastT >= 40) {
-            this.samples.push({ t: lapTimeMs, x, y });
-        }
-    }
-
-    finishLap() {
-        this.recording = false;
-        return this.encodeSamples();
-    }
-
-    encodeSamples() {
-        // Pack into ArrayBuffer: [u32 timestamp, f32 x, f32 y] × N
-        const buffer = new ArrayBuffer(this.samples.length * 12);
-        const view = new DataView(buffer);
-
-        for (let i = 0; i < this.samples.length; i++) {
-            const offset = i * 12;
-            view.setUint32(offset, this.samples[i].t, true);
-            view.setFloat32(offset + 4, this.samples[i].x, true);
-            view.setFloat32(offset + 8, this.samples[i].y, true);
-        }
-
-        return buffer;
-    }
-}
-```
-
-### Delta Calculator with Spatial Index
-
-```javascript
-class DeltaCalculator {
-    constructor() {
-        this.referenceLap = null;
+        // Build spatial index for fast lookups
+        this.gridSize = 15;  // 15m cells
         this.grid = new Map();
-        this.cellSize = 10;  // 10m grid cells
-    }
-
-    setReferenceLap(samplesBuffer) {
-        this.referenceLap = this.decodeSamples(samplesBuffer);
         this.buildSpatialIndex();
-    }
 
-    decodeSamples(buffer) {
-        const view = new DataView(buffer);
-        const samples = [];
-
-        for (let i = 0; i < buffer.byteLength; i += 12) {
-            samples.push({
-                t: view.getUint32(i, true),
-                x: view.getFloat32(i + 4, true),
-                y: view.getFloat32(i + 8, true)
-            });
-        }
-
-        return samples;
+        // Stats for current lap
+        this.observationsThisLap = 0;
+        this.lastObservationTime = 0;
     }
 
     buildSpatialIndex() {
         this.grid.clear();
-
-        for (let i = 0; i < this.referenceLap.length; i++) {
-            const { x, y } = this.referenceLap[i];
-            const cellX = Math.floor(x / this.cellSize);
-            const cellY = Math.floor(y / this.cellSize);
+        for (let i = 0; i < this.centerline.length; i++) {
+            const p = this.centerline[i];
+            const cellX = Math.floor(p.x / this.gridSize);
+            const cellY = Math.floor(p.y / this.gridSize);
             const key = `${cellX},${cellY}`;
 
-            if (!this.grid.has(key)) {
-                this.grid.set(key, []);
-            }
+            if (!this.grid.has(key)) this.grid.set(key, []);
             this.grid.get(key).push(i);
         }
     }
 
-    calculateDelta(currentX, currentY, currentLapTimeMs) {
-        if (!this.referenceLap || this.referenceLap.length === 0) {
-            return null;
-        }
+    /**
+     * Record an observation during a lap
+     * @param {number} x - Current X position
+     * @param {number} y - Current Y position
+     * @param {number} heading - Current heading (radians)
+     * @param {number} sigma - Position uncertainty (meters)
+     * @param {number} speed - Current speed (m/s)
+     */
+    recordObservation(x, y, heading, sigma, speed) {
+        if (!this.enabled) return;
 
-        // Find nearest reference point
-        const nearest = this.findNearestPoint(currentX, currentY);
-        if (!nearest) return null;
+        // Skip if poor GPS or too slow (might be reversing/stopped)
+        if (sigma > 4.0 || speed < 2.0) return;
 
-        // Delta = current time - reference time at same position
-        const deltaMs = currentLapTimeMs - nearest.t;
+        // Rate limit observations (max ~10Hz)
+        const now = Date.now();
+        if (now - this.lastObservationTime < 100) return;
+        this.lastObservationTime = now;
 
-        return {
-            deltaMs,
-            distance: nearest.distance,
-            confidence: nearest.distance < 20 ? 'high' : 'low'
-        };
+        // Find nearest centerline point
+        const nearest = this.findNearestPoint(x, y);
+        if (!nearest || nearest.distance > 15) return;  // Too far from track
+
+        // Update the centerline point
+        const point = this.centerline[nearest.index];
+        const weight = 1.0 / (sigma + 0.5);  // Higher weight for better GPS
+
+        point.sumX += x * weight;
+        point.sumY += y * weight;
+        point.sumHeadingSin += Math.sin(heading) * weight;
+        point.sumHeadingCos += Math.cos(heading) * weight;
+        point.sumWeight += weight;
+        point.lapCount++;
+
+        // Update position (running weighted average)
+        point.x = point.sumX / point.sumWeight;
+        point.y = point.sumY / point.sumWeight;
+        point.heading = Math.atan2(
+            point.sumHeadingSin / point.sumWeight,
+            point.sumHeadingCos / point.sumWeight
+        );
+
+        // Update confidence based on lap count and consistency
+        const expectedCount = point.lapCount;
+        point.confidence = Math.min(1.0, 0.3 + 0.07 * expectedCount);
+
+        this.observationsThisLap++;
     }
 
     findNearestPoint(x, y) {
-        const cellX = Math.floor(x / this.cellSize);
-        const cellY = Math.floor(y / this.cellSize);
+        const cellX = Math.floor(x / this.gridSize);
+        const cellY = Math.floor(y / this.gridSize);
 
-        let bestIdx = -1;
+        let best = null;
         let bestDist = Infinity;
 
         // Search 3x3 neighborhood
@@ -1537,28 +2082,797 @@ class DeltaCalculator {
                 const indices = this.grid.get(key) || [];
 
                 for (const i of indices) {
-                    const ref = this.referenceLap[i];
-                    const dist = Math.sqrt((x - ref.x) ** 2 + (y - ref.y) ** 2);
+                    const p = this.centerline[i];
+                    const dist = Math.sqrt((x - p.x) ** 2 + (y - p.y) ** 2);
 
                     if (dist < bestDist) {
                         bestDist = dist;
-                        bestIdx = i;
+                        best = { index: i, distance: dist, point: p };
                     }
                 }
             }
         }
 
-        if (bestIdx === -1) return null;
+        return best;
+    }
+
+    /**
+     * Finalize learning at end of lap
+     * @returns {Object} Updated track
+     */
+    finalizeLap() {
+        // Rebuild spatial index with updated positions
+        this.buildSpatialIndex();
+
+        // Update track centerline
+        this.track.centerline = this.centerline.map(p => ({
+            x: p.x,
+            y: p.y,
+            heading: p.heading,
+            curvature: p.curvature,
+            confidence: p.confidence,
+            lapCount: p.lapCount
+        }));
+
+        // Update track metadata
+        this.track.lastLearnedLap = Date.now();
+        this.track.modified = Date.now();
+
+        // Optionally recalculate timing line after significant learning
+        const avgLapCount = this.centerline.reduce((s, p) => s + p.lapCount, 0) / this.centerline.length;
+        if (avgLapCount >= 3 && avgLapCount % 3 === 0) {
+            // Recalculate timing line every 3 laps
+            this.track.startLine = this.recalculateTimingLine('start');
+            if (this.track.type === 'point_to_point') {
+                this.track.finishLine = this.recalculateTimingLine('finish');
+            }
+        }
+
+        const result = {
+            track: this.track,
+            stats: this.getStats(),
+            observationsThisLap: this.observationsThisLap
+        };
+
+        // Reset for next lap
+        this.observationsThisLap = 0;
+
+        return result;
+    }
+
+    recalculateTimingLine(which) {
+        const windowSize = Math.min(10, Math.floor(this.centerline.length * 0.02));
+        const window = which === 'start'
+            ? this.centerline.slice(0, windowSize)
+            : this.centerline.slice(-windowSize);
+
+        let sumX = 0, sumY = 0, sumWeight = 0;
+        let sumSin = 0, sumCos = 0;
+
+        for (const p of window) {
+            const weight = p.confidence || 0.5;
+            sumX += p.x * weight;
+            sumY += p.y * weight;
+            sumSin += Math.sin(p.heading) * weight;
+            sumCos += Math.cos(p.heading) * weight;
+            sumWeight += weight;
+        }
+
+        const centerX = sumX / sumWeight;
+        const centerY = sumY / sumWeight;
+        const direction = Math.atan2(sumSin / sumWeight, sumCos / sumWeight);
+
+        const lineDirection = which === 'finish'
+            ? this.wrapAngle(direction + Math.PI)
+            : direction;
+
+        const perpAngle = direction + Math.PI / 2;
+        const halfWidth = 12;
 
         return {
-            t: this.referenceLap[bestIdx].t,
-            distance: bestDist
+            p1: [centerX + Math.cos(perpAngle) * halfWidth, centerY + Math.sin(perpAngle) * halfWidth],
+            p2: [centerX - Math.cos(perpAngle) * halfWidth, centerY - Math.sin(perpAngle) * halfWidth],
+            direction: lineDirection
         };
     }
 
+    getStats() {
+        const avgConfidence = this.centerline.reduce((s, p) => s + p.confidence, 0) / this.centerline.length;
+        const avgLapCount = this.centerline.reduce((s, p) => s + p.lapCount, 0) / this.centerline.length;
+        const lowConfidencePoints = this.centerline.filter(p => p.confidence < 0.5).length;
+
+        return {
+            avgConfidence,
+            avgLapCount: Math.round(avgLapCount * 10) / 10,
+            lowConfidencePoints,
+            totalPoints: this.centerline.length,
+            learningEnabled: this.enabled
+        };
+    }
+
+    setEnabled(enabled) {
+        this.enabled = enabled;
+        this.track.learningEnabled = enabled;
+    }
+
+    wrapAngle(a) {
+        while (a > Math.PI) a -= 2 * Math.PI;
+        while (a < -Math.PI) a += 2 * Math.PI;
+        return a;
+    }
+}
+```
+
+### Learning UI (in Track Manager)
+
+```html
+<div class="bbTrackLearning" id="track-learning">
+    <div class="bbLearningHeader">
+        <span class="bbLearningTitle">Track Learning</span>
+        <label class="bbLearningToggle">
+            <input type="checkbox" id="learning-enabled" checked>
+            <span class="bbToggleSlider"></span>
+        </label>
+    </div>
+
+    <div class="bbLearningStats">
+        <div class="bbLearningStat">
+            <span class="bbLearningValue" id="learning-confidence">—</span>
+            <span class="bbLearningLabel">Confidence</span>
+        </div>
+        <div class="bbLearningStat">
+            <span class="bbLearningValue" id="learning-laps">—</span>
+            <span class="bbLearningLabel">Laps Learned</span>
+        </div>
+    </div>
+
+    <div class="bbLearningBar">
+        <div class="bbLearningBarFill" id="learning-bar"></div>
+    </div>
+
+    <div class="bbLearningHint" id="learning-hint">
+        Drive more laps to improve accuracy
+    </div>
+
+    <button class="bbLearningReset" id="btn-reset-learning">Reset Learning</button>
+</div>
+```
+
+```css
+.bbTrackLearning {
+    background: rgba(128,128,128,0.1);
+    border-radius: 12px;
+    padding: 16px;
+    margin-top: 16px;
+}
+
+.bbLearningHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.bbLearningTitle {
+    font-weight: 600;
+}
+
+.bbLearningToggle {
+    position: relative;
+    width: 44px;
+    height: 24px;
+}
+
+.bbLearningToggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.bbToggleSlider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(128,128,128,0.3);
+    border-radius: 12px;
+    transition: 0.2s;
+}
+
+.bbToggleSlider:before {
+    position: absolute;
+    content: "";
+    height: 20px;
+    width: 20px;
+    left: 2px;
+    bottom: 2px;
+    background: white;
+    border-radius: 50%;
+    transition: 0.2s;
+}
+
+.bbLearningToggle input:checked + .bbToggleSlider {
+    background: #34c759;
+}
+
+.bbLearningToggle input:checked + .bbToggleSlider:before {
+    transform: translateX(20px);
+}
+
+.bbLearningStats {
+    display: flex;
+    justify-content: space-around;
+    margin-bottom: 12px;
+}
+
+.bbLearningStat {
+    text-align: center;
+}
+
+.bbLearningValue {
+    font-size: 20px;
+    font-weight: 600;
+    display: block;
+}
+
+.bbLearningLabel {
+    font-size: 11px;
+    opacity: 0.6;
+}
+
+.bbLearningBar {
+    height: 6px;
+    background: rgba(128,128,128,0.2);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+.bbLearningBarFill {
+    height: 100%;
+    background: linear-gradient(90deg, #ff9500, #34c759);
+    transition: width 0.3s;
+}
+
+.bbLearningHint {
+    font-size: 12px;
+    opacity: 0.6;
+    text-align: center;
+    margin-bottom: 12px;
+}
+
+.bbLearningReset {
+    width: 100%;
+    padding: 10px;
+    border: none;
+    border-radius: 8px;
+    background: rgba(255, 59, 48, 0.1);
+    color: #ff3b30;
+    font-weight: 500;
+    cursor: pointer;
+}
+```
+
+### Integration
+
+```javascript
+let trackLearner = null;
+
+// When track is activated
+function activateTrack(track) {
+    // ... existing activation code ...
+
+    // Initialize learner if track has centerline
+    if (track.centerline && track.centerline.length > 0) {
+        trackLearner = new TrackLearner(track);
+        updateLearningUI(trackLearner.getStats());
+    } else {
+        trackLearner = null;
+    }
+}
+
+// During telemetry updates (when timing)
+function updateLapTiming() {
+    // ... existing timing code ...
+
+    // Record learning observation during lap
+    if (trackLearner && isTimingActive) {
+        trackLearner.recordObservation(
+            currentPos.x,
+            currentPos.y,
+            currentPos.yaw,
+            lastDiagnostics?.ekf?.pos_sigma || 3.0,
+            currentPos.speed / 3.6
+        );
+    }
+}
+
+// When lap completes
+function onLapComplete(lapTimeMs) {
+    // ... existing lap complete code ...
+
+    // Finalize learning
+    if (trackLearner) {
+        const result = trackLearner.finalizeLap();
+
+        // Save updated track to IndexedDB
+        saveTrack(result.track);
+
+        // Update ESP32 with refined timing line
+        if (result.stats.avgLapCount >= 3) {
+            sendTimingLineToESP32(result.track);
+        }
+
+        updateLearningUI(result.stats);
+    }
+}
+
+function updateLearningUI(stats) {
+    if (!stats) return;
+
+    $('learning-confidence').textContent = Math.round(stats.avgConfidence * 100) + '%';
+    $('learning-laps').textContent = stats.avgLapCount.toFixed(1);
+    $('learning-bar').style.width = (stats.avgConfidence * 100) + '%';
+
+    if (stats.avgConfidence > 0.8) {
+        $('learning-hint').textContent = 'Track well learned!';
+    } else if (stats.avgLapCount < 3) {
+        $('learning-hint').textContent = 'Drive more laps to improve accuracy';
+    } else {
+        $('learning-hint').textContent = 'Learning in progress...';
+    }
+}
+```
+
+---
+
+## Phase 8: Track Auto-Detection (Enhanced) ❌ NOT STARTED
+
+### Goal
+Automatically detect when user is near a saved track and offer to activate it.
+
+### Enhanced Detection
+
+Uses centerline matching (not just bounding box) for more accurate detection:
+
+```javascript
+class TrackAutoDetector {
+    constructor(trackDb) {
+        this.trackDb = trackDb;
+        this.currentTrack = null;
+        this.candidateTrack = null;
+        this.candidateConfidence = 0;
+        this.lastCheckTime = 0;
+        this.checkInterval = 3000;  // Check every 3 seconds
+        this.enabled = true;
+    }
+
+    async checkPosition(x, y, heading) {
+        const now = Date.now();
+        if (now - this.lastCheckTime < this.checkInterval) return null;
+        this.lastCheckTime = now;
+
+        if (this.currentTrack || !this.enabled) return null;
+
+        const tracks = await this.trackDb.getAllTracks();
+        const candidates = [];
+
+        for (const track of tracks) {
+            // Quick bounds check first
+            if (!track.bounds || !this.isWithinBounds(x, y, track.bounds)) continue;
+
+            // Detailed centerline match
+            const match = this.matchCenterline(x, y, heading, track);
+            if (match && match.score > 0.4) {
+                candidates.push({ track, ...match });
+            }
+        }
+
+        if (candidates.length === 0) {
+            this.candidateTrack = null;
+            this.candidateConfidence = 0;
+            return null;
+        }
+
+        // Best match
+        candidates.sort((a, b) => b.score - a.score);
+        const best = candidates[0];
+
+        // Require consistent detection (2+ checks)
+        if (this.candidateTrack?.id === best.track.id) {
+            this.candidateConfidence += 0.4;
+        } else {
+            this.candidateTrack = best.track;
+            this.candidateConfidence = 0.4;
+        }
+
+        if (this.candidateConfidence >= 0.8) {
+            return {
+                track: best.track,
+                confidence: this.candidateConfidence,
+                distance: best.distance
+            };
+        }
+
+        return null;
+    }
+
+    matchCenterline(x, y, heading, track) {
+        if (!track.centerline || track.centerline.length === 0) return null;
+
+        // Find nearest centerline point
+        let bestDist = Infinity;
+        let bestPoint = null;
+
+        for (const p of track.centerline) {
+            const dist = Math.sqrt((x - p.x) ** 2 + (y - p.y) ** 2);
+            if (dist < bestDist) {
+                bestDist = dist;
+                bestPoint = p;
+            }
+        }
+
+        if (!bestPoint || bestDist > 50) return null;  // Too far
+
+        // Score based on distance and heading alignment
+        const distanceScore = Math.max(0, 1 - bestDist / 50);
+        const headingDiff = Math.abs(this.wrapAngle(heading - bestPoint.heading));
+        const headingScore = Math.max(0, 1 - headingDiff / Math.PI);
+
+        const score = distanceScore * 0.6 + headingScore * 0.4;
+
+        return { distance: bestDist, score };
+    }
+
+    isWithinBounds(x, y, bounds) {
+        const margin = 100;  // Extra margin for detection
+        return x >= bounds.minX - margin && x <= bounds.maxX + margin &&
+               y >= bounds.minY - margin && y <= bounds.maxY + margin;
+    }
+
+    setCurrentTrack(track) {
+        this.currentTrack = track;
+        this.candidateTrack = null;
+        this.candidateConfidence = 0;
+    }
+
+    clearCurrentTrack() {
+        this.currentTrack = null;
+    }
+
+    wrapAngle(a) {
+        while (a > Math.PI) a -= 2 * Math.PI;
+        while (a < -Math.PI) a += 2 * Math.PI;
+        return a;
+    }
+}
+```
+
+### Auto-Detection UI
+
+```javascript
+function showTrackDetectedPrompt(detection) {
+    const toast = document.createElement('div');
+    toast.className = 'bbTrackDetectedToast';
+    toast.innerHTML = `
+        <div class="bbToastContent">
+            <div class="bbToastIcon">📍</div>
+            <div class="bbToastText">
+                <div class="bbToastTitle">Track detected</div>
+                <div class="bbToastName">${detection.track.name}</div>
+            </div>
+        </div>
+        <div class="bbToastActions">
+            <button class="bbToastBtn" onclick="dismissTrackDetection()">Dismiss</button>
+            <button class="bbToastBtn primary" onclick="activateDetectedTrack()">Activate</button>
+        </div>
+    `;
+
+    document.body.appendChild(toast);
+    detectedTrackPending = detection.track;
+
+    // Auto-dismiss after 10 seconds
+    setTimeout(() => {
+        if (toast.parentNode) {
+            toast.parentNode.removeChild(toast);
+            detectedTrackPending = null;
+        }
+    }, 10000);
+}
+```
+
+```css
+.bbTrackDetectedToast {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    right: 20px;
+    background: var(--surface);
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    z-index: 300;
+    animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+    from { transform: translateY(-100%); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+.bbToastContent {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.bbToastIcon {
+    font-size: 24px;
+}
+
+.bbToastTitle {
+    font-size: 13px;
+    opacity: 0.7;
+}
+
+.bbToastName {
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.bbToastActions {
+    display: flex;
+    gap: 10px;
+}
+
+.bbToastBtn {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    border-radius: 8px;
+    font-weight: 500;
+    cursor: pointer;
+    background: rgba(128,128,128,0.15);
+    color: var(--text);
+}
+
+.bbToastBtn.primary {
+    background: #007aff;
+    color: white;
+}
+```
+
+---
+
+## Phase 9: Reference Lap & Predictive Delta (Enhanced) ❌ NOT STARTED
+
+### Goal
+Real-time delta calculation comparing current lap to best lap, using arc-length parameterization for accuracy.
+
+### Why Arc-Length?
+
+Position-based matching has problems:
+- Driver takes different lines through corners
+- GPS noise causes false position matches
+- Doesn't work well on straights (many points at same position)
+
+**Arc-length** (distance traveled) is more robust:
+- At 500m into the lap, compare times regardless of exact position
+- Works even if driver takes different lines
+- More stable delta display
+
+### Enhanced Reference Lap Structure
+
+```javascript
+// Reference lap stored in IndexedDB
+{
+    id: string,
+    trackId: string,
+    lapTimeMs: number,
+    created: timestamp,
+    isBest: boolean,
+
+    // Samples with arc-length
+    // Format: [arcLength:f32, x:f32, y:f32, timestamp:u32] × N
+    // 16 bytes per sample, ~60KB for 2-minute lap at 25Hz
+    samples: ArrayBuffer,
+
+    // Metadata
+    avgSpeed: number,
+    maxSpeed: number,
+    sampleCount: number
+}
+```
+
+### Implementation: `DeltaCalculator` Class
+
+```javascript
+class DeltaCalculator {
+    constructor() {
+        this.reference = null;
+        this.refArcLengths = [];
+
+        // Current lap state
+        this.currentArcLength = 0;
+        this.lastPos = null;
+        this.isActive = false;
+    }
+
+    setReferenceLap(samplesBuffer) {
+        this.reference = this.decodeSamples(samplesBuffer);
+        if (this.reference.length > 0) {
+            this.refArcLengths = this.computeArcLengths(this.reference);
+        }
+    }
+
+    decodeSamples(buffer) {
+        const view = new DataView(buffer);
+        const samples = [];
+
+        for (let i = 0; i < buffer.byteLength; i += 16) {
+            samples.push({
+                arcLength: view.getFloat32(i, true),
+                x: view.getFloat32(i + 4, true),
+                y: view.getFloat32(i + 8, true),
+                t: view.getUint32(i + 12, true)
+            });
+        }
+
+        return samples;
+    }
+
+    computeArcLengths(samples) {
+        return samples.map(s => s.arcLength);
+    }
+
+    startLap() {
+        this.currentArcLength = 0;
+        this.lastPos = null;
+        this.isActive = true;
+    }
+
+    /**
+     * Update with current position and get delta
+     * @returns {Object|null} { deltaMs, method, confidence }
+     */
+    update(x, y, currentLapTimeMs) {
+        if (!this.isActive || !this.reference || this.reference.length < 10) {
+            return null;
+        }
+
+        // Update arc length (cumulative distance)
+        if (this.lastPos) {
+            const dx = x - this.lastPos.x;
+            const dy = y - this.lastPos.y;
+            this.currentArcLength += Math.sqrt(dx * dx + dy * dy);
+        }
+        this.lastPos = { x, y };
+
+        // Find reference time at same arc length
+        const refTime = this.interpolateTime(this.currentArcLength);
+        if (refTime === null) return null;
+
+        const deltaMs = currentLapTimeMs - refTime;
+
+        return {
+            deltaMs,
+            arcLength: this.currentArcLength,
+            method: 'arc_length',
+            confidence: 'high'
+        };
+    }
+
+    interpolateTime(arcLength) {
+        if (this.refArcLengths.length === 0) return null;
+
+        // Clamp to valid range
+        const maxArc = this.refArcLengths[this.refArcLengths.length - 1];
+        if (arcLength > maxArc) {
+            // Past end of reference - extrapolate
+            return this.reference[this.reference.length - 1].t;
+        }
+
+        // Binary search for bracket
+        let lo = 0, hi = this.refArcLengths.length - 1;
+
+        while (lo < hi - 1) {
+            const mid = Math.floor((lo + hi) / 2);
+            if (this.refArcLengths[mid] < arcLength) {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+        }
+
+        // Linear interpolation
+        const arcLo = this.refArcLengths[lo];
+        const arcHi = this.refArcLengths[hi];
+        const t = (arcLength - arcLo) / (arcHi - arcLo);
+
+        return this.reference[lo].t + t * (this.reference[hi].t - this.reference[lo].t);
+    }
+
+    endLap() {
+        this.isActive = false;
+    }
+
     clear() {
-        this.referenceLap = null;
-        this.grid.clear();
+        this.reference = null;
+        this.refArcLengths = [];
+        this.currentArcLength = 0;
+        this.lastPos = null;
+        this.isActive = false;
+    }
+}
+```
+
+### Lap Recorder (for creating reference laps)
+
+```javascript
+class LapRecorder {
+    constructor() {
+        this.samples = [];
+        this.arcLength = 0;
+        this.lastPos = null;
+        this.recording = false;
+    }
+
+    startLap() {
+        this.samples = [];
+        this.arcLength = 0;
+        this.lastPos = null;
+        this.recording = true;
+    }
+
+    addSample(x, y, lapTimeMs) {
+        if (!this.recording) return;
+
+        // Update arc length
+        if (this.lastPos) {
+            const dx = x - this.lastPos.x;
+            const dy = y - this.lastPos.y;
+            this.arcLength += Math.sqrt(dx * dx + dy * dy);
+        }
+        this.lastPos = { x, y };
+
+        // Sample at ~25Hz (every ~40ms)
+        const lastT = this.samples.length > 0
+            ? this.samples[this.samples.length - 1].t
+            : -40;
+
+        if (lapTimeMs - lastT >= 40) {
+            this.samples.push({
+                arcLength: this.arcLength,
+                x, y,
+                t: lapTimeMs
+            });
+        }
+    }
+
+    finishLap() {
+        this.recording = false;
+        return this.encodeSamples();
+    }
+
+    encodeSamples() {
+        // Pack: [arcLength:f32, x:f32, y:f32, timestamp:u32] × N
+        const buffer = new ArrayBuffer(this.samples.length * 16);
+        const view = new DataView(buffer);
+
+        for (let i = 0; i < this.samples.length; i++) {
+            const offset = i * 16;
+            view.setFloat32(offset, this.samples[i].arcLength, true);
+            view.setFloat32(offset + 4, this.samples[i].x, true);
+            view.setFloat32(offset + 8, this.samples[i].y, true);
+            view.setUint32(offset + 12, this.samples[i].t, true);
+        }
+
+        return buffer;
+    }
+
+    cancel() {
+        this.recording = false;
+        this.samples = [];
     }
 }
 ```
@@ -1566,29 +2880,42 @@ class DeltaCalculator {
 ### Delta Display
 
 ```javascript
-function updateDeltaDisplay(deltaResult) {
-    const deltaEl = $('lap-delta');
+function updateLiveDelta(deltaResult) {
+    const el = $('lap-delta');
 
-    if (!deltaResult || deltaResult.confidence === 'low') {
-        deltaEl.textContent = '—';
-        deltaEl.className = 'bbLapHistValue bbNum delta';
+    if (!deltaResult) {
+        el.textContent = '—';
+        el.className = 'bbLapHistValue bbNum delta';
         return;
     }
 
     const { deltaMs } = deltaResult;
-    const sign = deltaMs > 0 ? '+' : '';
-    const seconds = (deltaMs / 1000).toFixed(3);
+    const sign = deltaMs >= 0 ? '+' : '';
+    const seconds = Math.abs(deltaMs / 1000).toFixed(2);
 
-    deltaEl.textContent = `${sign}${seconds}`;
+    el.textContent = `${sign}${deltaMs >= 0 ? '' : '-'}${seconds}`;
 
-    if (deltaMs < -100) {
-        deltaEl.className = 'bbLapHistValue bbNum delta faster';
+    // Color coding with smooth transitions
+    if (deltaMs < -500) {
+        el.className = 'bbLapHistValue bbNum delta much-faster';
+    } else if (deltaMs < -100) {
+        el.className = 'bbLapHistValue bbNum delta faster';
+    } else if (deltaMs > 500) {
+        el.className = 'bbLapHistValue bbNum delta much-slower';
     } else if (deltaMs > 100) {
-        deltaEl.className = 'bbLapHistValue bbNum delta slower';
+        el.className = 'bbLapHistValue bbNum delta slower';
     } else {
-        deltaEl.className = 'bbLapHistValue bbNum delta';  // Neutral
+        el.className = 'bbLapHistValue bbNum delta neutral';
     }
 }
+```
+
+```css
+.delta.much-faster { color: #00d26a; font-weight: 700; }
+.delta.faster { color: #34c759; }
+.delta.neutral { color: var(--text); opacity: 0.7; }
+.delta.slower { color: #ff9500; }
+.delta.much-slower { color: #ff3b30; font-weight: 700; }
 ```
 
 ---
@@ -1596,9 +2923,46 @@ function updateDeltaDisplay(deltaResult) {
 ## Phase 10: Session History ❌ NOT STARTED
 
 ### Goal
-Track lap times across sessions and display personal bests.
+Track lap times across sessions, display session history, and manage reference laps.
 
-### Session Management
+### Enhanced Session Structure
+
+```javascript
+{
+    id: string,
+    trackId: string,
+    date: timestamp,
+
+    // Session conditions (optional)
+    conditions: {
+        weather: 'dry' | 'wet' | 'damp' | null,
+        temperature: number | null,  // Celsius
+        notes: string | null
+    },
+
+    laps: [
+        {
+            lapTimeMs: number,
+            deltaMs: number | null,     // vs best at time
+            isValid: boolean,
+            invalidReason: string | null,
+            maxSpeed: number,           // km/h
+            avgSpeed: number            // km/h
+        },
+        ...
+    ],
+
+    bestLapMs: number | null,
+    totalLaps: number,
+    totalDistance: number,  // meters
+
+    // Learning contribution
+    learningApplied: boolean,
+    pointsUpdated: number
+}
+```
+
+### Session Manager
 
 ```javascript
 class SessionManager {
@@ -1607,28 +2971,38 @@ class SessionManager {
         this.currentSession = null;
     }
 
-    startSession(trackId) {
+    startSession(trackId, conditions = {}) {
         this.currentSession = {
             id: crypto.randomUUID(),
             trackId,
             date: Date.now(),
+            conditions,
             laps: [],
             bestLapMs: null,
-            totalLaps: 0
+            totalLaps: 0,
+            totalDistance: 0,
+            learningApplied: false,
+            pointsUpdated: 0
         };
     }
 
-    recordLap(lapTimeMs, deltaMs, isValid = true) {
+    recordLap(lapData) {
         if (!this.currentSession) return;
+
+        const { lapTimeMs, deltaMs, isValid = true, invalidReason = null, maxSpeed, avgSpeed, distance } = lapData;
 
         this.currentSession.laps.push({
             lapTimeMs,
             deltaMs,
-            isValid
+            isValid,
+            invalidReason,
+            maxSpeed,
+            avgSpeed
         });
 
         if (isValid) {
             this.currentSession.totalLaps++;
+            this.currentSession.totalDistance += distance || 0;
 
             if (!this.currentSession.bestLapMs || lapTimeMs < this.currentSession.bestLapMs) {
                 this.currentSession.bestLapMs = lapTimeMs;
@@ -1636,23 +3010,27 @@ class SessionManager {
         }
     }
 
+    setLearningStats(applied, pointsUpdated) {
+        if (this.currentSession) {
+            this.currentSession.learningApplied = applied;
+            this.currentSession.pointsUpdated = pointsUpdated;
+        }
+    }
+
     async endSession() {
-        if (!this.currentSession) return;
+        if (!this.currentSession) return null;
 
         if (this.currentSession.laps.length > 0) {
             await this.trackDb.saveSession(this.currentSession);
-
-            // Update track lap count
-            const track = await this.trackDb.getTrack(this.currentSession.trackId);
-            if (track) {
-                track.lapCount = (track.lapCount || 0) + this.currentSession.totalLaps;
-                await this.trackDb.saveTrack(track);
-            }
         }
 
         const session = this.currentSession;
         this.currentSession = null;
         return session;
+    }
+
+    getCurrentSession() {
+        return this.currentSession;
     }
 }
 ```
@@ -1660,17 +3038,34 @@ class SessionManager {
 ### Session History UI
 
 ```html
-<div class="bbSessionHistory" id="session-history">
-    <div class="bbHistoryHeader">Recent Sessions</div>
-    <div class="bbHistoryList" id="history-list">
+<div class="bbSessionsSection" id="sessions-section">
+    <div class="bbSectHeader">
+        <span>Session History</span>
+        <button class="bbSectToggle" id="btn-toggle-sessions">▼</button>
+    </div>
+
+    <div class="bbSessionsList" id="sessions-list">
         <!-- Populated dynamically -->
+    </div>
+
+    <div class="bbSessionsEmpty" id="sessions-empty">
+        No sessions recorded yet
     </div>
 </div>
 ```
 
 ```javascript
 async function renderSessionHistory(trackId) {
-    const sessions = await trackDb.getSessions(trackId);
+    const sessions = await trackDb.getSessionsForTrack(trackId);
+
+    if (sessions.length === 0) {
+        $('sessions-list').style.display = 'none';
+        $('sessions-empty').style.display = 'block';
+        return;
+    }
+
+    $('sessions-list').style.display = 'block';
+    $('sessions-empty').style.display = 'none';
 
     // Sort by date, newest first
     sessions.sort((a, b) => b.date - a.date);
@@ -1678,15 +3073,97 @@ async function renderSessionHistory(trackId) {
     // Show last 10 sessions
     const recent = sessions.slice(0, 10);
 
-    $('history-list').innerHTML = recent.map(session => `
-        <div class="bbSessionItem">
-            <div class="bbSessionDate">${formatDate(session.date)}</div>
-            <div class="bbSessionStats">
-                <span>Best: ${formatLapTime(session.bestLapMs)}</span>
-                <span>${session.totalLaps} laps</span>
+    $('sessions-list').innerHTML = recent.map(session => `
+        <div class="bbSessionItem" onclick="showSessionDetail('${session.id}')">
+            <div class="bbSessionLeft">
+                <div class="bbSessionDate">${formatSessionDate(session.date)}</div>
+                <div class="bbSessionLaps">${session.totalLaps} ${session.totalLaps === 1 ? 'lap' : 'laps'}</div>
+            </div>
+            <div class="bbSessionRight">
+                <div class="bbSessionBest">${fmtLapTime(session.bestLapMs)}</div>
+                <div class="bbSessionLabel">best</div>
             </div>
         </div>
     `).join('');
+}
+
+function formatSessionDate(timestamp) {
+    const d = new Date(timestamp);
+    const now = new Date();
+    const diff = now - d;
+
+    if (diff < 86400000 && d.getDate() === now.getDate()) {
+        return 'Today, ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } else if (diff < 172800000) {
+        return 'Yesterday, ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } else {
+        return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) +
+               ', ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+}
+```
+
+```css
+.bbSessionsSection {
+    margin-top: 20px;
+}
+
+.bbSectHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(128,128,128,0.2);
+    font-weight: 600;
+}
+
+.bbSectToggle {
+    background: none;
+    border: none;
+    font-size: 12px;
+    opacity: 0.5;
+    cursor: pointer;
+}
+
+.bbSessionItem {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(128,128,128,0.1);
+    cursor: pointer;
+}
+
+.bbSessionItem:active {
+    background: rgba(128,128,128,0.1);
+}
+
+.bbSessionDate {
+    font-weight: 500;
+}
+
+.bbSessionLaps {
+    font-size: 12px;
+    opacity: 0.6;
+}
+
+.bbSessionBest {
+    font-size: 18px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+}
+
+.bbSessionLabel {
+    font-size: 11px;
+    opacity: 0.5;
+    text-align: right;
+}
+
+.bbSessionsEmpty {
+    text-align: center;
+    padding: 30px;
+    opacity: 0.5;
 }
 ```
 
@@ -1696,95 +3173,162 @@ async function renderSessionHistory(trackId) {
 
 ### Edge Cases to Handle
 
-1. **GPS Warmup**: Don't allow track creation or timing until GPS is warmed up
+1. **GPS Warmup**: Don't allow track creation/recording until GPS warmed up
    ```javascript
-   if (!telemetry.gps_valid) {
-       showWarning('Waiting for GPS lock...');
+   if (!diagnostics?.gps?.warmup_complete) {
+       showWarning('Waiting for GPS warmup...');
        return;
    }
    ```
 
-2. **Track Boundary Exit**: Warn if vehicle leaves track bounds significantly
+2. **Poor GPS Quality**: Warn during recording if sigma too high
+   ```javascript
+   if (sigma > 5.0) {
+       showQualityWarning('Poor GPS signal');
+   }
+   ```
+
+3. **Track Boundary Exit**: Warn if vehicle leaves track bounds
    ```javascript
    if (!isWithinBounds(x, y, track.bounds)) {
        showWarning('Outside track area');
    }
    ```
 
-3. **Power Loss / Page Refresh**:
+4. **Power Loss / Page Refresh**:
    - Current lap is lost (acceptable)
+   - Active track ID persisted in localStorage
    - Session data saved on each lap completion
-   - Track configuration persisted in IndexedDB
 
-4. **Multiple Crossings**: Handled by firmware debounce (500ms)
+5. **Multiple Crossings**: Handled by firmware debounce (500ms)
 
-5. **Reverse Direction**: Handled by firmware direction validation
+6. **Reverse Direction**: Handled by firmware direction validation (±90°)
 
-6. **Very Long Laps**: u32 milliseconds supports up to ~70 minutes
-
-7. **Coordinate System Reset**: If ESP32 restarts, coordinate origin changes
-   - Compare GPS lat/lon to track's gpsOrigin
-   - Warn user if significant drift detected
-
-### UI Polish
-
-1. **Lap Time Formatting**: `M:SS.mmm` (e.g., `1:23.456`)
+7. **Coordinate System Reset**: Compare GPS lat/lon to stored origin
    ```javascript
-   function formatLapTime(ms) {
-       if (ms === null) return '—:——';
-       const totalSec = ms / 1000;
-       const min = Math.floor(totalSec / 60);
-       const sec = totalSec % 60;
-       return `${min}:${sec.toFixed(3).padStart(6, '0')}`;
-   }
+   const drift = gpsDistance(lat, lon, track.gpsOrigin.lat, track.gpsOrigin.lon);
+   if (drift > 100) showWarning('GPS origin mismatch');
    ```
 
-2. **Delta Formatting**: `+/-S.mmm` with color
-   - Green: faster than reference
-   - Red: slower than reference
-   - Gray: no reference or low confidence
+### Quality Indicators
 
-3. **Animations**:
-   - Crossing flash (green pulse)
-   - New best celebration (scale pulse)
-   - State change transitions
+**GPS Quality:**
+| Sigma | Rating | Color |
+|-------|--------|-------|
+| < 2m | Excellent | Green |
+| 2-4m | Good | Green |
+| 4-5m | Fair | Yellow |
+| > 5m | Poor | Red |
 
-4. **Audio Cues** (optional, future enhancement):
-   - Beep on line crossing
-   - Different tone for new best
+**Track Confidence:**
+| Laps | Confidence |
+|------|------------|
+| 1 | 30% |
+| 5 | 65% |
+| 10 | 80% |
+| 20+ | 95% |
 
 ### Testing with Sample Data
 
-**Test 1: Geometry Validation**
+**Test Data Files (`data/sample-tracks/`):**
+
+The existing `austin_raceline.csv` provides good test data. Additional test files would help:
+
+1. **`austin_with_timestamps.csv`** - With timing for delta tests
+   ```csv
+   t_ms,x_m,y_m,heading_rad,speed_mps
+   0,-2.84,-0.96,1.57,0
+   40,-2.75,-0.90,1.56,8.5
+   ```
+
+2. **`austin_noisy.csv`** - With GPS-like noise (σ=1.5m)
+   ```csv
+   x_m,y_m,sigma_m
+   -2.84,0.96,1.8
+   ```
+
+3. **`simple_oval.csv`** - Small test track
+   ```csv
+   x_m,y_m
+   0,0
+   100,0
+   150,50
+   100,100
+   0,100
+   -50,50
+   0,0
+   ```
+
+**Automated Tests:**
+
 ```javascript
-// Load austin_raceline.csv
-// Set timing line at known position
-// Replay path, verify exactly 1 crossing per lap
+// Test 1: Track Recorder
+async function testTrackRecorder() {
+    const recorder = new TrackRecorder();
+    const path = loadCSV('simple_oval.csv');
+
+    recorder.start(path[0], 'loop');
+    for (const p of path) recorder.addSample(p);
+
+    const track = recorder.finish('Test', origin);
+    assert(track.centerline.length > 10);
+    assert(track.startLine);
+}
+
+// Test 2: Corner Preservation
+async function testCornerPreservation() {
+    // COTA has ~20 corners
+    const track = recordTrack('austin_raceline.csv');
+    const corners = track.centerline.filter(p => p.curvature > 0.02);
+    assert(corners.length >= 15);
+}
+
+// Test 3: Delta Accuracy
+async function testDelta() {
+    const calc = new DeltaCalculator();
+    calc.setReferenceLap(refLap);  // 90 seconds
+
+    // Simulate 5% slower lap
+    for (const p of refLap) {
+        const delta = calc.update(p.x, p.y, p.t * 1.05);
+        assert(Math.abs(delta.deltaMs - p.t * 0.05) < 500);
+    }
+}
+
+// Test 4: Learning Convergence
+async function testLearning() {
+    const learner = new TrackLearner(noisyTrack);
+
+    for (let lap = 0; lap < 10; lap++) {
+        for (const p of truePath) learner.recordObservation(p.x, p.y, p.heading, 2.0, 30);
+        learner.finalizeLap();
+    }
+
+    assert(learner.getStats().avgConfidence > 0.7);
+}
 ```
 
-**Test 2: Delta Accuracy**
-```javascript
-// Use austin_raceline.csv as reference lap
-// Create "slow" version with timestamps scaled 1.05x
-// Verify delta shows +5% throughout lap
-```
+### Manual Test Checklist
 
-**Test 3: Track Recording**
-```javascript
-// Replay austin_raceline.csv through TrackRecorder
-// Verify:
-// - Loop detection triggers
-// - Timing line direction is correct
-// - Bounds contain entire track
-// - Path shape matches original
-```
+**Track Recording:**
+- [ ] GPS quality indicator shows correctly
+- [ ] Distance counter increments
+- [ ] Corner counter detects turns
+- [ ] Loop detection triggers at start
+- [ ] P2P finish marking works
+- [ ] Track saves to IndexedDB
 
-**Test 4: IndexedDB Operations**
-```javascript
-// Create, read, update, delete tracks
-// Save and retrieve reference laps
-// Verify session history accumulates
-```
+**Track Learning:**
+- [ ] Confidence increases per lap
+- [ ] Reset clears learning data
+- [ ] Timing line refines after laps
+
+**Lap Timing:**
+- [ ] Timer starts/stops on crossings
+- [ ] Best lap updates correctly
+- [ ] Delta displays during lap
+- [ ] Flash on crossing
+- [ ] New best animation
 
 ---
 

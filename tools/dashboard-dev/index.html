@@ -356,9 +356,38 @@ body{
 }
 .bbLapSetupBtn:active{opacity:0.7}
 
-.bbLapActive{display:none;cursor:pointer}
+.bbLapActive{display:none;cursor:pointer;position:relative}
 .bbLapCard.active .bbLapActive{display:block}
 .bbLapCard.active .bbLapSetup{display:none}
+
+/* Lap timer stop button */
+.bbLapStop{
+    position:absolute;
+    top:8px;
+    right:8px;
+    width:28px;
+    height:28px;
+    border-radius:50%;
+    border:none;
+    background:rgba(128,128,128,0.1);
+    color:var(--text-tertiary);
+    font-size:18px;
+    font-weight:300;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    z-index:10;
+    transition:all 0.15s;
+}
+.bbLapStop:hover{
+    background:rgba(255,59,48,0.12);
+    color:#ff3b30;
+}
+.bbLapStop:active{
+    transform:scale(0.95);
+    background:rgba(255,59,48,0.2);
+}
 
 .bbLapMain{
     display:flex;
@@ -638,127 +667,350 @@ body{
     opacity:0.4;
     cursor:not-allowed;
 }
-
-/* TRACK TYPE SELECTOR */
-.bbTrackTypeSelector{
+/* ACTIVE TRACK DISPLAY (unified) */
+.bbActiveTrack{
     display:flex;
-    background:var(--bg);
-    border-radius:10px;
-    padding:3px;
-    margin-bottom:14px;
+    align-items:center;
+    gap:12px;
+    background:rgba(52,199,89,0.1);
+    border:1px solid rgba(52,199,89,0.2);
+    border-radius:12px;
+    padding:12px 14px;
+    margin-bottom:16px;
 }
-.bbTrackTypeBtn{
-    flex:1;
-    padding:10px 12px;
-    border:none;
-    border-radius:8px;
-    background:transparent;
-    font-size:13px;
+.bbActiveTrackInfo{flex:1;min-width:0}
+.bbActiveTrackName{
+    font-size:15px;
     font-weight:600;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+}
+.bbActiveTrackMeta{
+    font-size:12px;
+    color:var(--text-secondary);
+    margin-top:2px;
+}
+.bbActiveTrackClear{
+    width:28px;
+    height:28px;
+    border-radius:50%;
+    border:none;
+    background:rgba(128,128,128,0.12);
     color:var(--text-tertiary);
+    font-size:16px;
     cursor:pointer;
-    font-family:inherit;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    flex-shrink:0;
     transition:all 0.15s;
 }
-.bbTrackTypeBtn.selected{
-    background:var(--surface);
-    color:var(--text);
-    box-shadow:0 1px 3px rgba(0,0,0,0.1);
+.bbActiveTrackClear:active{
+    background:rgba(255,59,48,0.15);
+    color:#ff3b30;
 }
-.bbTrackTypeBtn:active{opacity:0.7}
 
-/* P2P CREATION PROGRESS */
-.bbP2PProgress{
+/* CREATE NEW TRACK (unified) */
+.bbCreateTrackHint{
+    font-size:13px;
+    color:var(--text-secondary);
+    margin:0 0 16px 0;
+    line-height:1.5;
+    text-align:center;
+}
+.bbCreateTrackBtns{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+}
+.bbRecordStartBtn{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:20px 14px 18px;
+    border:2px solid var(--divider);
+    border-radius:16px;
+    background:linear-gradient(180deg, var(--surface) 0%, var(--bg) 100%);
+    cursor:pointer;
+    transition:all 0.2s ease;
+    font-family:inherit;
+    position:relative;
+    overflow:hidden;
+}
+.bbRecordStartBtn::before{
+    content:'';
+    position:absolute;
+    top:0;
+    left:0;
+    right:0;
+    height:3px;
+    background:linear-gradient(90deg, transparent, #ff3b30, transparent);
+    opacity:0;
+    transition:opacity 0.2s;
+}
+.bbRecordStartBtn:hover{
+    border-color:rgba(255,59,48,0.35);
+    background:linear-gradient(180deg, rgba(255,59,48,0.04) 0%, rgba(255,59,48,0.02) 100%);
+}
+.bbRecordStartBtn:hover::before{
+    opacity:1;
+}
+.bbRecordStartBtn:active{
+    transform:scale(0.97);
+    border-color:#ff3b30;
+}
+.bbRecordStartIconWrap{
+    width:48px;
+    height:48px;
+    border-radius:50%;
+    background:rgba(255,59,48,0.1);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    margin-bottom:12px;
+    transition:transform 0.2s, background 0.2s;
+}
+.bbRecordStartBtn:hover .bbRecordStartIconWrap{
+    background:rgba(255,59,48,0.15);
+    transform:scale(1.05);
+}
+.bbRecordStartIcon{
+    font-size:22px;
+    color:#ff3b30;
+    line-height:1;
+}
+.bbRecordStartLabel{
+    font-size:14px;
+    font-weight:600;
+    color:var(--text);
+    margin-bottom:4px;
+}
+.bbRecordStartDesc{
+    font-size:11px;
+    color:var(--text-tertiary);
+    text-align:center;
+    line-height:1.35;
+}
+
+/* TRACK RECORDING OVERLAY (redesigned) */
+.bbRecordOverlay{
+    position:fixed;
+    bottom:0;
+    left:0;
+    right:0;
+    background:var(--surface);
+    padding:24px 20px;
+    padding-bottom:calc(24px + env(safe-area-inset-bottom, 0px));
+    border-radius:24px 24px 0 0;
+    box-shadow:0 -8px 32px rgba(0,0,0,0.18);
+    z-index:250;
+    transform:translateY(100%);
+    transition:transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+    border-top:3px solid #ff3b30;
+}
+.bbRecordOverlay.active{transform:translateY(0)}
+
+.bbRecordState{animation:fadeIn 0.25s ease-out}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+
+.bbRecordHeader{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:10px;
+    margin-bottom:16px;
+}
+.bbRecordPulse{
+    width:12px;
+    height:12px;
+    background:#ff3b30;
+    border-radius:50%;
+    animation:recPulse 1.2s ease-in-out infinite;
+}
+@keyframes recPulse{
+    0%,100%{transform:scale(1);opacity:1;box-shadow:0 0 0 0 rgba(255,59,48,0.5)}
+    50%{transform:scale(0.85);opacity:0.7;box-shadow:0 0 0 8px rgba(255,59,48,0)}
+}
+.bbRecordTitle{
+    font-size:14px;
+    font-weight:600;
+    color:var(--text-secondary);
+    letter-spacing:0.02em;
+    text-transform:uppercase;
+}
+
+.bbRecordHero{
+    text-align:center;
+    padding:16px 0 20px;
+}
+.bbRecordHeroValue{
+    font-size:72px;
+    font-weight:700;
+    letter-spacing:-0.04em;
+    line-height:1;
+    font-variant-numeric:tabular-nums;
+    color:var(--text);
+    background:linear-gradient(180deg, var(--text) 0%, var(--text-secondary) 100%);
+    -webkit-background-clip:text;
+    -webkit-text-fill-color:transparent;
+    background-clip:text;
+}
+.bbRecordHeroUnit{
+    font-size:12px;
+    font-weight:600;
+    color:var(--text-tertiary);
+    margin-top:6px;
+    text-transform:uppercase;
+    letter-spacing:0.1em;
+}
+
+.bbRecordMeta{
+    display:flex;
+    justify-content:center;
+    align-items:stretch;
+    gap:0;
+    margin-bottom:16px;
+    padding:12px 16px;
     background:var(--bg);
     border-radius:12px;
-    padding:14px 16px;
-    margin-bottom:14px;
-    display:none;
 }
-.bbP2PProgress.active{display:block}
-.bbP2PStep{
+.bbRecordMetaItem{
+    flex:1;
+    text-align:center;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+}
+.bbRecordMetaValue{
+    font-size:18px;
+    font-weight:700;
+    font-variant-numeric:tabular-nums;
+    color:var(--text);
+    display:block;
+    line-height:1.2;
+}
+.bbRecordMetaLabel{
+    font-size:9px;
+    color:var(--text-tertiary);
+    text-transform:uppercase;
+    letter-spacing:0.06em;
+    margin-top:3px;
+    font-weight:500;
+}
+.bbRecordMetaDivider{
+    width:1px;
+    height:auto;
+    background:var(--divider);
+    margin:0 10px;
+    align-self:stretch;
+}
+
+.bbRecordQuality{
     display:flex;
     align-items:center;
     gap:10px;
-    padding:8px 0;
-    transition:opacity 0.3s;
+    margin-bottom:14px;
+    padding:10px 14px;
+    background:var(--bg);
+    border-radius:10px;
 }
-.bbP2PStep.waiting{opacity:0.5}
-.bbP2PStepIcon{
-    width:24px;
-    height:24px;
+.bbRecordQualityBar{
+    flex:1;
+    height:6px;
+    background:rgba(128,128,128,0.15);
+    border-radius:3px;
+    overflow:hidden;
+}
+.bbRecordQualityFill{
+    height:100%;
+    background:var(--ok);
+    transition:width 0.3s ease-out, background 0.3s;
+    border-radius:3px;
+}
+.bbRecordQualityFill.fair{background:var(--amber)}
+.bbRecordQualityFill.poor{background:var(--red)}
+.bbRecordQualityText{
+    font-size:11px;
+    font-weight:600;
+    color:var(--text-secondary);
+    min-width:60px;
+    text-align:right;
+    text-transform:uppercase;
+    letter-spacing:0.02em;
+}
+
+.bbRecordHint{
+    text-align:center;
+    font-size:13px;
+    color:var(--text-tertiary);
+    margin:0 0 18px 0;
+    line-height:1.45;
+}
+
+.bbRecordActions{
+    display:flex;
+    gap:10px;
+}
+.bbRecordActionBtn{
+    flex:1;
+    padding:14px 20px;
+    border:none;
+    border-radius:12px;
+    font-size:15px;
+    font-weight:600;
+    cursor:pointer;
+    font-family:inherit;
+    text-align:center;
+    transition:transform 0.1s, opacity 0.15s;
+}
+.bbRecordActionBtn:active{transform:scale(0.97)}
+.bbRecordActionBtn.secondary{
+    background:rgba(128,128,128,0.12);
+    color:var(--text);
+}
+.bbRecordActionBtn.primary{
+    background:var(--ok);
+    color:#fff;
+}
+.bbRecordActionBtn.finish{
+    background:#ff3b30;
+    color:#fff;
+}
+
+/* Track Complete Success State */
+.bbRecordSuccess{
+    text-align:center;
+    padding:24px 16px 20px;
+}
+.bbRecordSuccessIcon{
+    width:72px;
+    height:72px;
+    margin:0 auto 16px;
+    background:linear-gradient(135deg, rgba(52,199,89,0.15) 0%, rgba(52,199,89,0.08) 100%);
     border-radius:50%;
     display:flex;
     align-items:center;
     justify-content:center;
-    font-size:12px;
-    font-weight:600;
-    flex-shrink:0;
-    transition:all 0.3s;
+    font-size:36px;
+    color:var(--ok);
+    animation:successPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
-.bbP2PStepIcon.pending{
-    border:2px solid var(--text-tertiary);
-    color:var(--text-tertiary);
-    background:transparent;
+@keyframes successPop{
+    0%{transform:scale(0.5);opacity:0}
+    100%{transform:scale(1);opacity:1}
 }
-.bbP2PStepIcon.current{
-    border:2px solid var(--accent);
-    color:var(--accent);
-    background:rgba(0,122,255,0.1);
-    animation:p2p-pulse 2s ease-in-out infinite;
-}
-@keyframes p2p-pulse{
-    0%,100%{box-shadow:0 0 0 0 rgba(0,122,255,0.4)}
-    50%{box-shadow:0 0 0 6px rgba(0,122,255,0)}
-}
-.bbP2PStepIcon.done{
-    background:var(--ok);
-    color:#fff;
-    border:none;
-}
-.bbP2PStepText{
-    font-size:13px;
-    color:var(--text-secondary);
-    transition:color 0.3s;
-}
-.bbP2PStepText.current{
+.bbRecordSuccessTitle{
+    font-size:24px;
+    font-weight:700;
     color:var(--text);
-    font-weight:600;
+    margin-bottom:8px;
+    letter-spacing:-0.01em;
 }
-.bbP2PStepText.done{color:var(--ok)}
-.bbP2PStepCoords{
-    font-size:11px;
-    color:var(--text-tertiary);
-    margin-left:34px;
-    margin-top:-4px;
-    margin-bottom:4px;
-}
-.bbP2PConnector{
-    width:2px;
-    height:16px;
-    background:var(--divider);
-    margin-left:11px;
-    transition:background 0.3s;
-}
-.bbP2PConnector.active{
-    background:linear-gradient(to bottom, var(--ok), var(--accent));
-}
-.bbP2PMessage{
-    text-align:center;
-    padding:12px;
-    margin-top:8px;
-    background:rgba(0,122,255,0.08);
-    border-radius:8px;
-    font-size:13px;
+.bbRecordSuccessStats{
+    font-size:14px;
     color:var(--text-secondary);
-    display:none;
-}
-.bbP2PMessage.active{display:block}
-.bbP2PDistance{
-    font-size:15px;
-    font-weight:600;
-    color:var(--accent);
-    font-family:var(--mono);
+    line-height:1.4;
 }
 
 .bbTrackList{
@@ -867,6 +1119,7 @@ body{
             <button class="bbLapSetupBtn" id="btn-open-tracks">Tracks</button>
         </div>
         <div class="bbLapActive" id="lap-active" onclick="openTrackModal()">
+            <button class="bbLapStop" id="btn-lap-stop" onclick="event.stopPropagation(); confirmStopTiming();" title="Stop timing">×</button>
             <div class="bbLapMain">
                 <div class="bbLapTime bbNum" id="lap-time">0:00.000</div>
                 <div class="bbLapTrackName" id="lap-track-name"></div>
@@ -968,84 +1221,54 @@ body{
     </div>
 </div>
 
-<!-- Track Manager Modal -->
+<!-- Track Manager Modal - Unified UX -->
 <div class="bbModal" id="track-modal">
     <div class="bbModalContent">
         <div class="bbModalHeader">
-            <span class="bbModalTitle">Track Manager</span>
+            <span class="bbModalTitle">Tracks</span>
             <button class="bbModalClose" id="track-modal-close">&times;</button>
         </div>
         <div class="bbModalBody">
             <!-- Active Track (if any) -->
             <div id="active-track-section" class="bbActiveTrack" style="display:none">
-                <div class="bbActiveTrackLabel">Active Track</div>
-                <div class="bbActiveTrackName" id="active-track-name">—</div>
-                <div class="bbActiveTrackMeta" id="active-track-meta">—</div>
+                <div class="bbActiveTrackInfo">
+                    <div class="bbActiveTrackName" id="active-track-name">—</div>
+                    <div class="bbActiveTrackMeta" id="active-track-meta">—</div>
+                </div>
+                <button class="bbActiveTrackClear" id="btn-clear-track" title="Clear active track">×</button>
             </div>
 
-            <!-- Current Position -->
-            <div class="bbModalSection">
-                <div class="bbSectionTitle">Current Position</div>
-                <div class="bbPosDisplay">
-                    <div class="bbPosRow">
-                        <span class="bbPosLabel">Local X, Y</span>
-                        <span class="bbPosValue" id="pos-xy">0.0, 0.0 m</span>
-                    </div>
-                    <div class="bbPosRow">
-                        <span class="bbPosLabel">Heading</span>
-                        <span class="bbPosValue" id="pos-heading">0°</span>
-                    </div>
-                    <div class="bbPosRow">
-                        <span class="bbPosLabel">Speed</span>
-                        <span class="bbPosValue" id="pos-speed">0 km/h</span>
-                    </div>
+            <!-- Create New Track - Unified Recording -->
+            <div class="bbModalSection" id="create-track-section">
+                <div class="bbSectionTitle">Record New Track</div>
+                <p class="bbCreateTrackHint">
+                    Drive to start position, then tap to begin
+                </p>
+                <div class="bbCreateTrackBtns">
+                    <button class="bbRecordStartBtn" id="btn-record-loop" onclick="startTrackRecording('loop')">
+                        <div class="bbRecordStartIconWrap">
+                            <svg class="bbRecordStartIcon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="9"/>
+                                <polyline points="16,12 12,8 8,12"/>
+                                <line x1="12" y1="8" x2="12" y2="16"/>
+                            </svg>
+                        </div>
+                        <span class="bbRecordStartLabel">Circuit</span>
+                        <span class="bbRecordStartDesc">Auto-detects return to start</span>
+                    </button>
+                    <button class="bbRecordStartBtn" id="btn-record-p2p" onclick="startTrackRecording('point_to_point')">
+                        <div class="bbRecordStartIconWrap">
+                            <svg class="bbRecordStartIcon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="5" cy="12" r="3"/>
+                                <circle cx="19" cy="12" r="3"/>
+                                <line x1="8" y1="12" x2="16" y2="12"/>
+                                <polyline points="13,9 16,12 13,15"/>
+                            </svg>
+                        </div>
+                        <span class="bbRecordStartLabel">Stage</span>
+                        <span class="bbRecordStartDesc">Mark finish when you're done</span>
+                    </button>
                 </div>
-            </div>
-
-            <!-- Track Type Selection -->
-            <div class="bbModalSection" id="track-type-section">
-                <div class="bbSectionTitle">New Track</div>
-                <div class="bbTrackTypeSelector">
-                    <button class="bbTrackTypeBtn selected" id="btn-type-loop" onclick="selectTrackType('loop')">Loop</button>
-                    <button class="bbTrackTypeBtn" id="btn-type-p2p" onclick="selectTrackType('point_to_point')">Point-to-Point</button>
-                </div>
-
-                <!-- P2P Creation Progress (hidden by default) -->
-                <div class="bbP2PProgress" id="p2p-progress">
-                    <div class="bbP2PStep" id="p2p-step-1">
-                        <div class="bbP2PStepIcon current" id="p2p-start-icon">1</div>
-                        <span class="bbP2PStepText current" id="p2p-start-text">Set start line</span>
-                    </div>
-                    <div class="bbP2PStepCoords" id="p2p-start-coords"></div>
-                    <div class="bbP2PConnector" id="p2p-connector"></div>
-                    <div class="bbP2PStep waiting" id="p2p-step-2">
-                        <div class="bbP2PStepIcon pending" id="p2p-finish-icon">2</div>
-                        <span class="bbP2PStepText" id="p2p-finish-text">Set finish line</span>
-                    </div>
-                    <div class="bbP2PStepCoords" id="p2p-finish-coords"></div>
-                    <div class="bbP2PMessage" id="p2p-message">
-                        Drive to your finish location<br>
-                        <span class="bbP2PDistance" id="p2p-distance">—</span> from start
-                    </div>
-                </div>
-
-                <button class="bbActionBtn primary" id="btn-set-start" disabled>
-                    Set Start Line Here
-                </button>
-                <button class="bbActionBtn primary" id="btn-set-finish" disabled style="display:none">
-                    Set Finish Line Here
-                </button>
-                <button class="bbActionBtn secondary" id="btn-cancel-p2p" style="display:none" onclick="cancelP2PCreation()">
-                    Cancel
-                </button>
-            </div>
-
-            <!-- Active Track Actions -->
-            <div class="bbModalSection" id="active-track-actions" style="display:none">
-                <div class="bbSectionTitle">Active Track</div>
-                <button class="bbActionBtn secondary" id="btn-clear-track">
-                    Clear Active Track
-                </button>
             </div>
 
             <!-- Demo Tracks -->
@@ -1058,9 +1281,70 @@ body{
             <div class="bbModalSection">
                 <div class="bbSectionTitle">Saved Tracks</div>
                 <div class="bbTrackList" id="track-list">
-                    <div class="bbTrackEmpty">No saved tracks</div>
+                    <div class="bbTrackEmpty">No saved tracks yet</div>
                 </div>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Track Recording Overlay - Redesigned -->
+<div class="bbRecordOverlay" id="record-overlay">
+    <!-- Recording State -->
+    <div class="bbRecordState" id="rec-state-recording">
+        <div class="bbRecordHeader">
+            <div class="bbRecordPulse"></div>
+            <span class="bbRecordTitle" id="rec-title">Recording Loop</span>
+        </div>
+
+        <div class="bbRecordHero">
+            <div class="bbRecordHeroValue" id="rec-distance">0</div>
+            <div class="bbRecordHeroUnit">meters</div>
+        </div>
+
+        <div class="bbRecordMeta">
+            <div class="bbRecordMetaItem">
+                <span class="bbRecordMetaValue" id="rec-corners">0</span>
+                <span class="bbRecordMetaLabel">corners</span>
+            </div>
+            <div class="bbRecordMetaDivider"></div>
+            <div class="bbRecordMetaItem">
+                <span class="bbRecordMetaValue" id="rec-points">0</span>
+                <span class="bbRecordMetaLabel">points</span>
+            </div>
+            <div class="bbRecordMetaDivider"></div>
+            <div class="bbRecordMetaItem">
+                <span class="bbRecordMetaValue" id="rec-elapsed">0:00</span>
+                <span class="bbRecordMetaLabel">elapsed</span>
+            </div>
+        </div>
+
+        <div class="bbRecordQuality">
+            <div class="bbRecordQualityBar">
+                <div class="bbRecordQualityFill good" id="rec-quality-fill" style="width:80%"></div>
+            </div>
+            <span class="bbRecordQualityText" id="rec-quality-text">GPS Good</span>
+        </div>
+
+        <p class="bbRecordHint" id="rec-hint">Drive around the track. Loop auto-detects on return.</p>
+
+        <div class="bbRecordActions" id="rec-actions-normal">
+            <button class="bbRecordActionBtn secondary" onclick="cancelTrackRecording()">Cancel</button>
+            <button class="bbRecordActionBtn finish" id="btn-mark-finish" style="display:none" onclick="markRecordingFinish()">Mark Finish</button>
+        </div>
+    </div>
+
+    <!-- Track Complete State -->
+    <div class="bbRecordState" id="rec-state-complete" style="display:none">
+        <div class="bbRecordSuccess">
+            <div class="bbRecordSuccessIcon">✓</div>
+            <div class="bbRecordSuccessTitle" id="rec-success-title">Track Complete!</div>
+            <div class="bbRecordSuccessStats" id="rec-success-stats">283m · 12 corners · Good quality</div>
+        </div>
+
+        <div class="bbRecordActions">
+            <button class="bbRecordActionBtn secondary" onclick="continueTrackRecording()">Keep Driving</button>
+            <button class="bbRecordActionBtn primary" onclick="finishTrackRecording()">Save Track</button>
         </div>
     </div>
 </div>
@@ -1160,7 +1444,7 @@ const P2P_TRACK = (() => {
 const DEMO_TRACKS = [
     {
         id: 'demo_loop',
-        name: 'Demo Loop',
+        name: 'Demo Circuit',
         type: 'loop',
         isDemo: true,
         // Start/finish line at (0,0) perpendicular to northbound direction
@@ -1731,11 +2015,1037 @@ async function deleteTrack(id) {
     });
 }
 
+// ========== TRACK RECORDER CLASS ==========
+/**
+ * TrackRecorder - Records a track by capturing position samples during driving.
+ *
+ * Features:
+ * - Adaptive sampling based on distance AND heading change
+ * - Quality filtering (rejects poor GPS samples)
+ * - Corner detection via curvature analysis
+ * - Loop closure detection with heading alignment
+ * - Post-processing: smoothing, corner-preserving downsampling
+ * - Automatic timing line generation
+ */
+class TrackRecorder {
+    constructor() {
+        // Recording state
+        this.recording = false;
+        this.trackType = 'loop';
+        this.startTime = 0;
+
+        // Sample storage
+        this.rawSamples = [];      // All samples for post-processing
+        this.keyPoints = [];       // Adaptively sampled points
+
+        // Start position for loop detection
+        this.startPos = null;
+        this.startHeading = null;
+
+        // Statistics
+        this.totalDistance = 0;
+        this.loopDetected = false;
+        this.lastSigma = 3.0;
+
+        // Corner detection state machine
+        this.inCorner = false;          // Are we currently in a corner?
+        this.cornerCount = 0;           // Number of completed corners
+        this.cornerEntryDist = 0;       // Distance when we entered current corner
+
+        // Configuration - tuned for real-world GPS behavior
+        this.config = {
+            // Quality thresholds
+            maxSigma: 5.0,              // Reject samples with uncertainty > 5m
+
+            // Adaptive sampling
+            minDistance: 1.5,           // Minimum 1.5m between samples
+            maxDistance: 20.0,          // Force sample after 20m even without heading change
+            headingThreshold: 0.05,     // ~3° heading change triggers sample
+
+            // Corner detection (with hysteresis)
+            cornerEntryThreshold: 0.025,  // rad/m to ENTER a corner (higher = need sharper turn)
+            cornerExitThreshold: 0.012,   // rad/m to EXIT a corner (lower = need straighter)
+            minCornerLength: 3,           // Minimum meters to count as a corner (filters noise)
+
+            // Loop detection
+            minLoopDistance: 150,       // Minimum track length before checking for loop (meters)
+            closeProximity: 25,         // Distance to start to detect closure (meters)
+            headingTolerance: 0.5,      // ~30° heading alignment for loop closure
+
+            // Post-processing
+            smoothingWindow: 3,         // Points for moving average
+            maxCenterlinePoints: 500,   // Maximum points in final centerline
+            timingLineWidth: 12         // Half-width of timing line (total 24m)
+        };
+    }
+
+    /**
+     * Start recording a new track
+     * @param {Object} pos - Initial position {x, y, heading, speed, sigma}
+     * @param {string} trackType - 'loop' or 'point_to_point'
+     */
+    start(pos, trackType = 'loop') {
+        if (!pos || typeof pos.x !== 'number' || typeof pos.y !== 'number') {
+            throw new Error('Invalid position: requires x, y coordinates');
+        }
+
+        this.recording = true;
+        this.trackType = trackType;
+        this.startTime = Date.now();
+        this.rawSamples = [];
+        this.keyPoints = [];
+        this.startPos = { x: pos.x, y: pos.y };
+        this.startHeading = pos.heading || 0;
+        this.totalDistance = 0;
+        this.loopDetected = false;
+        this.lastSigma = pos.sigma || 3.0;
+
+        // Reset corner state machine
+        this.inCorner = false;
+        this.cornerCount = 0;
+        this.cornerEntryDist = 0;
+
+        // First sample is always a key point
+        const firstSample = {
+            x: pos.x,
+            y: pos.y,
+            heading: pos.heading || 0,
+            speed: pos.speed || 0,
+            sigma: pos.sigma || 3.0,
+            t: 0,
+            curvature: 0,
+            isCorner: false
+        };
+
+        this.rawSamples.push({ ...firstSample });
+        this.keyPoints.push(firstSample);
+
+        return { started: true, trackType };
+    }
+
+    /**
+     * Add a position sample during recording
+     * @param {Object} pos - Position {x, y, heading, speed, sigma}
+     * @returns {Object} Result with stored flag, loop detection, stats
+     */
+    addSample(pos) {
+        if (!this.recording) {
+            return { stored: false, reason: 'not_recording' };
+        }
+
+        if (!pos || typeof pos.x !== 'number' || typeof pos.y !== 'number') {
+            return { stored: false, reason: 'invalid_position' };
+        }
+
+        const t = Date.now() - this.startTime;
+        const sigma = pos.sigma || 3.0;
+        this.lastSigma = sigma;
+
+        // Always store raw sample for post-processing
+        this.rawSamples.push({
+            x: pos.x,
+            y: pos.y,
+            heading: pos.heading || 0,
+            speed: pos.speed || 0,
+            sigma: sigma,
+            t: t
+        });
+
+        // Quality gate - don't add poor GPS as key points
+        if (sigma > this.config.maxSigma) {
+            return {
+                stored: false,
+                reason: 'poor_gps',
+                sigma: sigma,
+                stats: this.getStats()
+            };
+        }
+
+        // Calculate distance and heading change from last key point
+        const last = this.keyPoints[this.keyPoints.length - 1];
+        const dx = pos.x - last.x;
+        const dy = pos.y - last.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const headingChange = Math.abs(this._wrapAngle(pos.heading - last.heading));
+
+        // Update cumulative distance
+        this.totalDistance += dist;
+
+        // Adaptive sampling decision
+        const speedBasedMinDist = Math.max(
+            this.config.minDistance,
+            (pos.speed || 0) * 0.08  // 80ms of travel at current speed
+        );
+
+        const shouldStore =
+            dist >= speedBasedMinDist ||
+            headingChange >= this.config.headingThreshold ||
+            dist >= this.config.maxDistance;
+
+        if (!shouldStore) {
+            return {
+                stored: false,
+                reason: 'too_close',
+                distance: dist,
+                headingChange: headingChange,
+                stats: this.getStats()
+            };
+        }
+
+        // Compute local curvature (heading change per meter traveled)
+        const curvature = dist > 0.1 ? headingChange / dist : 0;
+
+        // Corner detection state machine with hysteresis
+        let isCorner = false;
+        if (!this.inCorner) {
+            // Not in a corner - check if we're entering one
+            if (curvature > this.config.cornerEntryThreshold) {
+                this.inCorner = true;
+                this.cornerEntryDist = this.totalDistance;
+                isCorner = true;
+            }
+        } else {
+            // In a corner - check if we're exiting
+            isCorner = true;  // Still in corner
+            if (curvature < this.config.cornerExitThreshold) {
+                // Exiting corner - count it if it was long enough
+                const cornerLength = this.totalDistance - this.cornerEntryDist;
+                if (cornerLength >= this.config.minCornerLength) {
+                    this.cornerCount++;
+                }
+                this.inCorner = false;
+            }
+        }
+
+        // Store as key point
+        const keyPoint = {
+            x: pos.x,
+            y: pos.y,
+            heading: pos.heading || 0,
+            speed: pos.speed || 0,
+            sigma: sigma,
+            t: t,
+            curvature: curvature,
+            isCorner: isCorner
+        };
+
+        this.keyPoints.push(keyPoint);
+
+        // Check for loop closure (loop tracks only)
+        if (this.trackType === 'loop') {
+            const loopResult = this._checkLoopClosure(pos);
+            if (loopResult.detected) {
+                this.loopDetected = true;
+                return {
+                    stored: true,
+                    loopDetected: true,
+                    loopQuality: loopResult.quality,
+                    distToStart: loopResult.distToStart,
+                    stats: this.getStats()
+                };
+            }
+        }
+
+        return {
+            stored: true,
+            curvature: curvature,
+            isCorner: isCorner,
+            stats: this.getStats()
+        };
+    }
+
+    /**
+     * Check if we've closed the loop (returned to start with aligned heading)
+     * @private
+     */
+    _checkLoopClosure(pos) {
+        if (this.totalDistance < this.config.minLoopDistance) {
+            return { detected: false, reason: 'min_distance_not_met' };
+        }
+
+        const distToStart = Math.sqrt(
+            (pos.x - this.startPos.x) ** 2 +
+            (pos.y - this.startPos.y) ** 2
+        );
+
+        if (distToStart >= this.config.closeProximity) {
+            return { detected: false, reason: 'too_far_from_start', distToStart };
+        }
+
+        // Check heading alignment (should be traveling same direction as at start)
+        const headingDiff = Math.abs(this._wrapAngle(pos.heading - this.startHeading));
+        const headingAligned = headingDiff < this.config.headingTolerance;
+
+        if (!headingAligned) {
+            return { detected: false, reason: 'heading_not_aligned', headingDiff };
+        }
+
+        return {
+            detected: true,
+            distToStart: distToStart,
+            headingDiff: headingDiff,
+            quality: this._assessQuality()
+        };
+    }
+
+    /**
+     * Assess overall recording quality
+     * @private
+     */
+    _assessQuality() {
+        // Guard against empty array
+        if (this.keyPoints.length === 0) {
+            return {
+                rating: 'poor',
+                avgUncertainty: 5.0,
+                goodSampleRatio: 0,
+                corners: 0,
+                totalPoints: 0
+            };
+        }
+
+        const validPoints = this.keyPoints.filter(p => p.sigma < 3.0);
+        const totalSigma = this.keyPoints.reduce((s, p) => s + (p.sigma || 3.0), 0);
+        const avgSigma = totalSigma / this.keyPoints.length;
+        const goodRatio = validPoints.length / this.keyPoints.length;
+
+        let rating = 'good';
+        if (isNaN(avgSigma) || avgSigma > 3.5 || goodRatio < 0.7) {
+            rating = 'fair';
+        }
+        if (isNaN(avgSigma) || avgSigma > 4.5 || goodRatio < 0.5) {
+            rating = 'poor';
+        }
+
+        // Use actual corner count from state machine (include current corner if in one)
+        const displayCorners = this.inCorner ? this.cornerCount + 1 : this.cornerCount;
+
+        return {
+            rating: rating,
+            avgUncertainty: isNaN(avgSigma) ? 3.0 : avgSigma,
+            goodSampleRatio: isNaN(goodRatio) ? 0.5 : goodRatio,
+            corners: displayCorners,
+            totalPoints: this.keyPoints.length
+        };
+    }
+
+    /**
+     * Finish recording and process into final track object
+     * @param {string} trackName - Name for the track
+     * @param {Object} gpsOrigin - GPS reference point {lat, lon} (optional)
+     * @returns {Object} Complete track object ready for storage
+     */
+    finish(trackName, gpsOrigin = null) {
+        if (!this.recording) {
+            throw new Error('Not recording');
+        }
+
+        this.recording = false;
+
+        if (this.keyPoints.length < 10) {
+            throw new Error(`Not enough points recorded (got ${this.keyPoints.length}, need at least 10)`);
+        }
+
+        // Post-processing pipeline
+        // 1. Smooth the path to reduce GPS jitter
+        const smoothed = this._smoothPath(this.keyPoints, this.config.smoothingWindow);
+
+        // 2. Recompute curvatures on smoothed path
+        const withCurvature = this._computeCurvatures(smoothed);
+
+        // 3. Corner-preserving downsampling
+        const centerline = this._curvaturePreservingDownsample(
+            withCurvature,
+            this.config.maxCenterlinePoints
+        );
+
+        // 4. Calculate timing line(s)
+        const startLine = this._calculateTimingLine(centerline, 'start');
+        let finishLine = null;
+        if (this.trackType === 'point_to_point') {
+            finishLine = this._calculateTimingLine(centerline, 'finish');
+        }
+
+        // 5. Calculate bounding box
+        const bounds = this._calculateBounds(centerline);
+
+        // 6. Calculate total distance
+        const totalDistance = this._calculatePathLength(centerline);
+
+        // 7. Assess quality
+        const quality = this._assessQuality();
+
+        // Generate unique ID
+        const id = 'track_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+
+        return {
+            id: id,
+            name: trackName,
+            type: this.trackType,
+            created: Date.now(),
+            modified: Date.now(),
+
+            // Timing lines
+            startLine: startLine,
+            finishLine: finishLine,
+
+            // Track geometry
+            centerline: centerline,
+            displayPath: centerline.map(p => [p.x, p.y]),
+            bounds: bounds,
+            totalDistance: totalDistance,
+
+            // Origin for coordinate system matching
+            origin: { x: this.startPos.x, y: this.startPos.y },
+            gpsOrigin: gpsOrigin,
+
+            // Statistics
+            bestLapMs: null,
+            lapCount: 0,
+
+            // Learning state
+            learningEnabled: true,
+            lastLearnedLap: null,
+
+            // Quality metadata
+            quality: quality
+        };
+    }
+
+    /**
+     * Smooth path using weighted moving average
+     * @private
+     */
+    _smoothPath(points, windowSize) {
+        if (!points || points.length === 0) return [];
+        if (points.length <= windowSize) return points.map(p => ({ ...p }));
+
+        const result = [];
+        const halfWindow = Math.floor(windowSize / 2);
+
+        for (let i = 0; i < points.length; i++) {
+            const start = Math.max(0, i - halfWindow);
+            const end = Math.min(points.length - 1, i + halfWindow);
+            const window = points.slice(start, end + 1);
+
+            // Guard against empty window
+            if (window.length === 0) {
+                result.push({ ...points[i] });
+                continue;
+            }
+
+            // Weighted average: higher weight for center and low-sigma samples
+            let sumX = 0, sumY = 0, sumWeight = 0;
+
+            for (let j = 0; j < window.length; j++) {
+                const distFromCenter = Math.abs(j - (i - start));
+                const positionWeight = 1.0 / (1 + distFromCenter * 0.5);
+                const sigma = window[j].sigma || 3.0;  // Default sigma if missing
+                const qualityWeight = 1.0 / (sigma + 0.5);
+                const weight = positionWeight * qualityWeight;
+
+                sumX += (window[j].x || 0) * weight;
+                sumY += (window[j].y || 0) * weight;
+                sumWeight += weight;
+            }
+
+            // Guard against zero weight (shouldn't happen but be safe)
+            const x = sumWeight > 0 ? sumX / sumWeight : points[i].x;
+            const y = sumWeight > 0 ? sumY / sumWeight : points[i].y;
+
+            result.push({
+                x: isNaN(x) ? points[i].x : x,
+                y: isNaN(y) ? points[i].y : y,
+                heading: points[i].heading || 0,
+                speed: points[i].speed || 0,
+                sigma: points[i].sigma || 3.0,
+                t: points[i].t || 0
+            });
+        }
+
+        return result;
+    }
+
+    /**
+     * Compute curvature at each point using central differences
+     * @private
+     */
+    _computeCurvatures(points) {
+        const result = [];
+
+        for (let i = 0; i < points.length; i++) {
+            let curvature = 0;
+
+            if (i > 0 && i < points.length - 1) {
+                // Central difference for heading change
+                const dHeading = this._wrapAngle(points[i + 1].heading - points[i - 1].heading);
+                const dx = points[i + 1].x - points[i - 1].x;
+                const dy = points[i + 1].y - points[i - 1].y;
+                const ds = Math.sqrt(dx * dx + dy * dy);
+
+                if (ds > 0.5) {
+                    curvature = Math.abs(dHeading / ds);
+                }
+            }
+
+            result.push({
+                ...points[i],
+                curvature: curvature,
+                isCorner: curvature > this.config.cornerCurvature
+            });
+        }
+
+        return result;
+    }
+
+    /**
+     * Downsample while preserving high-curvature points (corners)
+     * @private
+     */
+    _curvaturePreservingDownsample(points, maxPoints) {
+        if (points.length <= maxPoints) {
+            return points.map(p => ({
+                x: p.x,
+                y: p.y,
+                heading: p.heading,
+                curvature: p.curvature,
+                confidence: 1.0 / (p.sigma + 0.5),
+                lapCount: 1
+            }));
+        }
+
+        // Score each point by curvature importance
+        const scored = points.map((p, i) => ({
+            point: p,
+            index: i,
+            score: p.curvature || 0
+        }));
+
+        // Always keep first and last
+        const kept = new Set([0, points.length - 1]);
+
+        // Keep high-curvature points (corners) - allocate 30% of budget
+        const cornerBudget = Math.floor(maxPoints * 0.3);
+        const sortedByScore = scored.slice(1, -1).sort((a, b) => b.score - a.score);
+
+        for (let i = 0; i < Math.min(cornerBudget, sortedByScore.length); i++) {
+            kept.add(sortedByScore[i].index);
+        }
+
+        // Fill remaining with evenly spaced points
+        const remaining = maxPoints - kept.size;
+        if (remaining > 0) {
+            const step = Math.floor(points.length / remaining);
+            for (let i = 0; i < points.length && kept.size < maxPoints; i += step) {
+                kept.add(i);
+            }
+        }
+
+        // Return in original order
+        return Array.from(kept)
+            .sort((a, b) => a - b)
+            .map(i => ({
+                x: points[i].x,
+                y: points[i].y,
+                heading: points[i].heading,
+                curvature: points[i].curvature,
+                confidence: 1.0 / (points[i].sigma + 0.5),
+                lapCount: 1
+            }));
+    }
+
+    /**
+     * Calculate timing line perpendicular to track direction
+     * @private
+     */
+    _calculateTimingLine(centerline, which = 'start') {
+        // Guard: need at least one point
+        if (!centerline || centerline.length === 0) {
+            return {
+                p1: [0, 12],
+                p2: [0, -12],
+                direction: 0
+            };
+        }
+
+        const windowSize = Math.min(10, Math.floor(centerline.length * 0.05));
+        const window = which === 'start'
+            ? centerline.slice(0, Math.max(windowSize, 1))
+            : centerline.slice(-Math.max(windowSize, 1));
+
+        // Guard: empty window
+        if (window.length === 0) {
+            const p = centerline[0];
+            return {
+                p1: [p.x || 0, (p.y || 0) + 12],
+                p2: [p.x || 0, (p.y || 0) - 12],
+                direction: p.heading || 0
+            };
+        }
+
+        // Weighted average position and heading
+        let sumX = 0, sumY = 0, sumWeight = 0;
+        let sumSin = 0, sumCos = 0;
+
+        for (const p of window) {
+            const weight = p.confidence || 0.5;
+            const x = p.x || 0;
+            const y = p.y || 0;
+            const heading = p.heading || 0;
+
+            sumX += x * weight;
+            sumY += y * weight;
+            sumSin += Math.sin(heading) * weight;
+            sumCos += Math.cos(heading) * weight;
+            sumWeight += weight;
+        }
+
+        // Guard: zero weight
+        if (sumWeight === 0) sumWeight = 1;
+
+        const centerX = sumX / sumWeight;
+        const centerY = sumY / sumWeight;
+        const direction = Math.atan2(sumSin / sumWeight, sumCos / sumWeight);
+
+        // Guard: NaN values
+        const safeCenterX = isNaN(centerX) ? 0 : centerX;
+        const safeCenterY = isNaN(centerY) ? 0 : centerY;
+        const safeDirection = isNaN(direction) ? 0 : direction;
+
+        // Perpendicular direction for line endpoints
+        const perpAngle = safeDirection + Math.PI / 2;
+        const halfWidth = this.config.timingLineWidth;
+
+        return {
+            p1: [
+                safeCenterX + Math.cos(perpAngle) * halfWidth,
+                safeCenterY + Math.sin(perpAngle) * halfWidth
+            ],
+            p2: [
+                safeCenterX - Math.cos(perpAngle) * halfWidth,
+                safeCenterY - Math.sin(perpAngle) * halfWidth
+            ],
+            direction: safeDirection
+        };
+    }
+
+    /**
+     * Calculate bounding box with margin
+     * @private
+     */
+    _calculateBounds(centerline, margin = 30) {
+        let minX = Infinity, maxX = -Infinity;
+        let minY = Infinity, maxY = -Infinity;
+
+        for (const p of centerline) {
+            minX = Math.min(minX, p.x);
+            maxX = Math.max(maxX, p.x);
+            minY = Math.min(minY, p.y);
+            maxY = Math.max(maxY, p.y);
+        }
+
+        return {
+            minX: minX - margin,
+            maxX: maxX + margin,
+            minY: minY - margin,
+            maxY: maxY + margin
+        };
+    }
+
+    /**
+     * Calculate total path length
+     * @private
+     */
+    _calculatePathLength(centerline) {
+        let total = 0;
+        for (let i = 1; i < centerline.length; i++) {
+            const dx = centerline[i].x - centerline[i - 1].x;
+            const dy = centerline[i].y - centerline[i - 1].y;
+            total += Math.sqrt(dx * dx + dy * dy);
+        }
+        return total;
+    }
+
+    /**
+     * Cancel recording without saving
+     */
+    cancel() {
+        this.recording = false;
+        this.rawSamples = [];
+        this.keyPoints = [];
+        this.totalDistance = 0;
+        this.loopDetected = false;
+    }
+
+    /**
+     * Get current recording statistics
+     */
+    getStats() {
+        // If currently in a corner, count it as a partial corner for display
+        const displayCorners = this.inCorner ? this.cornerCount + 1 : this.cornerCount;
+
+        return {
+            recording: this.recording,
+            trackType: this.trackType,
+            keyPointCount: this.keyPoints.length,
+            rawSampleCount: this.rawSamples.length,
+            totalDistance: this.totalDistance,
+            loopDetected: this.loopDetected,
+            elapsedMs: this.recording ? Date.now() - this.startTime : 0,
+            gpsQuality: this._gpsQualityRating(this.lastSigma),
+            lastSigma: this.lastSigma,
+            corners: displayCorners,  // Actual corner count, not corner points
+            inCorner: this.inCorner   // For debugging
+        };
+    }
+
+    /**
+     * Get GPS quality rating string
+     * @private
+     */
+    _gpsQualityRating(sigma) {
+        if (sigma < 2.0) return 'excellent';
+        if (sigma < 3.0) return 'good';
+        if (sigma < 4.0) return 'fair';
+        if (sigma < 5.0) return 'poor';
+        return 'bad';
+    }
+
+    /**
+     * Wrap angle to [-PI, PI]
+     * @private
+     */
+    _wrapAngle(angle) {
+        while (angle > Math.PI) angle -= 2 * Math.PI;
+        while (angle < -Math.PI) angle += 2 * Math.PI;
+        return angle;
+    }
+}
+
+// Global track recorder instance
+let trackRecorder = null;
+
+// ========== TRACK RECORDING CONTROL FUNCTIONS ==========
+
+/**
+ * Start recording a new track
+ * @param {string} trackType - 'loop' or 'point_to_point'
+ */
+function startTrackRecording(trackType = 'loop') {
+    if (!currentSimPos || currentSimPos.speed === undefined) {
+        console.warn('Cannot start recording: no position data');
+        return false;
+    }
+
+    // Create recorder if needed
+    if (!trackRecorder) {
+        trackRecorder = new TrackRecorder();
+    }
+
+    // Create position object with required fields (TrackRecorder expects 'heading')
+    const pos = {
+        x: currentSimPos.x,
+        y: currentSimPos.y,
+        heading: currentSimPos.heading,
+        speed: currentSimPos.speed,
+        valid: true,
+        sigma: 2.5  // Simulate good GPS quality
+    };
+
+    // Start recording
+    const success = trackRecorder.start(pos, trackType);
+    if (!success) {
+        console.warn('Failed to start track recording');
+        return false;
+    }
+
+    // Show overlay
+    const overlay = $('record-overlay');
+    overlay.classList.add('active');
+
+    // Update title
+    $('rec-title').textContent = trackType === 'loop' ? 'Recording Circuit' : 'Recording Stage';
+
+    // Reset stats display
+    $('rec-distance').textContent = '0';
+    $('rec-corners').textContent = '0';
+    $('rec-points').textContent = '0';
+    $('rec-elapsed').textContent = '0:00';
+    updateRecordingQualityDisplay('good', 80);
+
+    // Set hint based on track type
+    if (trackType === 'loop') {
+        $('rec-hint').textContent = 'Complete one lap. We\'ll detect when you return.';
+    } else {
+        $('rec-hint').textContent = 'Drive the stage, then tap Mark Finish at the end.';
+    }
+
+    // Show recording state, hide complete state
+    $('rec-state-recording').style.display = 'block';
+    $('rec-state-complete').style.display = 'none';
+
+    // Show/hide Mark Finish button based on track type
+    const markFinishBtn = $('btn-mark-finish');
+    if (markFinishBtn) {
+        markFinishBtn.style.display = trackType === 'point_to_point' ? 'flex' : 'none';
+    }
+
+    // Close track modal if open
+    closeTrackModal();
+
+    console.log(`Track recording started: ${trackType}`);
+    return true;
+}
+
+/**
+ * Update track recording with current position (called from simulation loop)
+ */
+function updateTrackRecording() {
+    if (!trackRecorder || !trackRecorder.recording) return;
+    if (!currentSimPos) return;
+
+    // Create position object (TrackRecorder expects 'heading' not 'yaw')
+    const pos = {
+        x: currentSimPos.x,
+        y: currentSimPos.y,
+        heading: currentSimPos.heading,
+        speed: currentSimPos.speed,
+        valid: true,
+        sigma: 2.5  // Simulate good GPS quality
+    };
+
+    // Add sample (returns object with stored, loopDetected, stats, etc.)
+    const result = trackRecorder.addSample(pos);
+
+    // Update stats display
+    const stats = trackRecorder.getStats();
+    const distVal = Math.round(stats.totalDistance);
+    $('rec-distance').textContent = isNaN(distVal) ? '0' : distVal;
+    $('rec-corners').textContent = stats.corners || 0;
+    $('rec-points').textContent = stats.keyPointCount || 0;
+
+    // Update elapsed time
+    const elapsed = stats.elapsedMs || 0;
+    const mins = Math.floor(elapsed / 60000);
+    const secs = Math.floor((elapsed % 60000) / 1000);
+    $('rec-elapsed').textContent = mins + ':' + secs.toString().padStart(2, '0');
+
+    // Update quality display
+    const qualityPercent = getQualityPercent(stats.gpsQuality);
+    updateRecordingQualityDisplay(stats.gpsQuality, qualityPercent);
+
+    // Handle loop detection (only trigger once when first detected)
+    if (result && result.loopDetected && $('rec-state-complete').style.display === 'none') {
+        onLoopDetected();
+    }
+}
+
+/**
+ * Handle loop/circuit detection event
+ */
+function onLoopDetected() {
+    console.log('Circuit loop detected!');
+
+    // Get stats for success message
+    const stats = trackRecorder.getStats();
+    const quality = (stats.gpsQuality || 'good').charAt(0).toUpperCase() + (stats.gpsQuality || 'good').slice(1);
+    const distance = Math.round(stats.totalDistance) || 0;
+    const corners = stats.corners || 0;
+
+    // Set title based on track type
+    const isStage = trackRecorder && trackRecorder.trackType === 'point_to_point';
+    $('rec-success-title').textContent = isStage ? 'Stage Complete!' : 'Circuit Complete!';
+
+    // Update success stats
+    $('rec-success-stats').textContent = `${distance}m · ${corners} corners · ${quality} quality`;
+
+    // Switch to complete state
+    $('rec-state-recording').style.display = 'none';
+    $('rec-state-complete').style.display = 'block';
+}
+
+/**
+ * Finish track recording and save
+ */
+async function finishTrackRecording() {
+    if (!trackRecorder || !trackRecorder.recording) return;
+
+    // Get track name from user
+    const defaultName = trackRecorder.trackType === 'loop' ? 'New Circuit' : 'New Stage';
+    const trackName = prompt('Enter track name:', defaultName);
+    if (!trackName) return;  // User cancelled
+
+    // Get GPS origin if available (for simulation, use fixed value)
+    const gpsOrigin = {
+        lat: 37.82,
+        lon: -122.48
+    };
+
+    // Finish recording and get track data
+    const trackData = trackRecorder.finish(trackName, gpsOrigin);
+    if (!trackData) {
+        alert('Failed to create track: not enough data or poor quality');
+        return;
+    }
+
+    // Hide overlay
+    $('record-overlay').classList.remove('active');
+
+    // Save to track manager
+    await saveRecordedTrack(trackData);
+
+    console.log('Track saved:', trackData.name, `(${trackData.centerline.length} points)`);
+}
+
+/**
+ * Save recorded track to IndexedDB and activate it
+ */
+async function saveRecordedTrack(trackData) {
+    // Convert to track manager format
+    const track = {
+        id: trackData.id,
+        name: trackData.name,
+        type: trackData.type,
+        startLine: trackData.startLine,
+        finishLine: trackData.finishLine,
+        origin: trackData.origin,
+        centerline: trackData.centerline,
+        bounds: trackData.bounds,
+        pathLength: trackData.totalDistance || 0,
+        quality: trackData.quality,
+        bestLapMs: null,
+        lapCount: 0,
+        createdAt: trackData.createdAt,
+        isNew: true  // For P2P warmup - clears after first run
+    };
+
+    // Save to IndexedDB using existing track database infrastructure
+    try {
+        await saveTrack(track);
+    } catch (err) {
+        console.error('Failed to save track:', err);
+        alert('Failed to save track to database');
+        return;
+    }
+
+    // Activate the track (sets up timing lines and arms the timer)
+    activateTrack(track);
+
+    // Refresh track list if modal is open
+    if ($('track-modal').classList.contains('open')) {
+        renderTrackList();
+        updateActiveTrackDisplay();
+    }
+
+    // Show success message
+    const pathLen = Math.round(track.pathLength || 0);
+    alert(`Track "${track.name}" saved!\n${track.centerline.length} points · ${pathLen}m`);
+}
+
+/**
+ * Cancel track recording without saving
+ */
+function cancelTrackRecording() {
+    if (trackRecorder) {
+        trackRecorder.cancel();
+    }
+
+    // Hide overlay
+    $('record-overlay').classList.remove('active');
+
+    console.log('Track recording cancelled');
+}
+
+/**
+ * Continue recording after loop detection (for additional laps)
+ */
+function continueTrackRecording() {
+    if (!trackRecorder) return;
+
+    // Reset loop detection state
+    trackRecorder.loopDetected = false;
+
+    // Switch back to recording state
+    $('rec-state-recording').style.display = 'block';
+    $('rec-state-complete').style.display = 'none';
+
+    // Update hint based on track type
+    const isStage = trackRecorder.trackType === 'point_to_point';
+    $('rec-hint').textContent = isStage
+        ? 'Continue driving. Tap Mark Finish when done.'
+        : 'Continue driving. We\'ll detect the next loop.';
+
+    console.log('Continuing track recording...');
+}
+
+/**
+ * Mark finish line for point-to-point tracks
+ */
+function markRecordingFinish() {
+    if (!trackRecorder || !trackRecorder.recording) return;
+    if (trackRecorder.trackType !== 'point_to_point') return;
+
+    // Check minimum distance
+    const stats = trackRecorder.getStats();
+    if (stats.totalDistance < 50) {
+        alert('Track is too short. Drive at least 50 meters before marking finish.');
+        return;
+    }
+
+    // Trigger finish
+    finishTrackRecording();
+}
+
+/**
+ * Update quality display in recording overlay
+ */
+function updateRecordingQualityDisplay(quality, percent) {
+    const fill = $('rec-quality-fill');
+    const text = $('rec-quality-text');
+
+    // Guard against NaN
+    const safePercent = isNaN(percent) ? 80 : Math.max(0, Math.min(100, percent));
+    const safeQuality = quality || 'good';
+
+    fill.style.width = safePercent + '%';
+
+    // Remove all quality classes
+    fill.className = 'bbRecordQualityFill';
+
+    // Add appropriate class to fill bar
+    if (safeQuality === 'excellent' || safeQuality === 'good') {
+        fill.classList.add('good');
+    } else if (safeQuality === 'fair') {
+        fill.classList.add('fair');
+    } else {
+        fill.classList.add('poor');
+    }
+
+    // Format text: "GPS Good" etc.
+    const qualityLabel = safeQuality.charAt(0).toUpperCase() + safeQuality.slice(1);
+    text.textContent = 'GPS ' + qualityLabel;
+}
+
+/**
+ * Get quality percentage for progress bar
+ */
+function getQualityPercent(quality) {
+    switch (quality) {
+        case 'excellent': return 100;
+        case 'good': return 80;
+        case 'fair': return 60;
+        case 'poor': return 40;
+        case 'bad': return 20;
+        default: return 50;
+    }
+}
+
+/**
+ * Open IndexedDB for tracks
+ */
 // ========== TRACK MANAGER STATE ==========
 let activeTrack = null;
 let currentSimPos = null;  // Updated by simulation loop
-let selectedTrackType = 'loop';  // 'loop' or 'point_to_point'
-let p2pCreationState = null;  // { startLine: {...}, startPos: {x, y} } when creating P2P track
 
 function generateTrackId() {
     return 'track_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
@@ -1751,132 +3061,18 @@ function openTrackModal() {
 
 function closeTrackModal() {
     $('track-modal').classList.remove('open');
-    // Reset P2P creation if in progress
-    if (p2pCreationState) {
-        cancelP2PCreation();
-    }
-}
-
-function selectTrackType(type) {
-    selectedTrackType = type;
-    $('btn-type-loop').classList.toggle('selected', type === 'loop');
-    $('btn-type-p2p').classList.toggle('selected', type === 'point_to_point');
-
-    // Show/hide P2P progress indicator
-    $('p2p-progress').classList.toggle('active', type === 'point_to_point');
-
-    // Update button text based on type
-    if (type === 'loop') {
-        $('btn-set-start').textContent = 'Set Start Line Here';
-        $('btn-set-start').style.display = 'block';
-        $('btn-set-finish').style.display = 'none';
-        $('btn-cancel-p2p').style.display = 'none';
-    } else {
-        $('btn-set-start').textContent = 'Set Start Line';
-        updateP2PCreationUI();
-    }
-}
-
-function updateP2PCreationUI() {
-    if (p2pCreationState) {
-        // Start line is set, waiting for finish
-        $('p2p-step-1').classList.remove('waiting');
-        $('p2p-start-icon').className = 'bbP2PStepIcon done';
-        $('p2p-start-icon').textContent = '✓';
-        $('p2p-start-text').className = 'bbP2PStepText done';
-        $('p2p-start-coords').textContent = 'Start position saved';
-
-        $('p2p-connector').classList.add('active');
-
-        $('p2p-step-2').classList.remove('waiting');
-        $('p2p-finish-icon').className = 'bbP2PStepIcon current';
-        $('p2p-finish-icon').textContent = '2';
-        $('p2p-finish-text').className = 'bbP2PStepText current';
-        $('p2p-finish-coords').textContent = '';
-
-        $('p2p-message').classList.add('active');
-
-        // Update distance from start
-        if (currentSimPos && p2pCreationState.startPos) {
-            const dx = currentSimPos.x - p2pCreationState.startPos.x;
-            const dy = currentSimPos.y - p2pCreationState.startPos.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            $('p2p-distance').textContent = Math.round(dist) + 'm';
-        } else {
-            $('p2p-distance').textContent = '—';
-        }
-
-        $('btn-set-start').style.display = 'none';
-        $('btn-set-finish').style.display = 'block';
-        $('btn-set-finish').disabled = !currentSimPos;
-        $('btn-cancel-p2p').style.display = 'block';
-    } else {
-        // Initial state - waiting for start
-        $('p2p-step-1').classList.remove('waiting');
-        $('p2p-start-icon').className = 'bbP2PStepIcon current';
-        $('p2p-start-icon').textContent = '1';
-        $('p2p-start-text').className = 'bbP2PStepText current';
-        $('p2p-start-coords').textContent = '';
-
-        $('p2p-connector').classList.remove('active');
-
-        $('p2p-step-2').classList.add('waiting');
-        $('p2p-finish-icon').className = 'bbP2PStepIcon pending';
-        $('p2p-finish-icon').textContent = '2';
-        $('p2p-finish-text').className = 'bbP2PStepText';
-        $('p2p-finish-coords').textContent = '';
-
-        $('p2p-message').classList.remove('active');
-
-        $('btn-set-start').style.display = 'block';
-        $('btn-set-finish').style.display = 'none';
-        $('btn-cancel-p2p').style.display = 'none';
-    }
-}
-
-function cancelP2PCreation() {
-    p2pCreationState = null;
-    updateP2PCreationUI();
 }
 
 function updateActiveTrackDisplay() {
     const section = $('active-track-section');
-    const actionsSection = $('active-track-actions');
     if (activeTrack) {
-        section.style.display = 'block';
-        actionsSection.style.display = 'block';
+        section.style.display = 'flex';
         $('active-track-name').textContent = activeTrack.name;
         const typeLabel = activeTrack.type === 'point_to_point' ? 'runs' : 'laps';
         const bestStr = activeTrack.bestLapMs ? formatLapTime(activeTrack.bestLapMs) : '—';
         $('active-track-meta').textContent = 'Best: ' + bestStr + ' · ' + (activeTrack.lapCount || 0) + ' ' + typeLabel;
     } else {
         section.style.display = 'none';
-        actionsSection.style.display = 'none';
-    }
-}
-
-function updateTrackModalPosition() {
-    // Update position display in modal from current simulation state
-    if (currentSimPos) {
-        $('pos-xy').textContent = currentSimPos.x.toFixed(1) + ', ' + currentSimPos.y.toFixed(1) + ' m';
-        $('pos-heading').textContent = (currentSimPos.heading * 180 / Math.PI).toFixed(0) + '°';
-        $('pos-speed').textContent = (currentSimPos.speed * 3.6).toFixed(0) + ' km/h';
-        $('btn-set-start').disabled = false;
-        $('btn-set-finish').disabled = false;
-
-        // Update P2P creation distance if in progress
-        if (p2pCreationState && p2pCreationState.startPos) {
-            const dx = currentSimPos.x - p2pCreationState.startPos.x;
-            const dy = currentSimPos.y - p2pCreationState.startPos.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            $('p2p-distance').textContent = formatDistance(dist);
-        }
-    } else {
-        $('pos-xy').textContent = 'Waiting...';
-        $('pos-heading').textContent = '—';
-        $('pos-speed').textContent = '—';
-        $('btn-set-start').disabled = true;
-        $('btn-set-finish').disabled = true;
     }
 }
 
@@ -1926,7 +3122,7 @@ function renderDemoTrackList() {
 
     listEl.innerHTML = DEMO_TRACKS.map(track => {
         const isActive = activeTrack && activeTrack.id === track.id;
-        const typeLabel = track.type === 'point_to_point' ? 'Point-to-Point' : 'Loop';
+        const typeLabel = track.type === 'point_to_point' ? 'Stage' : 'Circuit';
         return '<div class="bbTrackItem" data-track-id="' + track.id + '">' +
             '<div class="bbTrackInfo">' +
                 '<div class="bbTrackName">' + escapeHtml(track.name) + (isActive ? ' ✓' : '') + '</div>' +
@@ -1982,7 +3178,7 @@ async function handleTrackAction(action, trackId) {
 
 function activateTrack(track) {
     activeTrack = track;
-    suppressStartLineIndicator = false; // Reset - only setStartLineHere sets this to true
+    suppressStartLineIndicator = false; // Reset indicator suppression
 
     const isP2P = track.type === 'point_to_point';
 
@@ -2053,125 +3249,21 @@ function deactivateTrack() {
     $('lap-track-name').textContent = '';
 }
 
-async function setStartLineHere() {
-    if (!currentSimPos) {
-        alert('Position not available. Start the simulation first.');
-        return;
-    }
-
-    const x = currentSimPos.x;
-    const y = currentSimPos.y;
-    const heading = currentSimPos.heading;
-
-    // Create perpendicular timing line (20m wide, 10m each side)
-    const width = 10;
-    const perpAngle = heading + Math.PI / 2;
-
-    const timingLine = {
-        p1: [x + Math.cos(perpAngle) * width, y + Math.sin(perpAngle) * width],
-        p2: [x - Math.cos(perpAngle) * width, y - Math.sin(perpAngle) * width],
-        direction: heading
-    };
-
-    if (selectedTrackType === 'point_to_point') {
-        // P2P: Save start line and wait for finish
-        p2pCreationState = {
-            startLine: timingLine,
-            startPos: { x, y }
-        };
-        updateP2PCreationUI();
-        return;
-    }
-
-    // Loop track: Create and activate immediately
-    const trackName = prompt('Enter track name:', 'Track ' + new Date().toLocaleDateString());
-    if (!trackName) return;
-
-    const track = {
-        id: generateTrackId(),
-        name: trackName,
-        type: 'loop',
-        created: Date.now(),
-        modified: Date.now(),
-        startLine: timingLine,
-        finishLine: null,
-        origin: { x, y },
-        bestLapMs: null,
-        lapCount: 0
-    };
-
-    await saveTrack(track);
-    activateTrack(track);
-    suppressStartLineIndicator = true;
-    closeTrackModal();
-    console.log('Loop track created:', track);
-}
-
-async function setFinishLineHere() {
-    if (!currentSimPos || !p2pCreationState) {
-        alert('Position not available or start line not set.');
-        return;
-    }
-
-    const x = currentSimPos.x;
-    const y = currentSimPos.y;
-    const heading = currentSimPos.heading;
-
-    // Calculate distance from start
-    const dx = x - p2pCreationState.startPos.x;
-    const dy = y - p2pCreationState.startPos.y;
-    const stageLength = Math.sqrt(dx * dx + dy * dy);
-
-    // Create perpendicular finish line
-    const width = 10;
-    const perpAngle = heading + Math.PI / 2;
-
-    const finishLine = {
-        p1: [x + Math.cos(perpAngle) * width, y + Math.sin(perpAngle) * width],
-        p2: [x - Math.cos(perpAngle) * width, y - Math.sin(perpAngle) * width],
-        direction: heading
-    };
-
-    // Update P2P progress UI to show finish is set
-    $('p2p-finish-icon').className = 'bbP2PStepIcon done';
-    $('p2p-finish-icon').textContent = '✓';
-    $('p2p-finish-text').className = 'bbP2PStepText done';
-    $('p2p-finish-coords').textContent = 'Finish position saved';
-    $('p2p-message').innerHTML = 'Stage ready<br><span class="bbP2PDistance">' + formatDistance(stageLength) + '</span> total';
-
-    const trackName = prompt('Enter track name:', 'Stage ' + new Date().toLocaleDateString());
-    if (!trackName) {
-        // Reset finish step visually (user cancelled)
-        updateP2PCreationUI(); // Restore the "waiting for finish" state
-        return;
-    }
-
-    const track = {
-        id: generateTrackId(),
-        name: trackName,
-        type: 'point_to_point',
-        created: Date.now(),
-        modified: Date.now(),
-        startLine: p2pCreationState.startLine,
-        finishLine: finishLine,
-        origin: p2pCreationState.startPos,
-        bestLapMs: null,
-        lapCount: 0
-    };
-
-    await saveTrack(track);
-    p2pCreationState = null;
-    activateTrack(track);
-    suppressStartLineIndicator = true;
-    closeTrackModal();
-    console.log('Point-to-point track created:', track);
-}
-
 async function clearActiveTrack() {
     if (!activeTrack) return;
     deactivateTrack();
     updateActiveTrackDisplay();
     renderTrackList();
+}
+
+// Stop timing with confirmation
+function confirmStopTiming() {
+    if (!activeTrack) return;
+
+    const trackName = activeTrack.name || 'this track';
+    if (confirm(`Stop timing "${trackName}"?`)) {
+        clearActiveTrack();
+    }
 }
 
 // Update track's best lap when a new best is set
@@ -2906,13 +3998,11 @@ function simulate() {
             speed: pos.speed
         };
 
-        // Update track modal position display if open
-        if ($('track-modal').classList.contains('open')) {
-            updateTrackModalPosition();
-        }
-
         // Update start line indicator
         updateStartLineIndicator();
+
+        // Update track recording if active
+        updateTrackRecording();
     }
 
     speed_ema = 0.7 * sp + 0.3 * speed_ema;
@@ -3052,12 +4142,6 @@ $('track-modal-close').onclick = closeTrackModal;
 $('track-modal').onclick = (e) => {
     if (e.target === $('track-modal')) closeTrackModal();
 };
-
-// Set start line button
-$('btn-set-start').onclick = setStartLineHere;
-
-// Set finish line button (P2P tracks)
-$('btn-set-finish').onclick = setFinishLineHere;
 
 // Clear active track button
 $('btn-clear-track').onclick = clearActiveTrack;

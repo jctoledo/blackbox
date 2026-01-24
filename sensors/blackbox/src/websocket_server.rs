@@ -475,8 +475,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
 .bbLapSetupText{font-size:13px;color:var(--text-tertiary)}
 .bbLapSetupBtn{background:var(--bg);border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;color:var(--text);cursor:pointer;font-family:inherit}
 .bbLapSetupBtn:active{opacity:0.7}
-.bbLapActive{display:none;cursor:pointer}
+.bbLapActive{display:none;cursor:pointer;position:relative}
 .bbLapCard.active .bbLapActive{display:block}
+.bbLapStop{position:absolute;top:8px;right:8px;width:28px;height:28px;border-radius:50%;border:none;background:rgba(128,128,128,0.1);color:var(--text-tertiary);font-size:18px;font-weight:300;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;transition:all 0.15s}
+.bbLapStop:hover{background:rgba(255,59,48,0.12);color:#ff3b30}
+.bbLapStop:active{transform:scale(0.95);background:rgba(255,59,48,0.2);color:#ff3b30}
 .bbLapCard.active .bbLapSetup{display:none}
 .bbLapMain{display:flex;flex-direction:column;align-items:center;padding:16px 18px 12px}
 .bbLapTime{font-size:44px;font-weight:600;line-height:1}
@@ -552,31 +555,55 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
 .bbTrackBtn:active{opacity:0.7}
 .bbTrackBtn.primary{background:var(--ok);color:#fff}
 .bbTrackBtn.danger{color:var(--red)}
-.bbActiveTrack{background:var(--bg);border-radius:12px;padding:14px 16px;margin-bottom:16px}
-.bbActiveTrackLabel{font-size:11px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.05em}
-.bbActiveTrackName{font-size:15px;font-weight:600;margin-top:4px}
-.bbActiveTrackMeta{font-size:12px;color:var(--text-tertiary);margin-top:2px}
-.bbTrackTypeSelector{display:flex;background:var(--bg);border-radius:10px;padding:3px;margin-bottom:14px}
-.bbTrackTypeBtn{flex:1;padding:10px 12px;border:none;border-radius:8px;background:transparent;font-size:13px;font-weight:600;color:var(--text-tertiary);cursor:pointer;font-family:inherit;transition:all 0.15s}
-.bbTrackTypeBtn.selected{background:var(--surface);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,0.1)}
-.bbP2PProgress{background:var(--bg);border-radius:12px;padding:14px 16px;margin-bottom:14px;display:none}
-.bbP2PProgress.active{display:block}
-.bbP2PStep{display:flex;align-items:center;gap:10px;padding:8px 0;transition:opacity 0.3s}
-.bbP2PStep.waiting{opacity:0.5}
-.bbP2PStepIcon{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0;transition:all 0.3s}
-.bbP2PStepIcon.pending{border:2px solid var(--text-tertiary);color:var(--text-tertiary);background:transparent}
-.bbP2PStepIcon.current{border:2px solid var(--accent);color:var(--accent);background:rgba(0,122,255,0.1);animation:p2p-pulse 2s ease-in-out infinite}
-@keyframes p2p-pulse{0%,100%{box-shadow:0 0 0 0 rgba(0,122,255,0.4)}50%{box-shadow:0 0 0 6px rgba(0,122,255,0)}}
-.bbP2PStepIcon.done{background:var(--ok);color:#fff;border:none}
-.bbP2PStepText{font-size:13px;color:var(--text-secondary);transition:color 0.3s}
-.bbP2PStepText.current{color:var(--text);font-weight:600}
-.bbP2PStepText.done{color:var(--ok)}
-.bbP2PStepCoords{font-size:11px;color:var(--text-tertiary);margin-left:34px;margin-top:-4px;margin-bottom:4px}
-.bbP2PConnector{width:2px;height:16px;background:var(--divider);margin-left:11px;transition:background 0.3s}
-.bbP2PConnector.active{background:linear-gradient(to bottom, var(--ok), var(--accent))}
-.bbP2PMessage{text-align:center;padding:12px;margin-top:8px;background:rgba(0,122,255,0.08);border-radius:8px;font-size:13px;color:var(--text-secondary);display:none}
-.bbP2PMessage.active{display:block}
-.bbP2PDistance{font-size:15px;font-weight:600;color:var(--accent);font-family:var(--mono)}
+.bbActiveTrack{display:flex;align-items:center;gap:12px;background:rgba(52,199,89,0.1);border:1px solid rgba(52,199,89,0.2);border-radius:12px;padding:12px 14px;margin-bottom:16px}
+.bbActiveTrackInfo{flex:1;min-width:0}
+.bbActiveTrackName{font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bbActiveTrackMeta{font-size:12px;color:var(--text-secondary);margin-top:2px}
+.bbActiveTrackClear{width:28px;height:28px;border-radius:50%;border:none;background:rgba(128,128,128,0.12);color:var(--text-tertiary);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.bbActiveTrackClear:active{background:rgba(255,59,48,0.15);color:#ff3b30}
+.bbCreateTrackHint{font-size:13px;color:var(--text-secondary);margin:0 0 16px 0;line-height:1.5;text-align:center}
+.bbCreateTrackBtns{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.bbRecordStartBtn{display:flex;flex-direction:column;align-items:center;padding:20px 14px 18px;border:2px solid var(--divider);border-radius:16px;background:linear-gradient(180deg, var(--surface) 0%, var(--bg) 100%);cursor:pointer;transition:all 0.2s ease;font-family:inherit;position:relative;overflow:hidden}
+.bbRecordStartBtn::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg, transparent, #ff3b30, transparent);opacity:0;transition:opacity 0.2s}
+.bbRecordStartBtn:active{transform:scale(0.97);border-color:#ff3b30}
+.bbRecordStartIconWrap{width:48px;height:48px;border-radius:50%;background:rgba(255,59,48,0.1);display:flex;align-items:center;justify-content:center;margin-bottom:12px}
+.bbRecordStartIcon{color:#ff3b30}
+.bbRecordStartLabel{font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px}
+.bbRecordStartDesc{font-size:11px;color:var(--text-tertiary);text-align:center;line-height:1.35}
+.bbRecordOverlay{position:fixed;bottom:0;left:0;right:0;background:var(--surface);padding:24px 20px;padding-bottom:calc(24px + env(safe-area-inset-bottom, 0px));border-radius:24px 24px 0 0;box-shadow:0 -8px 32px rgba(0,0,0,0.18);z-index:250;transform:translateY(100%);transition:transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);border-top:3px solid #ff3b30}
+.bbRecordOverlay.active{transform:translateY(0)}
+.bbRecordState{animation:fadeIn 0.25s ease-out}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.bbRecordHeader{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:16px}
+.bbRecordPulse{width:12px;height:12px;background:#ff3b30;border-radius:50%;animation:recPulse 1.2s ease-in-out infinite}
+@keyframes recPulse{0%,100%{transform:scale(1);opacity:1;box-shadow:0 0 0 0 rgba(255,59,48,0.5)}50%{transform:scale(0.85);opacity:0.7;box-shadow:0 0 0 8px rgba(255,59,48,0)}}
+.bbRecordTitle{font-size:14px;font-weight:600;color:var(--text-secondary);letter-spacing:0.02em;text-transform:uppercase}
+.bbRecordHero{text-align:center;padding:16px 0 20px}
+.bbRecordHeroValue{font-size:72px;font-weight:700;letter-spacing:-0.04em;line-height:1;font-variant-numeric:tabular-nums;color:var(--text)}
+.bbRecordHeroUnit{font-size:12px;font-weight:600;color:var(--text-tertiary);margin-top:6px;text-transform:uppercase;letter-spacing:0.1em}
+.bbRecordMeta{display:flex;justify-content:center;align-items:stretch;gap:0;margin-bottom:16px;padding:12px 16px;background:var(--bg);border-radius:12px}
+.bbRecordMetaItem{flex:1;text-align:center;display:flex;flex-direction:column;justify-content:center}
+.bbRecordMetaValue{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--text);display:block;line-height:1.2}
+.bbRecordMetaLabel{font-size:9px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.06em;margin-top:3px;font-weight:500}
+.bbRecordMetaDivider{width:1px;height:auto;background:var(--divider);margin:0 10px;align-self:stretch}
+.bbRecordQuality{display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:10px 14px;background:var(--bg);border-radius:10px}
+.bbRecordQualityBar{flex:1;height:6px;background:rgba(128,128,128,0.15);border-radius:3px;overflow:hidden}
+.bbRecordQualityFill{height:100%;background:var(--ok);transition:width 0.3s ease-out, background 0.3s;border-radius:3px}
+.bbRecordQualityFill.fair{background:var(--amber)}
+.bbRecordQualityFill.poor{background:var(--red)}
+.bbRecordQualityText{font-size:11px;font-weight:600;color:var(--text-secondary);min-width:60px;text-align:right;text-transform:uppercase;letter-spacing:0.02em}
+.bbRecordHint{text-align:center;font-size:13px;color:var(--text-tertiary);margin:0 0 18px 0;line-height:1.45}
+.bbRecordActions{display:flex;gap:10px}
+.bbRecordActionBtn{flex:1;padding:14px 20px;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;text-align:center;transition:transform 0.1s, opacity 0.15s}
+.bbRecordActionBtn:active{transform:scale(0.97)}
+.bbRecordActionBtn.secondary{background:rgba(128,128,128,0.12);color:var(--text)}
+.bbRecordActionBtn.primary{background:var(--ok);color:#fff}
+.bbRecordActionBtn.finish{background:#ff3b30;color:#fff}
+.bbRecordSuccess{text-align:center;padding:24px 16px 20px}
+.bbRecordSuccessIcon{width:72px;height:72px;margin:0 auto 16px;background:linear-gradient(135deg, rgba(52,199,89,0.15) 0%, rgba(52,199,89,0.08) 100%);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:36px;color:var(--ok);animation:successPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)}
+@keyframes successPop{0%{transform:scale(0.5);opacity:0}100%{transform:scale(1);opacity:1}}
+.bbRecordSuccessTitle{font-size:24px;font-weight:700;color:var(--text);margin-bottom:8px;letter-spacing:-0.01em}
+.bbRecordSuccessStats{font-size:14px;color:var(--text-secondary);line-height:1.4}
 </style></head>
 <body>
 
@@ -605,6 +632,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
             <button class="bbLapSetupBtn" id="btn-tracks">Tracks</button>
         </div>
         <div class="bbLapActive" id="lap-active" onclick="openTrackModal()">
+            <button class="bbLapStop" id="btn-lap-stop" onclick="event.stopPropagation();confirmStopTiming();" title="Stop timing">×</button>
             <div class="bbLapMain">
                 <div class="bbLapTime bbNum" id="lap-time">0:00.000</div>
                 <div class="bbLapTrackName" id="lap-track-name"></div>
@@ -781,55 +809,101 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
 <div class="bbModal" id="track-modal">
     <div class="bbModalContent">
         <div class="bbModalHeader">
-            <span class="bbModalTitle">Track Manager</span>
+            <span class="bbModalTitle">Tracks</span>
             <button class="bbModalClose" id="track-modal-close">&times;</button>
         </div>
         <div class="bbModalBody">
             <div id="active-track-section" class="bbActiveTrack" style="display:none">
-                <div class="bbActiveTrackLabel">Active Track</div>
-                <div class="bbActiveTrackName" id="active-track-name">—</div>
-                <div class="bbActiveTrackMeta" id="active-track-meta">—</div>
-            </div>
-            <div class="bbModalSection">
-                <div class="bbSectionTitle">Current Position</div>
-                <div class="bbPosDisplay">
-                    <div class="bbPosRow"><span class="bbPosLabel">Local X, Y</span><span class="bbPosValue" id="pos-xy">Waiting for GPS...</span></div>
-                    <div class="bbPosRow"><span class="bbPosLabel">Heading</span><span class="bbPosValue" id="pos-heading">—</span></div>
-                    <div class="bbPosRow"><span class="bbPosLabel">Speed</span><span class="bbPosValue" id="pos-speed">—</span></div>
+                <div class="bbActiveTrackInfo">
+                    <div class="bbActiveTrackName" id="active-track-name">—</div>
+                    <div class="bbActiveTrackMeta" id="active-track-meta">—</div>
                 </div>
+                <button class="bbActiveTrackClear" id="btn-clear-track" title="Clear active track">×</button>
             </div>
-            <div class="bbModalSection">
-                <div class="bbSectionTitle">New Track</div>
-                <div class="bbTrackTypeSelector">
-                    <button class="bbTrackTypeBtn selected" id="btn-type-loop" onclick="selectTrackType('loop')">Loop</button>
-                    <button class="bbTrackTypeBtn" id="btn-type-p2p" onclick="selectTrackType('point_to_point')">Point-to-Point</button>
+            <div class="bbModalSection" id="create-track-section">
+                <div class="bbSectionTitle">Record New Track</div>
+                <p class="bbCreateTrackHint">Drive to start position, then tap to begin</p>
+                <div class="bbCreateTrackBtns">
+                    <button class="bbRecordStartBtn" id="btn-record-loop" onclick="startTrackRecording('loop')">
+                        <div class="bbRecordStartIconWrap">
+                            <svg class="bbRecordStartIcon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="9"/>
+                                <polyline points="16,12 12,8 8,12"/>
+                                <line x1="12" y1="8" x2="12" y2="16"/>
+                            </svg>
+                        </div>
+                        <span class="bbRecordStartLabel">Circuit</span>
+                        <span class="bbRecordStartDesc">Auto-detects return to start</span>
+                    </button>
+                    <button class="bbRecordStartBtn" id="btn-record-p2p" onclick="startTrackRecording('point_to_point')">
+                        <div class="bbRecordStartIconWrap">
+                            <svg class="bbRecordStartIcon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="5" cy="12" r="3"/>
+                                <circle cx="19" cy="12" r="3"/>
+                                <line x1="8" y1="12" x2="16" y2="12"/>
+                                <polyline points="13,9 16,12 13,15"/>
+                            </svg>
+                        </div>
+                        <span class="bbRecordStartLabel">Stage</span>
+                        <span class="bbRecordStartDesc">Mark finish when you're done</span>
+                    </button>
                 </div>
-                <div class="bbP2PProgress" id="p2p-progress">
-                    <div class="bbP2PStep" id="p2p-step-1">
-                        <div class="bbP2PStepIcon current" id="p2p-start-icon">1</div>
-                        <span class="bbP2PStepText current" id="p2p-start-text">Set start line</span>
-                    </div>
-                    <div class="bbP2PStepCoords" id="p2p-start-coords"></div>
-                    <div class="bbP2PConnector" id="p2p-connector"></div>
-                    <div class="bbP2PStep waiting" id="p2p-step-2">
-                        <div class="bbP2PStepIcon pending" id="p2p-finish-icon">2</div>
-                        <span class="bbP2PStepText" id="p2p-finish-text">Set finish line</span>
-                    </div>
-                    <div class="bbP2PStepCoords" id="p2p-finish-coords"></div>
-                    <div class="bbP2PMessage" id="p2p-message">Drive to your finish location<br><span class="bbP2PDistance" id="p2p-distance">—</span> from start</div>
-                </div>
-                <button class="bbActionBtn primary" id="btn-set-start" disabled>Set Start Line Here</button>
-                <button class="bbActionBtn primary" id="btn-set-finish" disabled style="display:none">Set Finish Line Here</button>
-                <button class="bbActionBtn secondary" id="btn-cancel-p2p" style="display:none" onclick="cancelP2PCreation()">Cancel</button>
-            </div>
-            <div class="bbModalSection" id="active-track-actions" style="display:none">
-                <div class="bbSectionTitle">Active Track</div>
-                <button class="bbActionBtn secondary" id="btn-clear-track">Clear Active Track</button>
             </div>
             <div class="bbModalSection">
                 <div class="bbSectionTitle">Saved Tracks</div>
                 <div class="bbTrackList" id="track-list"><div class="bbTrackEmpty">No saved tracks</div></div>
             </div>
+        </div>
+    </div>
+</div>
+
+<div class="bbRecordOverlay" id="record-overlay">
+    <div class="bbRecordState" id="rec-state-recording">
+        <div class="bbRecordHeader">
+            <div class="bbRecordPulse"></div>
+            <span class="bbRecordTitle" id="rec-title">Recording Circuit</span>
+        </div>
+        <div class="bbRecordHero">
+            <div class="bbRecordHeroValue" id="rec-distance">0</div>
+            <div class="bbRecordHeroUnit">meters</div>
+        </div>
+        <div class="bbRecordMeta">
+            <div class="bbRecordMetaItem">
+                <span class="bbRecordMetaValue" id="rec-corners">0</span>
+                <span class="bbRecordMetaLabel">corners</span>
+            </div>
+            <div class="bbRecordMetaDivider"></div>
+            <div class="bbRecordMetaItem">
+                <span class="bbRecordMetaValue" id="rec-points">0</span>
+                <span class="bbRecordMetaLabel">points</span>
+            </div>
+            <div class="bbRecordMetaDivider"></div>
+            <div class="bbRecordMetaItem">
+                <span class="bbRecordMetaValue" id="rec-elapsed">0:00</span>
+                <span class="bbRecordMetaLabel">elapsed</span>
+            </div>
+        </div>
+        <div class="bbRecordQuality">
+            <div class="bbRecordQualityBar">
+                <div class="bbRecordQualityFill" id="rec-quality-fill" style="width:80%"></div>
+            </div>
+            <span class="bbRecordQualityText" id="rec-quality-text">GPS Good</span>
+        </div>
+        <p class="bbRecordHint" id="rec-hint">Complete one lap. We'll detect when you return.</p>
+        <div class="bbRecordActions" id="rec-actions-normal">
+            <button class="bbRecordActionBtn secondary" onclick="cancelTrackRecording()">Cancel</button>
+            <button class="bbRecordActionBtn finish" id="btn-mark-finish" style="display:none" onclick="markRecordingFinish()">Mark Finish</button>
+        </div>
+    </div>
+    <div class="bbRecordState" id="rec-state-complete" style="display:none">
+        <div class="bbRecordSuccess">
+            <div class="bbRecordSuccessIcon">✓</div>
+            <div class="bbRecordSuccessTitle" id="rec-success-title">Track Complete!</div>
+            <div class="bbRecordSuccessStats" id="rec-success-stats">—</div>
+        </div>
+        <div class="bbRecordActions">
+            <button class="bbRecordActionBtn secondary" onclick="continueTrackRecording()">Keep Driving</button>
+            <button class="bbRecordActionBtn primary" onclick="finishTrackRecording()">Save Track</button>
         </div>
     </div>
 </div>
@@ -945,10 +1019,29 @@ async function exportCSV(){
     a.href=u;a.download='blackbox_'+new Date(latest.sessionId).toISOString().slice(0,19).replace(/[T:]/g,'-')+'.csv';a.click();
 }
 
+// TrackRecorder - Adaptive sampling for track recording with corner state machine
+class TrackRecorder{
+    constructor(){this.config={minDistance:2,maxDistance:30,headingThreshold:0.15,cornerEntryThreshold:0.025,cornerExitThreshold:0.012,minCornerLength:3,minLoopDistance:150,closeProximity:25,headingTolerance:0.5};this.reset()}
+    reset(){this.recording=false;this.trackType='loop';this.startPos=null;this.startHeading=0;this.startTime=0;this.keyPoints=[];this.rawSamples=[];this.lastPos=null;this.lastSigma=3.0;this.totalDistance=0;this.loopDetected=false;this.inCorner=false;this.cornerCount=0;this.cornerEntryDist=0}
+    start(pos,trackType='loop'){if(this.recording)return false;this.reset();this.recording=true;this.trackType=trackType;this.startPos={x:pos.x,y:pos.y};this.startHeading=pos.heading||0;this.startTime=Date.now();this.keyPoints.push({x:pos.x,y:pos.y,heading:pos.heading||0,speed:pos.speed||0,sigma:pos.sigma||3.0,t:Date.now(),curvature:0,isCorner:false});this.lastPos={x:pos.x,y:pos.y,heading:pos.heading||0};return true}
+    addSample(pos){if(!this.recording||!this.lastPos)return{stored:false};const sigma=pos.sigma||3.0;this.lastSigma=sigma;const dx=pos.x-this.lastPos.x,dy=pos.y-this.lastPos.y,dist=Math.sqrt(dx*dx+dy*dy);if(dist<0.5)return{stored:false,stats:this.getStats()};const speedBasedMinDist=Math.max(this.config.minDistance,pos.speed*0.1);const headingChange=Math.abs(this._wrapAngle(pos.heading-this.lastPos.heading));const shouldStore=dist>=speedBasedMinDist||headingChange>=this.config.headingThreshold||dist>=this.config.maxDistance;if(!shouldStore)return{stored:false,stats:this.getStats()};const curvature=dist>0.1?headingChange/dist:0;let isCorner=false;if(!this.inCorner){if(curvature>this.config.cornerEntryThreshold){this.inCorner=true;this.cornerEntryDist=this.totalDistance;isCorner=true}}else{isCorner=true;if(curvature<this.config.cornerExitThreshold){const cornerLength=this.totalDistance-this.cornerEntryDist;if(cornerLength>=this.config.minCornerLength)this.cornerCount++;this.inCorner=false}}this.keyPoints.push({x:pos.x,y:pos.y,heading:pos.heading||0,speed:pos.speed||0,sigma:sigma,t:Date.now(),curvature:curvature,isCorner:isCorner});this.totalDistance+=dist;this.lastPos={x:pos.x,y:pos.y,heading:pos.heading||0};if(this.trackType==='loop'){const lr=this._checkLoopClosure(pos);if(lr.detected){this.loopDetected=true;return{stored:true,loopDetected:true,stats:this.getStats()}}}return{stored:true,curvature:curvature,isCorner:isCorner,stats:this.getStats()}}
+    _checkLoopClosure(pos){if(this.totalDistance<this.config.minLoopDistance)return{detected:false};const dts=Math.sqrt((pos.x-this.startPos.x)**2+(pos.y-this.startPos.y)**2);if(dts>=this.config.closeProximity)return{detected:false};const hd=Math.abs(this._wrapAngle(pos.heading-this.startHeading));return hd<this.config.headingTolerance?{detected:true}:{detected:false}}
+    _wrapAngle(a){while(a>Math.PI)a-=2*Math.PI;while(a<-Math.PI)a+=2*Math.PI;return a}
+    getStats(){const displayCorners=this.inCorner?this.cornerCount+1:this.cornerCount;return{recording:this.recording,trackType:this.trackType,keyPointCount:this.keyPoints.length,totalDistance:this.totalDistance,loopDetected:this.loopDetected,elapsedMs:this.recording?Date.now()-this.startTime:0,gpsQuality:this._gpsQualityRating(this.lastSigma),corners:displayCorners,inCorner:this.inCorner}}
+    _gpsQualityRating(sigma){if(sigma<2.0)return'excellent';if(sigma<3.0)return'good';if(sigma<4.0)return'fair';return'poor'}
+    cancel(){this.recording=false}
+    finish(trackName,gpsOrigin=null){if(!this.recording)return null;this.recording=false;if(this.keyPoints.length<10)return null;const centerline=this._smoothPath(this.keyPoints,3);const startLine=this._calculateTimingLine(centerline,'start');let finishLine=null;if(this.trackType==='point_to_point')finishLine=this._calculateTimingLine(centerline,'finish');const bounds=this._calculateBounds(centerline);const totalDist=this._calculatePathLength(centerline);const quality=this._assessQuality();return{id:'track_'+Date.now()+'_'+Math.random().toString(36).substr(2,9),name:trackName,type:this.trackType,created:Date.now(),startLine:startLine,finishLine:finishLine,centerline:centerline,bounds:bounds,totalDistance:totalDist,origin:{x:this.startPos.x,y:this.startPos.y},gpsOrigin:gpsOrigin,quality:quality}}
+    _smoothPath(pts,ws){if(!pts||pts.length===0)return[];if(pts.length<=ws)return pts.map(p=>({...p}));const result=[];const hw=Math.floor(ws/2);for(let i=0;i<pts.length;i++){const s=Math.max(0,i-hw),e=Math.min(pts.length-1,i+hw),w=pts.slice(s,e+1);if(w.length===0){result.push({...pts[i]});continue}let sx=0,sy=0,sw=0;for(let j=0;j<w.length;j++){const df=Math.abs(j-(i-s)),pw=1/(1+df*0.5),sg=w[j].sigma||3.0,qw=1/(sg+0.5),wt=pw*qw;sx+=w[j].x*wt;sy+=w[j].y*wt;sw+=wt}const x=sw>0?sx/sw:pts[i].x,y=sw>0?sy/sw:pts[i].y;result.push({x:isNaN(x)?pts[i].x:x,y:isNaN(y)?pts[i].y:y,heading:pts[i].heading,speed:pts[i].speed,sigma:pts[i].sigma,t:pts[i].t,curvature:pts[i].curvature,isCorner:pts[i].isCorner})}return result}
+    _calculateTimingLine(cl,which='start'){if(!cl||cl.length===0)return{p1:[0,12],p2:[0,-12],direction:0};const idx=which==='start'?Math.min(2,cl.length-1):Math.max(0,cl.length-3);const ns=5,s=Math.max(0,idx-ns),e=Math.min(cl.length-1,idx+ns),pts=cl.slice(s,e+1);let sx=0,sy=0,sw=0;for(const p of pts){const wt=1/(p.sigma||3.0+0.5);sx+=p.x*wt;sy+=p.y*wt;sw+=wt}const cx=sw>0?sx/sw:cl[idx].x,cy=sw>0?sy/sw:cl[idx].y;const safeCx=isNaN(cx)?0:cx,safeCy=isNaN(cy)?0:cy;let dir=0;if(pts.length>=2){const f=pts[0],l=pts[pts.length-1];dir=Math.atan2(l.y-f.y,l.x-f.x)}const w=12,perp=dir+Math.PI/2;return{p1:[safeCx+Math.cos(perp)*w,safeCy+Math.sin(perp)*w],p2:[safeCx-Math.cos(perp)*w,safeCy-Math.sin(perp)*w],direction:dir}}
+    _calculateBounds(cl){if(!cl||cl.length===0)return{minX:0,minY:0,maxX:100,maxY:100};let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;for(const p of cl){minX=Math.min(minX,p.x);minY=Math.min(minY,p.y);maxX=Math.max(maxX,p.x);maxY=Math.max(maxY,p.y)}return{minX,minY,maxX,maxY}}
+    _calculatePathLength(cl){if(!cl||cl.length<2)return 0;let len=0;for(let i=1;i<cl.length;i++){const dx=cl[i].x-cl[i-1].x,dy=cl[i].y-cl[i-1].y;len+=Math.sqrt(dx*dx+dy*dy)}return len}
+    _assessQuality(){if(this.keyPoints.length===0)return{rating:'poor',avgUncertainty:5.0,goodSampleRatio:0,corners:0,totalPoints:0};const vp=this.keyPoints.filter(p=>p.sigma<3.0);const ts=this.keyPoints.reduce((s,p)=>s+(p.sigma||3.0),0);const as=ts/this.keyPoints.length;const displayCorners=this.inCorner?this.cornerCount+1:this.cornerCount;const gr=vp.length/this.keyPoints.length;let rating='good';if(isNaN(as)||as>3.5||gr<0.7)rating='fair';if(isNaN(as)||as>4.5||gr<0.5)rating='poor';return{rating:rating,avgUncertainty:isNaN(as)?3.0:as,goodSampleRatio:isNaN(gr)?0.5:gr,corners:displayCorners,totalPoints:this.keyPoints.length}}
+}
+
 // Track Manager IndexedDB
 const TRACK_DB='blackbox-tracks',TRACK_DB_VER=1;
 let trackDb=null,activeTrack=null,currentPos=null,suppressStartLineIndicator=false;
-let selectedTrackType='loop',p2pCreationState=null,p2pNeedsWarmup=false;
+let p2pNeedsWarmup=false,trackRecorder=null;
 
 function openTrackDB(){
     return new Promise((res,rej)=>{
@@ -1010,40 +1103,18 @@ function openTrackModal(){
     $('track-modal').classList.add('open');
     renderTrackList();
     updateActiveTrackDisplay();
-    updateTrackPos();
 }
 function closeTrackModal(){$('track-modal').classList.remove('open')}
 
 function updateActiveTrackDisplay(){
-    const sec=$('active-track-section'),act=$('active-track-actions');
+    const sec=$('active-track-section');
     if(activeTrack){
-        sec.style.display='block';
-        act.style.display='block';
+        sec.style.display='flex';
         $('active-track-name').textContent=activeTrack.name;
         const best=activeTrack.bestLapMs?fmtLapTime(activeTrack.bestLapMs):'—';
         const unit=activeTrack.type==='point_to_point'?'runs':'laps';
         $('active-track-meta').textContent='Best: '+best+' · '+(activeTrack.lapCount||0)+' '+unit;
-    }else{sec.style.display='none';act.style.display='none'}
-}
-
-function updateTrackPos(){
-    if(currentPos&&currentPos.valid){
-        $('pos-xy').textContent=currentPos.x.toFixed(1)+', '+currentPos.y.toFixed(1)+' m';
-        $('pos-heading').textContent=(currentPos.yaw*180/Math.PI).toFixed(0)+'°';
-        $('pos-speed').textContent=currentPos.speed.toFixed(0)+' km/h';
-        $('btn-set-start').disabled=false;
-        $('btn-set-finish').disabled=false;
-        if(p2pCreationState&&p2pCreationState.startPos){
-            const dx=currentPos.x-p2pCreationState.startPos.x,dy=currentPos.y-p2pCreationState.startPos.y;
-            $('p2p-distance').textContent=formatDistance(Math.sqrt(dx*dx+dy*dy));
-        }
-    }else{
-        $('pos-xy').textContent='Waiting for GPS...';
-        $('pos-heading').textContent='—';
-        $('pos-speed').textContent='—';
-        $('btn-set-start').disabled=true;
-        $('btn-set-finish').disabled=true;
-    }
+    }else{sec.style.display='none'}
 }
 
 async function renderTrackList(){
@@ -1134,107 +1205,77 @@ async function deactivateTrack(){
     updateActiveTrackDisplay();
 }
 
-function selectTrackType(type){
-    selectedTrackType=type;
-    $('btn-type-loop').classList.toggle('selected',type==='loop');
-    $('btn-type-p2p').classList.toggle('selected',type==='point_to_point');
-    $('p2p-progress').classList.toggle('active',type==='point_to_point');
-    if(type==='loop'){
-        $('btn-set-start').textContent='Set Start Line Here';
-        $('btn-set-start').style.display='block';
-        $('btn-set-finish').style.display='none';
-        $('btn-cancel-p2p').style.display='none';
-    }else{
-        $('btn-set-start').textContent='Set Start Line';
-        updateP2PCreationUI();
-    }
+// Track Recording Functions
+function startTrackRecording(trackType='loop'){
+    if(!currentPos||!currentPos.valid){alert('Position not available');return false}
+    if(!trackRecorder)trackRecorder=new TrackRecorder();
+    const pos={x:currentPos.x,y:currentPos.y,heading:currentPos.yaw,speed:currentPos.speed,valid:true,sigma:currentPos.sigma||3.0};
+    if(!trackRecorder.start(pos,trackType)){console.warn('Failed to start recording');return false}
+    const overlay=$('record-overlay');overlay.classList.add('active');
+    $('rec-title').textContent=trackType==='loop'?'Recording Circuit':'Recording Stage';
+    $('rec-distance').textContent='0';$('rec-corners').textContent='0';$('rec-points').textContent='0';$('rec-elapsed').textContent='0:00';
+    $('rec-hint').textContent=trackType==='loop'?"Complete one lap. We'll detect when you return.":'Drive the stage, then tap Mark Finish at the end.';
+    $('rec-state-recording').style.display='block';$('rec-state-complete').style.display='none';
+    const markFinishBtn=$('btn-mark-finish');if(markFinishBtn)markFinishBtn.style.display=trackType==='point_to_point'?'flex':'none';
+    closeTrackModal();return true;
 }
-
-function updateP2PCreationUI(){
-    if(p2pCreationState){
-        $('p2p-step-1').classList.remove('waiting');
-        $('p2p-start-icon').className='bbP2PStepIcon done';
-        $('p2p-start-icon').textContent='✓';
-        $('p2p-start-text').className='bbP2PStepText done';
-        $('p2p-start-coords').textContent='Start position saved';
-        $('p2p-connector').classList.add('active');
-        $('p2p-step-2').classList.remove('waiting');
-        $('p2p-finish-icon').className='bbP2PStepIcon current';
-        $('p2p-finish-icon').textContent='2';
-        $('p2p-finish-text').className='bbP2PStepText current';
-        $('p2p-finish-coords').textContent='';
-        $('p2p-message').classList.add('active');
-        if(currentPos&&currentPos.valid&&p2pCreationState.startPos){
-            const dx=currentPos.x-p2pCreationState.startPos.x,dy=currentPos.y-p2pCreationState.startPos.y;
-            $('p2p-distance').textContent=formatDistance(Math.sqrt(dx*dx+dy*dy));
-        }else{$('p2p-distance').textContent='—'}
-        $('btn-set-start').style.display='none';
-        $('btn-set-finish').style.display='block';
-        $('btn-set-finish').disabled=!currentPos||!currentPos.valid;
-        $('btn-cancel-p2p').style.display='block';
-    }else{
-        $('p2p-step-1').classList.remove('waiting');
-        $('p2p-start-icon').className='bbP2PStepIcon current';
-        $('p2p-start-icon').textContent='1';
-        $('p2p-start-text').className='bbP2PStepText current';
-        $('p2p-start-coords').textContent='';
-        $('p2p-connector').classList.remove('active');
-        $('p2p-step-2').classList.add('waiting');
-        $('p2p-finish-icon').className='bbP2PStepIcon pending';
-        $('p2p-finish-icon').textContent='2';
-        $('p2p-finish-text').className='bbP2PStepText';
-        $('p2p-finish-coords').textContent='';
-        $('p2p-message').classList.remove('active');
-        $('btn-set-start').style.display='block';
-        $('btn-set-finish').style.display='none';
-        $('btn-cancel-p2p').style.display='none';
-    }
+function updateTrackRecording(){
+    if(!trackRecorder||!trackRecorder.recording||!currentPos||!currentPos.valid)return;
+    const pos={x:currentPos.x,y:currentPos.y,heading:currentPos.yaw,speed:currentPos.speed,valid:true,sigma:currentPos.sigma||3.0};
+    const result=trackRecorder.addSample(pos);
+    const stats=trackRecorder.getStats();
+    const distVal=Math.round(stats.totalDistance);
+    $('rec-distance').textContent=isNaN(distVal)?'0':distVal;
+    $('rec-corners').textContent=stats.corners||0;
+    $('rec-points').textContent=stats.keyPointCount||0;
+    const elapsed=stats.elapsedMs||0,mins=Math.floor(elapsed/60000),secs=Math.floor((elapsed%60000)/1000);
+    $('rec-elapsed').textContent=mins+':'+secs.toString().padStart(2,'0');
+    updateRecordingQualityDisplay(stats.gpsQuality);
+    if(result&&result.loopDetected&&$('rec-state-complete').style.display==='none')onLoopDetected();
 }
-
-function cancelP2PCreation(){
-    p2pCreationState=null;
-    updateP2PCreationUI();
+function cancelTrackRecording(){
+    if(trackRecorder){trackRecorder.cancel();trackRecorder=null}
+    $('record-overlay').classList.remove('active');
 }
-
-async function setStartLineHere(){
-    if(!currentPos||!currentPos.valid){alert('Position not available');return}
-    const x=currentPos.x,y=currentPos.y,heading=currentPos.yaw;
-    const w=10,perp=heading+Math.PI/2;
-    const line={p1:[x+Math.cos(perp)*w,y+Math.sin(perp)*w],p2:[x-Math.cos(perp)*w,y-Math.sin(perp)*w],direction:heading};
-    if(selectedTrackType==='point_to_point'){
-        p2pCreationState={startLine:line,startPos:{x,y}};
-        updateP2PCreationUI();
-        return;
-    }
-    const name=prompt('Enter track name:','Track '+new Date().toLocaleDateString());
-    if(!name)return;
-    const track={id:genTrackId(),name,type:'loop',created:Date.now(),modified:Date.now(),startLine:line,finishLine:null,origin:{x,y},bestLapMs:null,lapCount:0};
-    await saveTrack(track);
-    await activateTrack(track);
-    suppressStartLineIndicator=true;
-    closeTrackModal();
+function markRecordingFinish(){
+    if(!trackRecorder||!trackRecorder.recording||trackRecorder.trackType!=='point_to_point')return;
+    const stats=trackRecorder.getStats();
+    if(stats.totalDistance<50){alert('Track is too short. Drive at least 50 meters.');return}
+    onLoopDetected();
 }
-
-async function setFinishLineHere(){
-    if(!currentPos||!currentPos.valid||!p2pCreationState){alert('Position not available or start line not set');return}
-    const x=currentPos.x,y=currentPos.y,heading=currentPos.yaw;
-    const dx=x-p2pCreationState.startPos.x,dy=y-p2pCreationState.startPos.y;
-    const stageLength=Math.sqrt(dx*dx+dy*dy);
-    const w=10,perp=heading+Math.PI/2;
-    const finishLine={p1:[x+Math.cos(perp)*w,y+Math.sin(perp)*w],p2:[x-Math.cos(perp)*w,y-Math.sin(perp)*w],direction:heading};
-    $('p2p-finish-icon').className='bbP2PStepIcon done';
-    $('p2p-finish-icon').textContent='✓';
-    $('p2p-finish-text').className='bbP2PStepText done';
-    $('p2p-finish-coords').textContent='Finish position saved';
-    $('p2p-message').innerHTML='Stage ready<br><span class="bbP2PDistance">'+formatDistance(stageLength)+'</span> total';
-    const name=prompt('Enter track name:','Stage '+new Date().toLocaleDateString());
-    if(!name){updateP2PCreationUI();return}
-    const track={id:genTrackId(),name,type:'point_to_point',created:Date.now(),modified:Date.now(),startLine:p2pCreationState.startLine,finishLine,origin:p2pCreationState.startPos,bestLapMs:null,lapCount:0};
-    await saveTrack(track);
-    p2pCreationState=null;
-    await activateTrack(track);
-    suppressStartLineIndicator=true;
-    closeTrackModal();
+function onLoopDetected(){
+    const stats=trackRecorder.getStats();
+    const quality=(stats.gpsQuality||'good').charAt(0).toUpperCase()+(stats.gpsQuality||'good').slice(1);
+    const distance=Math.round(stats.totalDistance)||0,corners=stats.corners||0;
+    const isStage=trackRecorder&&trackRecorder.trackType==='point_to_point';
+    $('rec-success-title').textContent=isStage?'Stage Complete!':'Circuit Complete!';
+    $('rec-success-stats').textContent=distance+'m · '+corners+' corners · '+quality+' quality';
+    $('rec-state-recording').style.display='none';$('rec-state-complete').style.display='block';
+}
+function continueTrackRecording(){
+    if(!trackRecorder)return;
+    trackRecorder.loopDetected=false;
+    $('rec-state-recording').style.display='block';$('rec-state-complete').style.display='none';
+    const isStage=trackRecorder.trackType==='point_to_point';
+    $('rec-hint').textContent=isStage?'Continue driving. Tap Mark Finish when done.':"Continue driving. We'll detect the next loop.";
+}
+async function finishTrackRecording(){
+    if(!trackRecorder||!trackRecorder.recording)return;
+    const defaultName=trackRecorder.trackType==='loop'?'New Circuit':'New Stage';
+    const trackName=prompt('Enter track name:',defaultName);if(!trackName)return;
+    const trackData=trackRecorder.finish(trackName,null);
+    if(!trackData){alert('Failed to create track: not enough data or poor quality');return}
+    $('record-overlay').classList.remove('active');
+    const track={id:trackData.id,name:trackData.name,type:trackData.type,startLine:trackData.startLine,finishLine:trackData.finishLine,origin:trackData.origin,centerline:trackData.centerline,bounds:trackData.bounds,pathLength:trackData.totalDistance||0,quality:trackData.quality,bestLapMs:null,lapCount:0,createdAt:trackData.created,isNew:true};
+    await saveTrack(track);await activateTrack(track);renderTrackList();
+    alert('Track "'+track.name+'" saved!\\n'+track.centerline.length+' points · '+Math.round(track.pathLength||0)+'m');
+}
+function updateRecordingQualityDisplay(quality){
+    const fill=$('rec-quality-fill'),text=$('rec-quality-text');
+    const pct={excellent:100,good:80,fair:60,poor:40}[quality]||50;
+    fill.style.width=pct+'%';fill.className='bbRecordQualityFill';
+    if(quality==='fair')fill.classList.add('fair');else if(quality==='poor')fill.classList.add('poor');
+    text.textContent='GPS '+(quality||'Good').charAt(0).toUpperCase()+(quality||'good').slice(1);
 }
 
 async function clearActiveTrack(){
@@ -1242,6 +1283,10 @@ async function clearActiveTrack(){
     await deactivateTrack();
     updateActiveTrackDisplay();
     renderTrackList();
+}
+function confirmStopTiming(){
+    if(!activeTrack)return;
+    if(confirm('Stop timing "'+activeTrack.name+'"?'))clearActiveTrack();
 }
 
 async function updateTrackBestLap(lapTimeMs){
@@ -1471,9 +1516,9 @@ function process(buf){
     const lapCnt=buf.byteLength>=72?d.getUint16(69,1):0;
     const lapFlags=buf.byteLength>=72?d.getUint8(71):0;
     const latg=ay/9.81,lng=-ax/9.81,yawDeg=Math.abs(wz*57.3);
-    // Update position for track manager
-    currentPos={x:ekfX,y:ekfY,yaw:ekfYaw,speed:sp,valid:gpsOk===1};
-    if($('track-modal').classList.contains('open'))updateTrackPos();
+    // Update position for track manager and recording
+    currentPos={x:ekfX,y:ekfY,yaw:ekfYaw,speed:sp,valid:gpsOk===1,sigma:3.0};
+    updateTrackRecording();
     updateStartLineIndicator();
     updateFinishLineIndicator();
 
@@ -1638,8 +1683,6 @@ $('menu-export').onclick=$('diag-export').onclick=()=>{$('menu-overlay').classLi
 $('menu-tracks').onclick=$('btn-tracks').onclick=()=>{$('menu-overlay').classList.remove('open');openTrackModal()};
 $('track-modal-close').onclick=closeTrackModal;
 $('track-modal').onclick=e=>{if(e.target===$('track-modal'))closeTrackModal()};
-$('btn-set-start').onclick=setStartLineHere;
-$('btn-set-finish').onclick=setFinishLineHere;
 $('btn-clear-track').onclick=clearActiveTrack;
 $('menu-clear').onclick=()=>{$('menu-overlay').classList.remove('open');resetState()};
 
