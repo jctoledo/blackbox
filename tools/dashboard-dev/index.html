@@ -589,6 +589,234 @@ const CANYON_KEYFRAMES = [
 ];
 const LOOP_DURATION = 20000;
 
+// ============================================================================
+// SIMULATED TRACK PATH - A rectangular block loop for geometry-based lap timing
+// Format: [cumulative_distance_m, x_m, y_m, heading_rad]
+// Total length ~283m, completes in 20s at ~14 m/s (51 km/h) average
+//
+// Track layout (birds-eye view):
+//
+//        (10,60)-------- 60m --------(70,60)
+//           |                           |
+//   Corner1 |                           | Corner2
+//           |                           |
+//        (0,50)                      (80,50)
+//           |                           |
+//    50m    |                           | 50m
+//           |                           |
+//        (0,0) START                 (80,0)
+//           |                           |
+//   Corner4 |                           | Corner3
+//           |                           |
+//       (10,-10)------- 60m --------(70,-10)
+//
+// Direction: clockwise (right-hand turns)
+// ============================================================================
+const BLOCK_TRACK = (() => {
+    const waypoints = [];
+    let d = 0;  // Cumulative distance
+    const r = 10;  // Corner radius
+    const cornerSteps = 8;
+    const arcLength = (Math.PI * r / 2);  // Quarter circle
+
+    // Helper: add corner waypoints
+    // startAngle/endAngle are angles FROM the center TO the position on the arc
+    function addCorner(cx, cy, startAngle, endAngle) {
+        for (let i = 1; i <= cornerSteps; i++) {
+            const t = i / cornerSteps;
+            const angle = startAngle + t * (endAngle - startAngle);
+            const x = cx + r * Math.cos(angle);
+            const y = cy + r * Math.sin(angle);
+            // Heading is tangent to circle (perpendicular to radius, in direction of travel)
+            // For clockwise travel, heading = angle - PI/2
+            const heading = angle - Math.PI / 2;
+            d += arcLength / cornerSteps;
+            waypoints.push([d, x, y, heading]);
+        }
+    }
+
+    // === Leg 1: Start at (0,0) heading north, go to (0,50) ===
+    for (let i = 0; i <= 10; i++) {
+        const y = i * 5;
+        waypoints.push([d, 0, y, Math.PI / 2]);
+        if (i < 10) d += 5;
+    }
+
+    // === Corner 1: Right turn at (0,50) → (10,60) ===
+    // Center at (10, 50), turn from angle PI (west of center) to PI/2 (north of center)
+    addCorner(10, 50, Math.PI, Math.PI / 2);
+
+    // === Leg 2: East from (10,60) to (70,60) ===
+    for (let i = 1; i <= 12; i++) {
+        const x = 10 + i * 5;
+        d += 5;
+        waypoints.push([d, x, 60, 0]);  // Heading east
+    }
+
+    // === Corner 2: Right turn at (70,60) → (80,50) ===
+    // Center at (70, 50), turn from angle PI/2 (north of center) to 0 (east of center)
+    addCorner(70, 50, Math.PI / 2, 0);
+
+    // === Leg 3: South from (80,50) to (80,0) ===
+    for (let i = 1; i <= 10; i++) {
+        const y = 50 - i * 5;
+        d += 5;
+        waypoints.push([d, 80, y, -Math.PI / 2]);  // Heading south
+    }
+
+    // === Corner 3: Right turn at (80,0) → (70,-10) ===
+    // Center at (70, 0), turn from angle 0 (east of center) to -PI/2 (south of center)
+    addCorner(70, 0, 0, -Math.PI / 2);
+
+    // === Leg 4: West from (70,-10) to (10,-10) ===
+    for (let i = 1; i <= 12; i++) {
+        const x = 70 - i * 5;
+        d += 5;
+        waypoints.push([d, x, -10, Math.PI]);  // Heading west
+    }
+
+    // === Corner 4: Right turn at (10,-10) → (0,0) ===
+    // Center at (10, 0), turn from angle -PI/2 (south of center) to PI (west of center)
+    // Note: -PI/2 to PI goes through -PI, so we use -PI/2 to -PI then wrap
+    addCorner(10, 0, -Math.PI / 2, -Math.PI);
+
+    // Final point at exactly (0, 0) heading north
+    const lastWp = waypoints[waypoints.length - 1];
+    const distToStart = Math.sqrt(lastWp[1] * lastWp[1] + lastWp[2] * lastWp[2]);
+    if (distToStart > 0.1) {
+        d += distToStart;
+        waypoints.push([d, 0, 0, Math.PI / 2]);
+    }
+
+    return {
+        waypoints,
+        totalLength: d
+    };
+})();
+
+// ============================================================================
+// GEOMETRY FUNCTIONS (ported from lap_timer.rs)
+// ============================================================================
+
+/**
+ * Line segment intersection test using parametric form
+ * Tests if segment (p1->p2) intersects segment (p3->p4)
+ * @returns {number|null} Parameter t along first segment if intersection, null otherwise
+ */
+function lineSegmentIntersection(p1, p2, p3, p4) {
+    const d1x = p2[0] - p1[0];
+    const d1y = p2[1] - p1[1];
+    const d2x = p4[0] - p3[0];
+    const d2y = p4[1] - p3[1];
+
+    // Cross product of direction vectors
+    const cross = d1x * d2y - d1y * d2x;
+
+    // Parallel or nearly parallel lines
+    if (Math.abs(cross) < 1e-10) {
+        return null;
+    }
+
+    // Vector from p1 to p3
+    const dx = p3[0] - p1[0];
+    const dy = p3[1] - p1[1];
+
+    // Solve for t and u
+    const t = (dx * d2y - dy * d2x) / cross;
+    const u = (dx * d1y - dy * d1x) / cross;
+
+    // Check if intersection is within both segments
+    const EPSILON = 1e-6;
+    if (t >= -EPSILON && t <= 1 + EPSILON && u >= -EPSILON && u <= 1 + EPSILON) {
+        return Math.max(0, Math.min(1, t));
+    }
+    return null;
+}
+
+/**
+ * Normalize angle to [-π, π]
+ */
+function wrapAngle(angle) {
+    while (angle > Math.PI) angle -= 2 * Math.PI;
+    while (angle < -Math.PI) angle += 2 * Math.PI;
+    return angle;
+}
+
+/**
+ * Check if velocity direction is within tolerance of expected crossing direction
+ * @param {Array} velocity - [vx, vy] in m/s
+ * @param {number} expectedDir - Expected direction in radians
+ * @param {number} tolerance - Maximum deviation in radians (default ±90°)
+ * @returns {boolean}
+ */
+function directionValid(velocity, expectedDir, tolerance = Math.PI / 2) {
+    const speedSq = velocity[0] * velocity[0] + velocity[1] * velocity[1];
+    if (speedSq < 0.01) return false;  // Too slow to determine direction
+
+    const velDir = Math.atan2(velocity[1], velocity[0]);
+    const diff = wrapAngle(velDir - expectedDir);
+
+    return Math.abs(diff) <= tolerance;
+}
+
+/**
+ * Interpolate position along the block track based on elapsed time
+ * @param {number} elapsedMs - Elapsed time since loop start
+ * @returns {{x: number, y: number, vx: number, vy: number, heading: number, speed: number}}
+ */
+function getSimulatedPosition(elapsedMs) {
+    const loopTime = elapsedMs % LOOP_DURATION;
+    const progress = loopTime / LOOP_DURATION;  // 0 to 1
+
+    // Distance traveled along track
+    const totalDist = BLOCK_TRACK.totalLength;
+    const targetDist = progress * totalDist;
+
+    // Find the two waypoints we're between
+    const wps = BLOCK_TRACK.waypoints;
+    let i = 0;
+    while (i < wps.length - 1 && wps[i + 1][0] < targetDist) {
+        i++;
+    }
+
+    if (i >= wps.length - 1) {
+        // At end, return last point
+        const wp = wps[wps.length - 1];
+        return { x: wp[1], y: wp[2], vx: 0, vy: 15, heading: wp[3], speed: 15 };
+    }
+
+    // Interpolate between waypoints
+    const wp1 = wps[i];
+    const wp2 = wps[i + 1];
+    const segmentLength = wp2[0] - wp1[0];
+    const t = segmentLength > 0 ? (targetDist - wp1[0]) / segmentLength : 0;
+
+    const x = wp1[1] + t * (wp2[1] - wp1[1]);
+    const y = wp1[2] + t * (wp2[2] - wp1[2]);
+
+    // Calculate velocity from segment direction
+    const dx = wp2[1] - wp1[1];
+    const dy = wp2[2] - wp1[2];
+    const segLen = Math.sqrt(dx * dx + dy * dy);
+
+    // Speed varies with the canyon keyframes for realism
+    const auto = getAutoValues(elapsedMs);
+    const speed = auto.speed / 3.6;  // km/h to m/s
+
+    // Velocity direction follows track
+    const heading = segLen > 0 ? Math.atan2(dy, dx) : wp1[3];
+    const vx = speed * Math.cos(heading);
+    const vy = speed * Math.sin(heading);
+
+    return { x, y, vx, vy, heading, speed };
+}
+
+// ============================================================================
+// TIMING LINE STATE
+// ============================================================================
+let simTimingLine = null;  // {p1: [x,y], p2: [x,y], direction: radians}
+let simPrevPos = null;     // Previous position for crossing detection
+
 const $ = id => document.getElementById(id);
 const MODES = {0:'IDLE', 1:'ACCEL', 2:'BRAKE', 4:'CORNER', 5:'ACCEL', 6:'BRAKE'};
 const MODE_COLORS = {
@@ -656,17 +884,27 @@ let csvDuration = 0;
 function parseCSV(text) {
     const lines = text.trim().split('\n');
     const data = [];
+    // Parse header to find column indices
+    const header = lines[0].split(',').map(h => h.trim().toLowerCase());
+    const posXIdx = header.indexOf('pos_x');
+    const posYIdx = header.indexOf('pos_y');
+    const hasPosition = posXIdx !== -1 && posYIdx !== -1;
+
     for (let i = 1; i < lines.length; i++) {
         const values = lines[i].split(',');
         if (values.length < 8) continue;
-        data.push({
+        const row = {
             t: parseFloat(values[0]),
             speed: parseFloat(values[1]),
             latG: parseFloat(values[6]),
             lonG: parseFloat(values[7]),
             yawRad: parseFloat(values[4]),
-            mode: parseInt(values[5]) || 0
-        });
+            mode: parseInt(values[5]) || 0,
+            px: hasPosition ? parseFloat(values[posXIdx]) || 0 : 0,
+            py: hasPosition ? parseFloat(values[posYIdx]) || 0 : 0,
+            hasPosition: hasPosition
+        };
+        data.push(row);
     }
     if (data.length > 0) {
         const startT = data[0].t;
@@ -683,8 +921,19 @@ function loadCSVData(text, filename) {
     csvPlaybackIndex = 0;
     csvStartTime = Date.now();
     dataSource = 'csv';
-    // Deactivate lap timer when loading CSV (no simulated position data)
-    if (lapTimerActive) deactivateLapTimer();
+
+    // Check if CSV has position data
+    const hasPosition = csvData.length > 0 && csvData[0].hasPosition;
+    if (lapTimerActive && !hasPosition) {
+        // Deactivate lap timer when loading CSV without position data
+        deactivateLapTimer();
+        console.log('Lap timer deactivated: CSV has no position data');
+    } else if (hasPosition) {
+        // Clear previous position for fresh crossing detection
+        simPrevPos = null;
+        console.log('CSV has position data - lap timing available');
+    }
+
     resetState();
     updateSourceUI();
 }
@@ -734,7 +983,10 @@ function getCSVValues() {
         lonG: frame.lonG,
         latG: frame.latG,
         yawDeg: frame.yawRad * 180 / Math.PI,
-        mode: frame.mode
+        mode: frame.mode,
+        px: frame.px,
+        py: frame.py,
+        hasPosition: frame.hasPosition
     };
 }
 
@@ -813,8 +1065,8 @@ async function exportCSV() {
     if (!sessionChunks.length) { alert('No data in recording'); return; }
     let allData = [];
     sessionChunks.forEach(c => allData = allData.concat(c.data));
-    let csv = 'time,speed,ax,ay,wz,mode,lat_g,lon_g,gps_lat,gps_lon,gps_valid\n';
-    allData.forEach(r => { csv += [r.t, r.sp, r.ax, r.ay, r.wz, r.mo, r.latg, r.lng, r.lat || 0, r.lon || 0, r.gpsOk || 0].join(',') + '\n'; });
+    let csv = 'time,speed,ax,ay,wz,mode,lat_g,lon_g,gps_lat,gps_lon,gps_valid,pos_x,pos_y\n';
+    allData.forEach(r => { csv += [r.t, r.sp, r.ax, r.ay, r.wz, r.mo, r.latg, r.lng, r.lat || 0, r.lon || 0, r.gpsOk || 0, r.px || 0, r.py || 0].join(',') + '\n'; });
     const blob = new Blob([csv], { type: 'text/csv' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
     a.download = 'blackbox_' + new Date(latest.sessionId).toISOString().slice(0, 19).replace(/[T:]/g, '-') + '.csv'; a.click();
@@ -855,6 +1107,20 @@ function activateLapTimer() {
     lastLapMs = null;
     lapCrossingDebounce = 0;
 
+    // Configure timing line at the track start
+    // The track starts at (0, 0) heading north (+Y)
+    // Create a 20m wide timing line perpendicular to the start direction
+    const lineWidth = 10;  // 10m each side
+    simTimingLine = {
+        p1: [-lineWidth, 0],  // Left side of timing line
+        p2: [lineWidth, 0],   // Right side of timing line
+        direction: Math.PI / 2  // Valid crossing direction: north (+Y)
+    };
+    simPrevPos = null;  // Clear previous position
+
+    // Reset loop timing so we start at the beginning of the track
+    loopStartTime = Date.now();
+
     const section = $('lap-section');
     section.classList.remove('inactive');
     section.classList.add('active');
@@ -866,11 +1132,16 @@ function activateLapTimer() {
     $('menu-lap').textContent = 'Stop Lap Timer';
 
     updateLapDisplay();
+    console.log('Lap timer activated with timing line:', simTimingLine);
 }
 
 function deactivateLapTimer() {
     lapTimerActive = false;
     lapTimerState = 'idle';
+
+    // Clear timing line and position tracking
+    simTimingLine = null;
+    simPrevPos = null;
 
     const section = $('lap-section');
     section.classList.remove('active');
@@ -971,7 +1242,12 @@ function onLineCrossing(timestamp) {
     }
 }
 
-function simulateLapTimerUpdate(now) {
+/**
+ * Update lap timer state and check for line crossings
+ * @param {number} now - Current timestamp (ms)
+ * @param {Object|null} posData - Position data: {x, y, vx, vy, speed} or null
+ */
+function simulateLapTimerUpdate(now, posData) {
     if (!lapTimerActive) return;
 
     // Update current lap time if timing
@@ -980,16 +1256,31 @@ function simulateLapTimerUpdate(now) {
         $('lap-time').textContent = formatLapTime(currentLapMs);
     }
 
-    // In simulation mode, trigger a crossing at the loop point
-    // The canyon simulation loops every LOOP_DURATION (20 seconds)
-    if (dataSource === 'loop') {
-        const loopTime = (now - loopStartTime) % LOOP_DURATION;
+    // Geometry-based crossing detection (requires position data and timing line)
+    if (posData && simTimingLine) {
+        // Need previous position for crossing detection
+        if (simPrevPos) {
+            // Skip if nearly stationary (< 0.5 m/s)
+            if (posData.speed >= 0.5) {
+                // Check for line crossing
+                const intersection = lineSegmentIntersection(
+                    [simPrevPos.x, simPrevPos.y],
+                    [posData.x, posData.y],
+                    simTimingLine.p1,
+                    simTimingLine.p2
+                );
 
-        // Detect when we're near the start of a new loop (within 100ms of t=0)
-        // This simulates crossing the start/finish line
-        if (loopTime < 100) {
-            onLineCrossing(now);
+                if (intersection !== null) {
+                    // Validate crossing direction
+                    if (directionValid([posData.vx, posData.vy], simTimingLine.direction)) {
+                        onLineCrossing(now);
+                    }
+                }
+            }
         }
+
+        // Store current position for next frame
+        simPrevPos = { x: posData.x, y: posData.y };
     }
 }
 let trail = [], maxL = 0, maxR = 0, maxA = 0, maxB = 0, peak = 0;
@@ -1198,6 +1489,7 @@ let peakHighlightTimeout = null;
 
 function simulate() {
     let sp, longRaw, latRaw, yawDeg, yawRad, speedMs, mo;
+    let posData = null;  // Position data for lap timer: {x, y, vx, vy, speed}
 
     if (dataSource === 'csv' && csvData) {
         const values = getCSVValues();
@@ -1209,6 +1501,20 @@ function simulate() {
         yawRad = values.yawDeg * Math.PI / 180;
         speedMs = sp / 3.6;
         mo = values.mode;
+
+        // If CSV has position data, use it for lap timing
+        if (values.hasPosition && (values.px !== 0 || values.py !== 0)) {
+            // Estimate velocity from speed and heading (using yaw as rough approximation)
+            // For more accurate velocity, we'd need to track position changes
+            const heading = yawRad;  // Use yaw as heading approximation
+            posData = {
+                x: values.px,
+                y: values.py,
+                vx: speedMs * Math.cos(heading),
+                vy: speedMs * Math.sin(heading),
+                speed: speedMs
+            };
+        }
     } else {
         const elapsed = Date.now() - loopStartTime;
         const auto = getAutoValues(elapsed);
@@ -1219,6 +1525,16 @@ function simulate() {
         yawRad = auto.yawDeg * Math.PI / 180;
         speedMs = sp / 3.6;
         mo = classifyMode(longRaw, latRaw, yawRad, speedMs);
+
+        // Get position data for lap timer from track simulation
+        const pos = getSimulatedPosition(elapsed);
+        posData = {
+            x: pos.x,
+            y: pos.y,
+            vx: pos.vx,
+            vy: pos.vy,
+            speed: pos.speed
+        };
     }
 
     speed_ema = 0.7 * sp + 0.3 * speed_ema;
@@ -1274,12 +1590,15 @@ function simulate() {
 
     cnt++;
     if (rec) {
-        chunkBuffer.push({ t: now, sp, ax: -longRaw * 9.81, ay: latRaw * 9.81, wz: yawRad, mo, latg: latRaw, lng: longRaw, lat: 37.82, lon: -122.48, gpsOk: 1 });
+        // Get position data from already-computed posData (if available)
+        const px = posData ? posData.x : 0;
+        const py = posData ? posData.y : 0;
+        chunkBuffer.push({ t: now, sp, ax: -longRaw * 9.81, ay: latRaw * 9.81, wz: yawRad, mo, latg: latRaw, lng: longRaw, lat: 37.82, lon: -122.48, gpsOk: 1, px, py });
         if (now - lastSaveTime >= CHUNK_INTERVAL) saveChunk();
     }
 
-    // Update lap timer
-    simulateLapTimerUpdate(now);
+    // Update lap timer with position data for crossing detection
+    simulateLapTimerUpdate(now, posData);
 }
 
 setInterval(simulate, 33);

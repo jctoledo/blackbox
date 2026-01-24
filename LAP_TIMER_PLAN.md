@@ -230,7 +230,7 @@ const timingLine = { p1: [-10, 0], p2: [10, 0], direction: Math.PI/2 };
 |-------|-------------|--------|
 | 1 | Core Timing Engine (Firmware) | ✅ COMPLETE |
 | 2 | Telemetry Protocol Extension | ✅ COMPLETE |
-| 3 | Basic Lap Timer Display | ⚠️ PARTIAL (dashboard-dev only) |
+| 3 | Basic Lap Timer Display | ✅ COMPLETE (dashboard-dev) |
 | 4 | Production Dashboard Integration | ❌ NOT STARTED |
 | 5 | Track Configuration UI | ❌ NOT STARTED |
 | 6 | Track Persistence (IndexedDB) | ❌ NOT STARTED |
@@ -313,60 +313,51 @@ GET /api/laptimer/configure?type=clear
 
 ---
 
-## Phase 3: Basic Lap Timer Display ⚠️ PARTIAL
+## Phase 3: Basic Lap Timer Display ✅ COMPLETE
 
-### Current State
+### Implementation Complete
 
-**dashboard-dev (`tools/dashboard-dev/index.html`):** ✅ Complete
+**dashboard-dev (`tools/dashboard-dev/index.html`):** ✅ Full Implementation
 - Lap timer card with current time display
 - Lap count and state indicator (Armed/Timing)
 - Best/Last/Delta in bottom row
 - Delta color coding (green=faster, red=slower)
 - CSS animations for crossing flash and best lap highlight
-- Simulated 20-second lap cycle triggers crossing at loop point
 - Activate via "Simulate Track" button or menu
 
-**Production (`websocket_server.rs`):** ❌ NOT IMPLEMENTED
+**Geometry-Based Crossing Detection:** ✅ Implemented
+- `BLOCK_TRACK`: Rectangular simulated track (~283m loop, 20s at ~51 km/h)
+  - 4 legs: (0,0)→(0,50)→(70,60)→(80,0)→(10,-10)→(0,0)
+  - 4 corners with 10m radius, 8-step interpolation
+  - Proper heading calculation at each waypoint
+- `lineSegmentIntersection()`: Parametric form intersection test (ported from Rust)
+- `directionValid()`: Validates crossing direction within ±90° tolerance
+- `wrapAngle()`: Normalizes angles to [-π, π]
+- `getSimulatedPosition()`: Interpolates position along track by elapsed time
+
+**Position Tracking for Lap Timer:** ✅ Implemented
+- `simTimingLine`: Configured at (±10, 0) with direction π/2 (northbound)
+- `simPrevPos`: Tracks previous position for crossing detection
+- `simulateLapTimerUpdate(now, posData)`: Geometry-based crossing check
+
+**CSV Recording/Replay with Position:** ✅ Implemented
+- Recording captures `px, py` position from simulation
+- CSV export includes `pos_x, pos_y` columns
+- CSV parser reads position columns when present
+- Lap timer works with CSV replay when position data available
+
+**Production (`websocket_server.rs`):** ❌ NOT IMPLEMENTED (Phase 4)
 - API endpoint exists but no UI to use it
 - Dashboard HTML does not include lap timer section
 - JavaScript does not decode lap timer fields from 74-byte packet
 
-### Remaining Work
-
-**3.1 Verify dashboard-dev Implementation**
-- [ ] Test with austin_raceline.csv replay
-- [ ] Verify crossing detection triggers at correct positions (not just loop time)
-- [ ] Test all state transitions: Idle → Armed → Timing → (lap complete) → Timing
-- [ ] Test best lap tracking and delta calculation
-
-**3.2 Update dashboard-dev Simulation**
-
-Current simulation triggers crossing based on loop time, not geometry:
-```javascript
-// CURRENT (incorrect for testing):
-if (loopTime < 100) { onLineCrossing(now); }
-
-// NEEDED (geometry-based):
-// Simulate EKF position from austin_raceline.csv
-// Check actual line crossing with timing line
-```
-
-Add position simulation to dashboard-dev:
-```javascript
-// Simulated position track (load from CSV or generate)
-let simPath = [];  // [{x, y, t}, ...]
-let simIndex = 0;
-
-function getSimulatedPosition(elapsed) {
-    // Interpolate position along path
-    // Return {x, y, vx, vy}
-}
-
-function checkLineCrossing(prevPos, currPos, timingLine) {
-    // Use same geometry math as firmware
-    return lineSegmentIntersection(prevPos, currPos, timingLine.p1, timingLine.p2);
-}
-```
+### Verified Functionality
+- [x] Geometry-based crossing detection (not time-based)
+- [x] State transitions: Idle → Armed → Timing → (lap complete) → Timing
+- [x] Best lap tracking and delta calculation
+- [x] Visual feedback (flash, delta colors)
+- [x] Position data in CSV recording
+- [x] CSV replay with lap timing (when position available)
 
 ---
 
