@@ -505,6 +505,56 @@ if (oldVersion < 2) {
    - `formatSessionDuration()` - Format durations (Xh Xm)
    - `estimateObjectSize()` - Estimate IndexedDB object sizes
 
+6. **Bug Fixes (Post-Implementation)**
+   - Fixed `getCombinedStorageStats()` return format mismatch
+   - Fixed `getTrackDataStats()` field name mismatches (`hasRefLap` → `hasReferenceLap`, etc.)
+   - Added `corners` and `keyPoints` to track objects throughout save chain
+   - Fixed `tdb` → `trackDb` variable name in production
+   - Fixed `updateLapTimerDisplay()` → `updateActiveTrackDisplay()` (function didn't exist)
+   - Fixed `lapState` → `lapTimerState` undefined variable error
+   - Track corners now handled as both number (new) and array (legacy) formats
+
+---
+
+## Data Saving Behavior (Autosave)
+
+Understanding what data is saved automatically vs. what requires manual action:
+
+### Automatic Saves
+
+| Data Type | When Saved | Storage Location |
+|-----------|------------|------------------|
+| **Reference Lap (Best Lap)** | Immediately on lap completion if new best | `blackbox-tracks` → `reference_laps` |
+| **Track Definition** | When "Stop Recording" is pressed | `blackbox-tracks` → `tracks` |
+| **Telemetry Recording** | Every 60 seconds while recording active | `blackbox-rec` → `chunks` |
+
+### Save Flow Details
+
+**Reference Lap Autosave:**
+```
+Lap Complete → completeLapOrRun()
+            → isNewBest? → saveNewReferenceLap()
+            → Immediately written to IndexedDB
+```
+
+**Track Recording Save:**
+```
+Stop Recording → TrackRecorder.finish()
+             → saveRecordedTrack()
+             → saveTrack()
+             → Immediately written to IndexedDB
+```
+
+### What is NOT Saved (Requires Phase 10)
+
+- **Individual lap times** - Only shown on screen during session
+- **Lap history** - No record of non-best laps
+- **Session summaries** - No grouping of laps by session
+
+If you close the browser, only your best lap (reference) persists. All other lap times from that session are lost.
+
+**Implication:** Phase 10 (Session History) is needed for full lap time tracking across sessions.
+
 ---
 
 ## Phase 10: Session History ❌
