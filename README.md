@@ -778,6 +778,7 @@ The firmware includes a built-in web dashboard that runs directly on the ESP32. 
 | **GPS status** | Current coordinates and fix status |
 | **Recording** | Capture data locally for CSV export |
 | **Diagnostics page** | System health: sensor rates, EKF uncertainty, GPS quality (HDOP/PDOP), heap usage |
+| **Lap Timer** | Record tracks, real-time lap timing, delta-to-best display, session history |
 
 ### Diagnostics Page
 
@@ -956,6 +957,137 @@ This is useful for validating that the orientation correction is working properl
 
 ---
 
+## Lap Timer
+
+The dashboard includes a full-featured lap timer that rivals commercial solutions costing $700-1200+. Record tracks anywhere, get real-time lap times, and see live delta-to-best while driving.
+
+### Quick Start
+
+1. **Record a Track**
+   - Tap the lap timer card (bottom of dashboard)
+   - Tap **+** to start recording
+   - Drive one full lap (or point-to-point route)
+   - Recording automatically detects loop closure, or tap **Stop** for point-to-point
+   - Name your track and save
+
+2. **Start Timing**
+   - Tap your saved track to activate it
+   - Cross the start line - timing begins automatically
+   - Complete laps and see your times
+   - Best lap automatically saves as your reference
+
+3. **Watch the Delta**
+   - After your first lap, the delta bar appears
+   - Green bar = ahead of your best lap
+   - Red bar = behind your best lap
+   - Trend arrows show if you're gaining or losing time
+
+### Track Types
+
+| Type | Description | Use Case |
+|------|-------------|----------|
+| **Circuit** | Loop track (start = finish) | Track days, autocross, neighborhood circuits |
+| **Stage** | Point-to-point (separate start/finish) | Hill climbs, rally stages, touge |
+
+Circuit tracks auto-detect when you drive close to your starting point with similar heading. Stage tracks save wherever you stop recording.
+
+### Features
+
+**Timing Precision**
+- 30 Hz timing resolution (~33ms)
+- Direction validation prevents false triggers
+- 500ms debounce prevents double-counting
+
+**Delta Display**
+- Real-time comparison to your best lap
+- Arc-length based calculation (works even on different lines)
+- Color-coded bar: green (ahead), red (behind)
+- Glow effect for large deltas (>1 second)
+- Trend arrows: ▲ gaining, ▼ losing time
+
+**Track Recording**
+- Adaptive GPS sampling (~5m between points)
+- Corner detection via curvature analysis
+- Loop closure detection (proximity + heading)
+- GPS quality indicator during recording
+
+**Session History**
+- All lap times saved automatically
+- Sessions grouped by date
+- Best lap highlighted per session
+- Access via "H" button on track list
+
+**Track Auto-Detection**
+- Automatically detects when you're near a saved track
+- Toast notification offers one-tap activation
+- Uses centerline proximity and heading alignment
+- Requires ~6 seconds of consistent detection to avoid false positives
+
+**Data Management**
+- Unified "Data" modal shows all stored data
+- Storage breakdown: recordings vs tracks
+- Export any recording session to CSV
+- Clear individual tracks or all data
+
+### Understanding the Delta Bar
+
+The delta bar shows how your current lap compares to your best:
+
+```
+        -2.3s                    Current lap is 2.3 seconds AHEAD
+   ◄████████████████░░░░░░░►    Green bar extends left
+
+        +1.5s                    Current lap is 1.5 seconds BEHIND
+   ◄░░░░░░░░░░░░████████████►    Red bar extends right
+```
+
+**Bar Length (Magnitude)**
+- The bar length shows how far ahead or behind you are
+- Scale: ±2 seconds = full bar width
+- A bar halfway to the right = ~1 second behind
+- A bar all the way to the right = 2+ seconds behind
+
+**What "Full Bar" Means**
+- Full green (left): You're 2 or more seconds ahead of your best
+- Full red (right): You're 2 or more seconds behind your best
+- The number always shows the actual delta, even beyond ±2s
+- A glow effect appears when delta exceeds 1 second for emphasis
+
+**Trend Arrows (▲ ▼)**
+- ▲ (up arrow): You're currently **gaining time** - the gap is shrinking
+- ▼ (down arrow): You're currently **losing time** - the gap is growing
+- Based on how delta is changing over the last few seconds
+- No arrow: delta is stable (neither gaining nor losing)
+
+### Tips for Best Results
+
+| Do | Don't |
+|----|-------|
+| Wait for GPS lock before recording | Record indoors or in urban canyons |
+| Drive smoothly during track recording | Make sudden lane changes while recording |
+| Mount device securely | Let device move around in car |
+| Record a clean lap as your first reference | Rush through corners during recording |
+
+### How It Works Technically
+
+**Arc-Length Delta Calculation**
+
+Unlike position-based delta (which fails when you take different lines), arc-length delta works by:
+1. Tracking cumulative distance traveled during each lap
+2. At any point, finding what time you had at that distance on your best lap
+3. Subtracting to get delta
+
+This means if you're 500m into the lap, it compares your time to your best lap at 500m - regardless of exact position.
+
+**Centerline Storage**
+
+When you record a track, the system samples GPS points every ~5m to create a "centerline". This is used for:
+- Auto-detection (finding nearby tracks)
+- Loop closure detection (did you complete the circuit?)
+- Future: track learning to improve accuracy over multiple laps
+
+---
+
 ## How It Works
 
 The system uses sensor fusion to combine fast but drifty IMU measurements with slow but accurate GPS updates. Here's what happens under the hood:
@@ -1001,6 +1133,7 @@ The system uses sensor fusion to combine fast but drifty IMU measurements with s
 - [x] ~~Web dashboard for live visualization~~ ✓ Built-in mobile dashboard
 - [x] ~~High-rate GPS support~~ ✓ NEO-M9N at up to 25Hz with automotive mode
 - [x] ~~System diagnostics page~~ ✓ Sensor rates, EKF health, GPS quality
+- [x] ~~Lap timer~~ ✓ Track recording, real-time timing, delta-to-best, session history
 - [ ] CAN bus integration for vehicle data
 - [ ] Support for external wheel speed sensors
 - [ ] Bluetooth for phone connectivity

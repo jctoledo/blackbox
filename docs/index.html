@@ -1168,6 +1168,17 @@
                     <div class="feature-card">
                         <div class="feature-icon">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"/>
+                                <polyline points="12 6 12 12 16 14"/>
+                            </svg>
+                        </div>
+                        <h3>Lap Timer</h3>
+                        <p>Record tracks, time laps with 30Hz precision, and see real-time delta-to-best. Session history persists across sessions.</p>
+                    </div>
+
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <rect x="2" y="7" width="20" height="14" rx="2"/>
                                 <path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/>
                             </svg>
@@ -1335,6 +1346,10 @@
                                 <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
                                 Record & export to CSV
                             </li>
+                            <li>
+                                <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+                                Lap timer with delta-to-best display
+                            </li>
                         </ul>
                     </div>
                 </div>
@@ -1416,6 +1431,117 @@
                     </div>
                 </div>
                 <p class="comparison-note">Mode is set at compile time. See README for build instructions.</p>
+            </div>
+        </section>
+
+        <!-- Lap Timer Section -->
+        <section class="section" id="lap-timer">
+            <div class="section-inner">
+                <div class="section-header">
+                    <h2>Lap Timer</h2>
+                    <p>Professional timing features at a fraction of the cost</p>
+                </div>
+
+                <div class="comparison-grid">
+                    <div class="comparison-card">
+                        <h3>How It Works</h3>
+                        <ul>
+                            <li>
+                                <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+                                Record a track by driving one lap
+                            </li>
+                            <li>
+                                <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+                                Activate track, cross start line, timing begins
+                            </li>
+                            <li>
+                                <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+                                Best lap auto-saves as your reference
+                            </li>
+                            <li>
+                                <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+                                Delta bar shows ahead/behind in real-time
+                            </li>
+                        </ul>
+                    </div>
+
+                    <div class="comparison-card">
+                        <h3>Key Features</h3>
+                        <ul>
+                            <li>
+                                <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+                                30 Hz timing precision (~33ms resolution)
+                            </li>
+                            <li>
+                                <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+                                Circuit (loop) and Stage (point-to-point) tracks
+                            </li>
+                            <li>
+                                <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+                                Arc-length delta works even on different lines
+                            </li>
+                            <li>
+                                <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+                                Session history persists across power cycles
+                            </li>
+                            <li>
+                                <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+                                Auto-detect saved tracks when driving nearby
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Delta Bar Explanation -->
+                <div style="margin-top: 32px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 32px;">
+                    <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 16px;">The Delta Bar</h3>
+                    <p style="color: var(--text-secondary); margin-bottom: 20px; line-height: 1.7;">
+                        The delta bar shows how your current lap compares to your best, updated in real-time as you drive:
+                    </p>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                        <div style="background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; padding: 20px; text-align: center;">
+                            <div style="font-family: 'JetBrains Mono', monospace; font-size: 24px; color: #10b981; margin-bottom: 8px;">-2.3s</div>
+                            <div style="background: linear-gradient(to left, transparent 50%, #10b981 50%); height: 8px; border-radius: 4px; margin-bottom: 12px;"></div>
+                            <div style="font-size: 13px; color: var(--text-muted);">Green = ahead of best lap</div>
+                        </div>
+                        <div style="background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; padding: 20px; text-align: center;">
+                            <div style="font-family: 'JetBrains Mono', monospace; font-size: 24px; color: #ef4444; margin-bottom: 8px;">+1.5s</div>
+                            <div style="background: linear-gradient(to right, transparent 50%, #ef4444 50%); height: 8px; border-radius: 4px; margin-bottom: 12px;"></div>
+                            <div style="font-size: 13px; color: var(--text-muted);">Red = behind best lap</div>
+                        </div>
+                    </div>
+
+                    <!-- Additional explanation -->
+                    <div style="margin-top: 24px; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                        <div style="background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; padding: 16px;">
+                            <div style="font-weight: 600; margin-bottom: 8px; font-size: 14px;">Bar Length</div>
+                            <div style="font-size: 13px; color: var(--text-muted); line-height: 1.5;">
+                                Scale is &plusmn;2 seconds. Full bar = 2+ seconds ahead or behind. The number shows the actual delta even beyond &plusmn;2s.
+                            </div>
+                        </div>
+                        <div style="background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; padding: 16px;">
+                            <div style="font-weight: 600; margin-bottom: 8px; font-size: 14px;">Trend Arrows</div>
+                            <div style="font-size: 13px; color: var(--text-muted); line-height: 1.5;">
+                                &#9650; = gaining time (gap shrinking)<br>
+                                &#9660; = losing time (gap growing)
+                            </div>
+                        </div>
+                        <div style="background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; padding: 16px;">
+                            <div style="font-weight: 600; margin-bottom: 8px; font-size: 14px;">Glow Effect</div>
+                            <div style="font-size: 13px; color: var(--text-muted); line-height: 1.5;">
+                                When delta exceeds 1 second, the bar glows for emphasis. You're significantly ahead or behind.
+                            </div>
+                        </div>
+                    </div>
+
+                    <p style="color: var(--text-muted); margin-top: 20px; font-size: 13px; text-align: center;">
+                        Example: Full red bar with "+3.2s" means you're 3.2 seconds behind your best lap
+                    </p>
+                </div>
+
+                <p class="comparison-note" style="margin-top: 24px;">
+                    Rivals commercial solutions like VBOX LapTimer ($1,160) and AiM Solo 2 DL ($700)
+                </p>
             </div>
         </section>
 
