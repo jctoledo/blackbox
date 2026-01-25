@@ -571,6 +571,25 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
 .bbTrackBtn:active{opacity:0.7}
 .bbTrackBtn.primary{background:var(--ok);color:#fff}
 .bbTrackBtn.danger{color:var(--red)}
+.bbTrackBtn.secondary{background:var(--surface);color:var(--text-secondary);padding:6px 8px}
+.bbTrackItem{flex-wrap:wrap}
+.bbTrackHistory{width:100%;margin-top:12px;padding-top:12px;border-top:1px solid var(--divider)}
+.bbHistoryEmpty{display:flex;flex-direction:column;align-items:center;padding:16px;color:var(--text-tertiary);font-size:13px;text-align:center}
+.bbHistoryHint{font-size:11px;margin-top:4px;opacity:0.7}
+.bbHistorySummary{display:flex;justify-content:space-between;font-size:12px;color:var(--text-secondary);margin-bottom:10px}
+.bbHistoryTotal{font-weight:600}
+.bbHistorySession{background:var(--bg);border-radius:8px;padding:10px 12px;margin-bottom:8px}
+.bbHistorySession:last-child{margin-bottom:0}
+.bbHistorySessionHeader{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.bbHistoryDate{font-size:12px;font-weight:600;color:var(--text)}
+.bbHistorySessionStats{font-size:11px;color:var(--text-tertiary)}
+.bbHistoryLaps{display:flex;flex-wrap:wrap;gap:6px}
+.bbHistoryLap{font-size:11px;font-family:var(--mono);color:var(--text-secondary);background:var(--surface);padding:3px 6px;border-radius:4px}
+.bbHistoryLap.best{color:var(--ok);font-weight:600}
+.bbHistoryMore{font-size:11px;color:var(--text-tertiary);text-align:center;padding:8px;font-style:italic}
+.bbHistoryActions{margin-top:12px;text-align:center}
+.bbHistoryClearBtn{background:transparent;border:1px solid var(--red);color:var(--red);font-size:11px;padding:6px 12px;border-radius:6px;cursor:pointer;font-family:inherit}
+.bbHistoryClearBtn:active{opacity:0.7}
 .bbActiveTrack{display:flex;align-items:center;gap:12px;background:rgba(52,199,89,0.1);border:1px solid rgba(52,199,89,0.2);border-radius:12px;padding:12px 14px;margin-bottom:16px}
 .bbActiveTrackInfo{flex:1;min-width:0}
 .bbActiveTrackName{font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -1208,18 +1227,24 @@ async function getCombinedStorageStats(){
 
 async function deleteTrackWithRef(trackId){
     if(!trackDb)await openTrackDB();
+    // First delete lap history using its index
+    await deleteLapHistory(trackId);
+    // Then delete track and reference lap in single transaction
     const tx=trackDb.transaction(['tracks','reference_laps'],'readwrite');
     await idbPromise(tx.objectStore('tracks').delete(trackId));
     await idbPromise(tx.objectStore('reference_laps').delete(trackId));
-    await new Promise((res,rej)=>{tx.oncomplete=res;tx.onerror=()=>rej(tx.error)})
+    await new Promise((res,rej)=>{tx.oncomplete=res;tx.onerror=()=>rej(tx.error)});
+    if(activeTrack&&activeTrack.id===trackId)clearSession();
 }
 
 async function clearAllTracks(){
     if(!trackDb)await openTrackDB();
-    const tx=trackDb.transaction(['tracks','reference_laps'],'readwrite');
+    const tx=trackDb.transaction(['tracks','reference_laps','lap_history'],'readwrite');
     await idbPromise(tx.objectStore('tracks').clear());
     await idbPromise(tx.objectStore('reference_laps').clear());
-    await new Promise((res,rej)=>{tx.oncomplete=res;tx.onerror=()=>rej(tx.error)})
+    await idbPromise(tx.objectStore('lap_history').clear());
+    await new Promise((res,rej)=>{tx.oncomplete=res;tx.onerror=()=>rej(tx.error)});
+    clearSession();
 }
 
 function formatBytes(bytes){
@@ -1264,11 +1289,12 @@ class TrackRecorder{
     _assessQuality(){if(this.keyPoints.length===0)return{rating:'poor',avgUncertainty:5.0,goodSampleRatio:0,corners:0,totalPoints:0};const vp=this.keyPoints.filter(p=>p.sigma<3.0);const ts=this.keyPoints.reduce((s,p)=>s+(p.sigma||3.0),0);const as=ts/this.keyPoints.length;const displayCorners=this.inCorner?this.cornerCount+1:this.cornerCount;const gr=vp.length/this.keyPoints.length;let rating='good';if(isNaN(as)||as>3.5||gr<0.7)rating='fair';if(isNaN(as)||as>4.5||gr<0.5)rating='poor';return{rating:rating,avgUncertainty:isNaN(as)?3.0:as,goodSampleRatio:isNaN(gr)?0.5:gr,corners:displayCorners,totalPoints:this.keyPoints.length}}
 }
 
-// Track Manager IndexedDB (v2 adds reference_laps for predictive delta)
-const TRACK_DB='blackbox-tracks',TRACK_DB_VER=2;
+// Track Manager IndexedDB (v3 adds lap_history for session history)
+const TRACK_DB='blackbox-tracks',TRACK_DB_VER=3;
 let trackDb=null,activeTrack=null,currentPos=null,suppressStartLineIndicator=false;
 let p2pNeedsWarmup=false,trackRecorder=null;
 let referenceLap=null,lapTracker=null,lastDeltaMs=0,deltaTrend=0;
+let currentSessionId=null,currentSessionStart=null;
 
 function openTrackDB(){
     return new Promise((res,rej)=>{
@@ -1285,6 +1311,12 @@ function openTrackDB(){
                 const rs=d.createObjectStore('reference_laps',{keyPath:'id'});
                 rs.createIndex('trackId','trackId',{unique:true});
             }
+            if(oldVer<3&&!d.objectStoreNames.contains('lap_history')){
+                const hs=d.createObjectStore('lap_history',{keyPath:'id'});
+                hs.createIndex('trackId','trackId',{unique:false});
+                hs.createIndex('sessionId','sessionId',{unique:false});
+                hs.createIndex('timestamp','timestamp',{unique:false});
+            }
         };
     });
 }
@@ -1293,6 +1325,29 @@ function openTrackDB(){
 async function saveRefLap(ref){if(!trackDb)await openTrackDB();return new Promise((res,rej)=>{const tx=trackDb.transaction('reference_laps','readwrite');const r=tx.objectStore('reference_laps').put(ref);r.onsuccess=()=>res(ref);r.onerror=()=>rej(r.error)})}
 async function getRefLap(trackId){if(!trackDb)await openTrackDB();return new Promise((res,rej)=>{const tx=trackDb.transaction('reference_laps','readonly');const r=tx.objectStore('reference_laps').index('trackId').get(trackId);r.onsuccess=()=>res(r.result||null);r.onerror=()=>rej(r.error)})}
 async function deleteRefLap(trackId){if(!trackDb)await openTrackDB();return new Promise((res,rej)=>{const tx=trackDb.transaction('reference_laps','readwrite');const r=tx.objectStore('reference_laps').index('trackId').openCursor(IDBKeyRange.only(trackId));r.onsuccess=()=>{const c=r.result;if(c){c.delete();c.continue()}else res()};r.onerror=()=>rej(r.error)})}
+
+// Session management for lap history
+function genSessionId(){return 'session_'+Date.now()+'_'+Math.random().toString(36).substr(2,9)}
+function genUUID(){if(crypto.randomUUID)return crypto.randomUUID();return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0;return(c==='x'?r:(r&0x3|0x8)).toString(16)})}
+function startNewSession(){currentSessionId=genSessionId();currentSessionStart=Date.now()}
+function clearSession(){currentSessionId=null;currentSessionStart=null}
+
+// Lap history CRUD
+async function recordLapHistory(trackId,lapTimeMs,lapNum){
+    if(!trackDb)await openTrackDB();if(!currentSessionId)return;
+    const lap={id:genUUID(),trackId,timestamp:Date.now(),lapTimeMs,lapNumber:lapNum,sessionId:currentSessionId,sessionStart:currentSessionStart};
+    return new Promise((res,rej)=>{const tx=trackDb.transaction('lap_history','readwrite');const r=tx.objectStore('lap_history').put(lap);r.onsuccess=()=>res(lap);r.onerror=()=>rej(r.error)})
+}
+async function getLapHistory(trackId,limit=200){
+    if(!trackDb)await openTrackDB();
+    return new Promise((res,rej)=>{const tx=trackDb.transaction('lap_history','readonly');const r=tx.objectStore('lap_history').index('trackId').getAll(IDBKeyRange.only(trackId));
+        r.onsuccess=()=>{const laps=r.result||[];laps.sort((a,b)=>b.timestamp-a.timestamp);const ltd=laps.slice(0,limit);
+            const sm=new Map();for(const l of ltd){if(!sm.has(l.sessionId))sm.set(l.sessionId,{sessionId:l.sessionId,sessionStart:l.sessionStart,laps:[],bestMs:Infinity});const s=sm.get(l.sessionId);s.laps.push(l);if(l.lapTimeMs<s.bestMs)s.bestMs=l.lapTimeMs}
+            const sessions=Array.from(sm.values());sessions.sort((a,b)=>b.sessionStart-a.sessionStart);for(const s of sessions)s.laps.sort((a,b)=>a.lapNumber-b.lapNumber);
+            res({sessions,totalLaps:laps.length})};r.onerror=()=>rej(r.error)})
+}
+async function deleteLapHistory(trackId){if(!trackDb)await openTrackDB();return new Promise((res,rej)=>{const tx=trackDb.transaction('lap_history','readwrite');const r=tx.objectStore('lap_history').index('trackId').openCursor(IDBKeyRange.only(trackId));r.onsuccess=()=>{const c=r.result;if(c){c.delete();c.continue()}else res()};r.onerror=()=>rej(r.error)})}
+async function clearAllLapHistory(){if(!trackDb)await openTrackDB();return new Promise((res,rej)=>{const tx=trackDb.transaction('lap_history','readwrite');const r=tx.objectStore('lap_history').clear();r.onsuccess=()=>res();r.onerror=()=>rej(r.error)})}
 
 // LapTracker - tracks distance and samples during lap for delta calculation
 class LapTracker{
@@ -1401,13 +1456,15 @@ async function renderTrackList(){
             const best=t.bestLapMs?fmtLapTime(t.bestLapMs):'—';
             const isActive=activeTrack&&activeTrack.id===t.id;
             const unit=t.type==='point_to_point'?'runs':'laps';
+            const lc=t.lapCount||0;
             return '<div class=\"bbTrackItem\" data-id=\"'+t.id+'\">'+
                 '<div class=\"bbTrackInfo\">'+
                     '<div class=\"bbTrackName\">'+escHtml(t.name)+(isActive?' ✓':'')+'</div>'+
-                    '<div class=\"bbTrackMeta\"><span>Best: '+best+'</span><span>'+(t.lapCount||0)+' '+unit+'</span></div>'+
+                    '<div class=\"bbTrackMeta\"><span>Best: '+best+'</span><span>'+lc+' '+unit+'</span></div>'+
                 '</div>'+
                 '<div class=\"bbTrackActions\">'+
                     '<button class=\"bbTrackBtn primary\" data-action=\"use\">Use</button>'+
+                    (lc>0?'<button class=\"bbTrackBtn secondary\" data-action=\"history\" title=\"View history\">H</button>':'')+
                     '<button class=\"bbTrackBtn danger\" data-action=\"delete\">×</button>'+
                 '</div></div>';
         }).join('');
@@ -1423,11 +1480,51 @@ async function handleTrackAction(action,id){
         if(t)await activateTrack(t);
         closeTrackModal();
     }else if(action==='delete'){
-        if(confirm('Delete this track?')){
+        if(confirm('Delete this track and all lap history?')){
+            await deleteLapHistory(id);
             await deleteTrackFromDB(id);
             if(activeTrack&&activeTrack.id===id)await deactivateTrack();
             renderTrackList();
         }
+    }else if(action==='history'){
+        await showTrackHistory(id);
+    }
+}
+
+// Session history display
+function fmtSessionDate(ts){
+    const d=new Date(ts),now=new Date(),today=new Date(now.getFullYear(),now.getMonth(),now.getDate()),yest=new Date(today.getTime()-86400000),sd=new Date(d.getFullYear(),d.getMonth(),d.getDate());
+    if(sd.getTime()===today.getTime())return 'Today';if(sd.getTime()===yest.getTime())return 'Yesterday';return d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})
+}
+function fmtSessionTime(ts){return new Date(ts).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true})}
+async function showTrackHistory(id){
+    const t=await getTrack(id);if(!t)return;
+    const hist=await getLapHistory(id);
+    const isP2P=t.type==='point_to_point';
+    const unit=isP2P?'run':'lap',units=isP2P?'runs':'laps';
+    const item=document.querySelector('.bbTrackItem[data-id=\"'+id+'\"]');if(!item)return;
+    const ex=item.querySelector('.bbTrackHistory');if(ex){ex.remove();return}
+    const sec=document.createElement('div');sec.className='bbTrackHistory';
+    if(hist.sessions.length===0){sec.innerHTML='<div class=\"bbHistoryEmpty\"><span>No '+unit+' history</span><span class=\"bbHistoryHint\">Complete some '+units+' to start tracking</span></div>'}
+    else{
+        let html='<div class=\"bbHistorySummary\"><span class=\"bbHistoryTotal\">'+hist.totalLaps+' '+(hist.totalLaps===1?unit:units)+' total</span><span>'+hist.sessions.length+' session'+(hist.sessions.length===1?'':'s')+'</span></div><div class=\"bbHistorySessions\">';
+        const recent=hist.sessions.slice(0,5);
+        for(const s of recent){
+            html+='<div class=\"bbHistorySession\"><div class=\"bbHistorySessionHeader\"><span class=\"bbHistoryDate\">'+fmtSessionDate(s.sessionStart)+' '+fmtSessionTime(s.sessionStart)+'</span><span class=\"bbHistorySessionStats\">Best: '+fmtLapTime(s.bestMs)+' · '+s.laps.length+' '+(s.laps.length===1?unit:units)+'</span></div><div class=\"bbHistoryLaps\">';
+            for(const l of s.laps){const isBest=l.lapTimeMs===s.bestMs;html+='<span class=\"bbHistoryLap'+(isBest?' best':'')+'\">'+fmtLapTime(l.lapTimeMs)+'</span>'}
+            html+='</div></div>';
+        }
+        if(hist.sessions.length>5){const more=hist.sessions.length-5;html+='<div class=\"bbHistoryMore\">+'+more+' more session'+(more===1?'':'s')+'</div>'}
+        html+='</div><div class=\"bbHistoryActions\"><button class=\"bbHistoryClearBtn\" onclick=\"clearTrackHistoryConfirm(\\''+id+'\\');\">Clear History</button></div>';
+        sec.innerHTML=html;
+    }
+    item.appendChild(sec);
+}
+async function clearTrackHistoryConfirm(id){
+    if(confirm('Clear all lap history for this track?')){
+        await deleteLapHistory(id);
+        const t=await getTrack(id);if(t){t.lapCount=0;await saveTrack(t)}
+        renderTrackList();
     }
 }
 
@@ -1457,6 +1554,8 @@ async function activateTrack(track){
         activeTrack=track;
         suppressStartLineIndicator=false;
         p2pNeedsWarmup=isP2P&&track.isNew;
+        // Start new session for lap history
+        startNewSession();
         // Load reference lap for delta calculation
         try{referenceLap=await getRefLap(track.id);if(referenceLap)console.log('Reference lap loaded:',fmtLapTime(referenceLap.lapTimeMs))}catch(e){referenceLap=null}
         // Initialize lap tracker
@@ -1479,7 +1578,7 @@ async function activateTrack(track){
 
 async function deactivateTrack(){
     try{await fetch('/api/laptimer/configure?type=clear')}catch(e){}
-    activeTrack=null;referenceLap=null;
+    activeTrack=null;referenceLap=null;clearSession();
     if(lapTracker)lapTracker.reset();
     p2pNeedsWarmup=false;
     $('lap-setup-text').textContent='Tap to configure';
@@ -1576,6 +1675,8 @@ async function updateTrackBestLap(lapTimeMs){
     if(!activeTrack.bestLapMs||lapTimeMs<activeTrack.bestLapMs)activeTrack.bestLapMs=lapTimeMs;
     activeTrack.lapCount=(activeTrack.lapCount||0)+1;
     await saveTrack(activeTrack);
+    // Record lap to history
+    recordLapHistory(activeTrack.id,lapTimeMs,activeTrack.lapCount).catch(e=>console.error('Failed to record lap:',e));
 }
 
 // Start line indicator

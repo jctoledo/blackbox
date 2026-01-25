@@ -1147,6 +1147,7 @@ body{
 }
 .bbTrackItem{
     display:flex;
+    flex-wrap:wrap;
     justify-content:space-between;
     align-items:center;
     padding:12px 14px;
@@ -1191,6 +1192,103 @@ body{
 .bbTrackBtn.danger{
     color:var(--red);
 }
+.bbTrackBtn.secondary{
+    background:var(--surface);
+    color:var(--text-secondary);
+    padding:6px 8px;
+}
+
+/* Track History Styles */
+.bbTrackHistory{
+    width:100%;
+    margin-top:12px;
+    padding-top:12px;
+    border-top:1px solid var(--divider);
+}
+.bbHistoryEmpty{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:16px;
+    color:var(--text-tertiary);
+    font-size:13px;
+    text-align:center;
+}
+.bbHistoryHint{
+    font-size:11px;
+    margin-top:4px;
+    opacity:0.7;
+}
+.bbHistorySummary{
+    display:flex;
+    justify-content:space-between;
+    font-size:12px;
+    color:var(--text-secondary);
+    margin-bottom:10px;
+}
+.bbHistoryTotal{font-weight:600}
+.bbHistorySession{
+    background:var(--bg);
+    border-radius:8px;
+    padding:10px 12px;
+    margin-bottom:8px;
+}
+.bbHistorySession:last-child{margin-bottom:0}
+.bbHistorySessionHeader{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:8px;
+}
+.bbHistoryDate{
+    font-size:12px;
+    font-weight:600;
+    color:var(--text);
+}
+.bbHistorySessionStats{
+    font-size:11px;
+    color:var(--text-tertiary);
+}
+.bbHistoryLaps{
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+}
+.bbHistoryLap{
+    font-size:11px;
+    font-family:var(--mono);
+    color:var(--text-secondary);
+    background:var(--surface);
+    padding:3px 6px;
+    border-radius:4px;
+}
+.bbHistoryLap.best{
+    color:var(--ok);
+    font-weight:600;
+}
+.bbHistoryMore{
+    font-size:11px;
+    color:var(--text-tertiary);
+    text-align:center;
+    padding:8px;
+    font-style:italic;
+}
+.bbHistoryActions{
+    margin-top:12px;
+    text-align:center;
+}
+.bbHistoryClearBtn{
+    background:transparent;
+    border:1px solid var(--red);
+    color:var(--red);
+    font-size:11px;
+    padding:6px 12px;
+    border-radius:6px;
+    cursor:pointer;
+    font-family:inherit;
+}
+.bbHistoryClearBtn:active{opacity:0.7}
+
 .bbActiveTrack{
     background:var(--bg);
     border-radius:12px;
@@ -2597,7 +2695,7 @@ function estimateObjectSize(obj) {
 }
 
 // ========== TRACK DATABASE (IndexedDB) ==========
-const TRACK_DB_NAME = 'blackbox-tracks', TRACK_DB_VERSION = 2;
+const TRACK_DB_NAME = 'blackbox-tracks', TRACK_DB_VERSION = 3;
 let trackDb = null;
 
 function openTrackDB() {
@@ -2620,6 +2718,16 @@ function openTrackDB() {
                 if (!d.objectStoreNames.contains('reference_laps')) {
                     const refStore = d.createObjectStore('reference_laps', { keyPath: 'id' });
                     refStore.createIndex('trackId', 'trackId', { unique: true });
+                }
+            }
+
+            // Version 3: lap_history store for session history
+            if (oldVersion < 3) {
+                if (!d.objectStoreNames.contains('lap_history')) {
+                    const histStore = d.createObjectStore('lap_history', { keyPath: 'id' });
+                    histStore.createIndex('trackId', 'trackId', { unique: false });
+                    histStore.createIndex('sessionId', 'sessionId', { unique: false });
+                    histStore.createIndex('timestamp', 'timestamp', { unique: false });
                 }
             }
         };
@@ -2721,13 +2829,198 @@ async function deleteReferenceLap(trackId) {
     });
 }
 
+// ========== LAP HISTORY DATABASE ==========
+/**
+ * Lap history format:
+ * {
+ *   id: string,           // crypto.randomUUID()
+ *   trackId: string,      // Foreign key to tracks
+ *   timestamp: number,    // When lap completed
+ *   lapTimeMs: number,    // The lap time
+ *   lapNumber: number,    // 1, 2, 3... within session
+ *   sessionId: string,    // Groups laps from same activation
+ *   sessionStart: number  // Date.now() at session start (for date grouping)
+ * }
+ */
+
+// Current session tracking
+let currentSessionId = null;
+let currentSessionStart = null;
+
+function generateSessionId() {
+    return 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+}
+
+// Start a new session (called when track is activated)
+function startNewSession() {
+    currentSessionId = generateSessionId();
+    currentSessionStart = Date.now();
+}
+
+// Clear session (called when track is deactivated)
+function clearSession() {
+    currentSessionId = null;
+    currentSessionStart = null;
+}
+
+// Generate a UUID (with fallback for browsers without crypto.randomUUID)
+function genUUID() {
+    if (crypto.randomUUID) return crypto.randomUUID();
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+        const r = Math.random() * 16 | 0;
+        return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+}
+
+// Record a lap to history
+async function recordLapToHistory(trackId, lapTimeMs, lapNumber) {
+    if (!trackDb) await openTrackDB();
+    if (!currentSessionId) return; // No active session
+
+    const lap = {
+        id: genUUID(),
+        trackId: trackId,
+        timestamp: Date.now(),
+        lapTimeMs: lapTimeMs,
+        lapNumber: lapNumber,
+        sessionId: currentSessionId,
+        sessionStart: currentSessionStart
+    };
+
+    return new Promise((resolve, reject) => {
+        const tx = trackDb.transaction('lap_history', 'readwrite');
+        const req = tx.objectStore('lap_history').put(lap);
+        req.onsuccess = () => resolve(lap);
+        req.onerror = () => reject(req.error);
+    });
+}
+
+// Get all lap history for a track, grouped by session
+async function getLapHistoryForTrack(trackId, limit = 200) {
+    if (!trackDb) await openTrackDB();
+
+    return new Promise((resolve, reject) => {
+        const tx = trackDb.transaction('lap_history', 'readonly');
+        const index = tx.objectStore('lap_history').index('trackId');
+        const req = index.getAll(IDBKeyRange.only(trackId));
+
+        req.onsuccess = () => {
+            const laps = req.result || [];
+
+            // Sort by timestamp descending
+            laps.sort((a, b) => b.timestamp - a.timestamp);
+
+            // Limit total laps
+            const limitedLaps = laps.slice(0, limit);
+
+            // Group by sessionId
+            const sessionMap = new Map();
+            for (const lap of limitedLaps) {
+                if (!sessionMap.has(lap.sessionId)) {
+                    sessionMap.set(lap.sessionId, {
+                        sessionId: lap.sessionId,
+                        sessionStart: lap.sessionStart,
+                        laps: [],
+                        bestMs: Infinity
+                    });
+                }
+                const session = sessionMap.get(lap.sessionId);
+                session.laps.push(lap);
+                if (lap.lapTimeMs < session.bestMs) {
+                    session.bestMs = lap.lapTimeMs;
+                }
+            }
+
+            // Convert to array and sort sessions by date descending
+            const sessions = Array.from(sessionMap.values());
+            sessions.sort((a, b) => b.sessionStart - a.sessionStart);
+
+            // Sort laps within each session by lap number ascending
+            for (const session of sessions) {
+                session.laps.sort((a, b) => a.lapNumber - b.lapNumber);
+            }
+
+            resolve({
+                sessions: sessions,
+                totalLaps: laps.length
+            });
+        };
+        req.onerror = () => reject(req.error);
+    });
+}
+
+// Get history stats for a track (summary only, no full lap data)
+async function getLapHistoryStats(trackId) {
+    if (!trackDb) await openTrackDB();
+
+    return new Promise((resolve, reject) => {
+        const tx = trackDb.transaction('lap_history', 'readonly');
+        const index = tx.objectStore('lap_history').index('trackId');
+        const req = index.getAll(IDBKeyRange.only(trackId));
+
+        req.onsuccess = () => {
+            const laps = req.result || [];
+            if (laps.length === 0) {
+                resolve({ totalLaps: 0, sessionCount: 0, lastSessionDate: null });
+                return;
+            }
+
+            // Count unique sessions
+            const sessionIds = new Set(laps.map(l => l.sessionId));
+
+            // Find most recent lap
+            const mostRecent = laps.reduce((max, l) => l.timestamp > max.timestamp ? l : max, laps[0]);
+
+            resolve({
+                totalLaps: laps.length,
+                sessionCount: sessionIds.size,
+                lastSessionDate: mostRecent.sessionStart
+            });
+        };
+        req.onerror = () => reject(req.error);
+    });
+}
+
+// Delete all lap history for a track
+async function deleteLapHistoryForTrack(trackId) {
+    if (!trackDb) await openTrackDB();
+
+    return new Promise((resolve, reject) => {
+        const tx = trackDb.transaction('lap_history', 'readwrite');
+        const index = tx.objectStore('lap_history').index('trackId');
+        const req = index.openCursor(IDBKeyRange.only(trackId));
+        req.onsuccess = () => {
+            const cursor = req.result;
+            if (cursor) {
+                cursor.delete();
+                cursor.continue();
+            } else {
+                resolve();
+            }
+        };
+        req.onerror = () => reject(req.error);
+    });
+}
+
+// Clear all lap history
+async function clearAllLapHistory() {
+    if (!trackDb) await openTrackDB();
+
+    return new Promise((resolve, reject) => {
+        const tx = trackDb.transaction('lap_history', 'readwrite');
+        const req = tx.objectStore('lap_history').clear();
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+    });
+}
+
 // ========== TRACK DATA MANAGEMENT ==========
 
 // Get all tracks with their reference lap info for data management
 async function getTrackDataStats() {
     if (!trackDb) await openTrackDB();
 
-    const tx = trackDb.transaction(['tracks', 'reference_laps'], 'readonly');
+    const tx = trackDb.transaction(['tracks', 'reference_laps', 'lap_history'], 'readonly');
     const tracks = await new Promise((res, rej) => {
         const req = tx.objectStore('tracks').getAll();
         req.onsuccess = () => res(req.result || []);
@@ -2738,11 +3031,27 @@ async function getTrackDataStats() {
         req.onsuccess = () => res(req.result || []);
         req.onerror = () => rej(req.error);
     });
+    const lapHistory = await new Promise((res, rej) => {
+        const req = tx.objectStore('lap_history').getAll();
+        req.onsuccess = () => res(req.result || []);
+        req.onerror = () => rej(req.error);
+    });
 
     // Map reference laps by trackId
     const refLapByTrack = new Map();
     for (const ref of refLaps) {
         refLapByTrack.set(ref.trackId, ref);
+    }
+
+    // Group lap history by trackId
+    const historyByTrack = new Map();
+    let totalHistoryBytes = 0;
+    for (const lap of lapHistory) {
+        if (!historyByTrack.has(lap.trackId)) {
+            historyByTrack.set(lap.trackId, []);
+        }
+        historyByTrack.get(lap.trackId).push(lap);
+        totalHistoryBytes += estimateObjectSize(lap);
     }
 
     // Calculate storage for each track
@@ -2763,6 +3072,10 @@ async function getTrackDataStats() {
             }
             totalRefBytes += refBytes;
         }
+
+        // Get lap history for this track
+        const trackHistory = historyByTrack.get(track.id) || [];
+        const historyBytes = trackHistory.reduce((sum, lap) => sum + estimateObjectSize(lap), 0);
 
         // Handle corners: can be a number (new) or array (legacy) or undefined
         const corners = typeof track.corners === 'number' ? track.corners :
@@ -2786,7 +3099,9 @@ async function getTrackDataStats() {
             referenceLapTime: refLap ? refLap.lapTimeMs : 0,
             referenceLapSamples: refLap?.samples?.length || (refLap?.sampleCount || 0),
             refBytes,
-            totalBytes: trackBytes + refBytes
+            historyLapCount: trackHistory.length,
+            historyBytes,
+            totalBytes: trackBytes + refBytes + historyBytes
         };
     });
 
@@ -2797,7 +3112,8 @@ async function getTrackDataStats() {
         trackCount: tracks.length,
         totalTrackBytes,
         totalRefBytes,
-        totalBytes: totalTrackBytes + totalRefBytes,
+        totalHistoryBytes,
+        totalBytes: totalTrackBytes + totalRefBytes + totalHistoryBytes,
         tracks: trackData
     };
 }
@@ -2816,13 +3132,20 @@ async function getCombinedStorageStats() {
     };
 }
 
-// Delete a track and its reference lap
+// Delete a track, its reference lap, and lap history
 async function deleteTrackWithRef(trackId) {
-    // First delete reference lap if exists
+    // Delete reference lap if exists
     try {
         await deleteReferenceLap(trackId);
     } catch (e) {
         console.warn('No reference lap to delete for track:', trackId);
+    }
+
+    // Delete lap history
+    try {
+        await deleteLapHistoryForTrack(trackId);
+    } catch (e) {
+        console.warn('No lap history to delete for track:', trackId);
     }
 
     // Then delete the track
@@ -2832,14 +3155,15 @@ async function deleteTrackWithRef(trackId) {
     if (activeTrack && activeTrack.id === trackId) {
         activeTrack = null;
         referenceLap = null;
+        clearSession();
     }
 }
 
-// Clear all tracks and reference laps
+// Clear all tracks, reference laps, and lap history
 async function clearAllTracks() {
     if (!trackDb) await openTrackDB();
 
-    const tx = trackDb.transaction(['tracks', 'reference_laps'], 'readwrite');
+    const tx = trackDb.transaction(['tracks', 'reference_laps', 'lap_history'], 'readwrite');
     await new Promise((res, rej) => {
         const req = tx.objectStore('tracks').clear();
         req.onsuccess = () => res();
@@ -2847,6 +3171,11 @@ async function clearAllTracks() {
     });
     await new Promise((res, rej) => {
         const req = tx.objectStore('reference_laps').clear();
+        req.onsuccess = () => res();
+        req.onerror = () => rej(req.error);
+    });
+    await new Promise((res, rej) => {
+        const req = tx.objectStore('lap_history').clear();
         req.onsuccess = () => res();
         req.onerror = () => rej(req.error);
     });
@@ -2860,6 +3189,7 @@ async function clearAllTracks() {
     // Clear active track state
     activeTrack = null;
     referenceLap = null;
+    clearSession();
 }
 
 // ========== LAP TRACKER (Distance + Delta) ==========
@@ -4267,16 +4597,21 @@ async function renderTrackList() {
         listEl.innerHTML = tracks.map(track => {
             const bestStr = track.bestLapMs ? formatLapTime(track.bestLapMs) : '—';
             const isActive = activeTrack && activeTrack.id === track.id;
+            const isP2P = track.type === 'point_to_point';
+            const unitPlural = isP2P ? 'runs' : 'laps';
+            const lapCount = track.lapCount || 0;
+
             return '<div class="bbTrackItem" data-track-id="' + track.id + '">' +
                 '<div class="bbTrackInfo">' +
                     '<div class="bbTrackName">' + escapeHtml(track.name) + (isActive ? ' ✓' : '') + '</div>' +
                     '<div class="bbTrackMeta">' +
                         '<span>Best: ' + bestStr + '</span>' +
-                        '<span>' + (track.lapCount || 0) + ' laps</span>' +
+                        '<span>' + lapCount + ' ' + unitPlural + '</span>' +
                     '</div>' +
                 '</div>' +
                 '<div class="bbTrackActions">' +
                     '<button class="bbTrackBtn primary" data-action="use">Use</button>' +
+                    (lapCount > 0 ? '<button class="bbTrackBtn secondary" data-action="history" title="View lap history">H</button>' : '') +
                     '<button class="bbTrackBtn danger" data-action="delete">×</button>' +
                 '</div>' +
             '</div>';
@@ -4341,19 +4676,158 @@ async function handleTrackAction(action, trackId) {
             closeTrackModal();
         }
     } else if (action === 'delete') {
-        if (confirm('Delete this track?')) {
+        if (confirm('Delete this track and all lap history?')) {
+            // Delete lap history first
+            await deleteLapHistoryForTrack(trackId);
             await deleteTrack(trackId);
             if (activeTrack && activeTrack.id === trackId) {
                 deactivateTrack();
             }
             renderTrackList();
         }
+    } else if (action === 'history') {
+        await showTrackHistory(trackId);
+    }
+}
+
+// Format a date for session grouping (Today, Yesterday, or date)
+function formatSessionDate(timestamp) {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterday = new Date(today.getTime() - 86400000);
+    const sessionDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+    if (sessionDay.getTime() === today.getTime()) {
+        return 'Today';
+    } else if (sessionDay.getTime() === yesterday.getTime()) {
+        return 'Yesterday';
+    } else {
+        // Format as "Mon, Jan 15"
+        return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    }
+}
+
+// Format session time of day
+function formatSessionTime(timestamp) {
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+}
+
+// Show lap history for a track in an expandable section
+async function showTrackHistory(trackId) {
+    const track = await getTrack(trackId);
+    if (!track) return;
+
+    const historyData = await getLapHistoryForTrack(trackId);
+    const isP2P = track.type === 'point_to_point';
+    const unit = isP2P ? 'run' : 'lap';
+    const unitPlural = isP2P ? 'runs' : 'laps';
+
+    // Find or create the history section for this track
+    const trackItem = document.querySelector(`.bbTrackItem[data-track-id="${trackId}"]`);
+    if (!trackItem) return;
+
+    // Toggle existing history section
+    const existingHistory = trackItem.querySelector('.bbTrackHistory');
+    if (existingHistory) {
+        existingHistory.remove();
+        return;
+    }
+
+    // Create history section
+    const historySection = document.createElement('div');
+    historySection.className = 'bbTrackHistory';
+
+    if (historyData.sessions.length === 0) {
+        historySection.innerHTML = `
+            <div class="bbHistoryEmpty">
+                <span>No ${unit} history yet</span>
+                <span class="bbHistoryHint">Complete some ${unitPlural} to start tracking</span>
+            </div>
+        `;
+    } else {
+        let html = `
+            <div class="bbHistorySummary">
+                <span class="bbHistoryTotal">${historyData.totalLaps} ${historyData.totalLaps === 1 ? unit : unitPlural} total</span>
+                <span class="bbHistorySessions">${historyData.sessions.length} session${historyData.sessions.length === 1 ? '' : 's'}</span>
+            </div>
+            <div class="bbHistorySessions">
+        `;
+
+        // Show up to 5 most recent sessions
+        const recentSessions = historyData.sessions.slice(0, 5);
+        for (const session of recentSessions) {
+            const dateStr = formatSessionDate(session.sessionStart);
+            const timeStr = formatSessionTime(session.sessionStart);
+            const bestStr = formatLapTime(session.bestMs);
+            const lapCount = session.laps.length;
+
+            html += `
+                <div class="bbHistorySession">
+                    <div class="bbHistorySessionHeader">
+                        <span class="bbHistoryDate">${dateStr} ${timeStr}</span>
+                        <span class="bbHistorySessionStats">Best: ${bestStr} · ${lapCount} ${lapCount === 1 ? unit : unitPlural}</span>
+                    </div>
+                    <div class="bbHistoryLaps">
+            `;
+
+            // Show lap times in a compact grid
+            for (const lap of session.laps) {
+                const isBest = lap.lapTimeMs === session.bestMs;
+                html += `<span class="bbHistoryLap${isBest ? ' best' : ''}">${formatLapTime(lap.lapTimeMs)}</span>`;
+            }
+
+            html += `
+                    </div>
+                </div>
+            `;
+        }
+
+        // Show "more sessions" indicator if there are more
+        if (historyData.sessions.length > 5) {
+            const moreCount = historyData.sessions.length - 5;
+            html += `<div class="bbHistoryMore">+${moreCount} more session${moreCount === 1 ? '' : 's'}</div>`;
+        }
+
+        html += '</div>';
+
+        // Add clear history button
+        html += `
+            <div class="bbHistoryActions">
+                <button class="bbHistoryClearBtn" onclick="clearTrackHistoryConfirm('${trackId}')">Clear History</button>
+            </div>
+        `;
+
+        historySection.innerHTML = html;
+    }
+
+    trackItem.appendChild(historySection);
+}
+
+// Confirm and clear lap history for a track
+async function clearTrackHistoryConfirm(trackId) {
+    if (confirm('Clear all lap history for this track? This cannot be undone.')) {
+        await deleteLapHistoryForTrack(trackId);
+        // Also reset lapCount on the track
+        const track = await getTrack(trackId);
+        if (track) {
+            track.lapCount = 0;
+            await saveTrack(track);
+        }
+        // Refresh the track list
+        renderTrackList();
     }
 }
 
 async function activateTrack(track) {
     activeTrack = track;
     suppressStartLineIndicator = false; // Reset indicator suppression
+
+    // Start a new session for lap history (only for non-demo tracks)
+    if (!track.isDemo) {
+        startNewSession();
+    }
 
     const isP2P = track.type === 'point_to_point';
 
@@ -4443,6 +4917,7 @@ function deactivateTrack() {
     activeTrack = null;
     referenceLap = null;
     lapTracker.reset();
+    clearSession(); // Clear session for lap history
     deactivateLapTimer();
     $('lap-setup-text').textContent = 'No track configured';
     $('lap-track-name').textContent = '';
@@ -4935,6 +5410,13 @@ function completeLapOrRun(timestamp, isFinishLine = false) {
 
     // Update track's best lap in IndexedDB
     updateTrackBestLap(lapTimeMs);
+
+    // Record lap to history (non-demo tracks only)
+    if (activeTrack && !activeTrack.isDemo) {
+        recordLapToHistory(activeTrack.id, lapTimeMs, lapCount).catch(e => {
+            console.error('Failed to record lap to history:', e);
+        });
+    }
 
     // Clear first-run badge after first completion (both loop and P2P)
     section.classList.remove('first-run');
@@ -5642,7 +6124,7 @@ async function renderTrackDataList() {
 
         // Add event listeners
         listEl.querySelectorAll('.bbSessionBtn').forEach(btn => {
-            btn.onclick = () => handleTrackAction(btn);
+            btn.onclick = () => handleDataTrackAction(btn);
         });
 
     } catch (e) {
@@ -5690,7 +6172,7 @@ async function handleSessionAction(btn) {
     }
 }
 
-async function handleTrackAction(btn) {
+async function handleDataTrackAction(btn) {
     const action = btn.dataset.action;
     const item = btn.closest('.bbTrackDataItem');
     const trackId = item.dataset.trackId;

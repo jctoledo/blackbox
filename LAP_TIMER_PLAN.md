@@ -50,7 +50,7 @@ Delta is THE killer feature - now implemented!
 | 8 | Reference Lap & Predictive Delta | ✅ COMPLETE | - |
 | 8B | Delta Bar UX Polish | ✅ COMPLETE | - |
 | 9 | Data Management & Cleanup | ✅ COMPLETE | - |
-| 10 | Session History | ❌ NOT STARTED | MEDIUM |
+| 10 | Session History | ✅ COMPLETE | - |
 | 11 | Track Auto-Detection | ❌ NOT STARTED | LOW |
 | 12 | Track Learning | ❌ NOT STARTED | LOW |
 | 13 | Robustness & Edge Cases | ❌ NOT STARTED | LOW |
@@ -557,109 +557,60 @@ If you close the browser, only your best lap (reference) persists. All other lap
 
 ---
 
-## Phase 10: Session History ❌
+## Phase 10: Session History ✅
 
-### The Problem
+**Completed!** Lap times are now persisted and viewable across sessions.
 
-Currently there's no record of lap times across sessions. If you did 20 laps last weekend, that data is gone (unless you exported CSV and analyzed manually).
+### What Was Built
 
-### Solution
+1. **New IndexedDB Store** (`lap_history` in blackbox-tracks DB, version 3):
+   - Stores every completed lap with trackId, lapTimeMs, lapNumber
+   - Session grouping via `sessionId` and `sessionStart` fields
+   - Indexes on trackId, sessionId, timestamp for efficient queries
 
-Track lap history per track, viewable in the track modal.
+2. **Session Management**:
+   - `startNewSession()` called when track is activated
+   - `clearSession()` called when track is deactivated
+   - Session ID generated as `session_{timestamp}_{random}`
+
+3. **Lap Recording**:
+   - Every lap completion calls `recordLapToHistory()`
+   - Non-blocking (uses `.catch()` to handle errors silently)
+   - Demo tracks excluded (no history persistence)
+
+4. **History UI**:
+   - "H" button appears in track list when track has history
+   - Toggle to expand/collapse history section inline
+   - Sessions grouped by date ("Today", "Yesterday", or formatted date)
+   - Shows session time, best lap, lap count, and all lap times
+   - Best lap highlighted in each session
+   - Up to 5 most recent sessions shown
+   - "Clear History" button per track
+
+5. **Data Management Integration**:
+   - Deleting a track also deletes its lap history
+   - Clearing all tracks also clears all lap history
+   - Storage estimates include lap history size
 
 ### Data Structure
 
-**New object store: 'lap_history' in blackbox-tracks DB**
 ```javascript
 {
-  id: string,                    // crypto.randomUUID()
-  trackId: string,               // Foreign key
-  timestamp: number,             // When lap was completed
-  lapTimeMs: number,
-  lapNumber: number,             // Which lap in this session (1, 2, 3...)
-  sessionDate: number,           // Date.now() at session start (groups laps)
-
-  // Optional metadata
-  isValid: boolean,              // false if wrong direction, cut short
-  maxSpeedKmh: number | null,
-  conditions: string | null      // "dry", "wet", etc. (future)
+  id: string,           // UUID (with fallback for older browsers)
+  trackId: string,      // Foreign key to tracks
+  timestamp: number,    // When lap completed
+  lapTimeMs: number,    // The lap time
+  lapNumber: number,    // 1, 2, 3... within session
+  sessionId: string,    // Groups laps from same track activation
+  sessionStart: number  // Date.now() at session start
 }
 ```
 
-### Implementation
+### Key Implementation Notes
 
-**Step 1: Record lap on completion**
-```javascript
-// In updateLapTimer when LAP_FLAG_NEW_LAP detected
-async function recordLapHistory(lapTimeMs, lapNumber) {
-  if (!activeTrack) return;
-
-  const lap = {
-    id: crypto.randomUUID(),
-    trackId: activeTrack.id,
-    timestamp: Date.now(),
-    lapTimeMs: lapTimeMs,
-    lapNumber: lapNumber,
-    sessionDate: currentSessionStart,  // Set when timing starts
-    isValid: true
-  };
-
-  await saveLapHistory(lap);
-}
-```
-
-**Step 2: Display in track modal**
-
-When viewing a track's details:
-```
-┌─────────────────────────────┐
-│ My Block Loop               │
-│ Best: 1:23.456              │
-│ 47 laps total               │
-├─────────────────────────────┤
-│ Recent Sessions             │
-│ ┌─────────────────────────┐ │
-│ │ Today                   │ │
-│ │ Best: 1:24.2  Laps: 12  │ │
-│ │ 1:24.2 1:25.1 1:24.8... │ │
-│ ├─────────────────────────┤ │
-│ │ Yesterday               │ │
-│ │ Best: 1:23.4  Laps: 8   │ │
-│ │ 1:25.0 1:24.1 1:23.4... │ │
-│ └─────────────────────────┘ │
-│ [View All History]          │
-└─────────────────────────────┘
-```
-
-**Step 3: Query lap history**
-```javascript
-async function getLapHistoryForTrack(trackId, limit = 100) {
-  const tx = db.transaction('lap_history', 'readonly');
-  const index = tx.objectStore('lap_history').index('trackId');
-  const laps = await index.getAll(trackId);
-
-  // Sort by timestamp descending
-  laps.sort((a, b) => b.timestamp - a.timestamp);
-
-  // Group by sessionDate
-  const sessions = new Map();
-  for (const lap of laps.slice(0, limit)) {
-    const dateKey = new Date(lap.sessionDate).toDateString();
-    if (!sessions.has(dateKey)) {
-      sessions.set(dateKey, {
-        date: lap.sessionDate,
-        laps: [],
-        bestMs: Infinity
-      });
-    }
-    const session = sessions.get(dateKey);
-    session.laps.push(lap);
-    if (lap.lapTimeMs < session.bestMs) session.bestMs = lap.lapTimeMs;
-  }
-
-  return Array.from(sessions.values());
-}
-```
+- **UUID Generation**: Uses `crypto.randomUUID()` with fallback for browsers without support
+- **P2P Terminology**: Uses "runs" instead of "laps" for point-to-point tracks
+- **Production Sync**: Both dashboard-dev and websocket_server.rs updated identically
 
 ---
 
