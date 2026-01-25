@@ -576,6 +576,45 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
 .bbActiveTrackName{font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .bbActiveTrackMeta{font-size:12px;color:var(--text-secondary);margin-top:2px}
 .bbActiveTrackClear{width:28px;height:28px;border-radius:50%;border:none;background:rgba(128,128,128,0.12);color:var(--text-tertiary);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.bbStorageOverview{background:var(--bg);border-radius:12px;padding:16px;margin-bottom:16px}
+.bbStorageTotal{text-align:center;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--divider)}
+.bbStorageLabel{font-size:11px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.05em}
+.bbStorageValue{font-size:24px;font-weight:700;margin-top:4px}
+.bbStorageBreakdown{display:flex;justify-content:space-around}
+.bbStorageItem{text-align:center}
+.bbStorageItemLabel{font-size:11px;color:var(--text-tertiary);display:block}
+.bbStorageItemValue{font-size:14px;font-weight:600;margin-top:2px}
+.bbSectionCount{font-size:12px;font-weight:normal;color:var(--text-tertiary)}
+.bbTrackDataList{border-radius:12px;overflow:hidden;background:var(--bg);max-height:250px;overflow-y:auto}
+.bbTrackDataItem{padding:14px 16px;border-bottom:1px solid var(--divider);display:flex;justify-content:space-between;align-items:center;gap:12px}
+.bbTrackDataItem:last-child{border-bottom:none}
+.bbTrackDataInfo{flex:1;min-width:0}
+.bbTrackDataName{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bbTrackDataMeta{font-size:11px;color:var(--text-tertiary);margin-top:3px;display:flex;gap:8px}
+.bbTrackDataRef{margin-top:6px;font-size:12px}
+.bbTrackDataRef.has-ref{color:var(--ok);font-weight:500}
+.bbTrackDataRef.no-ref{color:var(--text-tertiary);font-style:italic}
+.bbTrackDataActions{display:flex;gap:8px;flex-shrink:0}
+.bbSessionList{border-radius:12px;overflow:hidden;background:var(--bg);max-height:calc(100vh - 350px);overflow-y:auto}
+.bbSessionEmpty{padding:30px 20px;text-align:center;color:var(--text-tertiary);font-size:13px}
+.bbSessionEmpty .icon{font-size:32px;margin-bottom:10px;opacity:0.4}
+.bbSessionItem{padding:14px 16px;border-bottom:1px solid var(--divider);display:flex;justify-content:space-between;align-items:center;gap:12px}
+.bbSessionItem:last-child{border-bottom:none}
+.bbSessionItem.active{background:rgba(52,199,89,0.08)}
+.bbSessionInfo{flex:1;min-width:0}
+.bbSessionDate{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bbSessionMeta{font-size:11px;color:var(--text-tertiary);margin-top:3px;display:flex;gap:8px;flex-wrap:wrap}
+.bbSessionStatus{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;margin-top:4px}
+.bbSessionStatus.complete{color:var(--ok)}
+.bbSessionStatus.active,.bbSessionStatus.recovered{color:var(--amber)}
+.bbSessionActions{display:flex;gap:8px;flex-shrink:0}
+.bbSessionBtn{background:var(--surface);border:none;border-radius:6px;padding:8px 14px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer;font-family:inherit;transition:opacity 0.15s}
+.bbSessionBtn:active{opacity:0.7}
+.bbSessionBtn:disabled{opacity:0.4;cursor:not-allowed}
+.bbSessionBtn.danger{color:var(--red)}
+.bbClearAllBtn{display:block;width:100%;padding:14px 18px;margin-top:16px;border:none;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;background:var(--bg);color:var(--red);transition:opacity 0.15s}
+.bbClearAllBtn:active{opacity:0.7}
+.bbClearAllBtn:disabled{opacity:0.4;cursor:not-allowed}
 .bbActiveTrackClear:active{background:rgba(255,59,48,0.15);color:#ff3b30}
 .bbCreateTrackHint{font-size:13px;color:var(--text-secondary);margin:0 0 16px 0;line-height:1.5;text-align:center}
 .bbCreateTrackBtns{display:grid;grid-template-columns:1fr 1fr;gap:12px}
@@ -816,7 +855,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
 
 <div class="bbMenuOverlay" id="menu-overlay">
     <div class="bbMenuPanel">
-        <button class="bbMenuItem" id="menu-tracks">Tracks</button>
+        <button class="bbMenuItem" id="menu-data">Data</button>
         <button class="bbMenuItem" id="menu-rec">Start Recording</button>
         <button class="bbMenuItem" id="menu-export">Export CSV</button>
         <button class="bbMenuItem destructive" id="menu-clear">Clear Session</button>
@@ -869,6 +908,31 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
             <div class="bbModalSection">
                 <div class="bbSectionTitle">Saved Tracks</div>
                 <div class="bbTrackList" id="track-list"><div class="bbTrackEmpty">No saved tracks</div></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="bbModal" id="data-modal">
+    <div class="bbModalContent">
+        <div class="bbModalHeader">
+            <span class="bbModalTitle">Data</span>
+            <button class="bbModalClose" id="data-modal-close">&times;</button>
+        </div>
+        <div class="bbModalBody">
+            <div class="bbStorageOverview">
+                <div class="bbStorageTotal"><div class="bbStorageLabel">Total Storage</div><div class="bbStorageValue" id="data-total-size">—</div></div>
+                <div class="bbStorageBreakdown"><div class="bbStorageItem"><span class="bbStorageItemLabel">Recordings</span><span class="bbStorageItemValue" id="data-rec-size">—</span></div><div class="bbStorageItem"><span class="bbStorageItemLabel">Tracks</span><span class="bbStorageItemValue" id="data-track-size">—</span></div></div>
+            </div>
+            <div class="bbModalSection">
+                <div class="bbSectionTitle">Recordings <span class="bbSectionCount" id="data-rec-count"></span></div>
+                <div class="bbSessionList" id="session-list"><div class="bbSessionEmpty"><div class="icon">📊</div>Loading...</div></div>
+                <button class="bbClearAllBtn" id="btn-clear-all-recordings">Clear All Recordings</button>
+            </div>
+            <div class="bbModalSection">
+                <div class="bbSectionTitle">Tracks & Best Laps <span class="bbSectionCount" id="data-track-count"></span></div>
+                <div class="bbTrackDataList" id="track-data-list"><div class="bbSessionEmpty"><div class="icon">🏁</div>Loading...</div></div>
+                <button class="bbClearAllBtn" id="btn-clear-all-tracks">Clear All Tracks</button>
             </div>
         </div>
     </div>
@@ -930,7 +994,7 @@ const $=id=>document.getElementById(id);
 const MODES={0:'IDLE',1:'ACCEL',2:'BRAKE',4:'CORNER',5:'ACCEL',6:'BRAKE'};
 const MODE_COLORS={0:'var(--mode-idle)',1:'var(--mode-accel)',2:'var(--mode-brake)',4:'var(--mode-idle)',5:'var(--mode-accel)',6:'var(--mode-brake)'};
 const LAP_FLAG_CROSSED_START=1,LAP_FLAG_CROSSED_FINISH=2,LAP_FLAG_NEW_LAP=4,LAP_FLAG_NEW_BEST=8,LAP_FLAG_INVALID=16;
-const DB_NAME='blackbox-rec',DB_VERSION=1,CHUNK_INTERVAL=60000;
+const DB_NAME='blackbox-rec',DB_VERSION=2,CHUNK_INTERVAL=60000;
 
 let isDark=window.matchMedia('(prefers-color-scheme:dark)').matches;
 function applyTheme(){
@@ -959,11 +1023,20 @@ function openDB(){
         req.onsuccess=()=>{db=req.result;resolve(db)};
         req.onupgradeneeded=(e)=>{
             const d=e.target.result;
+            const tx=e.target.transaction;
+            const oldVersion=e.oldVersion;
             if(!d.objectStoreNames.contains('chunks')){
-                d.createObjectStore('chunks',{keyPath:['sessionId','chunkIndex']});
+                const cs=d.createObjectStore('chunks',{keyPath:['sessionId','chunkIndex']});
+                cs.createIndex('sessionId','sessionId',{unique:false});
             }
             if(!d.objectStoreNames.contains('sessions')){
                 d.createObjectStore('sessions',{keyPath:'sessionId'});
+            }
+            if(oldVersion>=1&&oldVersion<2){
+                const cs=tx.objectStore('chunks');
+                if(!cs.indexNames.contains('sessionId')){
+                    cs.createIndex('sessionId','sessionId',{unique:false});
+                }
             }
         };
     });
@@ -1036,6 +1109,142 @@ async function exportCSV(){
     a.href=u;a.download='blackbox_'+new Date(latest.sessionId).toISOString().slice(0,19).replace(/[T:]/g,'-')+'.csv';a.click();
 }
 
+// Data Management Functions
+function idbPromise(r){return new Promise((res,rej)=>{r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
+
+async function getAllSessions(){
+    if(!db)await openDB();
+    const tx=db.transaction(['sessions','chunks'],'readonly');
+    const sessions=await idbPromise(tx.objectStore('sessions').getAll());
+    const allChunks=await idbPromise(tx.objectStore('chunks').getAll());
+    const chunksBySession=new Map();
+    for(const c of allChunks){
+        if(!chunksBySession.has(c.sessionId))chunksBySession.set(c.sessionId,{count:0,samples:0});
+        const s=chunksBySession.get(c.sessionId);s.count++;s.samples+=c.data?.length||0;
+    }
+    const enriched=sessions.map(s=>{
+        const cs=chunksBySession.get(s.sessionId)||{count:0,samples:0};
+        return{sessionId:s.sessionId,startTime:s.startTime||s.sessionId,status:s.status,chunkCount:cs.count,sampleCount:cs.samples,durationMs:cs.samples*50,estimatedBytes:cs.samples*50};
+    });
+    enriched.sort((a,b)=>b.sessionId-a.sessionId);
+    return enriched;
+}
+
+async function getStorageStats(){
+    const sessions=await getAllSessions();
+    const totalBytes=sessions.reduce((sum,s)=>sum+s.estimatedBytes,0);
+    return{sessionCount:sessions.length,totalBytes,sessions};
+}
+
+async function deleteSession(targetId){
+    if(!db)await openDB();
+    if(rec&&targetId===sessionId)throw new Error('Cannot delete active recording');
+    const tx=db.transaction(['sessions','chunks'],'readwrite');
+    const cs=tx.objectStore('chunks'),idx=cs.index('sessionId'),range=IDBKeyRange.only(targetId);
+    await new Promise((res,rej)=>{
+        const cur=idx.openCursor(range);
+        cur.onerror=()=>rej(cur.error);
+        cur.onsuccess=e=>{const c=e.target.result;if(c){c.delete();c.continue()}else res()};
+    });
+    await idbPromise(tx.objectStore('sessions').delete(targetId));
+    await new Promise((res,rej)=>{tx.oncomplete=res;tx.onerror=()=>rej(tx.error)});
+}
+
+async function exportSessionById(targetId){
+    if(!db)await openDB();
+    if(rec&&targetId===sessionId&&chunkBuffer.length>0)await saveChunk();
+    const tx=db.transaction(['sessions','chunks'],'readonly');
+    const session=await idbPromise(tx.objectStore('sessions').get(targetId));
+    if(!session)throw new Error('Session not found');
+    const idx=tx.objectStore('chunks').index('sessionId');
+    const chunks=await idbPromise(idx.getAll(targetId));
+    chunks.sort((a,b)=>a.chunkIndex-b.chunkIndex);
+    if(!chunks.length)throw new Error('No data in recording');
+    let allData=[];chunks.forEach(c=>allData=allData.concat(c.data||[]));
+    let csv='time,speed,ax,ay,wz,mode,lat_g,lon_g,gps_lat,gps_lon,gps_valid,lon_imu,lon_gps,gps_weight,pitch_corr,pitch_conf,roll_corr,roll_conf,tilt_x,tilt_y\n';
+    allData.forEach(r=>{csv+=r.t+','+r.sp+','+r.ax+','+r.ay+','+r.wz+','+r.mo+','+r.latg+','+r.lng+','+(r.lat||0)+','+(r.lon||0)+','+(r.gpsOk||0)+','+(r.lon_imu||0).toFixed(4)+','+(r.lon_gps||0).toFixed(4)+','+(r.gps_wt||0).toFixed(2)+','+(r.pitch_c||0).toFixed(2)+','+(r.pitch_cf||0).toFixed(1)+','+(r.roll_c||0).toFixed(2)+','+(r.roll_cf||0).toFixed(1)+','+(r.tilt_x||0).toFixed(4)+','+(r.tilt_y||0).toFixed(4)+'\n'});
+    const b=new Blob([csv],{type:'text/csv'}),u=URL.createObjectURL(b),a=document.createElement('a');
+    a.href=u;a.download='blackbox_'+new Date(targetId).toISOString().slice(0,19).replace(/[T:]/g,'-')+'.csv';a.click();
+    return{session,sampleCount:allData.length};
+}
+
+async function clearAllRecordings(){
+    if(rec)throw new Error('Cannot clear while recording');
+    if(!db)await openDB();
+    const tx=db.transaction(['sessions','chunks'],'readwrite');
+    await idbPromise(tx.objectStore('sessions').clear());
+    await idbPromise(tx.objectStore('chunks').clear());
+    await new Promise((res,rej)=>{tx.oncomplete=res;tx.onerror=()=>rej(tx.error)});
+}
+
+function formatLapTimeMs(ms){if(!ms||ms<=0)return'--:--.---';const m=Math.floor(ms/60000);const s=Math.floor((ms%60000)/1000);const msc=ms%1000;return m+':'+(s<10?'0':'')+s+'.'+(msc<100?'0':'')+(msc<10?'0':'')+msc}
+function formatSessionDuration(ms){const totalSec=Math.floor(ms/1000),h=Math.floor(totalSec/3600),m=Math.floor((totalSec%3600)/60);if(h>0)return h+'h '+m+'m';return m+'m'}
+function estimateObjectSize(obj){if(obj===null||obj===undefined)return 0;if(typeof obj==='string')return obj.length*2;if(typeof obj==='number')return 8;if(typeof obj==='boolean')return 4;if(obj instanceof ArrayBuffer)return obj.byteLength;if(Array.isArray(obj))return obj.reduce((s,i)=>s+estimateObjectSize(i),0);if(typeof obj==='object')return Object.keys(obj).reduce((s,k)=>s+k.length*2+estimateObjectSize(obj[k]),0);return 8}
+
+async function getTrackDataStats(){
+    if(!trackDb)await openTrackDB();
+    const tx=trackDb.transaction(['tracks','reference_laps'],'readonly');
+    const tracks=await idbPromise(tx.objectStore('tracks').getAll());
+    const refs=await idbPromise(tx.objectStore('reference_laps').getAll());
+    const refMap=new Map(refs.map(r=>[r.trackId,r]));
+    let totalBytes=0;
+    const result=tracks.map(t=>{
+        const ref=refMap.get(t.id);
+        const tBytes=estimateObjectSize(t);
+        const rBytes=ref?estimateObjectSize(ref):0;
+        totalBytes+=tBytes+rBytes;
+        const corners=typeof t.corners==='number'?t.corners:(Array.isArray(t.corners)?t.corners.length:0);
+        const points=typeof t.keyPoints==='number'?t.keyPoints:(t.centerline?.length||0);
+        return{id:t.id,name:t.name,corners:corners,points:points,totalBytes:tBytes+rBytes,hasReferenceLap:!!ref,referenceLapTime:ref?.lapTimeMs||0,referenceLapSamples:ref?.samples?.length||0}
+    });
+    return{tracks:result,totalBytes}
+}
+
+async function getCombinedStorageStats(){
+    const recStats=await getStorageStats();
+    const trackStats=await getTrackDataStats();
+    return{totalBytes:recStats.totalBytes+trackStats.totalBytes,recordingsBytes:recStats.totalBytes,tracksBytes:trackStats.totalBytes,sessionCount:recStats.sessionCount,trackCount:trackStats.tracks.length}
+}
+
+async function deleteTrackWithRef(trackId){
+    if(!trackDb)await openTrackDB();
+    const tx=trackDb.transaction(['tracks','reference_laps'],'readwrite');
+    await idbPromise(tx.objectStore('tracks').delete(trackId));
+    await idbPromise(tx.objectStore('reference_laps').delete(trackId));
+    await new Promise((res,rej)=>{tx.oncomplete=res;tx.onerror=()=>rej(tx.error)})
+}
+
+async function clearAllTracks(){
+    if(!trackDb)await openTrackDB();
+    const tx=trackDb.transaction(['tracks','reference_laps'],'readwrite');
+    await idbPromise(tx.objectStore('tracks').clear());
+    await idbPromise(tx.objectStore('reference_laps').clear());
+    await new Promise((res,rej)=>{tx.oncomplete=res;tx.onerror=()=>rej(tx.error)})
+}
+
+function formatBytes(bytes){
+    if(bytes===0)return'0 B';
+    const k=1024,sizes=['B','KB','MB','GB'],i=Math.floor(Math.log(bytes)/Math.log(k));
+    return parseFloat((bytes/Math.pow(k,i)).toFixed(1))+' '+sizes[i];
+}
+
+function formatSessionDate(ts){
+    const d=new Date(ts),now=new Date();
+    const isToday=d.toDateString()===now.toDateString();
+    const isYesterday=d.toDateString()===new Date(now-86400000).toDateString();
+    const time=d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
+    if(isToday)return'Today '+time;
+    if(isYesterday)return'Yesterday '+time;
+    return d.toLocaleDateString([],{month:'short',day:'numeric',year:'numeric'})+' '+time;
+}
+
+function formatDuration(ms){
+    const totalSec=Math.floor(ms/1000),h=Math.floor(totalSec/3600),m=Math.floor((totalSec%3600)/60),s=totalSec%60;
+    if(h>0)return h+'h '+m+'m';
+    if(m>0)return m+'m '+s+'s';
+    return s+'s';
+}
+
 // TrackRecorder - Adaptive sampling for track recording with corner state machine
 class TrackRecorder{
     constructor(){this.config={minDistance:2,maxDistance:30,headingThreshold:0.15,cornerEntryThreshold:0.025,cornerExitThreshold:0.012,minCornerLength:3,minLoopDistance:150,closeProximity:25,headingTolerance:0.5};this.reset()}
@@ -1047,7 +1256,7 @@ class TrackRecorder{
     getStats(){const displayCorners=this.inCorner?this.cornerCount+1:this.cornerCount;return{recording:this.recording,trackType:this.trackType,keyPointCount:this.keyPoints.length,totalDistance:this.totalDistance,loopDetected:this.loopDetected,elapsedMs:this.recording?Date.now()-this.startTime:0,gpsQuality:this._gpsQualityRating(this.lastSigma),corners:displayCorners,inCorner:this.inCorner}}
     _gpsQualityRating(sigma){if(sigma<2.0)return'excellent';if(sigma<3.0)return'good';if(sigma<4.0)return'fair';return'poor'}
     cancel(){this.recording=false}
-    finish(trackName,gpsOrigin=null){if(!this.recording)return null;this.recording=false;if(this.keyPoints.length<10)return null;const centerline=this._smoothPath(this.keyPoints,3);const startLine=this._calculateTimingLine(centerline,'start');let finishLine=null;if(this.trackType==='point_to_point')finishLine=this._calculateTimingLine(centerline,'finish');const bounds=this._calculateBounds(centerline);const totalDist=this._calculatePathLength(centerline);const quality=this._assessQuality();return{id:'track_'+Date.now()+'_'+Math.random().toString(36).substr(2,9),name:trackName,type:this.trackType,created:Date.now(),startLine:startLine,finishLine:finishLine,centerline:centerline,bounds:bounds,totalDistance:totalDist,origin:{x:this.startPos.x,y:this.startPos.y},gpsOrigin:gpsOrigin,quality:quality}}
+    finish(trackName,gpsOrigin=null){if(!this.recording)return null;this.recording=false;if(this.keyPoints.length<10)return null;const centerline=this._smoothPath(this.keyPoints,3);const startLine=this._calculateTimingLine(centerline,'start');let finishLine=null;if(this.trackType==='point_to_point')finishLine=this._calculateTimingLine(centerline,'finish');const bounds=this._calculateBounds(centerline);const totalDist=this._calculatePathLength(centerline);const quality=this._assessQuality();return{id:'track_'+Date.now()+'_'+Math.random().toString(36).substr(2,9),name:trackName,type:this.trackType,created:Date.now(),startLine:startLine,finishLine:finishLine,centerline:centerline,bounds:bounds,totalDistance:totalDist,origin:{x:this.startPos.x,y:this.startPos.y},gpsOrigin:gpsOrigin,quality:quality,corners:this.cornerCount,keyPoints:this.keyPoints.length}}
     _smoothPath(pts,ws){if(!pts||pts.length===0)return[];if(pts.length<=ws)return pts.map(p=>({...p}));const result=[];const hw=Math.floor(ws/2);for(let i=0;i<pts.length;i++){const s=Math.max(0,i-hw),e=Math.min(pts.length-1,i+hw),w=pts.slice(s,e+1);if(w.length===0){result.push({...pts[i]});continue}let sx=0,sy=0,sw=0;for(let j=0;j<w.length;j++){const df=Math.abs(j-(i-s)),pw=1/(1+df*0.5),sg=w[j].sigma||3.0,qw=1/(sg+0.5),wt=pw*qw;sx+=w[j].x*wt;sy+=w[j].y*wt;sw+=wt}const x=sw>0?sx/sw:pts[i].x,y=sw>0?sy/sw:pts[i].y;result.push({x:isNaN(x)?pts[i].x:x,y:isNaN(y)?pts[i].y:y,heading:pts[i].heading,speed:pts[i].speed,sigma:pts[i].sigma,t:pts[i].t,curvature:pts[i].curvature,isCorner:pts[i].isCorner})}return result}
     _calculateTimingLine(cl,which='start'){if(!cl||cl.length===0)return{p1:[0,12],p2:[0,-12],direction:0};const idx=which==='start'?Math.min(2,cl.length-1):Math.max(0,cl.length-3);const ns=5,s=Math.max(0,idx-ns),e=Math.min(cl.length-1,idx+ns),pts=cl.slice(s,e+1);let sx=0,sy=0,sw=0;for(const p of pts){const wt=1/(p.sigma||3.0+0.5);sx+=p.x*wt;sy+=p.y*wt;sw+=wt}const cx=sw>0?sx/sw:cl[idx].x,cy=sw>0?sy/sw:cl[idx].y;const safeCx=isNaN(cx)?0:cx,safeCy=isNaN(cy)?0:cy;let dir=0;if(pts.length>=2){const f=pts[0],l=pts[pts.length-1];dir=Math.atan2(l.y-f.y,l.x-f.x)}const w=12,perp=dir+Math.PI/2;return{p1:[safeCx+Math.cos(perp)*w,safeCy+Math.sin(perp)*w],p2:[safeCx-Math.cos(perp)*w,safeCy-Math.sin(perp)*w],direction:dir}}
     _calculateBounds(cl){if(!cl||cl.length===0)return{minX:0,minY:0,maxX:100,maxY:100};let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;for(const p of cl){minX=Math.min(minX,p.x);minY=Math.min(minY,p.y);maxX=Math.max(maxX,p.x);maxY=Math.max(maxY,p.y)}return{minX,minY,maxX,maxY}}
@@ -1339,7 +1548,7 @@ async function finishTrackRecording(){
     const trackData=trackRecorder.finish(trackName,null);
     if(!trackData){alert('Failed to create track: not enough data or poor quality');return}
     $('record-overlay').classList.remove('active');
-    const track={id:trackData.id,name:trackData.name,type:trackData.type,startLine:trackData.startLine,finishLine:trackData.finishLine,origin:trackData.origin,centerline:trackData.centerline,bounds:trackData.bounds,pathLength:trackData.totalDistance||0,quality:trackData.quality,bestLapMs:null,lapCount:0,createdAt:trackData.created,isNew:true};
+    const track={id:trackData.id,name:trackData.name,type:trackData.type,startLine:trackData.startLine,finishLine:trackData.finishLine,origin:trackData.origin,centerline:trackData.centerline,bounds:trackData.bounds,pathLength:trackData.totalDistance||0,quality:trackData.quality,bestLapMs:null,lapCount:0,corners:trackData.corners||0,keyPoints:trackData.centerline?.length||trackData.keyPoints||0,createdAt:trackData.created,isNew:true};
     await saveTrack(track);await activateTrack(track);renderTrackList();
     alert('Track "'+track.name+'" saved!\\n'+track.centerline.length+' points · '+Math.round(track.pathLength||0)+'m');
 }
@@ -1775,11 +1984,128 @@ $('menu-rec').onclick=$('diag-rec').onclick=async()=>{
     if(rec)await stopRecording();else await startRecording();
 };
 $('menu-export').onclick=$('diag-export').onclick=()=>{$('menu-overlay').classList.remove('open');exportCSV()};
-$('menu-tracks').onclick=$('btn-tracks').onclick=()=>{$('menu-overlay').classList.remove('open');openTrackModal()};
+$('btn-tracks').onclick=()=>openTrackModal();
 $('track-modal-close').onclick=closeTrackModal;
 $('track-modal').onclick=e=>{if(e.target===$('track-modal'))closeTrackModal()};
 $('btn-clear-track').onclick=clearActiveTrack;
 $('menu-clear').onclick=()=>{$('menu-overlay').classList.remove('open');resetState()};
+
+// Data Modal
+function openDataModal(){$('data-modal').classList.add('open');renderDataModal()}
+function closeDataModal(){$('data-modal').classList.remove('open')}
+
+async function renderDataModal(){
+    const combined=await getCombinedStorageStats();
+    $('data-total-size').textContent=formatBytes(combined.totalBytes);
+    $('data-rec-size').textContent=formatBytes(combined.recordingsBytes);
+    $('data-track-size').textContent=formatBytes(combined.tracksBytes);
+    $('data-rec-count').textContent='('+combined.sessionCount+')';
+    $('data-track-count').textContent='('+combined.trackCount+')';
+    await renderSessionList();
+    await renderTrackDataList()
+}
+
+async function renderSessionList(){
+    const listEl=$('session-list'),clearBtn=$('btn-clear-all-recordings');
+    try{
+        const stats=await getStorageStats();
+        clearBtn.disabled=stats.sessionCount===0||rec;
+        if(stats.sessionCount===0){
+            listEl.innerHTML='<div class=\"bbSessionEmpty\"><div class=\"icon\">📊</div>No recordings yet.<br>Start recording to capture telemetry.</div>';
+            return;
+        }
+        listEl.innerHTML=stats.sessions.map(s=>{
+            const isCur=rec&&s.sessionId===sessionId;
+            const statusCls=isCur?'active':(s.status==='active'?'recovered':'complete');
+            const statusLbl=isCur?'● Recording':(s.status==='active'?'⚠ Recovered':'● Complete');
+            return'<div class=\"bbSessionItem'+(isCur?' active':'')+'\" data-session-id=\"'+s.sessionId+'\">'+
+                '<div class=\"bbSessionInfo\">'+
+                    '<div class=\"bbSessionDate\">'+formatSessionDate(s.startTime)+'</div>'+
+                    '<div class=\"bbSessionMeta\"><span>'+s.chunkCount+' chunk'+(s.chunkCount!==1?'s':'')+'</span><span>'+formatBytes(s.estimatedBytes)+'</span><span>'+formatSessionDuration(s.durationMs)+'</span></div>'+
+                    '<div class=\"bbSessionStatus '+statusCls+'\">'+statusLbl+'</div>'+
+                '</div>'+
+                '<div class=\"bbSessionActions\">'+
+                    '<button class=\"bbSessionBtn\" data-action=\"export\">Export</button>'+
+                    '<button class=\"bbSessionBtn danger\" data-action=\"delete\"'+(isCur?' disabled':'')+'>Delete</button>'+
+                '</div>'+
+            '</div>';
+        }).join('');
+        listEl.querySelectorAll('.bbSessionBtn').forEach(btn=>{btn.onclick=()=>handleSessionAction(btn)});
+    }catch(e){console.error('Failed to load sessions:',e);listEl.innerHTML='<div class=\"bbSessionEmpty\"><div class=\"icon\">⚠️</div>Error loading recordings</div>'}
+}
+
+async function renderTrackDataList(){
+    const listEl=$('track-data-list'),clearBtn=$('btn-clear-all-tracks');
+    try{
+        const stats=await getTrackDataStats();
+        clearBtn.disabled=stats.tracks.length===0;
+        if(stats.tracks.length===0){
+            listEl.innerHTML='<div class=\"bbSessionEmpty\"><div class=\"icon\">🏁</div>No tracks saved.<br>Record a track to get started.</div>';
+            return;
+        }
+        listEl.innerHTML=stats.tracks.map(t=>{
+            const hasRef=t.hasReferenceLap;
+            const refInfo=hasRef?'Best: '+formatLapTimeMs(t.referenceLapTime)+' ('+t.referenceLapSamples+' pts)':'No best lap';
+            return'<div class=\"bbTrackDataItem\" data-track-id=\"'+t.id+'\">'+
+                '<div class=\"bbTrackDataInfo\">'+
+                    '<div class=\"bbTrackDataName\">'+t.name+'</div>'+
+                    '<div class=\"bbTrackDataMeta\"><span>'+t.corners+' corners</span><span>'+t.points+' points</span><span>'+formatBytes(t.totalBytes)+'</span></div>'+
+                    '<div class=\"bbTrackDataRef '+(hasRef?'has-ref':'no-ref')+'\">'+refInfo+'</div>'+
+                '</div>'+
+                '<div class=\"bbTrackDataActions\">'+
+                    '<button class=\"bbSessionBtn\" data-action=\"clear-best\"'+(hasRef?'':' disabled')+'>Clear Best</button>'+
+                    '<button class=\"bbSessionBtn danger\" data-action=\"delete-track\">Delete</button>'+
+                '</div>'+
+            '</div>';
+        }).join('');
+        listEl.querySelectorAll('.bbSessionBtn').forEach(btn=>{btn.onclick=()=>handleTrackAction(btn)});
+    }catch(e){console.error('Failed to load tracks:',e);listEl.innerHTML='<div class=\"bbSessionEmpty\"><div class=\"icon\">⚠️</div>Error loading tracks</div>'}
+}
+
+async function handleSessionAction(btn){
+    const action=btn.dataset.action,item=btn.closest('.bbSessionItem'),targetId=parseInt(item.dataset.sessionId,10);
+    if(action==='export'){
+        try{btn.textContent='Exporting...';await exportSessionById(targetId);btn.textContent='Export'}
+        catch(e){alert('Export failed: '+e.message);btn.textContent='Export'}
+    }else if(action==='delete'){
+        const dateStr=item.querySelector('.bbSessionDate').textContent;
+        if(!confirm('Delete recording from '+dateStr+'?\\n\\nThis cannot be undone.'))return;
+        try{btn.textContent='Deleting...';await deleteSession(targetId);await renderDataModal()}
+        catch(e){alert('Delete failed: '+e.message);btn.textContent='Delete'}
+    }
+}
+
+async function handleTrackAction(btn){
+    const action=btn.dataset.action,item=btn.closest('.bbTrackDataItem'),trackId=item.dataset.trackId,trackName=item.querySelector('.bbTrackDataName').textContent;
+    if(action==='clear-best'){
+        if(!confirm('Clear best lap for \"'+trackName+'\"?\\n\\nThis cannot be undone.'))return;
+        try{btn.textContent='Clearing...';btn.disabled=true;await deleteRefLap(trackId);await renderDataModal()}
+        catch(e){alert('Clear failed: '+e.message);btn.textContent='Clear Best';btn.disabled=false}
+    }else if(action==='delete-track'){
+        if(!confirm('Delete track \"'+trackName+'\" and its best lap?\\n\\nThis cannot be undone.'))return;
+        try{btn.textContent='Deleting...';await deleteTrackWithRef(trackId);if(activeTrack&&activeTrack.id===trackId){activeTrack=null;updateActiveTrackDisplay()}await renderDataModal()}
+        catch(e){alert('Delete failed: '+e.message);btn.textContent='Delete'}
+    }
+}
+
+$('menu-data').onclick=()=>{$('menu-overlay').classList.remove('open');openDataModal()};
+$('data-modal-close').onclick=closeDataModal;
+$('data-modal').onclick=e=>{if(e.target===$('data-modal'))closeDataModal()};
+$('btn-clear-all-recordings').onclick=async()=>{
+    if(rec){alert('Cannot clear while recording. Stop recording first.');return}
+    const stats=await getStorageStats();
+    if(stats.sessionCount===0){alert('No recordings to clear.');return}
+    if(!confirm('Delete all '+stats.sessionCount+' recording'+(stats.sessionCount!==1?'s':'')+'?\\n\\nThis will free '+formatBytes(stats.totalBytes)+' of storage.\\n\\nThis cannot be undone.'))return;
+    try{$('btn-clear-all-recordings').textContent='Clearing...';$('btn-clear-all-recordings').disabled=true;await clearAllRecordings();await renderDataModal();$('btn-clear-all-recordings').textContent='Clear All Recordings'}
+    catch(e){alert('Clear failed: '+e.message);$('btn-clear-all-recordings').textContent='Clear All Recordings';$('btn-clear-all-recordings').disabled=false}
+};
+$('btn-clear-all-tracks').onclick=async()=>{
+    const stats=await getTrackDataStats();
+    if(stats.tracks.length===0){alert('No tracks to clear.');return}
+    if(!confirm('Delete all '+stats.tracks.length+' track'+(stats.tracks.length!==1?'s':'')+'?\\n\\nThis will free '+formatBytes(stats.totalBytes)+' of storage.\\n\\nThis cannot be undone.'))return;
+    try{$('btn-clear-all-tracks').textContent='Clearing...';$('btn-clear-all-tracks').disabled=true;await clearAllTracks();activeTrack=null;updateActiveTrackDisplay();await renderDataModal();$('btn-clear-all-tracks').textContent='Clear All Tracks'}
+    catch(e){alert('Clear failed: '+e.message);$('btn-clear-all-tracks').textContent='Clear All Tracks';$('btn-clear-all-tracks').disabled=false}
+};
 
 // Init
 setInterval(()=>{

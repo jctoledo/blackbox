@@ -1213,6 +1213,204 @@ body{
     color:var(--text-tertiary);
     margin-top:2px;
 }
+
+/* DATA MANAGEMENT MODAL */
+.bbStorageOverview{
+    background:var(--bg);
+    border-radius:12px;
+    padding:16px;
+    margin-bottom:20px;
+}
+.bbStorageTotal{
+    text-align:center;
+    padding-bottom:12px;
+    border-bottom:1px solid var(--divider);
+    margin-bottom:12px;
+}
+.bbStorageLabel{
+    font-size:11px;
+    color:var(--text-tertiary);
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+}
+.bbStorageValue{
+    font-size:28px;
+    font-weight:700;
+    margin-top:4px;
+}
+.bbStorageBreakdown{
+    display:flex;
+    justify-content:space-around;
+}
+.bbStorageItem{
+    text-align:center;
+}
+.bbStorageItemLabel{
+    font-size:11px;
+    color:var(--text-tertiary);
+    display:block;
+}
+.bbStorageItemValue{
+    font-size:14px;
+    font-weight:600;
+    margin-top:2px;
+}
+.bbSectionCount{
+    font-weight:400;
+    color:var(--text-tertiary);
+    font-size:11px;
+}
+.bbSessionList{
+    border-radius:12px;
+    overflow:hidden;
+    background:var(--bg);
+    max-height:calc(100vh - 350px);
+    overflow-y:auto;
+}
+.bbSessionEmpty{
+    padding:30px 20px;
+    text-align:center;
+    color:var(--text-tertiary);
+    font-size:13px;
+}
+.bbSessionEmpty .icon{
+    font-size:32px;
+    margin-bottom:10px;
+    opacity:0.4;
+}
+.bbSessionItem{
+    padding:14px 16px;
+    border-bottom:1px solid var(--divider);
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:12px;
+}
+.bbSessionItem:last-child{border-bottom:none}
+.bbSessionItem.active{
+    background:rgba(52,199,89,0.08);
+}
+.bbSessionInfo{flex:1;min-width:0}
+.bbSessionDate{
+    font-size:14px;
+    font-weight:600;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+}
+.bbSessionMeta{
+    font-size:11px;
+    color:var(--text-tertiary);
+    margin-top:3px;
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+}
+.bbSessionStatus{
+    font-size:10px;
+    font-weight:600;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    margin-top:4px;
+}
+.bbSessionStatus.complete{color:var(--ok)}
+.bbSessionStatus.active{color:var(--amber)}
+.bbSessionStatus.recovered{color:var(--amber)}
+.bbSessionActions{
+    display:flex;
+    gap:8px;
+    flex-shrink:0;
+}
+.bbSessionBtn{
+    background:var(--surface);
+    border:none;
+    border-radius:6px;
+    padding:8px 14px;
+    font-size:12px;
+    font-weight:600;
+    color:var(--text);
+    cursor:pointer;
+    font-family:inherit;
+    transition:opacity 0.15s, background 0.15s;
+}
+.bbSessionBtn:active{opacity:0.7}
+.bbSessionBtn:disabled{
+    opacity:0.4;
+    cursor:not-allowed;
+}
+.bbSessionBtn.danger{color:var(--red)}
+.bbSessionBtn.exporting,.bbSessionBtn.deleting{
+    pointer-events:none;
+    opacity:0.6;
+}
+.bbClearAllBtn{
+    display:block;
+    width:100%;
+    padding:14px 18px;
+    margin-top:16px;
+    border:none;
+    border-radius:12px;
+    font-size:14px;
+    font-weight:600;
+    cursor:pointer;
+    font-family:inherit;
+    background:var(--bg);
+    color:var(--red);
+    transition:opacity 0.15s;
+}
+.bbClearAllBtn:active{opacity:0.7}
+.bbClearAllBtn:disabled{
+    opacity:0.4;
+    cursor:not-allowed;
+}
+.bbTrackDataList{
+    border-radius:12px;
+    overflow:hidden;
+    background:var(--bg);
+    max-height:250px;
+    overflow-y:auto;
+}
+.bbTrackDataItem{
+    padding:14px 16px;
+    border-bottom:1px solid var(--divider);
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:12px;
+}
+.bbTrackDataItem:last-child{border-bottom:none}
+.bbTrackDataInfo{flex:1;min-width:0}
+.bbTrackDataName{
+    font-size:14px;
+    font-weight:600;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+}
+.bbTrackDataMeta{
+    font-size:11px;
+    color:var(--text-tertiary);
+    margin-top:3px;
+    display:flex;
+    gap:8px;
+}
+.bbTrackDataRef{
+    margin-top:6px;
+    font-size:12px;
+}
+.bbTrackDataRef.has-ref{
+    color:var(--ok);
+    font-weight:500;
+}
+.bbTrackDataRef.no-ref{
+    color:var(--text-tertiary);
+    font-style:italic;
+}
+.bbTrackDataActions{
+    display:flex;
+    gap:8px;
+    flex-shrink:0;
+}
 </style></head>
 <body>
 
@@ -1341,7 +1539,7 @@ body{
 
 <div class="bbMenuOverlay" id="menu-overlay">
     <div class="bbMenuPanel">
-        <button class="bbMenuItem" id="menu-tracks">Tracks</button>
+        <button class="bbMenuItem" id="menu-data">Data</button>
         <button class="bbMenuItem" id="menu-load">Load CSV</button>
         <button class="bbMenuItem" id="menu-sim">Back to Sim</button>
         <button class="bbMenuItem" id="menu-rec">Start Recording</button>
@@ -1412,6 +1610,59 @@ body{
                 <div class="bbTrackList" id="track-list">
                     <div class="bbTrackEmpty">No saved tracks yet</div>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Data Management Modal -->
+<div class="bbModal" id="data-modal">
+    <div class="bbModalContent">
+        <div class="bbModalHeader">
+            <span class="bbModalTitle">Data</span>
+            <button class="bbModalClose" id="data-modal-close">&times;</button>
+        </div>
+        <div class="bbModalBody">
+            <!-- Storage Overview -->
+            <div class="bbStorageOverview">
+                <div class="bbStorageTotal">
+                    <div class="bbStorageLabel">Total Storage</div>
+                    <div class="bbStorageValue" id="data-total-size">—</div>
+                </div>
+                <div class="bbStorageBreakdown">
+                    <div class="bbStorageItem">
+                        <span class="bbStorageItemLabel">Recordings</span>
+                        <span class="bbStorageItemValue" id="data-rec-size">—</span>
+                    </div>
+                    <div class="bbStorageItem">
+                        <span class="bbStorageItemLabel">Tracks</span>
+                        <span class="bbStorageItemValue" id="data-track-size">—</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recordings Section -->
+            <div class="bbModalSection">
+                <div class="bbSectionTitle">Recordings <span class="bbSectionCount" id="data-rec-count"></span></div>
+                <div class="bbSessionList" id="session-list">
+                    <div class="bbSessionEmpty">
+                        <div class="icon">📊</div>
+                        Loading...
+                    </div>
+                </div>
+                <button class="bbClearAllBtn" id="btn-clear-all-recordings">Clear All Recordings</button>
+            </div>
+
+            <!-- Tracks & Reference Laps Section -->
+            <div class="bbModalSection">
+                <div class="bbSectionTitle">Tracks & Best Laps <span class="bbSectionCount" id="data-track-count"></span></div>
+                <div class="bbTrackDataList" id="track-data-list">
+                    <div class="bbSessionEmpty">
+                        <div class="icon">🏁</div>
+                        Loading...
+                    </div>
+                </div>
+                <button class="bbClearAllBtn" id="btn-clear-all-tracks">Clear All Tracks</button>
             </div>
         </div>
     </div>
@@ -2014,7 +2265,7 @@ function seekCSV(pct) {
 }
 
 // IndexedDB Recording (matches production)
-const DB_NAME = 'blackbox-rec', DB_VERSION = 1, CHUNK_INTERVAL = 60000;
+const DB_NAME = 'blackbox-rec', DB_VERSION = 2, CHUNK_INTERVAL = 60000;
 let db = null, sessionId = null, chunkBuffer = [], chunkIndex = 0, lastSaveTime = 0, recSessionStart = 0;
 
 function openDB() {
@@ -2024,11 +2275,24 @@ function openDB() {
         req.onsuccess = () => { db = req.result; resolve(db); };
         req.onupgradeneeded = (e) => {
             const d = e.target.result;
+            const tx = e.target.transaction;
+            const oldVersion = e.oldVersion;
+
+            // Version 1: Create base stores
             if (!d.objectStoreNames.contains('chunks')) {
-                d.createObjectStore('chunks', { keyPath: ['sessionId', 'chunkIndex'] });
+                const chunksStore = d.createObjectStore('chunks', { keyPath: ['sessionId', 'chunkIndex'] });
+                chunksStore.createIndex('sessionId', 'sessionId', { unique: false });
             }
             if (!d.objectStoreNames.contains('sessions')) {
                 d.createObjectStore('sessions', { keyPath: 'sessionId' });
+            }
+
+            // Version 2: Add sessionId index if upgrading from v1
+            if (oldVersion >= 1 && oldVersion < 2) {
+                const chunksStore = tx.objectStore('chunks');
+                if (!chunksStore.indexNames.contains('sessionId')) {
+                    chunksStore.createIndex('sessionId', 'sessionId', { unique: false });
+                }
             }
         };
     });
@@ -2082,6 +2346,254 @@ async function exportCSV() {
     const blob = new Blob([csv], { type: 'text/csv' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
     a.download = 'blackbox_' + new Date(latest.sessionId).toISOString().slice(0, 19).replace(/[T:]/g, '-') + '.csv'; a.click();
+}
+
+// ========== DATA MANAGEMENT FUNCTIONS ==========
+
+// Helper: wrap IndexedDB request in Promise
+function idbPromise(request) {
+    return new Promise((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+}
+
+// Get all sessions with computed statistics
+async function getAllSessions() {
+    if (!db) await openDB();
+
+    const tx = db.transaction(['sessions', 'chunks'], 'readonly');
+    const sessions = await idbPromise(tx.objectStore('sessions').getAll());
+    const allChunks = await idbPromise(tx.objectStore('chunks').getAll());
+
+    // Build a map of sessionId -> chunk stats
+    const chunksBySession = new Map();
+    for (const chunk of allChunks) {
+        if (!chunksBySession.has(chunk.sessionId)) {
+            chunksBySession.set(chunk.sessionId, { count: 0, samples: 0 });
+        }
+        const stats = chunksBySession.get(chunk.sessionId);
+        stats.count++;
+        stats.samples += chunk.data?.length || 0;
+    }
+
+    // Enrich sessions with computed stats
+    const enriched = sessions.map(s => {
+        const chunkStats = chunksBySession.get(s.sessionId) || { count: 0, samples: 0 };
+        const durationMs = chunkStats.samples * 50; // 20 Hz = 50ms per sample
+        return {
+            sessionId: s.sessionId,
+            startTime: s.startTime || s.sessionId,
+            status: s.status,
+            chunkCount: chunkStats.count,
+            sampleCount: chunkStats.samples,
+            durationMs: durationMs,
+            estimatedBytes: chunkStats.samples * 50 // ~50 bytes per sample
+        };
+    });
+
+    // Sort by sessionId descending (newest first)
+    enriched.sort((a, b) => b.sessionId - a.sessionId);
+    return enriched;
+}
+
+// Get aggregate storage statistics
+async function getStorageStats() {
+    const sessions = await getAllSessions();
+    const totalBytes = sessions.reduce((sum, s) => sum + s.estimatedBytes, 0);
+    const totalSamples = sessions.reduce((sum, s) => sum + s.sampleCount, 0);
+
+    return {
+        sessionCount: sessions.length,
+        totalBytes,
+        totalSamples,
+        sessions
+    };
+}
+
+// Delete a single session and all its chunks
+async function deleteSession(targetSessionId) {
+    if (!db) await openDB();
+
+    // Prevent deletion of currently active recording
+    if (rec && targetSessionId === sessionId) {
+        throw new Error('Cannot delete active recording');
+    }
+
+    const tx = db.transaction(['sessions', 'chunks'], 'readwrite');
+
+    // Use sessionId index to find and delete chunks efficiently
+    const chunksStore = tx.objectStore('chunks');
+    const index = chunksStore.index('sessionId');
+    const range = IDBKeyRange.only(targetSessionId);
+
+    // Open cursor on index and delete each matching chunk
+    await new Promise((resolve, reject) => {
+        const cursorReq = index.openCursor(range);
+        cursorReq.onerror = () => reject(cursorReq.error);
+        cursorReq.onsuccess = (e) => {
+            const cursor = e.target.result;
+            if (cursor) {
+                cursor.delete();
+                cursor.continue();
+            } else {
+                resolve();
+            }
+        };
+    });
+
+    // Delete the session record
+    await idbPromise(tx.objectStore('sessions').delete(targetSessionId));
+
+    // Wait for transaction to complete
+    await new Promise((resolve, reject) => {
+        tx.oncomplete = resolve;
+        tx.onerror = () => reject(tx.error);
+    });
+}
+
+// Export a specific session by ID
+async function exportSessionById(targetSessionId) {
+    if (!db) await openDB();
+
+    // If exporting active session, flush buffer first
+    if (rec && targetSessionId === sessionId && chunkBuffer.length > 0) {
+        await saveChunk();
+    }
+
+    const tx = db.transaction(['sessions', 'chunks'], 'readonly');
+    const session = await idbPromise(tx.objectStore('sessions').get(targetSessionId));
+
+    if (!session) {
+        throw new Error('Session not found');
+    }
+
+    // Get chunks using sessionId index
+    const index = tx.objectStore('chunks').index('sessionId');
+    const chunks = await idbPromise(index.getAll(targetSessionId));
+    chunks.sort((a, b) => a.chunkIndex - b.chunkIndex);
+
+    if (!chunks.length) {
+        throw new Error('No data in recording');
+    }
+
+    // Reassemble all data
+    let allData = [];
+    chunks.forEach(c => allData = allData.concat(c.data || []));
+
+    // Build CSV with all columns
+    let csv = 'time,speed,ax,ay,wz,mode,lat_g,lon_g,gps_lat,gps_lon,gps_valid,pos_x,pos_y\n';
+    allData.forEach(r => {
+        csv += [
+            r.t, r.sp, r.ax, r.ay, r.wz, r.mo,
+            r.latg, r.lng, r.lat || 0, r.lon || 0,
+            r.gpsOk || 0, r.px || 0, r.py || 0
+        ].join(',') + '\n';
+    });
+
+    // Create and download file
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'blackbox_' + new Date(targetSessionId).toISOString().slice(0, 19).replace(/[T:]/g, '-') + '.csv';
+    a.click();
+
+    return { session, sampleCount: allData.length };
+}
+
+// Clear all recordings (sessions and chunks)
+async function clearAllRecordings() {
+    if (rec) {
+        throw new Error('Cannot clear while recording is active');
+    }
+    if (!db) await openDB();
+
+    const tx = db.transaction(['sessions', 'chunks'], 'readwrite');
+    await idbPromise(tx.objectStore('sessions').clear());
+    await idbPromise(tx.objectStore('chunks').clear());
+
+    // Wait for transaction to complete
+    await new Promise((resolve, reject) => {
+        tx.oncomplete = resolve;
+        tx.onerror = () => reject(tx.error);
+    });
+}
+
+// Cleanup orphaned chunks (chunks with no matching session)
+async function cleanupOrphanedChunks() {
+    if (!db) await openDB();
+
+    const tx = db.transaction(['sessions', 'chunks'], 'readwrite');
+    const sessions = await idbPromise(tx.objectStore('sessions').getAll());
+    const sessionIds = new Set(sessions.map(s => s.sessionId));
+
+    const chunks = await idbPromise(tx.objectStore('chunks').getAll());
+    let orphanCount = 0;
+
+    for (const chunk of chunks) {
+        if (!sessionIds.has(chunk.sessionId)) {
+            tx.objectStore('chunks').delete([chunk.sessionId, chunk.chunkIndex]);
+            orphanCount++;
+        }
+    }
+
+    await new Promise((resolve, reject) => {
+        tx.oncomplete = resolve;
+        tx.onerror = () => reject(tx.error);
+    });
+
+    return orphanCount;
+}
+
+// Format bytes for display
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+// Format date for display
+function formatSessionDate(timestamp) {
+    const d = new Date(timestamp);
+    const now = new Date();
+    const isToday = d.toDateString() === now.toDateString();
+    const isYesterday = d.toDateString() === new Date(now - 86400000).toDateString();
+
+    const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
+    if (isToday) return `Today ${time}`;
+    if (isYesterday) return `Yesterday ${time}`;
+
+    return d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) + ' ' + time;
+}
+
+// Format duration for session display (hours/minutes/seconds)
+function formatSessionDuration(ms) {
+    const totalSec = Math.floor(ms / 1000);
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+
+    if (h > 0) return `${h}h ${m}m`;
+    if (m > 0) return `${m}m ${s}s`;
+    return `${s}s`;
+}
+
+// Format lap time (mm:ss.xxx)
+function formatLapTimeMs(ms) {
+    if (!ms || ms <= 0) return '—:——';
+    const totalSec = ms / 1000;
+    const min = Math.floor(totalSec / 60);
+    const sec = totalSec % 60;
+    return `${min}:${sec.toFixed(3).padStart(6, '0')}`;
+}
+
+// Estimate object size in bytes (rough approximation)
+function estimateObjectSize(obj) {
+    const str = JSON.stringify(obj);
+    return str ? str.length * 2 : 0; // UTF-16 characters = 2 bytes each
 }
 
 // ========== TRACK DATABASE (IndexedDB) ==========
@@ -2207,6 +2719,147 @@ async function deleteReferenceLap(trackId) {
         };
         req.onerror = () => reject(req.error);
     });
+}
+
+// ========== TRACK DATA MANAGEMENT ==========
+
+// Get all tracks with their reference lap info for data management
+async function getTrackDataStats() {
+    if (!trackDb) await openTrackDB();
+
+    const tx = trackDb.transaction(['tracks', 'reference_laps'], 'readonly');
+    const tracks = await new Promise((res, rej) => {
+        const req = tx.objectStore('tracks').getAll();
+        req.onsuccess = () => res(req.result || []);
+        req.onerror = () => rej(req.error);
+    });
+    const refLaps = await new Promise((res, rej) => {
+        const req = tx.objectStore('reference_laps').getAll();
+        req.onsuccess = () => res(req.result || []);
+        req.onerror = () => rej(req.error);
+    });
+
+    // Map reference laps by trackId
+    const refLapByTrack = new Map();
+    for (const ref of refLaps) {
+        refLapByTrack.set(ref.trackId, ref);
+    }
+
+    // Calculate storage for each track
+    let totalTrackBytes = 0;
+    let totalRefBytes = 0;
+
+    const trackData = tracks.map(track => {
+        const trackBytes = estimateObjectSize(track);
+        totalTrackBytes += trackBytes;
+
+        const refLap = refLapByTrack.get(track.id);
+        let refBytes = 0;
+        if (refLap) {
+            refBytes = estimateObjectSize(refLap);
+            // Account for ArrayBuffer in samples
+            if (refLap.samples instanceof ArrayBuffer) {
+                refBytes += refLap.samples.byteLength;
+            }
+            totalRefBytes += refBytes;
+        }
+
+        // Handle corners: can be a number (new) or array (legacy) or undefined
+        const corners = typeof track.corners === 'number' ? track.corners :
+                        (Array.isArray(track.corners) ? track.corners.length : 0);
+        // Handle points: use keyPoints if number, centerline length as fallback
+        const points = typeof track.keyPoints === 'number' ? track.keyPoints :
+                       (track.centerline?.length || 0);
+
+        return {
+            id: track.id,
+            name: track.name,
+            type: track.type,
+            corners: corners,
+            points: points,
+            created: track.created,
+            modified: track.modified,
+            bestLapMs: track.bestLapMs,
+            lapCount: track.lapCount || 0,
+            trackBytes,
+            hasReferenceLap: !!refLap,
+            referenceLapTime: refLap ? refLap.lapTimeMs : 0,
+            referenceLapSamples: refLap?.samples?.length || (refLap?.sampleCount || 0),
+            refBytes,
+            totalBytes: trackBytes + refBytes
+        };
+    });
+
+    // Sort by most recently modified
+    trackData.sort((a, b) => (b.modified || 0) - (a.modified || 0));
+
+    return {
+        trackCount: tracks.length,
+        totalTrackBytes,
+        totalRefBytes,
+        totalBytes: totalTrackBytes + totalRefBytes,
+        tracks: trackData
+    };
+}
+
+// Get combined storage stats for recordings + tracks
+async function getCombinedStorageStats() {
+    const recStats = await getStorageStats();
+    const trackStats = await getTrackDataStats();
+
+    return {
+        totalBytes: recStats.totalBytes + trackStats.totalBytes,
+        recordingsBytes: recStats.totalBytes,
+        tracksBytes: trackStats.totalBytes,
+        sessionCount: recStats.sessionCount,
+        trackCount: trackStats.tracks.length
+    };
+}
+
+// Delete a track and its reference lap
+async function deleteTrackWithRef(trackId) {
+    // First delete reference lap if exists
+    try {
+        await deleteReferenceLap(trackId);
+    } catch (e) {
+        console.warn('No reference lap to delete for track:', trackId);
+    }
+
+    // Then delete the track
+    await deleteTrack(trackId);
+
+    // Clear active track if it was the deleted one
+    if (activeTrack && activeTrack.id === trackId) {
+        activeTrack = null;
+        referenceLap = null;
+    }
+}
+
+// Clear all tracks and reference laps
+async function clearAllTracks() {
+    if (!trackDb) await openTrackDB();
+
+    const tx = trackDb.transaction(['tracks', 'reference_laps'], 'readwrite');
+    await new Promise((res, rej) => {
+        const req = tx.objectStore('tracks').clear();
+        req.onsuccess = () => res();
+        req.onerror = () => rej(req.error);
+    });
+    await new Promise((res, rej) => {
+        const req = tx.objectStore('reference_laps').clear();
+        req.onsuccess = () => res();
+        req.onerror = () => rej(req.error);
+    });
+
+    // Wait for transaction to complete
+    await new Promise((res, rej) => {
+        tx.oncomplete = res;
+        tx.onerror = () => rej(tx.error);
+    });
+
+    // Clear active track state
+    activeTrack = null;
+    referenceLap = null;
 }
 
 // ========== LAP TRACKER (Distance + Delta) ==========
@@ -2920,6 +3573,8 @@ class TrackRecorder {
             // Statistics
             bestLapMs: null,
             lapCount: 0,
+            corners: this.cornerCount,
+            keyPoints: this.keyPoints.length,
 
             // Learning state
             learningEnabled: true,
@@ -3433,6 +4088,8 @@ async function saveRecordedTrack(trackData) {
         quality: trackData.quality,
         bestLapMs: null,
         lapCount: 0,
+        corners: trackData.corners || 0,
+        keyPoints: trackData.centerline?.length || trackData.keyPoints || 0,
         createdAt: trackData.createdAt,
         isNew: true  // For P2P warmup - clears after first run
     };
@@ -4838,12 +5495,6 @@ $('btn-open-tracks').onclick = () => {
     openTrackModal();
 };
 
-// Open track manager from menu
-$('menu-tracks').onclick = () => {
-    $('menu-overlay').classList.remove('open');
-    openTrackModal();
-};
-
 // Track modal close button
 $('track-modal-close').onclick = closeTrackModal;
 
@@ -4854,6 +5505,316 @@ $('track-modal').onclick = (e) => {
 
 // Clear active track button
 $('btn-clear-track').onclick = clearActiveTrack;
+
+// ========== DATA MODAL ==========
+
+function openDataModal() {
+    $('data-modal').classList.add('open');
+    renderDataModal();
+}
+
+function closeDataModal() {
+    $('data-modal').classList.remove('open');
+}
+
+async function renderDataModal() {
+    // Fetch combined stats
+    const combined = await getCombinedStorageStats();
+
+    // Update storage overview
+    $('data-total-size').textContent = formatBytes(combined.totalBytes);
+    $('data-rec-size').textContent = formatBytes(combined.recordingsBytes);
+    $('data-track-size').textContent = formatBytes(combined.tracksBytes);
+    $('data-rec-count').textContent = `(${combined.sessionCount})`;
+    $('data-track-count').textContent = `(${combined.trackCount})`;
+
+    // Render both lists
+    await renderSessionList();
+    await renderTrackDataList();
+}
+
+async function renderSessionList() {
+    const listEl = $('session-list');
+    const clearBtn = $('btn-clear-all-recordings');
+
+    try {
+        const stats = await getStorageStats();
+
+        // Enable/disable clear button
+        clearBtn.disabled = stats.sessionCount === 0 || rec;
+
+        if (stats.sessionCount === 0) {
+            listEl.innerHTML = `
+                <div class="bbSessionEmpty">
+                    <div class="icon">📊</div>
+                    No recordings yet.<br>Start recording to capture telemetry data.
+                </div>
+            `;
+            return;
+        }
+
+        // Render session list
+        listEl.innerHTML = stats.sessions.map(session => {
+            const isCurrentRecording = rec && session.sessionId === sessionId;
+            const statusClass = isCurrentRecording ? 'active' : (session.status === 'active' ? 'recovered' : 'complete');
+            const statusLabel = isCurrentRecording ? '● Recording' : (session.status === 'active' ? '⚠ Recovered' : '● Complete');
+
+            return `
+                <div class="bbSessionItem ${isCurrentRecording ? 'active' : ''}" data-session-id="${session.sessionId}">
+                    <div class="bbSessionInfo">
+                        <div class="bbSessionDate">${formatSessionDate(session.startTime)}</div>
+                        <div class="bbSessionMeta">
+                            <span>${session.chunkCount} chunk${session.chunkCount !== 1 ? 's' : ''}</span>
+                            <span>${formatBytes(session.estimatedBytes)}</span>
+                            <span>${formatSessionDuration(session.durationMs)}</span>
+                        </div>
+                        <div class="bbSessionStatus ${statusClass}">${statusLabel}</div>
+                    </div>
+                    <div class="bbSessionActions">
+                        <button class="bbSessionBtn" data-action="export">Export</button>
+                        <button class="bbSessionBtn danger" data-action="delete" ${isCurrentRecording ? 'disabled' : ''}>Delete</button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        // Add event listeners using delegation
+        listEl.querySelectorAll('.bbSessionBtn').forEach(btn => {
+            btn.onclick = () => handleSessionAction(btn);
+        });
+
+    } catch (e) {
+        console.error('Failed to load sessions:', e);
+        listEl.innerHTML = `
+            <div class="bbSessionEmpty">
+                <div class="icon">⚠️</div>
+                Error loading recordings
+            </div>
+        `;
+    }
+}
+
+async function renderTrackDataList() {
+    const listEl = $('track-data-list');
+    const clearBtn = $('btn-clear-all-tracks');
+
+    try {
+        const stats = await getTrackDataStats();
+
+        // Enable/disable clear button
+        clearBtn.disabled = stats.tracks.length === 0;
+
+        if (stats.tracks.length === 0) {
+            listEl.innerHTML = `
+                <div class="bbSessionEmpty">
+                    <div class="icon">🏁</div>
+                    No tracks saved.<br>Record a track to get started.
+                </div>
+            `;
+            return;
+        }
+
+        // Render track list
+        listEl.innerHTML = stats.tracks.map(track => {
+            const hasRef = track.hasReferenceLap;
+            const refInfo = hasRef ?
+                `Best: ${formatLapTimeMs(track.referenceLapTime)} (${track.referenceLapSamples} pts)` :
+                'No best lap';
+
+            return `
+                <div class="bbTrackDataItem" data-track-id="${track.id}">
+                    <div class="bbTrackDataInfo">
+                        <div class="bbTrackDataName">${track.name}</div>
+                        <div class="bbTrackDataMeta">
+                            <span>${track.corners} corners</span>
+                            <span>${track.points} points</span>
+                            <span>${formatBytes(track.totalBytes)}</span>
+                        </div>
+                        <div class="bbTrackDataRef ${hasRef ? 'has-ref' : 'no-ref'}">${refInfo}</div>
+                    </div>
+                    <div class="bbTrackDataActions">
+                        <button class="bbSessionBtn" data-action="clear-best" ${!hasRef ? 'disabled' : ''}>Clear Best</button>
+                        <button class="bbSessionBtn danger" data-action="delete-track">Delete</button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        // Add event listeners
+        listEl.querySelectorAll('.bbSessionBtn').forEach(btn => {
+            btn.onclick = () => handleTrackAction(btn);
+        });
+
+    } catch (e) {
+        console.error('Failed to load tracks:', e);
+        listEl.innerHTML = `
+            <div class="bbSessionEmpty">
+                <div class="icon">⚠️</div>
+                Error loading tracks
+            </div>
+        `;
+    }
+}
+
+async function handleSessionAction(btn) {
+    const action = btn.dataset.action;
+    const item = btn.closest('.bbSessionItem');
+    const targetSessionId = parseInt(item.dataset.sessionId, 10);
+
+    if (action === 'export') {
+        try {
+            btn.textContent = 'Exporting...';
+            btn.classList.add('exporting');
+            await exportSessionById(targetSessionId);
+            btn.textContent = 'Export';
+            btn.classList.remove('exporting');
+        } catch (err) {
+            alert('Export failed: ' + err.message);
+            btn.textContent = 'Export';
+            btn.classList.remove('exporting');
+        }
+    } else if (action === 'delete') {
+        const dateStr = item.querySelector('.bbSessionDate').textContent;
+        if (!confirm(`Delete recording from ${dateStr}?\n\nThis cannot be undone.`)) return;
+
+        try {
+            btn.textContent = 'Deleting...';
+            btn.classList.add('deleting');
+            await deleteSession(targetSessionId);
+            await renderDataModal();
+        } catch (err) {
+            alert('Delete failed: ' + err.message);
+            btn.textContent = 'Delete';
+            btn.classList.remove('deleting');
+        }
+    }
+}
+
+async function handleTrackAction(btn) {
+    const action = btn.dataset.action;
+    const item = btn.closest('.bbTrackDataItem');
+    const trackId = item.dataset.trackId;
+    const trackName = item.querySelector('.bbTrackDataName').textContent;
+
+    if (action === 'clear-best') {
+        if (!confirm(`Clear best lap for "${trackName}"?\n\nThis cannot be undone.`)) return;
+
+        try {
+            btn.textContent = 'Clearing...';
+            btn.disabled = true;
+            await deleteReferenceLap(trackId);
+            await renderDataModal();
+        } catch (err) {
+            alert('Clear failed: ' + err.message);
+            btn.textContent = 'Clear Best';
+            btn.disabled = false;
+        }
+    } else if (action === 'delete-track') {
+        if (!confirm(`Delete track "${trackName}" and its best lap?\n\nThis cannot be undone.`)) return;
+
+        try {
+            btn.textContent = 'Deleting...';
+            btn.classList.add('deleting');
+            await deleteTrackWithRef(trackId);
+            // If this was the active track, clear it
+            if (activeTrack && activeTrack.id === trackId) {
+                activeTrack = null;
+                lapTimerState = 'idle';
+                updateActiveTrackDisplay();
+            }
+            await renderDataModal();
+        } catch (err) {
+            alert('Delete failed: ' + err.message);
+            btn.textContent = 'Delete';
+            btn.classList.remove('deleting');
+        }
+    }
+}
+
+// Menu: Open data modal
+$('menu-data').onclick = () => {
+    $('menu-overlay').classList.remove('open');
+    openDataModal();
+};
+
+// Data modal close button
+$('data-modal-close').onclick = closeDataModal;
+
+// Close data modal when clicking outside
+$('data-modal').onclick = (e) => {
+    if (e.target === $('data-modal')) closeDataModal();
+};
+
+// Clear all recordings button
+$('btn-clear-all-recordings').onclick = async () => {
+    if (rec) {
+        alert('Cannot clear recordings while recording is active. Stop recording first.');
+        return;
+    }
+
+    const stats = await getStorageStats();
+    if (stats.sessionCount === 0) {
+        alert('No recordings to clear.');
+        return;
+    }
+
+    const confirmed = confirm(
+        `Delete all ${stats.sessionCount} recording${stats.sessionCount !== 1 ? 's' : ''}?\n\n` +
+        `This will free ${formatBytes(stats.totalBytes)} of storage.\n\n` +
+        `This cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+        const btn = $('btn-clear-all-recordings');
+        btn.textContent = 'Clearing...';
+        btn.disabled = true;
+        await clearAllRecordings();
+        await renderDataModal();
+        btn.textContent = 'Clear All Recordings';
+    } catch (err) {
+        alert('Clear failed: ' + err.message);
+        const btn = $('btn-clear-all-recordings');
+        btn.textContent = 'Clear All Recordings';
+        btn.disabled = false;
+    }
+};
+
+// Clear all tracks button
+$('btn-clear-all-tracks').onclick = async () => {
+    const stats = await getTrackDataStats();
+    if (stats.tracks.length === 0) {
+        alert('No tracks to clear.');
+        return;
+    }
+
+    const confirmed = confirm(
+        `Delete all ${stats.tracks.length} track${stats.tracks.length !== 1 ? 's' : ''} and their best laps?\n\n` +
+        `This will free ${formatBytes(stats.totalBytes)} of storage.\n\n` +
+        `This cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+        const btn = $('btn-clear-all-tracks');
+        btn.textContent = 'Clearing...';
+        btn.disabled = true;
+        await clearAllTracks();
+        // Clear active track if it was deleted
+        activeTrack = null;
+        lapTimerState = 'idle';
+        updateActiveTrackDisplay();
+        await renderDataModal();
+        btn.textContent = 'Clear All Tracks';
+    } catch (err) {
+        alert('Clear failed: ' + err.message);
+        const btn = $('btn-clear-all-tracks');
+        btn.textContent = 'Clear All Tracks';
+        btn.disabled = false;
+    }
+};
 
 // Initialize
 setTimeout(() => { resize(); drawG(); }, 50);

@@ -49,7 +49,7 @@ Delta is THE killer feature - now implemented!
 | 1-7 | Core Timing, UI, Track Recording | ✅ COMPLETE | - |
 | 8 | Reference Lap & Predictive Delta | ✅ COMPLETE | - |
 | 8B | Delta Bar UX Polish | ✅ COMPLETE | - |
-| 9 | Data Management & Cleanup | ❌ NOT STARTED | HIGH |
+| 9 | Data Management & Cleanup | ✅ COMPLETE | - |
 | 10 | Session History | ❌ NOT STARTED | MEDIUM |
 | 11 | Track Auto-Detection | ❌ NOT STARTED | LOW |
 | 12 | Track Learning | ❌ NOT STARTED | LOW |
@@ -329,7 +329,7 @@ Track delta over last 3-5 seconds. If delta is decreasing (gaining time), show �
 
 ---
 
-## Phase 9: Data Management & Cleanup ❌
+## Phase 9: Data Management & Cleanup ✅
 
 ### The Problem
 
@@ -341,30 +341,43 @@ The `blackbox-rec` database stores telemetry recording sessions. Currently:
 
 ### Solution
 
-**New UI: Data Management Section**
+**New UI: Unified Data Modal**
 
-Add to hamburger menu or diagnostics page:
+Accessible via "Data" menu item in hamburger menu:
 
 ```
-┌─────────────────────────────┐
-│ 📊 Data Management          │
-├─────────────────────────────┤
-│ Storage: 12.3 MB used       │
-├─────────────────────────────┤
-│ Recordings                  │
-│ ┌─────────────────────────┐ │
-│ │ Today 2:34 PM    4.2 MB │ │
-│ │ [Export] [Delete]       │ │
-│ ├─────────────────────────┤ │
-│ │ Yesterday 6:12 PM 2.1 MB│ │
-│ │ [Export] [Delete]       │ │
-│ └─────────────────────────┘ │
-│                             │
-│ [Clear All Recordings]      │
-├─────────────────────────────┤
-│ Tracks: 3 saved (0.5 MB)    │
-│ (Manage in Tracks modal)    │
-└─────────────────────────────┘
+┌─────────────────────────────────────┐
+│ Data                            [×] │
+├─────────────────────────────────────┤
+│ Total Storage: 15.8 MB              │
+│   Recordings: 12.3 MB | Tracks: 3.5 MB │
+├─────────────────────────────────────┤
+│ Recordings (5)                      │
+│ ┌─────────────────────────────────┐ │
+│ │ Today 2:34 PM                   │ │
+│ │ 12 chunks • 4.2 MB • 45m        │ │
+│ │ ● Complete     [Export][Delete] │ │
+│ ├─────────────────────────────────┤ │
+│ │ Yesterday 6:12 PM               │ │
+│ │ 8 chunks • 2.1 MB • 28m         │ │
+│ │ ● Complete     [Export][Delete] │ │
+│ └─────────────────────────────────┘ │
+│ [Clear All Recordings]              │
+├─────────────────────────────────────┤
+│ Tracks & Best Laps (3)              │
+│ ┌─────────────────────────────────┐ │
+│ │ Thunderhill East                │ │
+│ │ 12 corners • 156 pts • 1.2 MB   │ │
+│ │ Best: 1:42.354 (892 pts)        │ │
+│ │         [Clear Best] [Delete]   │ │
+│ ├─────────────────────────────────┤ │
+│ │ Streets of Willow               │ │
+│ │ 8 corners • 98 pts • 0.8 MB     │ │
+│ │ No best lap                     │ │
+│ │         [Clear Best] [Delete]   │ │
+│ └─────────────────────────────────┘ │
+│ [Clear All Tracks]                  │
+└─────────────────────────────────────┘
 ```
 
 ### Implementation
@@ -457,6 +470,40 @@ if (oldVersion < 2) {
 1. **Delete while recording**: Prevent deletion of active session
 2. **Orphaned chunks**: Clean up chunks with no matching session
 3. **Storage quota**: Handle QuotaExceededError gracefully
+
+### Implementation Summary (Completed)
+
+**Unified Data Modal** - Renamed from "Recordings" to "Data" with expanded scope:
+
+1. **Storage Overview**
+   - Total storage used across all IndexedDB data
+   - Breakdown: Recordings vs Tracks storage
+
+2. **Recordings Section**
+   - List all recording sessions with date, chunks, size, duration
+   - Status indicators: Recording, Complete, Recovered
+   - Per-session actions: Export, Delete
+   - Clear All Recordings button
+
+3. **Tracks & Best Laps Section** (NEW)
+   - List all saved tracks with corners, points, size
+   - Reference lap info: Best time, sample count
+   - Per-track actions: Clear Best, Delete Track
+   - Clear All Tracks button
+
+4. **UX Improvements**
+   - Removed redundant "Tracks" from hamburger menu (still accessible from lap timer card)
+   - "Data" menu item opens unified data management modal
+   - Both dashboard-dev and production websocket_server.rs updated
+
+5. **New Functions Added**
+   - `getTrackDataStats()` - Get track info with reference lap details
+   - `getCombinedStorageStats()` - Combined recordings + tracks stats
+   - `deleteTrackWithRef()` - Delete track and its reference lap
+   - `clearAllTracks()` - Clear all track data
+   - `formatLapTimeMs()` - Format lap times (m:ss.ms)
+   - `formatSessionDuration()` - Format durations (Xh Xm)
+   - `estimateObjectSize()` - Estimate IndexedDB object sizes
 
 ---
 
