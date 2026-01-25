@@ -4,1173 +4,441 @@
 [![Rust](https://img.shields.io/badge/rust-1.75%2B-orange.svg)](https://www.rust-lang.org/)
 [![ESP32-C3](https://img.shields.io/badge/platform-ESP32--C3-blue.svg)](https://www.espressif.com/)
 
-A complete ESP32-C3 firmware that fuses GPS and IMU data to track your vehicle's position, velocity, and acceleration in real-time. Built for track day logging, vehicle dynamics research, and DIY automotive projects. Professional-grade algorithms on $50 hardware.
+Real-time GPS + IMU sensor fusion for vehicle dynamics. Track position, velocity, acceleration, and driving modes on $50 hardware. Built-in mobile dashboard with lap timer.
 
-**What it does:**
-- Tracks position (±1m accuracy between GPS updates)
-- Measures velocity in 2D (earth frame)
-- Calculates true acceleration (gravity compensated)
-- Detects driving modes (idle, accelerating, braking, cornering)
-- Streams telemetry at 20-30Hz over WiFi
-- **Built-in mobile dashboard** - view live data on your phone
+**What you get:**
+- Live G-meter with mode detection (idle, accel, brake, corner)
+- Lap timer with delta-to-best display
+- 20-30 Hz telemetry streaming over WiFi
+- Works standalone — no phone app or internet needed
 
-**Why build this instead of buying?**
-- Track day data logging without $1000+ commercial systems
-- Vehicle dynamics research and education
-- DIY EV/kit car development
-- Test suspension, brakes, and aerodynamics
-- Learn sensor fusion practically
-
----
-
-## Table of Contents
-
-- [Hardware Requirements](#hardware-requirements)
-- [Quick Start](#quick-start)
-  - [Option A: Web Flasher](#option-a-web-flasher-easiest)
-  - [Option B: Build from Source](#option-b-build-from-source)
-- [Building From Source](#building-from-source)
-  - [Prerequisites](#prerequisites)
-  - [Build Commands](#build-commands)
-  - [Common Build Issues](#common-build-issues)
-- [System Architecture](#system-architecture)
-  - [Data Flow](#data-flow)
-  - [File Structure](#file-structure)
-  - [Key Algorithms](#key-algorithms)
-- [Telemetry Format](#telemetry-format)
-- [Configuration](#configuration)
-  - [WiFi and Network](#wifi-and-network)
-  - [EKF Tuning](#ekf-tuning)
-  - [EKF Health Metrics](#ekf-health-metrics)
-  - [Mode Detection Thresholds](#mode-detection-thresholds)
-- [Performance](#performance)
-- [LED Status Codes](#led-status-codes)
-- [Calibration](#calibration)
-- [Mobile Dashboard](#mobile-dashboard)
-  - [Dashboard Features](#dashboard-features)
-  - [Diagnostics Page](#diagnostics-page)
-  - [WiFi Modes](#wifi-modes)
-  - [Using Python Tools](#using-python-tools-station-mode-only)
-- [How It Works](#how-it-works)
-- [Future Enhancements](#future-enhancements)
-- [Contributing](#contributing)
-- [License](#license)
-
----
-
-## Hardware Requirements
-
-### Core Components ($50-100 total)
-
-| Component | Cost | Purpose | Where to Buy |
-|-----------|------|---------|--------------|
-| ESP32-C3 DevKit | $5 | Main controller | AliExpress, Amazon |
-| WT901 IMU | $25 | 9-axis motion sensor (configurable to 200Hz) | WitMotion store |
-| **GPS (choose one):** | | | |
-| - NEO-6M | $15 | Budget GPS, 5Hz max | AliExpress, Amazon |
-| - NEO-M9N | $75 | High-performance GPS, up to 25Hz | SparkFun |
-| Wires + USB cable | $5 | Connections | - |
-
-**GPS Recommendation:** NEO-M9N provides significantly better position accuracy, faster updates (up to 25Hz), and automotive-optimized mode. Worth the investment for serious data logging.
-
-### Optional Add-ons
-
-- **WS2812 RGB LED** ($2) - Visual status indicator
-- **SD card module** ($5) - Offline data logging (not yet implemented)
-- **CAN transceiver** ($10) - Read vehicle data (future feature)
-
-### Wiring Diagram
-
-```
-ESP32-C3 DevKitC-02          WT901 IMU               NEO-6M GPS
-┌─────────────────┐          ┌──────────┐            ┌──────────┐
-│                 │          │          │            │          │
-│ 3V3 ────────────┼──────────┤ VCC      │            │          │
-│ GND ────────────┼──────────┤ GND      │            │          │
-│ GPIO19 (RX) ────┼──────────┤ TX       │            │          │
-│ GPIO18 (TX) ────┼──────────┤ RX       │            │          │
-│                 │          └──────────┘            │          │
-│ 3V3 ────────────┼──────────────────────────────────┤ VCC      │
-│ GND ────────────┼──────────────────────────────────┤ GND      │
-│ GPIO4  (RX) ────┼──────────────────────────────────┤ TX       │
-│ GPIO5  (TX) ────┼──────────────────────────────────┤ RX       │
-│                 │                                  └──────────┘
-│ GPIO8 ──────────┼── (Optional: WS2812 LED data pin)
-│                 │
-└─────────────────┘
-```
-
-**Important:** GPS uses hardware UART0 (the same as USB console). During GPS operation, you won't see serial output unless using a separate USB-JTAG debugger. This is by design to free up the UART for GPS.
-
-### IMU Configuration (Optional - Only If Needed)
-
-The WT901 ships at 9600 baud / 10Hz. The firmware auto-detects the baud rate, so **most users can skip this step initially**.
-
-**Check if configuration is needed:**
-1. Flash the firmware and connect to the dashboard
-2. Check the diagnostics page - look at "IMU Rate"
-3. If it shows ~10-20 Hz instead of ~200 Hz, configure the IMU
-
-**To configure for 200Hz (requires USB-serial adapter, ~$5):**
-
-```bash
-# 1. Disconnect IMU from ESP32
-# 2. Connect IMU to USB-serial adapter:
-#    IMU TX  -> Adapter RX
-#    IMU RX  -> Adapter TX
-#    IMU GND -> Adapter GND
-#    IMU VCC -> Adapter 5V
-# 3. Run the configuration tool:
-cd tools/python
-pip install pyserial
-python3 configure_wt901.py /dev/ttyUSB0
-
-# 4. Reconnect IMU to ESP32
-```
-
-Settings are saved to the IMU's EEPROM - you only need to do this **once** per IMU.
-
-**Why 200Hz matters:** Higher IMU rate = smoother sensor fusion. At 5Hz GPS, you get 40 IMU samples between GPS updates at 200Hz vs only 2 samples at 10Hz.
+**Documentation:** [Lap Timer Guide](docs/LAP_TIMER.md) · [Sensor Fusion Guide](docs/SENSOR_FUSION.md)
 
 ---
 
 ## Quick Start
 
-### Option A: Web Flasher (Easiest)
-
-Flash directly from your browser - no toolchain required:
+### Option A: Flash from Browser (Easiest)
 
 1. Go to **https://jctoledo.github.io/blackbox/**
-2. Connect your ESP32-C3 via USB
-3. Select "Blackbox" from the dropdown
-4. Click "Connect Device" and select your serial port
-5. Click "Flash Firmware"
+2. Connect ESP32-C3 via USB
+3. Click **Connect Device** → select port → **Flash Firmware**
 
-**Requirements:** Chrome, Edge, or Opera (Web Serial API)
-
-**Note:** You may need to hold the BOOT button when connecting to enter flash mode.
-
----
+*Requires Chrome, Edge, or Opera. Hold BOOT button if device isn't detected.*
 
 ### Option B: Build from Source
 
-### 1. Install Rust Toolchain
-
 ```bash
-# Install Rust
+# Install toolchain (one-time)
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source $HOME/.cargo/env
-
-# Install ESP32 tools
 cargo install espup cargo-espflash
 espup install
 
-# Load ESP environment (required in EVERY new terminal)
-source $HOME/export-esp.sh
-
-# Add rust-src component (required for ESP32)
-rustup component add rust-src --toolchain esp
-```
-
-### 2. Clone and Configure
-
-```bash
-git clone https://github.com/jctoledo/blackbox.git
-cd blackbox/sensors/blackbox
-
-# Edit WiFi credentials
-nano src/main.rs
-# Change these lines:
-# const WIFI_SSID: &str = "YourNetworkName";
-# const WIFI_PASSWORD: &str = "YourPassword";
-# const MQTT_BROKER: &str = "mqtt://192.168.1.100:1883";  // Your broker IP
-# const TCP_SERVER: &str = "192.168.1.100:9000";          // Your server IP
-```
-
-### 3. Build and Flash
-
-The project includes a `.cargo/config.toml` that configures everything automatically.
-
-```bash
-# Navigate to the sensor project
+# Build and flash
+source $HOME/export-esp.sh  # Required in every new terminal
 cd sensors/blackbox
-
-# Load ESP environment first (in every new terminal!)
-source $HOME/export-esp.sh
-
-# Quick check (fast, no linking)
-cargo check
-
-# Build firmware (default: NEO-6M GPS at 5Hz)
-cargo build --release
-
-# Build with NEO-M9N GPS at 25Hz
-export GPS_MODEL="m9n"
-export GPS_RATE="25"
-cargo build --release
-
-# Build and flash in one command
 cargo run --release
 ```
 
-**First build takes 10-20 minutes** as it downloads ESP-IDF. Subsequent builds: 30s-2min.
+First build takes 10-20 minutes. See [Build Guide](#building-from-source) for detailed instructions.
 
-### 4. Receive Telemetry
+### Use the Dashboard
 
-**UDP Telemetry (recommended)**
+1. Power on device → creates WiFi network **"Blackbox"**
+2. Connect your phone (password: `blackbox123`)
+3. Open browser → go to `192.168.71.1`
+4. Drive!
+
+---
+
+## Hardware
+
+### Required Components (~$50-100)
+
+| Component | Price | Notes |
+|-----------|-------|-------|
+| ESP32-C3 DevKit | $5 | Any C3 dev board works |
+| WT901 IMU | $25 | 9-axis, configurable to 200Hz |
+| GPS Module | $15-75 | NEO-6M (budget) or NEO-M9N (recommended) |
+| Wires + USB | $5 | — |
+
+**GPS Choice:** NEO-M9N ($75) provides 25Hz updates and better accuracy. Worth it for serious use. NEO-6M ($15) works fine for learning.
+
+### Wiring
+
+```
+ESP32-C3              WT901 IMU         GPS Module
+─────────             ─────────         ──────────
+3V3  ─────────────────► VCC
+GND  ─────────────────► GND
+GPIO19 (RX) ──────────► TX
+GPIO18 (TX) ──────────► RX
+3V3  ─────────────────────────────────► VCC
+GND  ─────────────────────────────────► GND
+GPIO4  (RX) ──────────────────────────► TX
+GPIO5  (TX) ──────────────────────────► RX
+GPIO8 ───► (Optional: WS2812 LED)
+```
+
+<details>
+<summary><b>IMU Configuration (optional)</b></summary>
+
+The WT901 ships at 10Hz. Firmware auto-detects baud rate, so **try it first without configuration**.
+
+Check the diagnostics page — if IMU Rate shows ~10Hz instead of ~200Hz, configure it:
 
 ```bash
-# In another terminal, from repo root
+# Requires USB-serial adapter (~$5)
+# Connect: IMU TX→Adapter RX, IMU RX→Adapter TX, GND, 5V
 cd tools/python
-python3 udp_telemetry_server.py
+pip install pyserial
+python3 configure_wt901.py /dev/ttyUSB0
 ```
 
-Receives 20Hz binary telemetry and displays:
-```
-[20Hz] Spd: 45.3km/h Pos:(123.4,456.7)m Vel:(+12.58,+0.32)m/s Acc:(+1.23,-0.15,+9.81)m/s² Yaw:+45° wz:+12°/s CORNER
-```
-
-**MQTT (for status messages and debugging)**
-
-```bash
-# Requires mosquitto or another MQTT broker
-mosquitto_sub -h 192.168.1.100 -t 'car/#' -v
-```
-
----
-
-## Building From Source
-
-### Prerequisites
-
-<details>
-<summary><b>Ubuntu/Debian Linux</b></summary>
-
-```bash
-# System dependencies
-sudo apt-get update
-sudo apt-get install -y git wget flex bison gperf python3 python3-pip \
-  python3-venv cmake ninja-build ccache libffi-dev libssl-dev \
-  dfu-util libusb-1.0-0 build-essential
-
-# Rust and ESP toolchain
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source $HOME/.cargo/env
-cargo install espup cargo-espflash
-espup install
-source $HOME/export-esp.sh
-rustup component add rust-src --toolchain esp
-```
+Settings save to EEPROM — only needed once per IMU.
 
 </details>
-
-<details>
-<summary><b>macOS</b></summary>
-
-```bash
-# Install Homebrew if needed
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-
-# System dependencies
-brew install cmake ninja dfu-util
-
-# Rust and ESP toolchain
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source $HOME/.cargo/env
-cargo install espup cargo-espflash
-espup install
-source $HOME/export-esp.sh
-rustup component add rust-src --toolchain esp
-```
-
-</details>
-
-<details>
-<summary><b>Windows</b></summary>
-
-1. Install [Visual Studio Build Tools](https://visualstudio.microsoft.com/downloads/) (C++ development)
-2. Install [Python 3](https://www.python.org/downloads/)
-3. Install [Git](https://git-scm.com/download/win)
-4. Install Rust via [rustup-init.exe](https://rustup.rs/)
-5. Open PowerShell and run:
-
-```powershell
-cargo install espup cargo-espflash
-espup install
-# Restart terminal to load environment
-rustup component add rust-src --toolchain esp
-```
-
-</details>
-
-### Build Commands
-
-The `.cargo/config.toml` file in the sensor project configures the target and build settings automatically:
-
-```bash
-# Navigate to the sensor project first
-cd sensors/blackbox
-
-# ALWAYS load ESP environment first!
-source $HOME/export-esp.sh
-
-# Quick check (no linking, fast)
-cargo check
-
-# Full build
-cargo build --release
-
-# Build and flash with monitor
-cargo run --release
-
-# Format code
-cargo fmt
-
-# Lint
-cargo clippy -- -D warnings
-
-# Run unit tests (on host, no device needed)
-cargo test -p sensor-fusion -p wt901 -p ublox-gps
-
-# Run driving simulation (demonstrates GPS-corrected orientation)
-cargo run -p sensor-fusion --example drive_sim
-
-# Clean build (if things go wrong)
-cargo clean
-```
-
-**No need to specify `--target` or `-Zbuild-std` - it's all configured!**
-
-### Common Build Issues
-
-<details>
-<summary><b>Click to see troubleshooting</b></summary>
-
-**Error: "can't find crate for `core`" or "can't find crate for `std`"**
-
-This means the ESP toolchain isn't loaded or rust-src is missing:
-
-```bash
-# Solution 1: Make sure you're in the sensor directory
-cd sensors/blackbox
-
-# Solution 2: Load ESP environment
-source $HOME/export-esp.sh
-
-# Solution 3: Add rust-src component
-rustup component add rust-src --toolchain esp
-
-# Solution 4: Verify .cargo/config.toml exists
-cat .cargo/config.toml
-# Should contain:
-# [unstable]
-# build-std = ["std", "panic_abort"]
-```
-
-**Error: "linking with `riscv32-esp-elf-gcc` failed"**
-```bash
-source $HOME/export-esp.sh  # You forgot this!
-```
-
-**Error: "CMake not found"**
-```bash
-# Ubuntu/Debian
-sudo apt-get install cmake ninja-build
-
-# macOS
-brew install cmake ninja
-```
-
-**Error: "Permission denied" on serial port (Linux)**
-```bash
-sudo usermod -a -G dialout $USER
-# Log out and back in for group change to take effect
-```
-
-**Build hangs or crashes**
-```bash
-cargo clean
-rm -rf ~/.espressif
-espup install
-source $HOME/export-esp.sh
-rustup component add rust-src --toolchain esp
-cargo build --release
-```
-
-**Error: "espflash: command not found"**
-```bash
-cargo install cargo-espflash
-```
-
-</details>
-
----
-
-## System Architecture
-
-### Data Flow
-
-```
-GPS (5-25Hz)        IMU (200Hz)
-   │                   │
-   │ NMEA              │ Binary packets
-   │ sentences         │
-   ▼                   ▼                   
-┌─────────────────────────────────┐       
-│   Sensor Parsers                │       
-│   • Parse lat/lon/speed         │       
-│   • Parse ax,ay,az,wx,wy,wz     │       
-│   • Parse roll,pitch,yaw        │       
-└────────────┬────────────────────┘       
-             │                            
-             ▼                            
-┌─────────────────────────────────┐       
-│   Coordinate Transforms         │       
-│   • Remove gravity from accel   │       
-│   • Body → Earth frame          │       
-└────────────┬────────────────────┘       
-             │                            
-             ▼                            
-┌─────────────────────────────────┐       
-│   Extended Kalman Filter        │       
-│   State: [x, y, ψ, vx, vy,      │       
-│           bias_ax, bias_ay]     │       
-│                                 │       
-│   • Predict using IMU (50Hz)    │       
-│   • Update using GPS (5Hz)      │       
-│   • ZUPT when stationary        │       
-└────────────┬────────────────────┘       
-             │                            
-             ▼                            
-┌─────────────────────────────────┐
-│   Mode Classifier               │
-│   • Detect: IDLE, ACCEL, BRAKE, │
-│     CORNER, ACCEL+CORNER,       │
-│     BRAKE+CORNER                │
-└────────────┬────────────────────┘       
-             │                            
-             ▼                            
-┌─────────────────────────────────┐
-│   Binary Telemetry (20Hz)       │
-│   • 67 bytes with checksum      │
-│   • HTTP poll (AP mode)         │
-│   • UDP/TCP stream (STA mode)   │
-└─────────────────────────────────┘       
-```
-
-### File Structure
-
-```
-blackbox/
-├── framework/                       # sensor-fusion library crate (host-testable)
-│   └── src/
-│       ├── lib.rs                   # Crate entry point
-│       ├── ekf.rs                   # Extended Kalman Filter
-│       ├── transforms.rs            # Body↔Earth↔Vehicle coordinate math
-│       ├── mode.rs                  # Driving mode classifier
-│       ├── fusion.rs                # GPS/IMU blending, tilt correction
-│       ├── filter.rs                # Biquad filter (unused, for reference)
-│       └── velocity.rs              # Velocity source selection
-├── drivers/
-│   ├── wt901/                       # WT901 IMU driver crate
-│   └── ublox-gps/                   # u-blox GPS driver crate
-├── sensors/
-│   └── blackbox/                    # ESP32 firmware (embedded binary)
-│       ├── .cargo/
-│       │   └── config.toml          # ESP32-C3 build configuration
-│       ├── src/
-│       │   ├── main.rs              # Main loop and setup
-│       │   ├── config.rs            # Build-time configuration
-│       │   ├── system.rs            # Sensor/estimator/publisher managers
-│       │   ├── imu.rs               # WT901 UART parser (auto-detect baud)
-│       │   ├── gps.rs               # NMEA/UBX parser with warmup
-│       │   ├── diagnostics.rs       # System health monitoring
-│       │   ├── binary_telemetry.rs  # 67-byte packet format
-│       │   ├── websocket_server.rs  # Mobile dashboard & HTTP server
-│       │   ├── udp_stream.rs        # High-speed UDP client
-│       │   ├── mqtt.rs              # MQTT client for status
-│       │   ├── wifi.rs              # WiFi connection manager
-│       │   └── rgb_led.rs           # WS2812 status LED
-│       ├── Cargo.toml               # Rust dependencies
-│       ├── sdkconfig.defaults       # ESP-IDF configuration
-│       └── build.rs                 # Build script
-├── tools/
-│   ├── dashboard-dev/               # Dashboard simulator (no hardware needed)
-│   │   ├── index.html               # Local dev dashboard with CSV replay
-│   │   └── README.md                # Dev tool documentation
-│   └── python/
-│       ├── configure_wt901.py       # IMU configuration tool (200Hz setup)
-│       ├── probe_wt901.py           # IMU baud rate detection
-│       ├── udp_telemetry_server.py  # Python receiver (UDP)
-│       └── mqtt_binary_decoder.py   # Python receiver (MQTT)
-└── README.md                        # This file
-```
-
-### Key Algorithms
-
-**Extended Kalman Filter (ekf.rs)**
-- 7-state vector: `[x, y, ψ, vx, vy, bias_ax, bias_ay]`
-- Prediction: IMU accelerations integrated to update velocity and position
-- Update: GPS position/velocity fused with Kalman gain
-- CTRA motion model when speed > 2 m/s and turning
-
-**Zero-Velocity Update (main.rs)**
-- Detects stationary: `|accel| < 0.18g && |yaw_rate| < 12°/s && GPS_speed < 3.5m/s`
-- Forces velocity to zero
-- Estimates IMU biases from residual accelerations
-- Eliminates drift over time
-
-**Mode Detection (mode.rs)**
-- **IDLE**: Low acceleration or below minimum speed
-- **ACCEL**: Longitudinal accel exceeds threshold (configurable via presets)
-- **BRAKE**: Longitudinal decel exceeds threshold (configurable via presets)
-- **CORNER**: Lateral accel AND yaw rate exceed thresholds, same sign
-- **ACCEL+CORNER**: Trail throttle / corner exit
-- **BRAKE+CORNER**: Trail braking / corner entry
-
-Thresholds are adjustable via the dashboard's **Driving Preset** selector with 4 built-in profiles plus custom tuning.
-
----
-
-## Telemetry Format
-
-### Binary Packet (67 bytes)
-
-```rust
-struct TelemetryPacket {
-    header: u16,        // 0xAA55 magic
-    timestamp_ms: u32,
-    
-    ax, ay, az: f32,    // Acceleration (m/s²)
-    wz: f32,            // Yaw rate (rad/s)
-    roll, pitch: f32,   // Orientation (rad)
-    
-    yaw: f32,           // EKF yaw (rad)
-    x, y: f32,          // Position (m, ENU frame)
-    vx, vy: f32,        // Velocity (m/s)
-    speed_kmh: f32,     // Display speed
-    mode: u8,           // 0=IDLE, 1=ACCEL, 2=BRAKE, 4=CORNER, 5=ACCEL+CORNER, 6=BRAKE+CORNER
-    
-    lat, lon: f32,      // GPS (degrees)
-    gps_valid: u8,      // 0=no fix, 1=valid
-    
-    checksum: u16,      // Sum of all bytes (excl. checksum)
-}
-```
-
-### MQTT Topics
-
-- `car/telemetry_bin` - Binary packets (if using MQTT instead of TCP)
-- `car/status` - JSON status messages
-- `car/config` - Configuration updates
-- `car/gps_raw` - NMEA sentences (debug only)
-
----
-
-## Configuration
-
-### WiFi and Network
-
-Edit `sensors/blackbox/src/main.rs`:
-```rust
-const WIFI_SSID: &str = "YourNetwork";
-const WIFI_PASSWORD: &str = "YourPassword";
-const MQTT_BROKER: &str = "mqtt://192.168.1.100:1883";
-const TCP_SERVER: &str = "192.168.1.100:9000";
-```
-
-### EKF Tuning
-
-Edit `sensors/blackbox/src/ekf.rs`:
-```rust
-const Q_ACC: f32 = 0.40;    // Process noise: acceleration (m/s²)²
-const Q_GYRO: f32 = 0.005;  // Process noise: gyro (rad/s)²
-const Q_BIAS: f32 = 1e-3;   // Process noise: bias drift (m/s²)²
-
-const R_POS: f32 = 20.0;    // Measurement noise: GPS position (m)²
-const R_VEL: f32 = 0.2;     // Measurement noise: GPS velocity (m/s)²
-const R_YAW: f32 = 0.10;    // Measurement noise: magnetometer (rad)²
-```
-
-### EKF Health Metrics
-
-The diagnostics page shows real-time EKF state estimation quality. Understanding these metrics helps diagnose performance issues:
-
-| Metric | What It Measures | Healthy Values | Causes of Growth |
-|--------|------------------|----------------|------------------|
-| **Position σ** | Uncertainty in X/Y position (meters). Square root of position covariance. | <5m with GPS lock, <2m stable | GPS signal loss, long time between fixes, high acceleration |
-| **Velocity σ** | Uncertainty in velocity (m/s). How confident the EKF is about speed. | <0.5 m/s | GPS velocity unavailable, rapid acceleration changes |
-| **Yaw σ** | Heading uncertainty (degrees). Magnetometer fusion quality. | <5° | Magnetic interference, compass calibration issues |
-| **Bias X/Y** | Learned accelerometer bias (m/s²). Offset errors in IMU readings. | <0.5 m/s² | IMU not level during calibration, temperature drift |
-| **ZUPT Rate** | Zero-velocity updates per minute. Higher = more frequent stops. | 0-60/min typical | Updates when stationary detection triggers |
-| **EKF/GPS** | EKF predictions per GPS fix. Ratio of IMU to GPS updates. | ~40 (200Hz IMU / 5Hz GPS) | Lower = GPS rate issues, Higher = IMU rate issues |
-
-**Interpreting the metrics:**
-
-- **Position σ** starts high (~10m) at boot and decreases as GPS provides fixes. During GPS outages, it grows based on velocity uncertainty. ZUPT resets it when stationary.
-
-- **Velocity σ** reflects how well the EKF tracks speed. It grows during acceleration (model uncertainty) and shrinks with GPS velocity updates.
-
-- **Bias X/Y** are learned during ZUPT (when stationary). Values near zero mean good calibration. Values >0.3 m/s² suggest recalibration is needed.
-
-- **EKF/GPS ratio** ~40 is ideal (200Hz IMU / 5Hz GPS). Significantly lower values indicate GPS is updating too frequently or IMU rate is low. Higher values suggest GPS rate issues.
-
-### Mode Detection Thresholds
-
-Mode detection thresholds can be configured **live from the mobile dashboard** using the Driving Preset selector. Choose from 4 built-in presets or create custom settings:
-
-| Preset | Accel | Brake | Lateral | Yaw | Min Speed | Best For |
-|--------|-------|-------|---------|-----|-----------|----------|
-| **Track** | 0.35g | 0.55g | 0.50g | 0.15 rad/s | 4.0 m/s | Racing, track days |
-| **Canyon** | 0.22g | 0.35g | 0.28g | 0.10 rad/s | 3.0 m/s | Spirited mountain roads |
-| **City** | 0.10g | 0.18g | 0.12g | 0.05 rad/s | 2.0 m/s | Daily driving (default) |
-| **Highway** | 0.12g | 0.22g | 0.14g | 0.04 rad/s | 5.0 m/s | Highway cruising |
-| **Custom** | User-defined via sliders | | | | | Fine-tuning |
-
-Each threshold has an **entry** and **exit** value (hysteresis) to prevent oscillation. Exit thresholds are typically 50% of entry values.
-
-**Threshold tuning tips:**
-- **Too many false detections?** Increase thresholds
-- **Missing real events?** Decrease thresholds
-- **Road bumps triggering modes?** Increase thresholds or check calibration
-
-**Preset Selection:**
-1. Open dashboard at `http://192.168.71.1`
-2. Scroll to "Driving Preset" section
-3. Tap a preset button - settings apply immediately
-4. Tap "Custom" to access individual sliders for fine-tuning
-
-**Note:** Mode detection requires `speed > min_speed`. This prevents false detection from IMU noise when stationary. Higher min_speed on Highway preset filters out parking lot maneuvers.
-
----
-
-## Performance
-
-| Metric | Value |
-|--------|-------|
-| Update rate | 50 Hz (IMU predict) / 5 Hz (GPS update) |
-| Telemetry rate | 20 Hz (UDP stream) |
-| Position accuracy | ±1-2m (GPS dependent) |
-| Velocity accuracy | ±0.2 m/s |
-| Latency | <20ms sensor-to-transmission |
-| Memory usage | ~50KB RAM, ~800KB flash |
-| Power | ~0.5W @ 5V |
-
----
-
-## LED Status Codes
-
-### Boot Sequence (Access Point Mode)
-| Pattern | Meaning |
-|---------|---------|
-| 3 magenta blinks | Boot sequence started (AP mode) |
-| 5 green blinks | WiFi AP started |
-| 3 cyan blinks | HTTP server ready |
-| Yellow pulses | IMU calibration in progress |
-| Continuous red blink | Critical error (WiFi AP failed) |
-
-### Boot Sequence (Station Mode)
-| Pattern | Meaning |
-|---------|---------|
-| 3 blue blinks | Boot sequence started (Station mode) |
-| 5 green blinks | WiFi connected to network |
-| 3 magenta blinks | MQTT connected |
-| 5 fast red blinks | MQTT connection failed (continuing without MQTT) |
-| 3 cyan blinks | UDP socket ready |
-| Yellow pulses | IMU calibration in progress |
-| Continuous red blink | Critical error (WiFi connection failed) |
-
-### Main Loop (operational)
-| Pattern | Meaning |
-|---------|---------|
-| Cyan pulse (2s cycle) | GPS locked, system operational |
-| Yellow fast blink | Waiting for GPS fix |
-| 3 green-white flashes | Settings changed via dashboard |
-| 3 orange blinks | WiFi disconnected (repeats every 5s) |
-| 2 red blinks | MQTT disconnected (Station mode only, repeats every 5s) |
-
-**Note:** MQTT status LED only applies to Station mode. In Access Point mode, MQTT is not used and no red blinks will occur for MQTT status.
-
----
-
-## Calibration
-
-Proper calibration is **critical** for accurate mode detection. The IMU calibration measures accelerometer biases that are subtracted from all future readings.
-
-### Calibration Procedure
-
-1. **Mount the device** in its final position in the car
-   - Must be rigidly attached (no wobble or vibration)
-   - Orientation matters: device forward = car forward
-   - Does NOT need to be perfectly level (IMU handles tilt)
-
-2. **Park on reasonably level ground**
-   - Doesn't need to be perfectly flat
-   - Avoid steep hills during calibration
-
-3. **Turn OFF the engine**
-   - Engine vibration corrupts calibration
-   - For EVs, ensure the car is in Park with no systems active
-
-4. **Power on the ESP32**
-   - Wait for boot sequence LED pattern
-
-5. **Don't touch ANYTHING during yellow LED flashing** (~10 seconds)
-   - The device collects 150 accelerometer samples
-   - ANY movement corrupts the bias calculation
-   - Keep doors closed, don't sit in the car
-
-6. **Wait for operational state**
-   - Yellow fast blink = waiting for GPS lock
-   - Cyan pulse = GPS locked, ready to drive
-
-### Recalibration
-
-You can trigger recalibration from the dashboard:
-1. Open dashboard at `http://192.168.71.1`
-2. Stop the vehicle on level ground, engine off
-3. Tap the **CLR** button to reset and recalibrate
-
-### Signs of Bad Calibration
-
-- Mode detection triggers incorrectly (constant ACCEL or BRAKE)
-- Non-zero acceleration shown when stationary
-- Speed reads incorrectly
-- G-meter not centered when parked
-
-**Fix:** Power cycle and recalibrate following the procedure above.
-
-### Tips for Best Results
-
-| Do | Don't |
-|----|-------|
-| Mount rigidly with zip ties or bracket | Use velcro or loose mounting |
-| Calibrate with engine off | Calibrate while idling |
-| Wait for full yellow LED sequence | Touch car during calibration |
-| Orient device correctly (forward = forward) | Mount sideways or upside down |
-| Recalibrate if detection seems wrong | Assume it's a software bug |
 
 ---
 
 ## Mobile Dashboard
 
-The firmware includes a built-in web dashboard that runs directly on the ESP32. No external server needed - just connect your phone and view live telemetry.
+Connect to the device's WiFi and open `192.168.71.1` in any browser.
 
-> **Development:** To iterate on the dashboard UI without hardware, use the [Dashboard Development Tool](tools/dashboard-dev/README.md). It includes a canyon drive simulator and CSV replay for testing.
-
-### How to Use
-
-1. **Power on the device** - it creates a WiFi network called "Blackbox"
-2. **Connect your phone** to the "Blackbox" WiFi (password: `blackbox123`)
-3. **Open a browser** and go to `http://192.168.71.1`
-4. **View live telemetry** - data streams at ~30Hz via WebSocket
-
-### Dashboard Features
+### Features
 
 | Feature | Description |
 |---------|-------------|
-| **G-meter** | Real-time lateral/longitudinal G display with trail |
-| **Max G values** | Tracks peak L/R/Accel/Brake G-forces |
-| **Speed** | Current speed and session max speed |
-| **Driving mode** | IDLE, ACCEL, BRAKE, CORNER, or combined states (ACCEL+CORNER, BRAKE+CORNER) |
-| **Driving presets** | One-tap presets for Track, Canyon, City, Highway, or Custom tuning |
-| **Session timer** | Time since dashboard loaded |
-| **GPS status** | Current coordinates and fix status |
-| **Recording** | Capture data locally for CSV export |
-| **Diagnostics page** | System health: sensor rates, EKF uncertainty, GPS quality (HDOP/PDOP), heap usage |
-| **Lap Timer** | Record tracks, real-time lap timing, delta-to-best display, session history |
-
-### Diagnostics Page
-
-Access the diagnostics page at `http://192.168.71.1/api/diagnostics` (JSON) or view it in the dashboard footer.
-
-**What it shows:**
-
-| Metric | Description | Healthy Range |
-|--------|-------------|---------------|
-| **IMU Rate** | Accelerometer packets per second | 195-200 Hz (configured) or 10-20 Hz (factory) |
-| **GPS Rate** | Valid RMC position fixes per second (excludes GGA/GSA) | 5 Hz (NEO-6M) or 8-25 Hz (NEO-M9N) |
-| **Loop Rate** | Main loop iterations per second | >1000 Hz |
-| **ZUPT Rate** | Zero-velocity updates per minute | 0-60/min typical |
-| **EKF/GPS** | EKF predictions per GPS fix | ~40 (200Hz IMU / 5Hz GPS) |
-| **Position σ** | EKF position uncertainty | <5m (with GPS lock) |
-| **Velocity σ** | EKF velocity uncertainty | <0.5 m/s |
-| **Yaw σ** | EKF heading uncertainty | <5° |
-| **Bias X/Y** | Learned accelerometer biases | <0.5 m/s² |
-| **HDOP** | GPS horizontal dilution of precision | <2.0 (good), <5.0 (acceptable) |
-| **Free Heap** | Available RAM | >40KB |
-
-**Troubleshooting with diagnostics:**
-- **IMU 0 Hz**: Check wiring, run `configure_wt901.py` to verify IMU is configured
-- **GPS 0 Hz**: Check wiring, verify GPS has sky view for fix
-- **Position σ growing**: GPS lost fix, or ZUPT not triggering when stationary
-- **High bias values**: Recalibrate IMU (CLR button in dashboard)
+| G-Meter | Real-time lateral/longitudinal display with trail |
+| Speed | Current and max speed |
+| Mode Detection | IDLE, ACCEL, BRAKE, CORNER, or combined states |
+| Driving Presets | Track, Canyon, City, Highway, or Custom |
+| Lap Timer | Record tracks, time laps, see delta-to-best |
+| Recording | Capture sessions, export to CSV |
+| Diagnostics | Sensor rates, GPS quality, EKF health |
 
 ### Controls
 
 | Action | Effect |
 |--------|--------|
-| **CLR button** | Clear max G values |
-| **Tap max speed** | Reset max speed only |
-| **Double-tap G-meter** | Reset max G values only |
-| **Preset buttons** | Switch driving profile (Track/Canyon/City/Highway/Custom) |
-| **Reset button** | Reset sliders to current preset defaults (Custom mode only) |
-| **Apply button** | Send custom slider values to device (Custom mode only) |
-| **REC button** | Start/stop recording data |
-| **Export button** | Download recorded data as CSV |
-
-### Connection Status
-
-The indicator in the top-right shows connection quality:
-- **Blue dot + "WS"** - WebSocket connected (~30Hz, best)
-- **Green dot + "HTTP"** - HTTP polling fallback (~15Hz)
-- **Gray dot + "Offline"** - No connection
-
-### WiFi Modes
-
-The firmware supports two WiFi modes, each with different connectivity options:
-
-#### Access Point Mode (Default)
-
-**Best for:** Mobile use, track days, standalone operation
-
-```
-┌──────────────┐     WiFi: "Blackbox"      ┌──────────────┐
-│   ESP32      │◄─────────────────────────►│    Phone     │
-│  (creates    │     192.168.71.1:80        │  (connects)  │
-│   network)   │                           │              │
-└──────────────┘                           └──────────────┘
-```
-
-- ESP32 creates its own WiFi network: `Blackbox` / `blackbox123`
-- Connect your phone directly to view the dashboard
-- No router or internet required
-- Data delivered via WebSocket (fast) or HTTP polling (fallback)
-- **No Python tools** - dashboard only
-
-**To use (default, no changes needed):**
-```bash
-cargo build --release
-```
-
-#### Station Mode
-
-**Best for:** Home testing, data logging to laptop, multiple receivers
-
-```
-┌──────────────┐                           ┌──────────────┐
-│   ESP32      │     Your WiFi Network     │   Laptop     │
-│  (connects   │◄─────────────────────────►│  (Python     │
-│   to router) │                           │   tools)     │
-└──────────────┘                           └──────────────┘
-        │                                         │
-        │              ┌──────────┐              │
-        └──────────────►│  Router  │◄────────────┘
-                       └──────────┘
-```
-
-- ESP32 connects to your existing WiFi network
-- Telemetry sent via **UDP** to your laptop (high-speed, 20Hz)
-- Status messages via **MQTT** broker
-- Python tools can receive and log data
-- Dashboard NOT available (no web server in this mode)
-
-**To use:**
-```bash
-# Set environment variables before building
-export WIFI_MODE="station"
-export WIFI_SSID="YourHomeNetwork"
-export WIFI_PASSWORD="YourPassword"
-export MQTT_BROKER="mqtt://192.168.1.100:1883"
-export UDP_SERVER="192.168.1.100:9000"
-cargo build --release
-```
-
-### Using Python Tools (Station Mode Only)
-
-The Python tools in `tools/python/` only work in **Station mode** when ESP32 is on the same network as your laptop.
-
-**Setup:**
-```bash
-# Install dependencies
-cd tools/python
-pip install -r requirements.txt
-
-# Start MQTT broker (if not already running)
-# On Ubuntu: sudo apt install mosquitto && sudo systemctl start mosquitto
-# On macOS: brew install mosquitto && brew services start mosquitto
-```
-
-**Receive UDP Telemetry (recommended):**
-```bash
-python3 udp_telemetry_server.py
-```
-Output:
-```
-[20Hz] Spd: 45.3km/h Pos:(123.4,456.7)m Acc:(+1.23,-0.15)m/s² CORNER
-```
-
-**Receive MQTT Status:**
-```bash
-python3 mqtt_binary_decoder.py
-```
-
-**Subscribe to raw MQTT topics:**
-```bash
-mosquitto_sub -h localhost -t 'car/#' -v
-```
-
-**Probe WT901 IMU baud rate (debugging tool):**
-```bash
-# Disconnect IMU from ESP32, connect to USB-serial adapter
-python3 probe_wt901.py /dev/ttyUSB0
-```
-Useful for verifying IMU is working before flashing, or determining what baud rate it's configured to.
-
-**Analyze Telemetry CSV (works with both modes):**
-```bash
-# Export CSV from dashboard, then analyze on your computer
-python3 analyze_telemetry.py recorded_session.csv
-```
-Analyzes a CSV export from the dashboard and provides:
-- **Timing analysis**: Sample rate, duration
-- **Speed distribution**: Time in speed bands
-- **Acceleration analysis**: lon_g range, mean, bias detection
-- **Mode distribution**: Time spent in IDLE/ACCEL/BRAKE/CORNER
-- **Ground truth comparison**: Compares lon_g with GPS-derived acceleration
-- **Mode detection accuracy**: Precision and recall for ACCEL/BRAKE modes
-- **Correlation**: How well lon_g matches actual acceleration (want >0.7)
-- **Diagnostic summary**: Identifies potential issues like bias or high false positive rates
-
-This is useful for validating that the orientation correction is working properly after a test drive.
-
-### Choosing a Mode
-
-| Feature | Access Point | Station |
-|---------|--------------|---------|
-| Mobile dashboard | ✅ Yes | ❌ No |
-| Python tools | ❌ No | ✅ Yes |
-| Needs router | ❌ No | ✅ Yes |
-| Range | ~30m | Network dependent |
-| Multiple receivers | ❌ No | ✅ Yes |
-| Data logging to laptop | ❌ No | ✅ Yes |
+| Tap CLR | Reset max G values |
+| Tap max speed | Reset max speed |
+| Preset buttons | Switch driving profile |
+| REC button | Start/stop recording |
 
 ---
 
 ## Lap Timer
 
-The dashboard includes a full-featured lap timer that rivals commercial solutions costing $700-1200+. Record tracks anywhere, get real-time lap times, and see live delta-to-best while driving.
+Record tracks anywhere and get real-time lap timing with delta display.
 
-### Quick Start
+**[Full Lap Timer Guide →](docs/LAP_TIMER.md)**
 
-1. **Record a Track**
-   - Tap the lap timer card (bottom of dashboard)
-   - Tap **+** to start recording
-   - Drive one full lap (or point-to-point route)
-   - Recording automatically detects loop closure, or tap **Stop** for point-to-point
-   - Name your track and save
+### Quick Overview
 
-2. **Start Timing**
-   - Tap your saved track to activate it
-   - Cross the start line - timing begins automatically
-   - Complete laps and see your times
-   - Best lap automatically saves as your reference
+1. **Record a Track** — Tap lap timer card → **+** → drive one lap → **Stop**
+2. **Activate Track** — Tap saved track to enable timing
+3. **Drive** — Cross start line, timing begins automatically
+4. **Watch Delta** — Green = ahead, Red = behind your best
 
-3. **Watch the Delta**
-   - After your first lap, the delta bar appears
-   - Green bar = ahead of your best lap
-   - Red bar = behind your best lap
-   - Trend arrows show if you're gaining or losing time
+### Delta Bar
 
-### Track Types
+```
+    -2.3s                     2.3 seconds AHEAD of best
+◄████████████░░░░░░░░►        Green bar extends left
 
-| Type | Description | Use Case |
-|------|-------------|----------|
-| **Circuit** | Loop track (start = finish) | Track days, autocross, neighborhood circuits |
-| **Stage** | Point-to-point (separate start/finish) | Hill climbs, rally stages, touge |
+    +1.5s                     1.5 seconds BEHIND best
+◄░░░░░░░░████████████►        Red bar extends right
+```
 
-Circuit tracks auto-detect when you drive close to your starting point with similar heading. Stage tracks save wherever you stop recording.
+- **Scale:** ±2 seconds = full bar. Number shows actual delta beyond ±2s.
+- **Trend arrows:** ▲ gaining time, ▼ losing time
+- **Glow effect:** Appears when delta exceeds 1 second
 
 ### Features
 
-**Timing Precision**
-- 30 Hz timing resolution (~33ms)
-- Direction validation prevents false triggers
-- 500ms debounce prevents double-counting
+| Feature | Description |
+|---------|-------------|
+| Circuit & Stage | Loop tracks or point-to-point routes |
+| Session History | All lap times saved and grouped by date |
+| Track Auto-Detection | Notifies you when near a saved track |
+| Data Management | View storage, export CSV, delete sessions |
 
-**Delta Display**
-- Real-time comparison to your best lap
-- Arc-length based calculation (works even on different lines)
-- Color-coded bar: green (ahead), red (behind)
-- Glow effect for large deltas (>1 second)
-- Trend arrows: ▲ gaining, ▼ losing time
-
-**Track Recording**
-- Adaptive GPS sampling (~5m between points)
-- Corner detection via curvature analysis
-- Loop closure detection (proximity + heading)
-- GPS quality indicator during recording
-
-**Session History**
-- All lap times saved automatically
-- Sessions grouped by date
-- Best lap highlighted per session
-- Access via "H" button on track list
-
-**Track Auto-Detection**
-- Automatically detects when you're near a saved track
-- Toast notification offers one-tap activation
-- Uses centerline proximity and heading alignment
-- Requires ~6 seconds of consistent detection to avoid false positives
-
-**Data Management**
-- Unified "Data" modal shows all stored data
-- Storage breakdown: recordings vs tracks
-- Export any recording session to CSV
-- Clear individual tracks or all data
-
-### Understanding the Delta Bar
-
-The delta bar shows how your current lap compares to your best:
-
-```
-        -2.3s                    Current lap is 2.3 seconds AHEAD
-   ◄████████████████░░░░░░░►    Green bar extends left
-
-        +1.5s                    Current lap is 1.5 seconds BEHIND
-   ◄░░░░░░░░░░░░████████████►    Red bar extends right
-```
-
-**Bar Length (Magnitude)**
-- The bar length shows how far ahead or behind you are
-- Scale: ±2 seconds = full bar width
-- A bar halfway to the right = ~1 second behind
-- A bar all the way to the right = 2+ seconds behind
-
-**What "Full Bar" Means**
-- Full green (left): You're 2 or more seconds ahead of your best
-- Full red (right): You're 2 or more seconds behind your best
-- The number always shows the actual delta, even beyond ±2s
-- A glow effect appears when delta exceeds 1 second for emphasis
-
-**Trend Arrows (▲ ▼)**
-- ▲ (up arrow): You're currently **gaining time** - the gap is shrinking
-- ▼ (down arrow): You're currently **losing time** - the gap is growing
-- Based on how delta is changing over the last few seconds
-- No arrow: delta is stable (neither gaining nor losing)
-
-### Tips for Best Results
-
-| Do | Don't |
-|----|-------|
-| Wait for GPS lock before recording | Record indoors or in urban canyons |
-| Drive smoothly during track recording | Make sudden lane changes while recording |
-| Mount device securely | Let device move around in car |
-| Record a clean lap as your first reference | Rush through corners during recording |
-
-### How It Works Technically
-
-**Arc-Length Delta Calculation**
-
-Unlike position-based delta (which fails when you take different lines), arc-length delta works by:
-1. Tracking cumulative distance traveled during each lap
-2. At any point, finding what time you had at that distance on your best lap
-3. Subtracting to get delta
-
-This means if you're 500m into the lap, it compares your time to your best lap at 500m - regardless of exact position.
-
-**Centerline Storage**
-
-When you record a track, the system samples GPS points every ~5m to create a "centerline". This is used for:
-- Auto-detection (finding nearby tracks)
-- Loop closure detection (did you complete the circuit?)
-- Future: track learning to improve accuracy over multiple laps
+See the [full documentation](docs/LAP_TIMER.md) for details on recording, delta calculation, and troubleshooting.
 
 ---
 
-## How It Works
+## Calibration
 
-The system uses sensor fusion to combine fast but drifty IMU measurements with slow but accurate GPS updates. Here's what happens under the hood:
+Proper calibration is critical for accurate readings.
 
-**7-State Extended Kalman Filter**
-- Tracks: position (x, y), heading (yaw), velocity (vx, vy), and accelerometer biases (bax, bay)
-- Predicts state 200 times per second using IMU accelerations
-- Corrects drift 5-25 times per second using GPS position and velocity
-- Learns accelerometer biases during stops (Zero-Velocity Update / ZUPT)
+1. Mount device rigidly in final position
+2. Park on level ground, engine **OFF**
+3. Power on and **don't touch anything** during yellow LED (~10 seconds)
+4. Wait for cyan pulse = ready
 
-**Coordinate Transformations**
-- Raw IMU measures in "body frame" (sensor orientation)
-- Gravity is removed using roll/pitch angles
-- Accelerations rotated to "earth frame" (horizontal plane)
-- Then rotated to "vehicle frame" (car forward/left) for mode detection
+**Signs of bad calibration:** Mode triggers incorrectly, G-meter not centered when parked, non-zero acceleration when stationary.
 
-**GPS-Corrected Orientation (ArduPilot-style)**
-- Problem: AHRS can't distinguish tilt from acceleration (reports false pitch when accelerating)
-- Solution: Compare IMU-derived acceleration with GPS velocity ground truth
-- Learn and correct pitch/roll errors over time
-- Enables accurate 200Hz acceleration despite AHRS limitations
+**To recalibrate:** Tap CLR in dashboard while stationary with engine off.
 
-**Tilt Correction**
-- When stopped, the device learns its mounting offset automatically
-- Works regardless of mounting angle (within reason)
-- Re-learns if you move the device
+---
 
-**Motion Models**
-- CTRA (Constant Turn Rate and Acceleration): Used when speed >2 m/s and turning
-- CA (Constant Acceleration): Used when going straight or slow
+## LED Status
 
-**Why this matters for track days:**
-- High-rate IMU gives responsive g-force readings (200 Hz)
-- GPS prevents drift over time
-- Mode detection works reliably regardless of mounting angle
-- ZUPT eliminates accumulated errors at every stop
+| Pattern | Meaning |
+|---------|---------|
+| Cyan pulse (2s) | GPS locked, operational |
+| Yellow fast blink | Waiting for GPS fix |
+| Yellow pulses | Calibration in progress |
+| Green blinks (boot) | WiFi ready |
+| Red blink | Error (check wiring) |
+
+---
+
+## Building from Source
+
+<details>
+<summary><b>Prerequisites by Platform</b></summary>
+
+**Ubuntu/Debian:**
+```bash
+sudo apt-get install -y git wget flex bison gperf python3 python3-pip \
+  python3-venv cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0
+
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+cargo install espup cargo-espflash
+espup install
+rustup component add rust-src --toolchain esp
+```
+
+**macOS:**
+```bash
+brew install cmake ninja dfu-util
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+cargo install espup cargo-espflash
+espup install
+rustup component add rust-src --toolchain esp
+```
+
+**Windows:**
+1. Install Visual Studio Build Tools, Python 3, Git
+2. Install Rust via rustup-init.exe
+3. Run: `cargo install espup cargo-espflash && espup install`
+
+</details>
+
+### Build Commands
+
+```bash
+source $HOME/export-esp.sh  # Required in every new terminal!
+cd sensors/blackbox
+
+cargo check              # Quick syntax check
+cargo build --release    # Build firmware
+cargo run --release      # Build + flash + monitor
+cargo fmt                # Format code
+cargo clippy             # Lint
+```
+
+### GPS Configuration
+
+```bash
+# Default: NEO-6M at 5Hz
+cargo build --release
+
+# NEO-M9N at 25Hz
+export GPS_MODEL="m9n" GPS_RATE="25"
+cargo build --release
+```
+
+<details>
+<summary><b>Troubleshooting Build Issues</b></summary>
+
+**"can't find crate for core"**
+```bash
+source $HOME/export-esp.sh
+rustup component add rust-src --toolchain esp
+```
+
+**"linking with riscv32-esp-elf-gcc failed"**
+```bash
+source $HOME/export-esp.sh  # You forgot this
+```
+
+**Permission denied on serial port (Linux)**
+```bash
+sudo usermod -a -G dialout $USER
+# Log out and back in
+```
+
+**Build hangs**
+```bash
+cargo clean
+rm -rf ~/.espressif
+espup install
+```
+
+</details>
+
+---
+
+## Configuration Reference
+
+### WiFi Modes
+
+**Access Point (default)** — Device creates its own network. Best for mobile use.
+```bash
+cargo build --release  # No config needed
+```
+
+**Station Mode** — Device joins your network. Enables UDP streaming to laptop.
+```bash
+export WIFI_MODE="station"
+export WIFI_SSID="YourNetwork"
+export WIFI_PASSWORD="YourPassword"
+export UDP_SERVER="192.168.1.100:9000"
+cargo build --release
+```
+
+### Mode Detection Thresholds
+
+Configure via dashboard presets or custom sliders:
+
+| Preset | Accel | Brake | Lateral | Best For |
+|--------|-------|-------|---------|----------|
+| Track | 0.35g | 0.55g | 0.50g | Racing |
+| Canyon | 0.22g | 0.35g | 0.28g | Mountain roads |
+| City | 0.10g | 0.18g | 0.12g | Daily driving |
+| Highway | 0.12g | 0.22g | 0.14g | Cruising |
+
+<details>
+<summary><b>EKF Tuning (Advanced)</b></summary>
+
+Edit `sensors/blackbox/src/ekf.rs`:
+
+```rust
+const Q_ACC: f32 = 0.40;    // Process noise: acceleration
+const Q_GYRO: f32 = 0.005;  // Process noise: gyro
+const R_POS: f32 = 20.0;    // Measurement noise: GPS position
+const R_VEL: f32 = 0.2;     // Measurement noise: GPS velocity
+```
+
+Higher Q = trust sensors more. Higher R = trust sensors less.
+
+</details>
+
+<details>
+<summary><b>Diagnostics Metrics Explained</b></summary>
+
+| Metric | Healthy | Meaning |
+|--------|---------|---------|
+| IMU Rate | 195-200 Hz | Accelerometer samples/sec |
+| GPS Rate | 5-25 Hz | Position fixes/sec |
+| Position σ | <5m | EKF position uncertainty |
+| Velocity σ | <0.5 m/s | EKF velocity uncertainty |
+| Bias X/Y | <0.5 m/s² | Learned accelerometer bias |
+| HDOP | <2.0 | GPS quality (lower = better) |
+
+**Troubleshooting:**
+- IMU 0 Hz → Check wiring, run configure_wt901.py
+- GPS 0 Hz → Check wiring, ensure sky view
+- High bias → Recalibrate (CLR button)
+
+</details>
+
+---
+
+## Technical Overview
+
+**[Full Sensor Fusion Guide →](docs/SENSOR_FUSION.md)**
+
+### How Sensor Fusion Works
+
+The system combines fast IMU (200Hz) with accurate GPS (5-25Hz):
+
+1. **Predict** — IMU accelerations update position/velocity 200×/sec
+2. **Correct** — GPS fixes correct drift 5-25×/sec
+3. **ZUPT** — When stopped, velocity forced to zero, biases learned
+
+**7-State Kalman Filter:** Position (x,y), heading, velocity (vx,vy), accelerometer biases (bax,bay)
+
+### Data Flow
+
+```
+GPS (5-25Hz) ──┐
+               ├──► EKF ──► Mode Classifier ──► Telemetry (20Hz)
+IMU (200Hz) ───┘
+```
+
+See the [full sensor fusion documentation](docs/SENSOR_FUSION.md) for details on coordinate frames, ZUPT, EKF tuning, and diagnostics interpretation.
+
+### File Structure
+
+```
+blackbox/
+├── docs/                # Documentation
+│   ├── LAP_TIMER.md     # Lap timer user guide
+│   └── SENSOR_FUSION.md # EKF and sensor fusion details
+├── framework/           # Sensor fusion library (host-testable)
+│   └── src/
+│       ├── ekf.rs       # Extended Kalman Filter
+│       ├── transforms.rs # Coordinate math
+│       ├── mode.rs      # Mode detection
+│       └── fusion.rs    # GPS/IMU blending
+├── sensors/blackbox/    # ESP32 firmware
+│   └── src/
+│       ├── main.rs      # Main loop
+│       ├── websocket_server.rs  # Dashboard
+│       └── ...
+└── tools/
+    ├── dashboard-dev/   # Dashboard simulator
+    └── python/          # Receivers and tools
+```
+
+---
+
+## Python Tools
+
+Station mode only. Connect ESP32 and laptop to same network.
+
+```bash
+cd tools/python
+pip install -r requirements.txt
+
+# Receive telemetry
+python3 udp_telemetry_server.py
+
+# Analyze CSV export
+python3 analyze_telemetry.py recorded_session.csv
+
+# Configure IMU
+python3 configure_wt901.py /dev/ttyUSB0
+```
 
 ---
 
 ## Future Enhancements
 
-- [ ] SD card logging for offline operation
-- [x] ~~Web dashboard for live visualization~~ ✓ Built-in mobile dashboard
-- [x] ~~High-rate GPS support~~ ✓ NEO-M9N at up to 25Hz with automotive mode
-- [x] ~~System diagnostics page~~ ✓ Sensor rates, EKF health, GPS quality
-- [x] ~~Lap timer~~ ✓ Track recording, real-time timing, delta-to-best, session history
-- [ ] CAN bus integration for vehicle data
-- [ ] Support for external wheel speed sensors
-- [ ] Bluetooth for phone connectivity
-- [ ] Over-the-air firmware updates
+- [ ] SD card logging
+- [ ] CAN bus integration
+- [ ] Bluetooth connectivity
+- [ ] Over-the-air updates
+- [x] ~~Mobile dashboard~~ ✓
+- [x] ~~High-rate GPS~~ ✓
+- [x] ~~Lap timer~~ ✓
 
 ---
 
 ## Contributing
 
-Contributions welcome! Whether it's:
-- Bug fixes
-- New sensor drivers
-- Documentation improvements
-- Performance optimizations
-
-Open an issue or pull request on GitHub.
-
----
+Contributions welcome — bug fixes, new features, documentation improvements. Open an issue or PR on GitHub.
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
-
----
-
-## Acknowledgments
-
-Built with:
-- [esp-idf-hal](https://github.com/esp-rs/esp-idf-hal) - Rust ESP32 HAL
-- [esp-idf-svc](https://github.com/esp-rs/esp-idf-svc) - ESP-IDF services
-- WT901 IMU from WitMotion
-- U-blox NEO-6M GPS module
-
-Inspired by open-source motorsport and robotics projects that prove pro-grade systems don't need pro prices.
+MIT License — see [LICENSE](LICENSE).
 
 ---
 
 **Questions?** Open an [issue](https://github.com/jctoledo/blackbox/issues).
 
-**Ready to track?** [Start with Quick Start ↑](#quick-start)
+**Ready to build?** [Start with Quick Start ↑](#quick-start)
