@@ -678,6 +678,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
 @keyframes successPop{0%{transform:scale(0.5);opacity:0}100%{transform:scale(1);opacity:1}}
 .bbRecordSuccessTitle{font-size:24px;font-weight:700;color:var(--text);margin-bottom:8px;letter-spacing:-0.01em}
 .bbRecordSuccessStats{font-size:14px;color:var(--text-secondary);line-height:1.4}
+.bbToast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--surface);border-radius:12px;padding:12px 16px;box-shadow:0 4px 20px rgba(0,0,0,.25);display:flex;align-items:center;gap:12px;z-index:10001;animation:bbToastSlideIn 0.3s ease-out;max-width:calc(100vw - 32px)}
+@keyframes bbToastSlideIn{from{opacity:0;transform:translateX(-50%) translateY(20px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+.bbToast.dismissing{animation:bbToastSlideOut 0.2s ease-in forwards}
+@keyframes bbToastSlideOut{from{opacity:1;transform:translateX(-50%) translateY(0)}to{opacity:0;transform:translateX(-50%) translateY(20px)}}
+.bbToastIcon{font-size:24px;flex-shrink:0}
+.bbToastText{flex:1;min-width:0}
+.bbToastText strong{display:block;font-size:14px;font-weight:600;margin-bottom:2px}
+.bbToastText span{font-size:12px;color:var(--text-secondary);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bbToastActions{display:flex;gap:8px;flex-shrink:0}
+.bbToastBtn{padding:8px 14px;border-radius:8px;border:none;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit}
+.bbToastBtn.primary{background:var(--ok);color:#fff}
+.bbToastBtn.secondary{background:var(--divider);color:var(--text)}
 </style></head>
 <body>
 
@@ -1296,6 +1308,52 @@ let p2pNeedsWarmup=false,trackRecorder=null;
 let referenceLap=null,lapTracker=null,lastDeltaMs=0,deltaTrend=0;
 let currentSessionId=null,currentSessionStart=null;
 
+// Track Auto-Detection
+class TrackAutoDetector{
+    constructor(){this.lastCheck=0;this.checkInterval=3000;this.candidateTrack=null;this.matchCount=0;this.requiredMatches=2;this.activeToast=null}
+    async check(x,y,heading){
+        const now=Date.now();if(now-this.lastCheck<this.checkInterval)return null;this.lastCheck=now;
+        if(activeTrack){this.reset();return null}
+        if(this.activeToast)return null;
+        const tracks=await getAllTracks();let bestMatch=null,bestScore=0;
+        for(const t of tracks){if(t.isDemo)continue;const sc=this.scoreMatch(x,y,heading,t);if(sc>bestScore&&sc>0.5){bestScore=sc;bestMatch=t}}
+        if(bestMatch){if(this.candidateTrack?.id===bestMatch.id)this.matchCount++;else{this.candidateTrack=bestMatch;this.matchCount=1}if(this.matchCount>=this.requiredMatches)return{track:bestMatch,confidence:bestScore}}else this.reset();
+        return null
+    }
+    scoreMatch(x,y,heading,track){
+        if(track.bounds){const m=100;if(x<track.bounds.minX-m||x>track.bounds.maxX+m||y<track.bounds.minY-m||y>track.bounds.maxY+m)return 0}
+        const cl=track.centerline||[];if(cl.length===0)return 0;
+        let minD=Infinity,nearP=null;for(const p of cl){const d=Math.sqrt((x-p.x)**2+(y-p.y)**2);if(d<minD){minD=d;nearP=p}}
+        if(!nearP||minD>50)return 0;
+        const distScore=Math.max(0,1-minD/50);
+        const hdiff=Math.abs(wrapAngle(heading-(nearP.heading||0)));
+        const headScore=Math.max(0,1-hdiff/Math.PI);
+        return distScore*0.6+headScore*0.4
+    }
+    reset(){this.candidateTrack=null;this.matchCount=0}
+    setActiveToast(t){this.activeToast=t}
+    clearActiveToast(){this.activeToast=null}
+}
+const trackAutoDetector=new TrackAutoDetector();
+
+function showTrackDetectedToast(track){
+    dismissActiveToast();
+    const t=document.createElement('div');t.className='bbToast';
+    t.innerHTML='<div class=\"bbToastIcon\">📍</div><div class=\"bbToastText\"><strong>Track detected</strong><span>'+escHtml(track.name)+'</span></div><div class=\"bbToastActions\"><button class=\"bbToastBtn primary\" onclick=\"activateDetectedTrack()\">Activate</button><button class=\"bbToastBtn secondary\" onclick=\"dismissActiveToast()\">Dismiss</button></div>';
+    document.body.appendChild(t);trackAutoDetector.setActiveToast(t);t._detectedTrack=track;
+    t._dismissTimeout=setTimeout(()=>dismissActiveToast(),10000)
+}
+function dismissActiveToast(){
+    const t=trackAutoDetector.activeToast;if(!t)return;
+    if(t._dismissTimeout)clearTimeout(t._dismissTimeout);
+    t.classList.add('dismissing');setTimeout(()=>{if(t.parentNode)t.parentNode.removeChild(t)},200);
+    trackAutoDetector.clearActiveToast();trackAutoDetector.reset()
+}
+async function activateDetectedTrack(){
+    const t=trackAutoDetector.activeToast;if(!t||!t._detectedTrack)return;
+    const track=t._detectedTrack;dismissActiveToast();await activateTrack(track)
+}
+
 function openTrackDB(){
     return new Promise((res,rej)=>{
         const r=indexedDB.open(TRACK_DB,TRACK_DB_VER);
@@ -1426,6 +1484,7 @@ async function deleteTrackFromDB(id){
 
 function genTrackId(){return 'track_'+Date.now()+'_'+Math.random().toString(36).substr(2,9)}
 function escHtml(t){const d=document.createElement('div');d.textContent=t;return d.innerHTML}
+function wrapAngle(a){while(a>Math.PI)a-=2*Math.PI;while(a<-Math.PI)a+=2*Math.PI;return a}
 
 // Track Manager UI
 function openTrackModal(){
@@ -1926,6 +1985,13 @@ function process(buf){
     updateTrackRecording();
     updateStartLineIndicator();
     updateFinishLineIndicator();
+
+    // Track auto-detection (only when no active track and not recording)
+    if(!activeTrack&&!trackRecorder&&currentPos.valid){
+        trackAutoDetector.check(currentPos.x,currentPos.y,currentPos.yaw).then(detected=>{
+            if(detected)showTrackDetectedToast(detected.track)
+        }).catch(()=>{})
+    }
 
     const now=Date.now();
     const dt=lastT?Math.min((now-lastT)/1000,0.2):0.033;

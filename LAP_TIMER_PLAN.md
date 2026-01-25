@@ -51,7 +51,7 @@ Delta is THE killer feature - now implemented!
 | 8B | Delta Bar UX Polish | ✅ COMPLETE | - |
 | 9 | Data Management & Cleanup | ✅ COMPLETE | - |
 | 10 | Session History | ✅ COMPLETE | - |
-| 11 | Track Auto-Detection | ❌ NOT STARTED | LOW |
+| 11 | Track Auto-Detection | ✅ COMPLETE | - |
 | 12 | Track Learning | ❌ NOT STARTED | LOW |
 | 13 | Robustness & Edge Cases | ❌ NOT STARTED | LOW |
 | 14 | Documentation | ❌ NOT STARTED | LOW |
@@ -614,118 +614,53 @@ If you close the browser, only your best lap (reference) persists. All other lap
 
 ---
 
-## Phase 11: Track Auto-Detection ❌
+## Phase 11: Track Auto-Detection ✅
 
-### The Problem
+**Completed!** The system now automatically detects when you're driving near a saved track and offers to activate it.
 
-User has to manually open track modal and select their track every time. If they're at a track they've saved before, the system should offer to activate it automatically.
+### What Was Built
 
-### Solution
+1. **TrackAutoDetector Class**:
+   - Checks position every 3 seconds against all saved tracks
+   - Uses centerline proximity (within 50m) and heading alignment
+   - Requires 2 consecutive matches (~6 seconds) to trigger notification
+   - Skips demo tracks (only matches user-recorded tracks)
+   - Score-based matching: `0.6 × distScore + 0.4 × headingScore`
 
-Periodically check if current position is near a saved track's centerline. If consistent match, show toast offering to activate.
+2. **Toast Notification UI**:
+   - Animated slide-up toast at bottom of screen
+   - Shows track name with 📍 icon
+   - "Activate" button to immediately enable the track
+   - "Dismiss" button to close without activating
+   - Auto-dismisses after 10 seconds
+   - Only one toast shown at a time
 
-### Implementation
+3. **Integration Points**:
+   - Dashboard-dev: hooks into simulation loop after position update
+   - Production: hooks into telemetry update after currentPos is set
+   - Both skip detection when recording a new track or when track already active
 
-```javascript
-class TrackAutoDetector {
-  constructor() {
-    this.lastCheck = 0;
-    this.checkInterval = 3000;  // Check every 3 seconds
-    this.candidateTrack = null;
-    this.matchCount = 0;
-    this.requiredMatches = 2;   // Need 2 consecutive matches
-  }
+### Detection Thresholds
 
-  async check(x, y, heading) {
-    const now = Date.now();
-    if (now - this.lastCheck < this.checkInterval) return null;
-    this.lastCheck = now;
+| Parameter | Value | Purpose |
+|-----------|-------|---------|
+| Check interval | 3 seconds | Avoid excessive IndexedDB queries |
+| Required matches | 2 | Prevent false positives from GPS noise |
+| Max centerline distance | 50m | Must be reasonably close to track |
+| Score threshold | 0.5 | Combined distance + heading score |
+| Bounds margin | 100m | Quick rejection before centerline scan |
 
-    // Don't auto-detect if already have active track
-    if (activeTrack) return null;
+### How to Test (dashboard-dev)
 
-    const tracks = await getAllTracks();
-    let bestMatch = null;
-    let bestScore = 0;
-
-    for (const track of tracks) {
-      const score = this.scoreMatch(x, y, heading, track);
-      if (score > bestScore && score > 0.5) {
-        bestScore = score;
-        bestMatch = track;
-      }
-    }
-
-    if (bestMatch) {
-      if (this.candidateTrack?.id === bestMatch.id) {
-        this.matchCount++;
-      } else {
-        this.candidateTrack = bestMatch;
-        this.matchCount = 1;
-      }
-
-      if (this.matchCount >= this.requiredMatches) {
-        return { track: bestMatch, confidence: bestScore };
-      }
-    } else {
-      this.candidateTrack = null;
-      this.matchCount = 0;
-    }
-
-    return null;
-  }
-
-  scoreMatch(x, y, heading, track) {
-    // Quick bounds check
-    if (!track.bounds) return 0;
-    const margin = 100;
-    if (x < track.bounds.minX - margin || x > track.bounds.maxX + margin ||
-        y < track.bounds.minY - margin || y > track.bounds.maxY + margin) {
-      return 0;
-    }
-
-    // Find nearest centerline point
-    let minDist = Infinity;
-    let nearestPoint = null;
-    for (const p of track.centerline || []) {
-      const dist = Math.sqrt((x - p.x) ** 2 + (y - p.y) ** 2);
-      if (dist < minDist) {
-        minDist = dist;
-        nearestPoint = p;
-      }
-    }
-
-    if (!nearestPoint || minDist > 50) return 0;
-
-    // Score based on distance and heading alignment
-    const distScore = Math.max(0, 1 - minDist / 50);
-    const headingDiff = Math.abs(wrapAngle(heading - nearestPoint.heading));
-    const headingScore = Math.max(0, 1 - headingDiff / Math.PI);
-
-    return distScore * 0.6 + headingScore * 0.4;
-  }
-}
-```
-
-**Toast UI:**
-```javascript
-function showTrackDetectedToast(track) {
-  const toast = document.createElement('div');
-  toast.className = 'bbToast';
-  toast.innerHTML = `
-    <div class="bbToastText">
-      <strong>Track detected</strong><br>
-      ${escHtml(track.name)}
-    </div>
-    <button onclick="activateDetectedTrack()">Activate</button>
-    <button onclick="dismissToast()">✕</button>
-  `;
-  document.body.appendChild(toast);
-
-  // Auto-dismiss after 10 seconds
-  setTimeout(() => toast.remove(), 10000);
-}
-```
+1. Open `tools/dashboard-dev/index.html` in browser
+2. Click lap timer card → open track modal
+3. Click **+** → Start Recording
+4. Wait ~20 seconds for one full simulated lap
+5. Click **Stop Recording** → track saves and auto-activates
+6. Click the **×** next to the active track name to deactivate it
+7. Wait ~6+ seconds while simulation keeps running
+8. Toast should appear: "Track detected: [your track name]"
+9. Click **Activate** to re-enable timing, or **Dismiss** to close
 
 ---
 
