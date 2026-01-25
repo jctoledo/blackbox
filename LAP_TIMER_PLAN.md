@@ -53,8 +53,9 @@ Delta is THE killer feature - now implemented!
 | 10 | Session History | ❌ NOT STARTED | MEDIUM |
 | 11 | Track Auto-Detection | ❌ NOT STARTED | LOW |
 | 12 | Track Learning | ❌ NOT STARTED | LOW |
-| 13 | Polish & Edge Cases | ❌ NOT STARTED | LOW |
+| 13 | Robustness & Edge Cases | ❌ NOT STARTED | LOW |
 | 14 | Documentation | ❌ NOT STARTED | LOW |
+| 15 | UX Improvements | ❌ NOT STARTED | MEDIUM |
 
 ---
 
@@ -727,7 +728,7 @@ class TrackLearner {
 
 ---
 
-## Phase 13: Polish & Edge Cases ❌
+## Phase 13: Robustness & Edge Cases ❌
 
 ### GPS Warmup Check
 
@@ -802,6 +803,179 @@ Update CLAUDE.md with:
 - Lap timer architecture in codebase guide
 - Key files and their purposes
 - Testing procedures
+
+---
+
+## Phase 15: UX Improvements ❌
+
+Dedicated phase for user experience polish after core features are complete.
+
+### Mobile & Touch Optimization
+
+**Touch Targets:**
+- Ensure all buttons are minimum 44x44px (iOS HIG) / 48x48dp (Material)
+- Increase tap area for track list items and modal controls
+- Add touch feedback (ripple/highlight) on interactive elements
+
+**Viewport Handling:**
+- Handle iOS Safari address bar resize gracefully
+- Prevent zoom on double-tap for controls
+- Lock orientation or adapt layout for landscape
+
+**Gesture Support:**
+- Swipe to dismiss modals
+- Pull-to-refresh for track list (if applicable)
+- Swipe between dashboard/diagnostics views
+
+### Visual Polish
+
+**Animations & Transitions:**
+```css
+/* Smooth modal entry/exit */
+.bbModal { transition: opacity 0.2s, transform 0.2s; }
+.bbModal.entering { opacity: 0; transform: translateY(20px); }
+
+/* Delta bar value changes */
+.deltaValue { transition: color 0.15s; }
+
+/* Mode indicator transitions */
+.modeIndicator { transition: background-color 0.2s; }
+```
+
+**Loading States:**
+- Skeleton screens for track list while loading from IndexedDB
+- Spinner overlay during track activation
+- Progress indicator for CSV export
+
+**Empty States:**
+- Friendly illustration + message when no tracks saved
+- "Record your first track" call-to-action button
+- Empty lap history state with encouragement
+
+### Feedback & Confirmation
+
+**Toast Notifications:**
+- Consistent styling across all toasts
+- Queue multiple toasts (don't overlap)
+- Swipe-to-dismiss on mobile
+- Auto-dismiss with progress indicator
+
+**Confirmation Dialogs:**
+- "Delete track?" with track name displayed
+- "Clear all recordings?" with count/size
+- "Discard recording?" if leaving mid-record
+- Destructive actions require explicit confirmation
+
+**Progress Indicators:**
+- Track recording: distance/corners/time elapsed
+- CSV export: "Exporting... X of Y chunks"
+- Reference lap save: brief "Saved as best lap" toast
+
+### Accessibility
+
+**Color & Contrast:**
+- Verify WCAG AA contrast ratios (4.5:1 for text)
+- Don't rely solely on color (add icons/patterns)
+- Test with color blindness simulators
+
+**Screen Readers:**
+- Add `aria-label` to icon-only buttons
+- Announce mode changes ("Now timing", "Lap complete")
+- Live regions for delta updates
+
+**Large Text Support:**
+- Test with system font scaling
+- Ensure layouts don't break at 150% text size
+- Consider a "large display" mode for track use
+
+### Onboarding & First-Use
+
+**First Launch:**
+```javascript
+if (!localStorage.getItem('hasSeenOnboarding')) {
+  showOnboardingOverlay();
+  localStorage.setItem('hasSeenOnboarding', 'true');
+}
+```
+
+**Onboarding Steps:**
+1. "Welcome to Blackbox Lap Timer"
+2. "Record a track by driving one lap"
+3. "Then drive laps and see your times"
+4. "Beat your best lap and watch the delta"
+
+**Contextual Hints:**
+- Tooltip on first track modal open: "Tap + to record a new track"
+- Hint when first crossing start line: "Timing started!"
+- Tip after first lap: "Drive more laps to improve your best"
+
+### Settings UX
+
+**Preset Selection:**
+- Visual feedback when preset applied (flash/pulse)
+- Show what changed ("Thresholds updated for Track mode")
+- Preview threshold values before applying
+
+**Custom Mode Sliders:**
+- Show current value while dragging
+- Snap to common values (optional)
+- Reset to defaults button
+
+**Validation Feedback:**
+- Inline validation messages (not just blocked submit)
+- Highlight invalid fields with red border
+- Explain why value is invalid
+
+### Error States
+
+**Friendly Error Messages:**
+| Technical | User-Friendly |
+|-----------|---------------|
+| IndexedDB error | "Couldn't save. Storage might be full." |
+| GPS timeout | "Waiting for GPS signal..." |
+| Track load failed | "Couldn't load track. Try refreshing." |
+
+**Recovery Suggestions:**
+- "GPS not ready" → "Move outside for better signal"
+- "Track origin mismatch" → "Re-record track for best accuracy"
+- "Storage full" → "Delete old recordings in Data Management"
+
+### Performance Feel
+
+**Optimistic Updates:**
+- Show track as "saving..." immediately, confirm after IndexedDB write
+- Update UI before async operations complete
+- Roll back on failure with error message
+
+**Perceived Speed:**
+- Prioritize above-fold content rendering
+- Defer non-critical JavaScript
+- Lazy-load track centerlines (don't block list display)
+
+**Smooth Scrolling:**
+- Use CSS `scroll-behavior: smooth` for anchor links
+- Momentum scrolling on track list
+- Avoid layout shifts during scroll
+
+### Implementation Checklist
+
+**High Impact:**
+- [ ] Touch target sizing audit and fixes
+- [ ] Empty states for tracks and history
+- [ ] Confirmation dialogs for destructive actions
+- [ ] Loading states for async operations
+
+**Medium Impact:**
+- [ ] Modal animations (enter/exit)
+- [ ] Toast notification queue
+- [ ] First-use onboarding overlay
+- [ ] Error message improvements
+
+**Polish:**
+- [ ] Skeleton screens
+- [ ] Gesture support (swipe to dismiss)
+- [ ] Accessibility audit (contrast, aria labels)
+- [ ] Large text mode testing
 
 ---
 
