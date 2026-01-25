@@ -382,6 +382,7 @@ const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
     --bg:#f2f2f7;--surface:#ffffff;--text:#1c1c1e;--text-secondary:#48484a;--text-tertiary:#8e8e93;
     --divider:rgba(0,0,0,.08);--ok:#34c759;--amber:#ff9500;--red:#ff3b30;
     --mode-idle:#8e8e93;--mode-accel:#1c1c1e;--mode-brake:#ff3b30;
+    --mono:ui-monospace,SFMono-Regular,SF Mono,Menlo,Consolas,Liberation Mono,monospace;
 }
 .dark{
     --bg:#000000;--surface:#1c1c1e;--text:#ffffff;--text-secondary:#aeaeb2;--text-tertiary:#636366;
@@ -489,7 +490,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
 .bbLapState{font-size:11px;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-tertiary);opacity:0.5}
 .bbLapState.timing{color:var(--ok);opacity:0.9}
 .bbDeltaBar{display:none;flex-direction:column;align-items:center;gap:4px;margin:6px 0 8px}
-.bbLapCard.timing.has-ref .bbDeltaBar{display:flex}
+.bbLapCard.timing .bbDeltaBar{display:flex}
 .bbDeltaText{font-size:28px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-0.02em;color:var(--text);text-shadow:0 2px 6px rgba(0,0,0,0.25);transition:color 0.12s ease;line-height:1}
 .bbDeltaText.ahead{color:var(--ok);text-shadow:0 0 16px rgba(52,199,89,0.5),0 2px 6px rgba(0,0,0,0.2)}
 .bbDeltaText.behind{color:var(--red);text-shadow:0 0 16px rgba(255,59,48,0.5),0 2px 6px rgba(0,0,0,0.2)}
@@ -500,7 +501,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
 .bbDeltaFill.behind{background:linear-gradient(270deg,var(--red) 0%,rgba(255,59,48,0.8) 100%)}
 .bbDeltaBar.no-ref .bbDeltaTrack{opacity:0.2}
 .bbDeltaBar.no-ref .bbDeltaCenter{opacity:0.2}
-.bbDeltaBar.no-ref .bbDeltaText{font-size:14px;font-weight:500;color:var(--text-tertiary);opacity:0.5;text-shadow:none}
+.bbDeltaBar.no-ref .bbDeltaText{color:var(--text-tertiary);opacity:0.3;text-shadow:none}
 .bbDeltaBar.no-ref .bbDeltaFill{display:none}
 .bbDeltaFill.glow-ahead{box-shadow:0 0 16px rgba(52,199,89,0.7),0 0 32px rgba(52,199,89,0.3)}
 .bbDeltaFill.glow-behind{box-shadow:0 0 16px rgba(255,59,48,0.7),0 0 32px rgba(255,59,48,0.3)}
@@ -1151,7 +1152,7 @@ async function getAllSessions(){
     const chunksBySession=new Map();
     for(const c of allChunks){
         if(!chunksBySession.has(c.sessionId))chunksBySession.set(c.sessionId,{count:0,samples:0});
-        const s=chunksBySession.get(c.sessionId);s.count++;s.samples+=c.data?.length||0;
+        const s=chunksBySession.get(c.sessionId);s.count++;s.samples+=(c.data&&c.data.length)||0;
     }
     const enriched=sessions.map(s=>{
         const cs=chunksBySession.get(s.sessionId)||{count:0,samples:0};
@@ -1225,8 +1226,8 @@ async function getTrackDataStats(){
         const rBytes=ref?estimateObjectSize(ref):0;
         totalBytes+=tBytes+rBytes;
         const corners=typeof t.corners==='number'?t.corners:(Array.isArray(t.corners)?t.corners.length:0);
-        const points=typeof t.keyPoints==='number'?t.keyPoints:(t.centerline?.length||0);
-        return{id:t.id,name:t.name,corners:corners,points:points,totalBytes:tBytes+rBytes,hasReferenceLap:!!ref,referenceLapTime:ref?.lapTimeMs||0,referenceLapSamples:ref?.samples?.length||0}
+        const points=typeof t.keyPoints==='number'?t.keyPoints:((t.centerline&&t.centerline.length)||0);
+        return{id:t.id,name:t.name,corners:corners,points:points,totalBytes:tBytes+rBytes,hasReferenceLap:!!ref,referenceLapTime:(ref&&ref.lapTimeMs)||0,referenceLapSamples:(ref&&ref.samples&&ref.samples.length)||0}
     });
     return{tracks:result,totalBytes}
 }
@@ -1307,6 +1308,7 @@ let trackDb=null,activeTrack=null,currentPos=null,suppressStartLineIndicator=fal
 let p2pNeedsWarmup=false,trackRecorder=null;
 let referenceLap=null,lapTracker=null,lastDeltaMs=0,deltaTrend=0;
 let currentSessionId=null,currentSessionStart=null;
+let lastPosSigma=3.0; // EKF position uncertainty from diagnostics (updated at 1Hz)
 
 // Track Auto-Detection
 class TrackAutoDetector{
@@ -1317,7 +1319,7 @@ class TrackAutoDetector{
         if(this.activeToast)return null;
         const tracks=await getAllTracks();let bestMatch=null,bestScore=0;
         for(const t of tracks){if(t.isDemo)continue;const sc=this.scoreMatch(x,y,heading,t);if(sc>bestScore&&sc>0.5){bestScore=sc;bestMatch=t}}
-        if(bestMatch){if(this.candidateTrack?.id===bestMatch.id)this.matchCount++;else{this.candidateTrack=bestMatch;this.matchCount=1}if(this.matchCount>=this.requiredMatches)return{track:bestMatch,confidence:bestScore}}else this.reset();
+        if(bestMatch){if(this.candidateTrack&&this.candidateTrack.id===bestMatch.id)this.matchCount++;else{this.candidateTrack=bestMatch;this.matchCount=1}if(this.matchCount>=this.requiredMatches)return{track:bestMatch,confidence:bestScore}}else this.reset();
         return null
     }
     scoreMatch(x,y,heading,track){
@@ -1574,7 +1576,7 @@ async function showTrackHistory(id){
             html+='</div></div>';
         }
         if(hist.sessions.length>5){const more=hist.sessions.length-5;html+='<div class=\"bbHistoryMore\">+'+more+' more session'+(more===1?'':'s')+'</div>'}
-        html+='</div><div class=\"bbHistoryActions\"><button class=\"bbHistoryClearBtn\" onclick=\"clearTrackHistoryConfirm(\\''+id+'\\');\">Clear History</button></div>';
+        html+='</div><div class=\"bbHistoryActions\"><button class=\"bbHistoryClearBtn\" onclick=\"clearTrackHistoryConfirm(\''+id+'\');\">Clear History</button></div>';
         sec.innerHTML=html;
     }
     item.appendChild(sec);
@@ -1706,7 +1708,7 @@ async function finishTrackRecording(){
     const trackData=trackRecorder.finish(trackName,null);
     if(!trackData){alert('Failed to create track: not enough data or poor quality');return}
     $('record-overlay').classList.remove('active');
-    const track={id:trackData.id,name:trackData.name,type:trackData.type,startLine:trackData.startLine,finishLine:trackData.finishLine,origin:trackData.origin,centerline:trackData.centerline,bounds:trackData.bounds,pathLength:trackData.totalDistance||0,quality:trackData.quality,bestLapMs:null,lapCount:0,corners:trackData.corners||0,keyPoints:trackData.centerline?.length||trackData.keyPoints||0,createdAt:trackData.created,isNew:true};
+    const track={id:trackData.id,name:trackData.name,type:trackData.type,startLine:trackData.startLine,finishLine:trackData.finishLine,origin:trackData.origin,centerline:trackData.centerline,bounds:trackData.bounds,pathLength:trackData.totalDistance||0,quality:trackData.quality,bestLapMs:null,lapCount:0,corners:trackData.corners||0,keyPoints:(trackData.centerline&&trackData.centerline.length)||trackData.keyPoints||0,createdAt:trackData.created,isNew:true};
     await saveTrack(track);await activateTrack(track);renderTrackList();
     alert('Track "'+track.name+'" saved!\\n'+track.centerline.length+' points · '+Math.round(track.pathLength||0)+'m');
 }
@@ -1981,7 +1983,7 @@ function process(buf){
     const lapFlags=buf.byteLength>=72?d.getUint8(71):0;
     const latg=ay/9.81,lng=-ax/9.81,yawDeg=Math.abs(wz*57.3);
     // Update position for track manager and recording
-    currentPos={x:ekfX,y:ekfY,yaw:ekfYaw,speed:sp,valid:gpsOk===1,sigma:3.0};
+    currentPos={x:ekfX,y:ekfY,yaw:ekfYaw,speed:sp,valid:gpsOk===1,sigma:lastPosSigma};
     updateTrackRecording();
     updateStartLineIndicator();
     updateFinishLineIndicator();
@@ -2099,6 +2101,7 @@ async function updateDiag(){
         $('gps-warmup').className='bbVal '+(d.gps.warmup?'ok':'warn');
         const ps=$('pos-sigma');ps.textContent=d.ekf.pos_sigma.toFixed(2)+' m';
         ps.className='bbVal bbNum '+(d.ekf.pos_sigma<5?'ok':(d.ekf.pos_sigma<10?'warn':'err'));
+        if(!isNaN(d.ekf.pos_sigma)&&d.ekf.pos_sigma>0)lastPosSigma=d.ekf.pos_sigma; // Store for track recorder GPS quality
         const vs=$('vel-sigma');vs.textContent=d.ekf.vel_sigma.toFixed(2)+' m/s';
         vs.className='bbVal bbNum '+(d.ekf.vel_sigma<0.5?'ok':(d.ekf.vel_sigma<1.0?'warn':'err'));
         const ys=$('yaw-sigma');ys.textContent=d.ekf.yaw_sigma_deg.toFixed(1)+'°';

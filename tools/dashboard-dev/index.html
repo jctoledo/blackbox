@@ -15,6 +15,7 @@
     --mode-idle:#8e8e93;
     --mode-accel:#1c1c1e;
     --mode-brake:#ff3b30;
+    --mono:ui-monospace,SFMono-Regular,SF Mono,Menlo,Consolas,Liberation Mono,monospace;
 }
 .dark{
     --bg:#000000;
@@ -2545,7 +2546,7 @@ async function getAllSessions() {
         }
         const stats = chunksBySession.get(chunk.sessionId);
         stats.count++;
-        stats.samples += chunk.data?.length || 0;
+        stats.samples += (chunk.data && chunk.data.length) || 0;
     }
 
     // Enrich sessions with computed stats
@@ -3155,7 +3156,7 @@ async function getTrackDataStats() {
                         (Array.isArray(track.corners) ? track.corners.length : 0);
         // Handle points: use keyPoints if number, centerline length as fallback
         const points = typeof track.keyPoints === 'number' ? track.keyPoints :
-                       (track.centerline?.length || 0);
+                       ((track.centerline && track.centerline.length) || 0);
 
         return {
             id: track.id,
@@ -3170,7 +3171,7 @@ async function getTrackDataStats() {
             trackBytes,
             hasReferenceLap: !!refLap,
             referenceLapTime: refLap ? refLap.lapTimeMs : 0,
-            referenceLapSamples: refLap?.samples?.length || (refLap?.sampleCount || 0),
+            referenceLapSamples: (refLap && refLap.samples && refLap.samples.length) || (refLap && refLap.sampleCount) || 0,
             refBytes,
             historyLapCount: trackHistory.length,
             historyBytes,
@@ -4492,7 +4493,7 @@ async function saveRecordedTrack(trackData) {
         bestLapMs: null,
         lapCount: 0,
         corners: trackData.corners || 0,
-        keyPoints: trackData.centerline?.length || trackData.keyPoints || 0,
+        keyPoints: (trackData.centerline && trackData.centerline.length) || trackData.keyPoints || 0,
         createdAt: trackData.createdAt,
         isNew: true  // For P2P warmup - clears after first run
     };
@@ -4666,7 +4667,7 @@ class TrackAutoDetector {
         }
 
         if (bestMatch) {
-            if (this.candidateTrack?.id === bestMatch.id) {
+            if (this.candidateTrack && this.candidateTrack.id === bestMatch.id) {
                 this.matchCount++;
             } else {
                 this.candidateTrack = bestMatch;
