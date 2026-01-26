@@ -1,8 +1,8 @@
 # ESP32-C3 configuration
 CONFIG_IDF_TARGET="esp32c3"
 
-# Partition table is configured via build.rs with absolute path to partitions.csv
-# This provides 2.5MB app partition (vs 1.5MB default)
+# Partition table configured in workspace root sdkconfig.defaults
+# See docs/PARTITION_SIZE_ISSUES.md for details
 
 # Flash size
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
