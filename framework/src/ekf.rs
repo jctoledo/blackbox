@@ -1,8 +1,25 @@
 /// Extended Kalman Filter for vehicle state estimation
 /// 7-state: [x, y, ψ, vx, vy, bax, bay]
+///
+/// Features:
+/// - CTRA (Constant Turn Rate and Acceleration) motion model at speed
+/// - CA (Constant Acceleration) model when slow/straight
+/// - Innovation gating to reject outlier measurements (prevents position explosion)
+/// - Diagonal covariance approximation for embedded efficiency
 use core::f32::consts::PI;
 
 const N: usize = 7; // State dimension
+
+/// Chi-squared thresholds for innovation gating (1 DOF)
+/// These values determine how many standard deviations a measurement can be
+/// before it's rejected as an outlier.
+///
+/// At 99.5% confidence: chi2 = 7.88 (rejects 0.5% of valid measurements)
+/// At 99% confidence: chi2 = 6.63 (rejects 1% of valid measurements)
+/// At 95% confidence: chi2 = 3.84 (rejects 5% of valid measurements)
+const CHI2_GATE_POSITION: f32 = 16.0; // ~4 sigma - reject extreme outliers only
+const CHI2_GATE_VELOCITY: f32 = 9.0; // ~3 sigma - moderately strict
+const CHI2_GATE_YAW: f32 = 12.0; // ~3.5 sigma - account for magnetic interference
 
 /// EKF tuning configuration
 /// Allows runtime adjustment of filter parameters (Open/Closed Principle)
@@ -36,6 +53,15 @@ impl Default for EkfConfig {
     }
 }
 
+/// Result of a measurement update, indicating whether it was accepted or rejected
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum UpdateResult {
+    /// Measurement was accepted and state was updated
+    Accepted,
+    /// Measurement was rejected due to innovation gating (outlier)
+    Rejected,
+}
+
 /// EKF state and covariance
 pub struct Ekf {
     /// State: [x, y, ψ, vx, vy, bax, bay]
@@ -46,6 +72,14 @@ pub struct Ekf {
 
     /// Filter configuration
     pub config: EkfConfig,
+
+    /// Innovation gating statistics (for diagnostics)
+    pub rejected_position: u32,
+    pub rejected_velocity: u32,
+    pub rejected_yaw: u32,
+    pub accepted_position: u32,
+    pub accepted_velocity: u32,
+    pub accepted_yaw: u32,
 }
 
 impl Ekf {
@@ -58,7 +92,38 @@ impl Ekf {
             x: [0.0; N],
             p: [100.0, 100.0, 100.0, 100.0, 100.0, 1.0, 1.0],
             config,
+            rejected_position: 0,
+            rejected_velocity: 0,
+            rejected_yaw: 0,
+            accepted_position: 0,
+            accepted_velocity: 0,
+            accepted_yaw: 0,
         }
+    }
+
+    /// Get innovation gating statistics (accepted, rejected) for position
+    pub fn position_gate_stats(&self) -> (u32, u32) {
+        (self.accepted_position, self.rejected_position)
+    }
+
+    /// Get innovation gating statistics (accepted, rejected) for velocity
+    pub fn velocity_gate_stats(&self) -> (u32, u32) {
+        (self.accepted_velocity, self.rejected_velocity)
+    }
+
+    /// Get innovation gating statistics (accepted, rejected) for yaw
+    pub fn yaw_gate_stats(&self) -> (u32, u32) {
+        (self.accepted_yaw, self.rejected_yaw)
+    }
+
+    /// Reset gating statistics (call periodically for rate calculation)
+    pub fn reset_gate_stats(&mut self) {
+        self.rejected_position = 0;
+        self.rejected_velocity = 0;
+        self.rejected_yaw = 0;
+        self.accepted_position = 0;
+        self.accepted_velocity = 0;
+        self.accepted_yaw = 0;
     }
 
     /// Get position (x, y)
@@ -143,37 +208,87 @@ impl Ekf {
     }
 
     /// Update with GPS position measurement
-    pub fn update_position(&mut self, z_x: f32, z_y: f32) {
-        // X position update
+    ///
+    /// Uses innovation gating (Mahalanobis distance test) to reject outliers.
+    /// This prevents corrupt GPS data from causing position explosion.
+    ///
+    /// Returns UpdateResult::Accepted if measurement was used, Rejected if gated.
+    pub fn update_position(&mut self, z_x: f32, z_y: f32) -> UpdateResult {
+        // Compute innovations (measurement residuals)
+        let y_x = z_x - self.x[0];
+        let y_y = z_y - self.x[1];
+
+        // Innovation covariances (diagonal)
         let s_x = self.p[0] + self.config.r_pos;
+        let s_y = self.p[1] + self.config.r_pos;
+
+        // Mahalanobis distance squared (sum for 2D position)
+        // For diagonal covariance: d² = y_x²/s_x + y_y²/s_y
+        let mahal_sq = (y_x * y_x) / s_x + (y_y * y_y) / s_y;
+
+        // Chi-squared gate: reject if measurement is too far from prediction
+        // For 2 DOF at 99.9% confidence, chi2 ≈ 13.8
+        // Using sum of individual 1-DOF tests with CHI2_GATE_POSITION each
+        if mahal_sq > CHI2_GATE_POSITION * 2.0 {
+            self.rejected_position += 1;
+            return UpdateResult::Rejected;
+        }
+
+        // Measurement passed gating - apply standard Kalman update
         let k_x = self.p[0] / s_x;
-        self.x[0] += k_x * (z_x - self.x[0]);
+        self.x[0] += k_x * y_x;
         self.p[0] *= 1.0 - k_x;
 
-        // Y position update
-        let s_y = self.p[1] + self.config.r_pos;
         let k_y = self.p[1] / s_y;
-        self.x[1] += k_y * (z_y - self.x[1]);
+        self.x[1] += k_y * y_y;
         self.p[1] *= 1.0 - k_y;
+
+        self.accepted_position += 1;
+        UpdateResult::Accepted
     }
 
     /// Update with GPS velocity measurement
-    pub fn update_velocity(&mut self, z_vx: f32, z_vy: f32) {
-        // VX update
+    ///
+    /// Uses innovation gating to reject outliers (e.g., corrupt GPS data).
+    ///
+    /// Returns UpdateResult::Accepted if measurement was used, Rejected if gated.
+    pub fn update_velocity(&mut self, z_vx: f32, z_vy: f32) -> UpdateResult {
+        // Compute innovations
+        let y_vx = z_vx - self.x[3];
+        let y_vy = z_vy - self.x[4];
+
+        // Innovation covariances
         let s_x = self.p[3] + self.config.r_vel;
+        let s_y = self.p[4] + self.config.r_vel;
+
+        // Mahalanobis distance squared (2D velocity)
+        let mahal_sq = (y_vx * y_vx) / s_x + (y_vy * y_vy) / s_y;
+
+        // Chi-squared gate for 2 DOF
+        if mahal_sq > CHI2_GATE_VELOCITY * 2.0 {
+            self.rejected_velocity += 1;
+            return UpdateResult::Rejected;
+        }
+
+        // Apply Kalman update
         let k_x = self.p[3] / s_x;
-        self.x[3] += k_x * (z_vx - self.x[3]);
+        self.x[3] += k_x * y_vx;
         self.p[3] *= 1.0 - k_x;
 
-        // VY update
-        let s_y = self.p[4] + self.config.r_vel;
         let k_y = self.p[4] / s_y;
-        self.x[4] += k_y * (z_vy - self.x[4]);
+        self.x[4] += k_y * y_vy;
         self.p[4] *= 1.0 - k_y;
+
+        self.accepted_velocity += 1;
+        UpdateResult::Accepted
     }
 
     /// Update with scalar speed measurement
-    pub fn update_speed(&mut self, z_speed: f32) {
+    ///
+    /// Uses innovation gating to reject outlier speed measurements.
+    /// Note: Speed is always non-negative, so outliers are typically
+    /// from corrupt GPS data showing impossibly high speeds.
+    pub fn update_speed(&mut self, z_speed: f32) -> UpdateResult {
         let r_spd = if z_speed < 0.3 { 0.20 } else { 0.04 }; // Adaptive R
 
         let v_est = self.speed().max(0.05); // Avoid division by zero
@@ -185,31 +300,61 @@ impl Ekf {
         // Innovation covariance
         let s = h_x * h_x * self.p[3] + h_y * h_y * self.p[4] + r_spd;
 
+        // Innovation
+        let y = z_speed - v_est;
+
+        // Mahalanobis distance squared (1 DOF for scalar speed)
+        let mahal_sq = (y * y) / s;
+
+        // Gate using velocity threshold (speed is derived from velocity)
+        if mahal_sq > CHI2_GATE_VELOCITY {
+            // Don't increment rejected_velocity here - it's a different measurement
+            return UpdateResult::Rejected;
+        }
+
         // Kalman gains
         let k_x = self.p[3] * h_x / s;
         let k_y = self.p[4] * h_y / s;
-
-        // Innovation
-        let y = z_speed - v_est;
 
         // Update
         self.x[3] += k_x * y;
         self.x[4] += k_y * y;
         self.p[3] -= k_x * h_x * self.p[3];
         self.p[4] -= k_y * h_y * self.p[4];
+
+        UpdateResult::Accepted
     }
 
     /// Update with IMU yaw measurement (from magnetometer)
-    pub fn update_yaw(&mut self, z_yaw: f32) {
+    ///
+    /// Uses innovation gating to reject outliers (e.g., magnetic interference).
+    /// Note: Innovation is wrapped to [-π, π] before gating.
+    ///
+    /// Returns UpdateResult::Accepted if measurement was used, Rejected if gated.
+    pub fn update_yaw(&mut self, z_yaw: f32) -> UpdateResult {
         // Wrap innovation to [-π, π]
         let dy = wrap_angle(z_yaw - self.x[2]);
 
+        // Innovation covariance
         let s = self.p[2] + self.config.r_yaw;
-        let k = self.p[2] / s;
 
+        // Mahalanobis distance squared (1 DOF)
+        let mahal_sq = (dy * dy) / s;
+
+        // Chi-squared gate
+        if mahal_sq > CHI2_GATE_YAW {
+            self.rejected_yaw += 1;
+            return UpdateResult::Rejected;
+        }
+
+        // Apply Kalman update
+        let k = self.p[2] / s;
         self.x[2] += k * dy;
         self.x[2] = wrap_angle(self.x[2]);
         self.p[2] *= 1.0 - k;
+
+        self.accepted_yaw += 1;
+        UpdateResult::Accepted
     }
 
     /// Update accelerometer biases when stationary
@@ -230,9 +375,20 @@ impl Ekf {
     }
 
     /// Zero-velocity update (ZUPT) - force velocity to zero
+    ///
+    /// ZUPT bypasses innovation gating because we have high confidence
+    /// the vehicle is stationary (verified by multiple sensors).
+    /// If the EKF has drifted, ZUPT is the mechanism to recover.
     pub fn zupt(&mut self) {
-        self.update_velocity(0.0, 0.0);
-        self.update_speed(0.0);
+        // Force velocity to zero without gating
+        // This is intentional - ZUPT is a recovery mechanism
+        self.x[3] = 0.0;
+        self.x[4] = 0.0;
+
+        // Reduce velocity covariance to reflect high confidence
+        // Using very small values (but not zero to maintain numerical stability)
+        self.p[3] = 0.01;
+        self.p[4] = 0.01;
     }
 
     /// Lock position when stationary - reduces position uncertainty to make EKF
@@ -289,5 +445,200 @@ mod tests {
         assert!((wrap_angle(0.0) - 0.0).abs() < 0.001);
         assert!((wrap_angle(4.0 * PI) - 0.0).abs() < 0.001);
         assert!((wrap_angle(PI + 0.1) - (-PI + 0.1)).abs() < 0.001);
+    }
+
+    // ========== Innovation Gating Tests ==========
+
+    #[test]
+    fn test_position_gating_accepts_reasonable_measurement() {
+        let mut ekf = Ekf::new();
+        // Initialize at origin with some uncertainty
+        ekf.x[0] = 0.0;
+        ekf.x[1] = 0.0;
+        ekf.p[0] = 10.0; // 10m² variance = ~3m std dev
+        ekf.p[1] = 10.0;
+
+        // Measurement within ~3 sigma (sqrt(10+20) = 5.5m std dev)
+        // 5m is within reasonable range
+        let result = ekf.update_position(5.0, 5.0);
+
+        assert_eq!(result, UpdateResult::Accepted);
+        assert!(ekf.x[0] > 0.0); // State should have moved toward measurement
+        assert!(ekf.x[1] > 0.0);
+        assert_eq!(ekf.accepted_position, 1);
+        assert_eq!(ekf.rejected_position, 0);
+    }
+
+    #[test]
+    fn test_position_gating_rejects_extreme_outlier() {
+        let mut ekf = Ekf::new();
+        // Initialize at origin with tight uncertainty
+        ekf.x[0] = 0.0;
+        ekf.x[1] = 0.0;
+        ekf.p[0] = 1.0; // 1m² variance = 1m std dev
+        ekf.p[1] = 1.0;
+
+        // Extreme outlier: 1000m away when EKF thinks we're at origin with 1m uncertainty
+        // Mahalanobis: (1000² / (1+20)) = 47619 >> threshold
+        let result = ekf.update_position(1000.0, 1000.0);
+
+        assert_eq!(result, UpdateResult::Rejected);
+        // State should NOT have moved
+        assert!((ekf.x[0] - 0.0).abs() < 0.001);
+        assert!((ekf.x[1] - 0.0).abs() < 0.001);
+        assert_eq!(ekf.accepted_position, 0);
+        assert_eq!(ekf.rejected_position, 1);
+    }
+
+    #[test]
+    fn test_position_gating_accepts_after_covariance_grows() {
+        let mut ekf = Ekf::new();
+        ekf.x[0] = 0.0;
+        ekf.x[1] = 0.0;
+        ekf.p[0] = 1.0;
+        ekf.p[1] = 1.0;
+
+        // First: 100m measurement rejected when uncertainty is low
+        let result1 = ekf.update_position(100.0, 100.0);
+        assert_eq!(result1, UpdateResult::Rejected);
+
+        // Simulate many prediction steps that grow covariance
+        // qx = 0.25 * q_acc * dt² = 0.25 * 0.40 * 0.01 = 0.001 per step
+        // After 1000 steps: P grows by ~1.0
+        for _ in 0..1000 {
+            ekf.predict(0.0, 0.0, 0.0, 0.1);
+        }
+
+        // Now covariance should be larger (not huge, but growing)
+        assert!(
+            ekf.p[0] > 1.5,
+            "Covariance should grow: {}",
+            ekf.p[0]
+        );
+
+        // The key insight: covariance growth allows larger innovations
+        // With very high uncertainty, even extreme measurements get accepted
+        // Let's verify by setting high uncertainty manually
+        ekf.p[0] = 10000.0; // Very uncertain
+        ekf.p[1] = 10000.0;
+        let result2 = ekf.update_position(100.0, 100.0);
+        assert_eq!(
+            result2,
+            UpdateResult::Accepted,
+            "Should accept when uncertainty is high"
+        );
+    }
+
+    #[test]
+    fn test_velocity_gating_accepts_reasonable_measurement() {
+        let mut ekf = Ekf::new();
+        ekf.x[3] = 10.0; // Moving at 10 m/s
+        ekf.x[4] = 0.0;
+        ekf.p[3] = 1.0;
+        ekf.p[4] = 1.0;
+
+        // Small velocity change is reasonable
+        let result = ekf.update_velocity(11.0, 1.0);
+
+        assert_eq!(result, UpdateResult::Accepted);
+        assert_eq!(ekf.accepted_velocity, 1);
+    }
+
+    #[test]
+    fn test_velocity_gating_rejects_impossible_jump() {
+        let mut ekf = Ekf::new();
+        ekf.x[3] = 10.0; // Moving at 10 m/s
+        ekf.x[4] = 0.0;
+        ekf.p[3] = 0.1; // Very confident in velocity
+        ekf.p[4] = 0.1;
+
+        // Jump from 10 m/s to 100 m/s is physically impossible
+        // Mahalanobis: (90² / (0.1+0.2)) = 27000 >> threshold
+        let result = ekf.update_velocity(100.0, 0.0);
+
+        assert_eq!(result, UpdateResult::Rejected);
+        // Velocity should NOT have changed
+        assert!((ekf.x[3] - 10.0).abs() < 0.1);
+        assert_eq!(ekf.rejected_velocity, 1);
+    }
+
+    #[test]
+    fn test_yaw_gating_accepts_small_correction() {
+        let mut ekf = Ekf::new();
+        ekf.x[2] = 0.0; // Facing east
+        ekf.p[2] = 0.1; // ~18° std dev
+
+        // Small yaw correction (10°)
+        let result = ekf.update_yaw(0.17); // ~10°
+
+        assert_eq!(result, UpdateResult::Accepted);
+        assert!(ekf.x[2] > 0.0); // Yaw moved toward measurement
+    }
+
+    #[test]
+    fn test_yaw_gating_rejects_magnetic_spike() {
+        let mut ekf = Ekf::new();
+        ekf.x[2] = 0.0;
+        ekf.p[2] = 0.01; // Very confident
+
+        // Sudden 180° flip (magnetic interference near metal)
+        let result = ekf.update_yaw(PI);
+
+        assert_eq!(result, UpdateResult::Rejected);
+        // Yaw should NOT have flipped
+        assert!(ekf.x[2].abs() < 0.1);
+        assert_eq!(ekf.rejected_yaw, 1);
+    }
+
+    #[test]
+    fn test_zupt_bypasses_gating() {
+        let mut ekf = Ekf::new();
+        // EKF thinks we're moving fast
+        ekf.x[3] = 50.0; // 50 m/s
+        ekf.x[4] = 50.0;
+        ekf.p[3] = 0.01; // Very confident (incorrectly)
+        ekf.p[4] = 0.01;
+
+        // ZUPT should FORCE velocity to zero regardless of gating
+        ekf.zupt();
+
+        assert!((ekf.x[3] - 0.0).abs() < 0.001);
+        assert!((ekf.x[4] - 0.0).abs() < 0.001);
+        // Covariance should be reset to small value
+        assert!(ekf.p[3] < 0.1);
+        assert!(ekf.p[4] < 0.1);
+    }
+
+    #[test]
+    fn test_gating_stats_reset() {
+        let mut ekf = Ekf::new();
+        ekf.p[0] = 0.1;
+        ekf.p[1] = 0.1;
+
+        // Generate some rejections
+        ekf.update_position(1000.0, 1000.0);
+        ekf.update_position(1000.0, 1000.0);
+        assert_eq!(ekf.rejected_position, 2);
+
+        // Reset stats
+        ekf.reset_gate_stats();
+        assert_eq!(ekf.rejected_position, 0);
+        assert_eq!(ekf.accepted_position, 0);
+    }
+
+    #[test]
+    fn test_speed_gating_rejects_impossible_speed() {
+        let mut ekf = Ekf::new();
+        ekf.x[3] = 10.0;
+        ekf.x[4] = 0.0;
+        ekf.p[3] = 0.1;
+        ekf.p[4] = 0.1;
+
+        // Current speed is ~10 m/s, claiming 200 m/s is impossible
+        let result = ekf.update_speed(200.0);
+
+        assert_eq!(result, UpdateResult::Rejected);
+        // Speed should NOT have changed much
+        assert!(ekf.speed() < 15.0);
     }
 }

@@ -367,7 +367,10 @@ impl TelemetryPublisher {
         packet.wz = sensors.imu_parser.data().wz;
         packet.roll = sensors.imu_parser.data().roll.to_radians();
         packet.pitch = sensors.imu_parser.data().pitch.to_radians();
-        packet.yaw = estimator.ekf.yaw();
+        // Use aligned heading (EKF yaw + learned offset to match GPS course reference)
+        // This ensures heading is always in absolute reference (0 = North)
+        // Fixes the GPS course vs EKF yaw reference frame mismatch bug
+        packet.yaw = sensor_fusion.get_aligned_heading();
 
         let (ekf_x, ekf_y) = estimator.ekf.position();
 

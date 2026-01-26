@@ -154,13 +154,13 @@ pub use lap_timer::{
 
 // Re-export sensor fusion types
 pub use fusion::{
-    FusionConfig, GpsAcceleration, OrientationCorrector, SensorFusion, TiltEstimator,
-    YawRateCalibrator,
+    FusionConfig, GpsAcceleration, HeadingAligner, OrientationCorrector, SensorFusion,
+    TiltEstimator, YawRateCalibrator,
 };
 
 // Re-export commonly used types from sensor_framework
-// Re-export EKF
-pub use ekf::Ekf;
+// Re-export EKF types
+pub use ekf::{Ekf, EkfConfig, UpdateResult};
 // Legacy (deprecated) - kept for backward compatibility
 #[allow(deprecated)]
 pub use sensor_framework::SensorData;

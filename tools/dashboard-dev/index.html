@@ -3656,8 +3656,7 @@ class TrackRecorder {
 
             // Loop detection
             minLoopDistance: 150,       // Minimum track length before checking for loop (meters)
-            closeProximity: 25,         // Distance to start to detect closure (meters)
-            headingTolerance: 0.5,      // ~30° heading alignment for loop closure
+            closeProximity: 12,         // Distance to start to detect closure (meters) - ~4x GPS accuracy for M9N
 
             // Post-processing
             smoothingWindow: 3,         // Points for moving average
@@ -3842,7 +3841,8 @@ class TrackRecorder {
     }
 
     /**
-     * Check if we've closed the loop (returned to start with aligned heading)
+     * Check if we've closed the loop (returned to start position)
+     * Note: Heading check removed - unreliable due to GPS/EKF reference frame mismatch
      * @private
      */
     _checkLoopClosure(pos) {
@@ -3859,18 +3859,10 @@ class TrackRecorder {
             return { detected: false, reason: 'too_far_from_start', distToStart };
         }
 
-        // Check heading alignment (should be traveling same direction as at start)
-        const headingDiff = Math.abs(this._wrapAngle(pos.heading - this.startHeading));
-        const headingAligned = headingDiff < this.config.headingTolerance;
-
-        if (!headingAligned) {
-            return { detected: false, reason: 'heading_not_aligned', headingDiff };
-        }
-
+        // Loop detected: traveled minimum distance and returned close to start
         return {
             detected: true,
             distToStart: distToStart,
-            headingDiff: headingDiff,
             quality: this._assessQuality()
         };
     }

@@ -1,7 +1,8 @@
 # ESP32-C3 configuration
 CONFIG_IDF_TARGET="esp32c3"
 
-# Use built-in large partition table (3MB app partition)
+# Use built-in large partition table (1.5MB app partition)
+# For a larger partition, create a custom partition table
 # CONFIG_PARTITION_TABLE_SINGLE_APP is not set
 CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y
 

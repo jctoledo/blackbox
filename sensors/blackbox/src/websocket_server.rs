@@ -1288,15 +1288,16 @@ function formatDuration(ms){
 
 // TrackRecorder - Adaptive sampling for track recording with corner state machine
 class TrackRecorder{
-    constructor(){this.config={minDistance:2,maxDistance:30,headingThreshold:0.15,cornerEntryThreshold:0.025,cornerExitThreshold:0.012,minCornerLength:3,minLoopDistance:150,closeProximity:25,headingTolerance:0.5};this.reset()}
+    constructor(){this.config={minDistance:2,maxDistance:30,headingThreshold:0.15,cornerEntryThreshold:0.025,cornerExitThreshold:0.012,minCornerLength:3,minLoopDistance:150,closeProximity:12};this.reset()}
     reset(){this.recording=false;this.trackType='loop';this.startPos=null;this.startHeading=0;this.startTime=0;this.keyPoints=[];this.rawSamples=[];this.lastPos=null;this.lastSigma=3.0;this.totalDistance=0;this.loopDetected=false;this.inCorner=false;this.cornerCount=0;this.cornerEntryDist=0;this.speedGate=false}
     start(pos,trackType='loop'){if(this.recording)return false;this.reset();this.recording=true;this.trackType=trackType;this.startPos={x:pos.x,y:pos.y};this.startHeading=pos.heading||0;this.startTime=Date.now();this.keyPoints.push({x:pos.x,y:pos.y,lat:pos.lat||0,lon:pos.lon||0,heading:pos.heading||0,speed:pos.speed||0,sigma:pos.sigma||3.0,t:Date.now(),curvature:0,isCorner:false});this.lastPos={x:pos.x,y:pos.y,heading:pos.heading||0};return true}
     addSample(pos){if(!this.recording||!this.lastPos)return{stored:false};
     // Check loop closure FIRST - even when stopped at start position
-    if(this.trackType==='loop'&&this.totalDistance>=this.config.minLoopDistance){const dts=Math.sqrt((pos.x-this.startPos.x)**2+(pos.y-this.startPos.y)**2);if(dts<this.config.closeProximity){const hd=Math.abs(this._wrapAngle(pos.heading-this.startHeading));if(hd<this.config.headingTolerance){this.loopDetected=true;return{stored:true,loopDetected:true,stats:this.getStats()}}}}
+    // Only check distance traveled + proximity to start (heading check removed - unreliable due to GPS/EKF reference frame mismatch)
+    if(this.trackType==='loop'&&this.totalDistance>=this.config.minLoopDistance){const dts=Math.sqrt((pos.x-this.startPos.x)**2+(pos.y-this.startPos.y)**2);if(dts<this.config.closeProximity){this.loopDetected=true;return{stored:true,loopDetected:true,stats:this.getStats()}}}
     // Speed gate - skip samples while stationary (but loop check already ran above)
     const spd=pos.speed||0;if(!this.speedGate){if(spd<2.0)return{stored:false,stats:this.getStats()};this.speedGate=true;this.lastPos={x:pos.x,y:pos.y,heading:pos.heading||0};if(this.keyPoints.length<=1){this.startHeading=pos.heading||0}}else{if(spd<0.5){this.speedGate=false;return{stored:false,stats:this.getStats()}}}const sigma=pos.sigma||3.0;this.lastSigma=sigma;const dx=pos.x-this.lastPos.x,dy=pos.y-this.lastPos.y,dist=Math.sqrt(dx*dx+dy*dy);if(dist<0.5)return{stored:false,stats:this.getStats()};const speedBasedMinDist=Math.max(this.config.minDistance,pos.speed*0.1);const headingChange=Math.abs(this._wrapAngle(pos.heading-this.lastPos.heading));const shouldStore=dist>=speedBasedMinDist||headingChange>=this.config.headingThreshold||dist>=this.config.maxDistance;if(!shouldStore)return{stored:false,stats:this.getStats()};const curvature=dist>0.1?headingChange/dist:0;let isCorner=false;if(!this.inCorner){if(curvature>this.config.cornerEntryThreshold){this.inCorner=true;this.cornerEntryDist=this.totalDistance;isCorner=true}}else{isCorner=true;if(curvature<this.config.cornerExitThreshold){const cornerLength=this.totalDistance-this.cornerEntryDist;if(cornerLength>=this.config.minCornerLength)this.cornerCount++;this.inCorner=false}}this.keyPoints.push({x:pos.x,y:pos.y,lat:pos.lat||0,lon:pos.lon||0,heading:pos.heading||0,speed:pos.speed||0,sigma:sigma,t:Date.now(),curvature:curvature,isCorner:isCorner});this.totalDistance+=dist;this.lastPos={x:pos.x,y:pos.y,heading:pos.heading||0};if(this.trackType==='loop'){const lr=this._checkLoopClosure(pos);if(lr.detected){this.loopDetected=true;return{stored:true,loopDetected:true,stats:this.getStats()}}}return{stored:true,curvature:curvature,isCorner:isCorner,stats:this.getStats()}}
-    _checkLoopClosure(pos){if(this.totalDistance<this.config.minLoopDistance)return{detected:false};const dts=Math.sqrt((pos.x-this.startPos.x)**2+(pos.y-this.startPos.y)**2);if(dts>=this.config.closeProximity)return{detected:false};const hd=Math.abs(this._wrapAngle(pos.heading-this.startHeading));return hd<this.config.headingTolerance?{detected:true}:{detected:false}}
+    _checkLoopClosure(pos){if(this.totalDistance<this.config.minLoopDistance)return{detected:false};const dts=Math.sqrt((pos.x-this.startPos.x)**2+(pos.y-this.startPos.y)**2);return dts<this.config.closeProximity?{detected:true}:{detected:false}}
     _wrapAngle(a){while(a>Math.PI)a-=2*Math.PI;while(a<-Math.PI)a+=2*Math.PI;return a}
     getStats(){const displayCorners=this.inCorner?this.cornerCount+1:this.cornerCount;return{recording:this.recording,trackType:this.trackType,keyPointCount:this.keyPoints.length,totalDistance:this.totalDistance,loopDetected:this.loopDetected,elapsedMs:this.recording?Date.now()-this.startTime:0,gpsQuality:this._gpsQualityRating(this.lastSigma),corners:displayCorners,inCorner:this.inCorner}}
     _gpsQualityRating(sigma){if(sigma<2.0)return'excellent';if(sigma<3.0)return'good';if(sigma<4.0)return'fair';return'poor'}
@@ -1749,7 +1750,9 @@ async function deactivateTrack(){
 function startTrackRecording(trackType='loop'){
     if(!currentPos||!currentPos.valid){alert('Position not available');return false}
     if(!trackRecorder)trackRecorder=new TrackRecorder();
-    const pos={x:currentPos.x,y:currentPos.y,lat:currentPos.lat,lon:currentPos.lon,heading:currentPos.yaw,speed:currentPos.speed,valid:true,sigma:currentPos.sigma||3.0};
+    // Use GPS course if valid, else EKF yaw (heading used for corner detection, not loop closure)
+    const heading=currentPos.validGpsCourse?currentPos.gpsCourse:currentPos.yaw;
+    const pos={x:currentPos.x,y:currentPos.y,lat:currentPos.lat,lon:currentPos.lon,heading:heading,speed:currentPos.speed,valid:true,sigma:currentPos.sigma||3.0};
     if(!trackRecorder.start(pos,trackType)){console.warn('Failed to start recording');return false}
     const overlay=$('record-overlay');overlay.classList.add('active');
     $('rec-title').textContent=trackType==='loop'?'Recording Circuit':'Recording Stage';
@@ -1761,7 +1764,7 @@ function startTrackRecording(trackType='loop'){
 }
 function updateTrackRecording(){
     if(!trackRecorder||!trackRecorder.recording||!currentPos||!currentPos.valid)return;
-    // Prefer GPS course (direct measurement) over EKF yaw when valid
+    // Use GPS course when valid, otherwise EKF yaw (heading used for corner detection, not loop closure)
     const heading=currentPos.validGpsCourse?currentPos.gpsCourse:currentPos.yaw;
     const pos={x:currentPos.x,y:currentPos.y,lat:currentPos.lat,lon:currentPos.lon,heading:heading,speed:currentPos.speed,valid:true,sigma:currentPos.sigma||3.0};
     const result=trackRecorder.addSample(pos);
