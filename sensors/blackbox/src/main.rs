@@ -788,8 +788,8 @@ fn main() {
                     // Vehicle stopped - perform ZUPT, lock position, and bias estimation
                     estimator.zupt();
                     estimator.ekf.lock_position(); // Prevent GPS noise from moving position
-                    // Issue 4: Lock yaw to prevent magnetometer noise from drifting heading
-                    // Magnetometer updates still occur but with very low gain (~1%)
+                                                   // Issue 4: Lock yaw to prevent magnetometer noise from drifting heading
+                                                   // Magnetometer updates still occur but with very low gain (~1%)
                     estimator.ekf.lock_yaw();
                     diagnostics.record_zupt();
 
@@ -822,14 +822,14 @@ fn main() {
                         // This catches corrupt GPS data that passes checksum (rare but possible)
                         // Normal driving: max 42 m/s (150 km/h) × 0.04s = 1.7m between 25Hz fixes
                         let (ekf_x, ekf_y) = estimator.ekf.position();
-                        let jump_dist =
-                            ((x - ekf_x).powi(2) + (y - ekf_y).powi(2)).sqrt();
+                        let jump_dist = ((x - ekf_x).powi(2) + (y - ekf_y).powi(2)).sqrt();
 
                         if jump_dist < 1000.0 {
                             estimator.update_position(x, y);
                         } else {
                             // Log rejected update (uncomment for debugging)
-                            // info!("GPS rejected: jump={:.0}m, gps=({:.1},{:.1}), ekf=({:.1},{:.1})",
+                            // info!("GPS rejected: jump={:.0}m,
+                            // gps=({:.1},{:.1}), ekf=({:.1},{:.1})",
                             //       jump_dist, x, y, ekf_x, ekf_y);
                         }
                     }
@@ -900,11 +900,8 @@ fn main() {
             let (ekf_x, ekf_y) = estimator.ekf.position();
             let (ekf_vx, ekf_vy) = estimator.ekf.velocity();
             let lap_flags = lap_timer.update((ekf_x, ekf_y), (ekf_vx, ekf_vy), now_ms, speed);
-            let lap_timer_data = Some((
-                lap_timer.current_lap_ms(),
-                lap_timer.lap_count(),
-                lap_flags,
-            ));
+            let lap_timer_data =
+                Some((lap_timer.current_lap_ms(), lap_timer.lap_count(), lap_flags));
 
             // Publish telemetry with tilt-corrected accelerations and lap timer data
             publisher
@@ -912,7 +909,8 @@ fn main() {
                 .ok();
 
             // Update fusion diagnostics at telemetry rate for synchronized CSV export
-            // This ensures fusion data (lon_imu, lon_gps, etc.) matches the telemetry packet
+            // This ensures fusion data (lon_imu, lon_gps, etc.) matches the telemetry
+            // packet
             let (tilt_x, tilt_y, tilt_valid) = sensor_fusion.get_tilt_offsets();
             let (pitch_corr, roll_corr) = sensor_fusion.get_orientation_correction();
             let (pitch_conf, roll_conf) = sensor_fusion.get_orientation_confidence();

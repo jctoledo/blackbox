@@ -334,7 +334,8 @@ impl TelemetryPublisher {
     /// Publish binary telemetry packet via UDP and/or HTTP server state
     ///
     /// # Arguments
-    /// * `lap_timer_data` - Optional tuple of (lap_time_ms, lap_count, lap_flags)
+    /// * `lap_timer_data` - Optional tuple of (lap_time_ms, lap_count,
+    ///   lap_flags)
     pub fn publish_telemetry(
         &mut self,
         sensors: &SensorManager,

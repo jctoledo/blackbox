@@ -40,18 +40,19 @@ pub struct TelemetryPacket {
     pub vy: f32,
     pub speed_kmh: f32,
     pub pos_sigma: f32, // EKF position uncertainty (meters), for GPS quality indicator
-    pub mode: u8, // 0=IDLE, 1=ACCEL, 2=BRAKE, 4=CORNER, 5=ACCEL+CORNER, 6=BRAKE+CORNER
+    pub mode: u8,       // 0=IDLE, 1=ACCEL, 2=BRAKE, 4=CORNER, 5=ACCEL+CORNER, 6=BRAKE+CORNER
 
     // GPS data (13 bytes)
-    pub lat: f32,      // degrees (f32 for size, ~1cm accuracy)
+    pub lat: f32, // degrees (f32 for size, ~1cm accuracy)
     pub lon: f32,
-    pub gps_valid: u8, // 0/1
+    pub gps_valid: u8,   // 0/1
     pub gps_course: f32, // Course over ground in radians (only valid when speed > ~1 m/s)
 
     // Lap timer (7 bytes)
     pub lap_time_ms: u32, // Current lap time in ms (0 if not timing)
     pub lap_count: u16,   // Completed lap count
-    pub lap_flags: u8,    // Flags: 1=crossed_start, 2=crossed_finish, 4=new_lap, 8=new_best, 16=invalid
+    pub lap_flags: u8,    /* Flags: 1=crossed_start, 2=crossed_finish, 4=new_lap, 8=new_best,
+                           * 16=invalid */
 
     pub checksum: u16, // Simple checksum
 }

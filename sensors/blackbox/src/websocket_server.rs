@@ -361,7 +361,10 @@ fn parse_lap_timer_config(uri: &str, state: &TelemetryServerState) -> (String, u
             }
         }
         _ => (
-            format!(r#"{{"error":"unknown type '{}', expected: clear, loop, point_to_point"}}"#, config_type),
+            format!(
+                r#"{{"error":"unknown type '{}', expected: clear, loop, point_to_point"}}"#,
+                config_type
+            ),
             400,
         ),
     }
@@ -2706,9 +2709,10 @@ impl TelemetryServer {
         )?;
 
         // Lap timer configuration endpoint
-        // GET /api/laptimer/configure?type=loop&p1_x=...&p1_y=...&p2_x=...&p2_y=...&dir=...
-        // GET /api/laptimer/configure?type=clear
-        // GET /api/laptimer/configure?type=point_to_point&p1_x=...&p1_y=...&p2_x=...&p2_y=...&dir=...&f_p1_x=...&f_p1_y=...&f_p2_x=...&f_p2_y=...&f_dir=...
+        // GET /api/laptimer/configure?type=loop&p1_x=...&p1_y=...&p2_x=...&p2_y=...&
+        // dir=... GET /api/laptimer/configure?type=clear
+        // GET /api/laptimer/configure?type=point_to_point&p1_x=...&p1_y=...&p2_x=...&
+        // p2_y=...&dir=...&f_p1_x=...&f_p1_y=...&f_p2_x=...&f_p2_y=...&f_dir=...
         let state_laptimer = state.clone();
         server.fn_handler(
             "/api/laptimer/configure",
