@@ -788,6 +788,9 @@ fn main() {
                     // Vehicle stopped - perform ZUPT, lock position, and bias estimation
                     estimator.zupt();
                     estimator.ekf.lock_position(); // Prevent GPS noise from moving position
+                    // Issue 4: Lock yaw to prevent magnetometer noise from drifting heading
+                    // Magnetometer updates still occur but with very low gain (~1%)
+                    estimator.ekf.lock_yaw();
                     diagnostics.record_zupt();
 
                     let (ax_b, ay_b, _) = remove_gravity(
@@ -808,6 +811,11 @@ fn main() {
                     estimator.update_bias(ax_e, ay_e);
                     estimator.reset_speed();
                 } else {
+                    // Issue 4: Store current aligned heading while moving
+                    // This preserves heading for when we stop
+                    estimator
+                        .ekf
+                        .store_moving_yaw(sensor_fusion.get_aligned_heading());
                     // Moving - update position from GPS (only when fix is valid)
                     if let Some((x, y)) = sensors.gps_parser.to_local_coords() {
                         // Sanity check: reject extreme position jumps (> 1000m)

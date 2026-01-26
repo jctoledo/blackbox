@@ -62,6 +62,10 @@ pub enum UpdateResult {
     Rejected,
 }
 
+/// Minimum position sigma floor (meters)
+/// EKF can't know position better than GPS accuracy (~2-3m for M9N)
+const POS_SIGMA_FLOOR: f32 = 2.5;
+
 /// EKF state and covariance
 pub struct Ekf {
     /// State: [x, y, ψ, vx, vy, bax, bay]
@@ -80,6 +84,24 @@ pub struct Ekf {
     pub accepted_position: u32,
     pub accepted_velocity: u32,
     pub accepted_yaw: u32,
+
+    // Issue 3: Innovation tracking for uncertainty estimation
+    /// Sum of normalized innovation squared (NIS) for position updates
+    nis_position_sum: f32,
+    /// Count of position updates for NIS average
+    nis_position_count: u32,
+    /// Last accepted GPS position X (for discrepancy check)
+    last_gps_x: f32,
+    /// Last accepted GPS position Y (for discrepancy check)
+    last_gps_y: f32,
+    /// Whether we have a valid last GPS position
+    has_last_gps: bool,
+
+    // Issue 4: Yaw stabilization when stationary
+    /// Last valid heading before stopping (radians, aligned to GPS course)
+    last_moving_yaw: f32,
+    /// Whether we have a valid stored yaw from when moving
+    has_last_moving_yaw: bool,
 }
 
 impl Ekf {
@@ -98,6 +120,15 @@ impl Ekf {
             accepted_position: 0,
             accepted_velocity: 0,
             accepted_yaw: 0,
+            // Issue 3: Innovation tracking
+            nis_position_sum: 0.0,
+            nis_position_count: 0,
+            last_gps_x: 0.0,
+            last_gps_y: 0.0,
+            has_last_gps: false,
+            // Issue 4: Yaw stabilization
+            last_moving_yaw: 0.0,
+            has_last_moving_yaw: false,
         }
     }
 
@@ -144,6 +175,151 @@ impl Ekf {
     /// Get speed (magnitude of velocity)
     pub fn speed(&self) -> f32 {
         (self.x[3] * self.x[3] + self.x[4] * self.x[4]).sqrt()
+    }
+
+    // ============== Issue 3: Effective Uncertainty Estimation ==============
+
+    /// Get average normalized innovation squared (NIS) for position
+    ///
+    /// NIS should average ~2.0 for 2D position if filter is consistent.
+    /// Values significantly higher indicate model/measurement mismatch.
+    ///
+    /// Returns 2.0 (ideal) if no updates yet.
+    pub fn get_nis_position_avg(&self) -> f32 {
+        if self.nis_position_count > 0 {
+            self.nis_position_sum / self.nis_position_count as f32
+        } else {
+            2.0 // Expected value for 2 DOF
+        }
+    }
+
+    /// Reset NIS statistics (call periodically to track recent performance)
+    pub fn reset_nis_stats(&mut self) {
+        self.nis_position_sum = 0.0;
+        self.nis_position_count = 0;
+    }
+
+    /// Get distance between EKF position and last GPS measurement (meters)
+    ///
+    /// Large discrepancy indicates EKF may have drifted from reality.
+    /// Returns 0.0 if no GPS position stored yet.
+    pub fn get_gps_discrepancy(&self) -> f32 {
+        if self.has_last_gps {
+            let dx = self.x[0] - self.last_gps_x;
+            let dy = self.x[1] - self.last_gps_y;
+            (dx * dx + dy * dy).sqrt()
+        } else {
+            0.0
+        }
+    }
+
+    /// Get effective position sigma that accounts for uncertainty beyond covariance
+    ///
+    /// The raw covariance P may not reflect true uncertainty when:
+    /// - Innovation statistics indicate model mismatch (NIS >> expected)
+    /// - EKF has drifted far from GPS measurements
+    ///
+    /// This method returns an adjusted sigma that:
+    /// 1. Starts with sqrt(P[0] + P[1]) as base
+    /// 2. Inflates based on NIS average (if significantly above expected)
+    /// 3. Inflates based on GPS discrepancy
+    /// 4. Applies minimum floor (GPS can't be more accurate than ~2-3m)
+    pub fn get_effective_pos_sigma(&self) -> f32 {
+        // Base sigma from covariance
+        let base_sigma = (self.p[0] + self.p[1]).sqrt();
+
+        // NIS inflation factor: if NIS is higher than expected, uncertainty is understated
+        // Expected NIS for 2 DOF is ~2.0. If it's 4.0, our uncertainty is 2x understated.
+        let nis_avg = self.get_nis_position_avg();
+        let nis_inflation = if nis_avg > 2.0 {
+            (nis_avg / 2.0).sqrt() // sqrt to convert variance ratio to sigma ratio
+        } else {
+            1.0
+        };
+
+        // GPS discrepancy inflation: if EKF is far from GPS, uncertainty is understated
+        let discrepancy = self.get_gps_discrepancy();
+        let discrepancy_inflation = if discrepancy > 5.0 {
+            // If discrepancy > 5m, add it to sigma (conservative)
+            1.0 + (discrepancy - 5.0) / 10.0
+        } else {
+            1.0
+        };
+
+        // Combine inflations (multiplicative)
+        let inflated_sigma = base_sigma * nis_inflation * discrepancy_inflation;
+
+        // Apply floor: EKF can't know position better than GPS (~2-3m for M9N)
+        inflated_sigma.max(POS_SIGMA_FLOOR)
+    }
+
+    // ============== Issue 4: Yaw Stabilization When Stationary ==============
+
+    /// Store current yaw as the last known heading while moving
+    ///
+    /// Call this while vehicle is moving (before it stops) to remember
+    /// the heading for stabilization when stationary.
+    pub fn store_moving_yaw(&mut self, yaw: f32) {
+        self.last_moving_yaw = yaw;
+        self.has_last_moving_yaw = true;
+    }
+
+    /// Get the last stored yaw from when the vehicle was moving
+    ///
+    /// Returns None if no yaw has been stored yet.
+    pub fn get_last_moving_yaw(&self) -> Option<f32> {
+        if self.has_last_moving_yaw {
+            Some(self.last_moving_yaw)
+        } else {
+            None
+        }
+    }
+
+    /// Lock yaw when stationary - reduces yaw uncertainty to prevent
+    /// magnetometer noise from corrupting heading while parked
+    ///
+    /// Similar to lock_position(), this makes the EKF resistant to
+    /// noisy magnetometer updates when we're confident about heading.
+    ///
+    /// With P_yaw = 0.001 and R_yaw = 0.10, Kalman gain K ≈ 0.01,
+    /// so magnetometer updates only affect yaw by ~1% instead of ~50%.
+    pub fn lock_yaw(&mut self) {
+        self.p[2] = 0.001; // Very confident in current yaw
+    }
+
+    /// Update yaw with soft constraint (higher measurement noise)
+    ///
+    /// Use this when stationary to allow slow yaw updates without
+    /// letting magnetometer noise cause rapid drift.
+    ///
+    /// # Arguments
+    /// * `z_yaw` - Yaw measurement in radians
+    /// * `r_yaw_factor` - Multiplier for measurement noise (>1 = less trust)
+    pub fn update_yaw_soft(&mut self, z_yaw: f32, r_yaw_factor: f32) -> UpdateResult {
+        // Wrap innovation to [-π, π]
+        let dy = wrap_angle(z_yaw - self.x[2]);
+
+        // Use inflated measurement noise
+        let r_yaw = self.config.r_yaw * r_yaw_factor;
+        let s = self.p[2] + r_yaw;
+
+        // Mahalanobis distance squared (1 DOF)
+        let mahal_sq = (dy * dy) / s;
+
+        // Chi-squared gate (same as regular update_yaw)
+        if mahal_sq > CHI2_GATE_YAW {
+            self.rejected_yaw += 1;
+            return UpdateResult::Rejected;
+        }
+
+        // Apply Kalman update with reduced gain due to higher R
+        let k = self.p[2] / s;
+        self.x[2] += k * dy;
+        self.x[2] = wrap_angle(self.x[2]);
+        self.p[2] *= 1.0 - k;
+
+        self.accepted_yaw += 1;
+        UpdateResult::Accepted
     }
 
     /// Get accelerometer biases (bax, bay)
@@ -233,6 +409,17 @@ impl Ekf {
             self.rejected_position += 1;
             return UpdateResult::Rejected;
         }
+
+        // Issue 3: Track normalized innovation squared (NIS) for uncertainty estimation
+        // NIS = innovation² / S, should average ~1.0 if filter is consistent
+        // High NIS average indicates model/measurement mismatch
+        self.nis_position_sum += mahal_sq;
+        self.nis_position_count += 1;
+
+        // Store GPS position for discrepancy checking
+        self.last_gps_x = z_x;
+        self.last_gps_y = z_y;
+        self.has_last_gps = true;
 
         // Measurement passed gating - apply standard Kalman update
         let k_x = self.p[0] / s_x;
@@ -640,5 +827,190 @@ mod tests {
         assert_eq!(result, UpdateResult::Rejected);
         // Speed should NOT have changed much
         assert!(ekf.speed() < 15.0);
+    }
+
+    // ========== Issue 3: Effective Uncertainty Tests ==========
+
+    #[test]
+    fn test_nis_tracking() {
+        let mut ekf = Ekf::new();
+        ekf.x[0] = 0.0;
+        ekf.x[1] = 0.0;
+        ekf.p[0] = 10.0;
+        ekf.p[1] = 10.0;
+
+        // Initial NIS average should be 2.0 (expected for 2 DOF)
+        assert!((ekf.get_nis_position_avg() - 2.0).abs() < 0.01);
+
+        // Accept a measurement - NIS should be tracked
+        ekf.update_position(2.0, 2.0);
+        assert_eq!(ekf.nis_position_count, 1);
+
+        // NIS for this measurement: (2² + 2²) / (10+20) / 2 per dim
+        // Should be small since measurement is close
+        assert!(ekf.get_nis_position_avg() < 1.0);
+    }
+
+    #[test]
+    fn test_nis_reset() {
+        let mut ekf = Ekf::new();
+        ekf.p[0] = 10.0;
+        ekf.p[1] = 10.0;
+
+        ekf.update_position(1.0, 1.0);
+        ekf.update_position(2.0, 2.0);
+        assert_eq!(ekf.nis_position_count, 2);
+
+        ekf.reset_nis_stats();
+        assert_eq!(ekf.nis_position_count, 0);
+        assert!((ekf.get_nis_position_avg() - 2.0).abs() < 0.01); // Back to default
+    }
+
+    #[test]
+    fn test_gps_discrepancy() {
+        let mut ekf = Ekf::new();
+        ekf.x[0] = 0.0;
+        ekf.x[1] = 0.0;
+        ekf.p[0] = 100.0;
+        ekf.p[1] = 100.0;
+
+        // No GPS yet - discrepancy should be 0
+        assert!((ekf.get_gps_discrepancy() - 0.0).abs() < 0.01);
+
+        // Accept GPS at (10, 0)
+        ekf.update_position(10.0, 0.0);
+
+        // EKF should have moved toward GPS, but discrepancy should be low
+        assert!(ekf.get_gps_discrepancy() < 2.0);
+
+        // Now simulate EKF drift: manually set EKF position far from last GPS
+        ekf.x[0] = 50.0;
+        ekf.x[1] = 0.0;
+
+        // Discrepancy should now be ~40m (50 - 10)
+        let discrepancy = ekf.get_gps_discrepancy();
+        assert!(
+            discrepancy > 35.0 && discrepancy < 45.0,
+            "Discrepancy should be ~40m, got {}",
+            discrepancy
+        );
+    }
+
+    #[test]
+    fn test_effective_pos_sigma_floor() {
+        let mut ekf = Ekf::new();
+        // Very confident EKF (low covariance)
+        ekf.p[0] = 0.01;
+        ekf.p[1] = 0.01;
+
+        // Even with low covariance, effective sigma should have floor
+        let sigma = ekf.get_effective_pos_sigma();
+        assert!(
+            sigma >= POS_SIGMA_FLOOR,
+            "Sigma {} should be >= floor {}",
+            sigma,
+            POS_SIGMA_FLOOR
+        );
+    }
+
+    #[test]
+    fn test_effective_pos_sigma_inflates_with_discrepancy() {
+        let mut ekf = Ekf::new();
+        ekf.p[0] = 10.0;
+        ekf.p[1] = 10.0;
+
+        // Accept GPS at origin
+        ekf.update_position(0.0, 0.0);
+        let sigma_no_discrepancy = ekf.get_effective_pos_sigma();
+
+        // Simulate drift: move EKF far from last GPS
+        ekf.x[0] = 20.0;
+        ekf.x[1] = 0.0;
+
+        let sigma_with_discrepancy = ekf.get_effective_pos_sigma();
+        assert!(
+            sigma_with_discrepancy > sigma_no_discrepancy,
+            "Sigma should inflate with discrepancy: {} > {}",
+            sigma_with_discrepancy,
+            sigma_no_discrepancy
+        );
+    }
+
+    // ========== Issue 4: Yaw Stabilization Tests ==========
+
+    #[test]
+    fn test_store_moving_yaw() {
+        let mut ekf = Ekf::new();
+
+        // Initially no stored yaw
+        assert!(ekf.get_last_moving_yaw().is_none());
+
+        // Store yaw
+        ekf.store_moving_yaw(1.5);
+        assert!(ekf.get_last_moving_yaw().is_some());
+        assert!((ekf.get_last_moving_yaw().unwrap() - 1.5).abs() < 0.01);
+
+        // Update stored yaw
+        ekf.store_moving_yaw(2.0);
+        assert!((ekf.get_last_moving_yaw().unwrap() - 2.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_lock_yaw_reduces_sensitivity() {
+        let mut ekf = Ekf::new();
+        ekf.x[2] = 0.5; // Current yaw
+        ekf.p[2] = 0.1; // Normal uncertainty
+
+        // Normal yaw update
+        let yaw_before = ekf.x[2];
+        ekf.update_yaw(1.0);
+        let change_normal = (ekf.x[2] - yaw_before).abs();
+
+        // Reset
+        ekf.x[2] = 0.5;
+        ekf.p[2] = 0.1;
+
+        // Lock yaw then update
+        ekf.lock_yaw();
+        let yaw_before_locked = ekf.x[2];
+        ekf.update_yaw(1.0);
+        let change_locked = (ekf.x[2] - yaw_before_locked).abs();
+
+        // Locked update should have much smaller effect
+        assert!(
+            change_locked < change_normal * 0.1,
+            "Locked change {} should be << normal change {}",
+            change_locked,
+            change_normal
+        );
+    }
+
+    #[test]
+    fn test_update_yaw_soft() {
+        let mut ekf = Ekf::new();
+        ekf.x[2] = 0.0;
+        ekf.p[2] = 0.1;
+
+        // Soft update with 10x noise factor
+        let yaw_before = ekf.x[2];
+        ekf.update_yaw_soft(0.5, 10.0);
+        let change_soft = (ekf.x[2] - yaw_before).abs();
+
+        // Reset
+        ekf.x[2] = 0.0;
+        ekf.p[2] = 0.1;
+
+        // Normal update
+        let yaw_before_normal = ekf.x[2];
+        ekf.update_yaw(0.5);
+        let change_normal = (ekf.x[2] - yaw_before_normal).abs();
+
+        // Soft update should have smaller effect
+        assert!(
+            change_soft < change_normal,
+            "Soft change {} should be < normal change {}",
+            change_soft,
+            change_normal
+        );
     }
 }

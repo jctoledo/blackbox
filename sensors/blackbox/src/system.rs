@@ -391,8 +391,10 @@ impl TelemetryPublisher {
         packet.vx = vx;
         packet.vy = vy;
         packet.speed_kmh = display_speed_kmh;
-        // EKF position uncertainty: sqrt(var_x + var_y) from diagonal of covariance matrix
-        packet.pos_sigma = (estimator.ekf.p[0] + estimator.ekf.p[1]).sqrt();
+        // EKF position uncertainty: uses effective sigma that accounts for
+        // innovation statistics, GPS discrepancy, and minimum floor (~2-3m)
+        // This prevents false confidence when EKF may have drifted
+        packet.pos_sigma = estimator.ekf.get_effective_pos_sigma();
         packet.mode = estimator.mode_classifier.get_mode_u8();
 
         if sensors.gps_parser.last_fix().valid {
