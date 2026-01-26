@@ -1,10 +1,8 @@
 # ESP32-C3 configuration
 CONFIG_IDF_TARGET="esp32c3"
 
-# Use built-in large partition table (1.5MB app partition)
-# For a larger partition, create a custom partition table
-# CONFIG_PARTITION_TABLE_SINGLE_APP is not set
-CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y
+# Partition table is configured via build.rs with absolute path to partitions.csv
+# This provides 2.5MB app partition (vs 1.5MB default)
 
 # Flash size
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y

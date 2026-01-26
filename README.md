@@ -12,7 +12,7 @@ Real-time GPS + IMU sensor fusion for vehicle dynamics. Track position, velocity
 - 20-30 Hz telemetry streaming over WiFi
 - Works standalone — no phone app or internet needed
 
-**Documentation:** [Lap Timer Guide](docs/LAP_TIMER.md) · [Sensor Fusion Guide](docs/SENSOR_FUSION.md)
+**Documentation:** [Lap Timer Guide](docs/LAP_TIMER.md) · [Sensor Fusion Guide](docs/SENSOR_FUSION.md) · [Flash Partition](docs/PARTITION_SIZE_ISSUES.md)
 
 ---
 
@@ -226,6 +226,16 @@ rustup component add rust-src --toolchain esp
 3. Run: `cargo install espup cargo-espflash && espup install`
 
 </details>
+
+### First Time Setup
+
+After cloning, run the partition setup script to configure paths for your machine:
+
+```bash
+./scripts/setup-partition.sh
+```
+
+This is required because the ESP-IDF build system needs absolute paths. See [Flash Partition](docs/PARTITION_SIZE_ISSUES.md) for details.
 
 ### Build Commands
 

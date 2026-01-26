@@ -3,8 +3,10 @@ CONFIG_FREERTOS_HZ=1000
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
 CONFIG_ESP_SYSTEM_EVENT_TASK_STACK_SIZE=4096
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
-# CONFIG_PARTITION_TABLE_SINGLE_APP is not set
-CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y
+# Custom partition table with 2.5 MB app partition (vs 1.5 MB default)
+# NOTE: Path must be absolute - run ./scripts/setup-partition.sh after cloning
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="/home/jose/Documents/code/blackbox/partitions.csv"
 CONFIG_COMPILER_OPTIMIZATION_SIZE=y
 
 # Enable newlib

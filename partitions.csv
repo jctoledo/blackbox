@@ -1,0 +1,7 @@
+# Custom partition table for ESP32-C3 with 4MB flash
+# Provides 2.5MB app partition (vs 1.5MB default)
+#
+# Name,   Type, SubType, Offset,  Size,    Flags
+nvs,      data, nvs,     0x9000,  0x6000,
+phy_init, data, phy,     0xf000,  0x1000,
+factory,  app,  factory, 0x10000, 0x280000,

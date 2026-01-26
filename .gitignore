@@ -41,6 +41,7 @@ dist/
 
 # Telemetry data files
 *.csv
+!partitions.csv
 *.dat
 telemetry_*.bin
 blackbox-v*.bin
