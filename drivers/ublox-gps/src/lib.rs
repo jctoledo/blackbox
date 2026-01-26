@@ -185,7 +185,7 @@ impl NmeaParser {
     ///
     /// # Arguments
     ///
-    /// * `warmup_fixes` - Number of valid fixes to average for reference point
+    /// * `warmup_fixes` - Number of valid fixes to average for reference point (minimum 1)
     pub fn with_warmup_fixes(warmup_fixes: u8) -> Self {
         Self {
             line_buffer: [0; 120],
@@ -193,7 +193,7 @@ impl NmeaParser {
             last_fix: GpsFix::default(),
             reference: GpsReference::default(),
             warmup_count: 0,
-            warmup_fixes,
+            warmup_fixes: warmup_fixes.max(1), // Prevent division by zero
             warmup_lat_sum: 0.0,
             warmup_lon_sum: 0.0,
             last_valid_lat: 0.0,
@@ -363,6 +363,14 @@ impl NmeaParser {
             Ok(s) => s,
             Err(_) => return,
         };
+
+        // Validate NMEA checksum before parsing
+        // Format: $GPRMC,...*XX where XX is hex checksum
+        if !validate_nmea_checksum(line) {
+            #[cfg(feature = "logging")]
+            warn!("NMEA checksum failed, rejecting: {}", line);
+            return;
+        }
 
         if line.starts_with("$GPRMC") || line.starts_with("$GNRMC") {
             self.parse_rmc(line);
@@ -798,6 +806,50 @@ fn parse_time(time_str: &str) -> Option<(u8, u8, u8)> {
     Some((hh, mm, ss))
 }
 
+/// Validate NMEA sentence checksum
+///
+/// NMEA checksum is calculated by XORing all bytes between '$' and '*' (exclusive).
+/// The two hex digits after '*' are the expected checksum.
+///
+/// Example: $GPRMC,123456,A,3723.2475,N,12158.3416,W,0.5,90.0,010123,,,*4B
+///          The checksum (0x4B) is XOR of all bytes from 'G' to the last ','
+///
+/// Returns true if checksum is valid, false if invalid or malformed.
+fn validate_nmea_checksum(line: &str) -> bool {
+    let bytes = line.as_bytes();
+
+    // Find '$' and '*' positions
+    let dollar_pos = match bytes.iter().position(|&b| b == b'$') {
+        Some(pos) => pos,
+        None => return false,
+    };
+
+    let star_pos = match bytes.iter().position(|&b| b == b'*') {
+        Some(pos) => pos,
+        None => return false,
+    };
+
+    // Need at least 2 hex digits after '*'
+    if star_pos + 2 >= bytes.len() {
+        return false;
+    }
+
+    // Compute XOR checksum of bytes between '$' and '*' (exclusive)
+    let mut computed: u8 = 0;
+    for &byte in &bytes[dollar_pos + 1..star_pos] {
+        computed ^= byte;
+    }
+
+    // Parse expected checksum (2 hex digits after '*')
+    let hex_str = &line[star_pos + 1..star_pos + 3];
+    let expected = match u8::from_str_radix(hex_str, 16) {
+        Ok(val) => val,
+        Err(_) => return false,
+    };
+
+    computed == expected
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -844,5 +896,38 @@ mod tests {
         // Test distance calculation
         let dist = gps_distance(37.0, -122.0, 37.0001, -122.0, 37.0);
         assert!((dist - 11.132).abs() < 0.1);
+    }
+
+    #[test]
+    fn test_nmea_checksum_validation() {
+        // Valid GPRMC sentence (checksum 0x6A is XOR of bytes between $ and *)
+        assert!(validate_nmea_checksum(
+            "$GPRMC,123519,A,4807.038,N,01131.000,E,022.4,084.4,230394,003.1,W*6A"
+        ));
+
+        // Valid GNRMC sentence (checksum 0x59)
+        assert!(validate_nmea_checksum(
+            "$GNRMC,001225.00,A,3723.24750,N,12158.34160,W,0.00,0.00,010123,,,A*59"
+        ));
+
+        // Invalid checksum (last digit wrong)
+        assert!(!validate_nmea_checksum(
+            "$GPRMC,123519,A,4807.038,N,01131.000,E,022.4,084.4,230394,003.1,W*6B"
+        ));
+
+        // Missing checksum
+        assert!(!validate_nmea_checksum("$GPRMC,123519,A,4807.038,N"));
+
+        // Missing dollar sign
+        assert!(!validate_nmea_checksum(
+            "GPRMC,123519,A,4807.038,N,01131.000,E*00"
+        ));
+
+        // Corrupted data (simulates bit flip in direction indicator)
+        // Original: 'N' (0x4E) → corrupted to 'S' (0x53), changes checksum
+        // This would have been accepted before the fix, causing position explosion!
+        assert!(!validate_nmea_checksum(
+            "$GPRMC,123519,A,4807.038,S,01131.000,E,022.4,084.4,230394,003.1,W*6A"
+        ));
     }
 }

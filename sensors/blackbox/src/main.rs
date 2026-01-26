@@ -810,15 +810,32 @@ fn main() {
                 } else {
                     // Moving - update position from GPS (only when fix is valid)
                     if let Some((x, y)) = sensors.gps_parser.to_local_coords() {
-                        estimator.update_position(x, y);
+                        // Sanity check: reject extreme position jumps (> 1000m)
+                        // This catches corrupt GPS data that passes checksum (rare but possible)
+                        // Normal driving: max 42 m/s (150 km/h) × 0.04s = 1.7m between 25Hz fixes
+                        let (ekf_x, ekf_y) = estimator.ekf.position();
+                        let jump_dist =
+                            ((x - ekf_x).powi(2) + (y - ekf_y).powi(2)).sqrt();
+
+                        if jump_dist < 1000.0 {
+                            estimator.update_position(x, y);
+                        } else {
+                            // Log rejected update (uncomment for debugging)
+                            // info!("GPS rejected: jump={:.0}m, gps=({:.1},{:.1}), ekf=({:.1},{:.1})",
+                            //       jump_dist, x, y, ekf_x, ekf_y);
+                        }
                     }
                 }
 
                 // Update EKF with velocity components (requires full validity)
                 if let Some((vx, vy)) = sensors.gps_parser.get_velocity_enu() {
                     let speed = (vx * vx + vy * vy).sqrt();
-                    estimator.update_velocity(vx, vy);
-                    estimator.update_speed(speed);
+                    // Sanity check: reject extreme velocities (> 100 m/s = 360 km/h)
+                    // This catches NaN and corrupt GPS data
+                    if speed < 100.0 && speed.is_finite() {
+                        estimator.update_velocity(vx, vy);
+                        estimator.update_speed(speed);
+                    }
                 }
             }
         }

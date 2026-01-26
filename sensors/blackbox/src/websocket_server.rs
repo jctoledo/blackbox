@@ -544,6 +544,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
 .bbModalTitle{font-size:17px;font-weight:600}
 .bbModalClose{background:none;border:none;font-size:24px;color:var(--text-tertiary);cursor:pointer;padding:0;line-height:1}
 .bbModalClose:active{opacity:0.5}
+.bbExportAllBtn{background:var(--card-bg);border:1px solid var(--border);border-radius:4px;color:var(--text-secondary);padding:4px 10px;font-size:12px;cursor:pointer;margin-right:12px}
+.bbExportAllBtn:active{opacity:0.7}
 .bbModalBody{padding:16px 18px;overflow-y:auto;flex:1}
 .bbModalSection{margin-bottom:20px}
 .bbModalSection:last-child{margin-bottom:0}
@@ -898,6 +900,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
     <div class="bbModalContent">
         <div class="bbModalHeader">
             <span class="bbModalTitle">Tracks</span>
+            <button class="bbExportAllBtn" id="btn-export-all" title="Export all tracks">Export All</button>
             <button class="bbModalClose" id="track-modal-close">&times;</button>
         </div>
         <div class="bbModalBody">
@@ -1542,6 +1545,7 @@ async function renderTrackList(){
                 '<div class=\"bbTrackActions\">'+
                     '<button class=\"bbTrackBtn primary\" data-action=\"use\">Use</button>'+
                     (lc>0?'<button class=\"bbTrackBtn secondary\" data-action=\"history\" title=\"View history\">H</button>':'')+
+                    '<button class=\"bbTrackBtn secondary\" data-action=\"export\" title=\"Export track data\">↓</button>'+
                     '<button class=\"bbTrackBtn danger\" data-action=\"delete\">×</button>'+
                 '</div></div>';
         }).join('');
@@ -1565,6 +1569,74 @@ async function handleTrackAction(action,id){
         }
     }else if(action==='history'){
         await showTrackHistory(id);
+    }else if(action==='export'){
+        await exportTrackData(id);
+    }
+}
+
+async function exportTrackData(id){
+    try{
+        const track=await getTrack(id);
+        if(!track){alert('Track not found');return}
+        const history=await getLapHistory(id);
+        const refLap=await getRefLap(id);
+        const exportData={
+            version:1,
+            exportedAt:new Date().toISOString(),
+            track:track,
+            lapHistory:history||[],
+            referenceLap:refLap||null
+        };
+        const json=JSON.stringify(exportData,null,2);
+        const blob=new Blob([json],{type:'application/json'});
+        const url=URL.createObjectURL(blob);
+        const a=document.createElement('a');
+        a.href=url;
+        const safeName=track.name.replace(/[^a-z0-9]/gi,'_').toLowerCase();
+        a.download='track_'+safeName+'_'+new Date().toISOString().slice(0,10)+'.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }catch(e){
+        console.error('Export error:',e);
+        alert('Export failed: '+e.message);
+    }
+}
+
+async function exportAllTracks(){
+    try{
+        const tracks=await getAllTracks();
+        if(tracks.length===0){alert('No tracks to export');return}
+        const allData={
+            version:1,
+            exportedAt:new Date().toISOString(),
+            deviceInfo:{gpsRef:jsGpsRef},
+            tracks:[]
+        };
+        for(const t of tracks){
+            const history=await getLapHistory(t.id);
+            const refLap=await getRefLap(t.id);
+            allData.tracks.push({
+                track:t,
+                lapHistory:history||[],
+                referenceLap:refLap||null
+            });
+        }
+        const json=JSON.stringify(allData,null,2);
+        const blob=new Blob([json],{type:'application/json'});
+        const url=URL.createObjectURL(blob);
+        const a=document.createElement('a');
+        a.href=url;
+        a.download='blackbox_tracks_'+new Date().toISOString().slice(0,10)+'.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        alert('Exported '+tracks.length+' track(s)');
+    }catch(e){
+        console.error('Export all error:',e);
+        alert('Export failed: '+e.message);
     }
 }
 
@@ -2193,6 +2265,7 @@ $('btn-tracks').onclick=()=>openTrackModal();
 $('track-modal-close').onclick=closeTrackModal;
 $('track-modal').onclick=e=>{if(e.target===$('track-modal'))closeTrackModal()};
 $('btn-clear-track').onclick=clearActiveTrack;
+$('btn-export-all').onclick=exportAllTracks;
 $('menu-clear').onclick=()=>{$('menu-overlay').classList.remove('open');resetState()};
 
 // Data Modal
