@@ -94,7 +94,7 @@ jobs:
             ../../firmware-output/${{ matrix.project }}.bin
 
       - name: Upload firmware artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: firmware-${{ matrix.project }}
           path: firmware-output/${{ matrix.project }}.bin
