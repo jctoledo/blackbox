@@ -1135,8 +1135,8 @@ async function exportCSV(){
     if(!sessionChunks.length){alert('No data in recording');return}
     let allData=[];
     sessionChunks.forEach(c=>allData=allData.concat(c.data));
-    let csv='time,speed,ax,ay,wz,mode,lat_g,lon_g,gps_lat,gps_lon,gps_valid,lon_imu,lon_gps,gps_weight,pitch_corr,pitch_conf,roll_corr,roll_conf,tilt_x,tilt_y\n';
-    allData.forEach(r=>{csv+=r.t+','+r.sp+','+r.ax+','+r.ay+','+r.wz+','+r.mo+','+r.latg+','+r.lng+','+(r.lat||0)+','+(r.lon||0)+','+(r.gpsOk||0)+','+(r.lon_imu||0).toFixed(4)+','+(r.lon_gps||0).toFixed(4)+','+(r.gps_wt||0).toFixed(2)+','+(r.pitch_c||0).toFixed(2)+','+(r.pitch_cf||0).toFixed(1)+','+(r.roll_c||0).toFixed(2)+','+(r.roll_cf||0).toFixed(1)+','+(r.tilt_x||0).toFixed(4)+','+(r.tilt_y||0).toFixed(4)+'\n'});
+    let csv='time,speed,ax,ay,wz,mode,lat_g,lon_g,gps_lat,gps_lon,gps_valid,ekf_x,ekf_y,ekf_yaw,gps_course,lon_imu,lon_gps,gps_weight,pitch_corr,pitch_conf,roll_corr,roll_conf,tilt_x,tilt_y\n';
+    allData.forEach(r=>{const gc=r.gpsCourse;const gcStr=isNaN(gc)?'':gc.toFixed(4);csv+=r.t+','+r.sp+','+r.ax+','+r.ay+','+r.wz+','+r.mo+','+r.latg+','+r.lng+','+(r.lat||0)+','+(r.lon||0)+','+(r.gpsOk||0)+','+(r.ekfX||0).toFixed(3)+','+(r.ekfY||0).toFixed(3)+','+(r.ekfYaw||0).toFixed(4)+','+gcStr+','+(r.lon_imu||0).toFixed(4)+','+(r.lon_gps||0).toFixed(4)+','+(r.gps_wt||0).toFixed(2)+','+(r.pitch_c||0).toFixed(2)+','+(r.pitch_cf||0).toFixed(1)+','+(r.roll_c||0).toFixed(2)+','+(r.roll_cf||0).toFixed(1)+','+(r.tilt_x||0).toFixed(4)+','+(r.tilt_y||0).toFixed(4)+'\n'});
     const b=new Blob([csv],{type:'text/csv'}),u=URL.createObjectURL(b),a=document.createElement('a');
     a.href=u;a.download='blackbox_'+new Date(latest.sessionId).toISOString().slice(0,19).replace(/[T:]/g,'-')+'.csv';a.click();
 }
@@ -1193,8 +1193,8 @@ async function exportSessionById(targetId){
     chunks.sort((a,b)=>a.chunkIndex-b.chunkIndex);
     if(!chunks.length)throw new Error('No data in recording');
     let allData=[];chunks.forEach(c=>allData=allData.concat(c.data||[]));
-    let csv='time,speed,ax,ay,wz,mode,lat_g,lon_g,gps_lat,gps_lon,gps_valid,lon_imu,lon_gps,gps_weight,pitch_corr,pitch_conf,roll_corr,roll_conf,tilt_x,tilt_y\n';
-    allData.forEach(r=>{csv+=r.t+','+r.sp+','+r.ax+','+r.ay+','+r.wz+','+r.mo+','+r.latg+','+r.lng+','+(r.lat||0)+','+(r.lon||0)+','+(r.gpsOk||0)+','+(r.lon_imu||0).toFixed(4)+','+(r.lon_gps||0).toFixed(4)+','+(r.gps_wt||0).toFixed(2)+','+(r.pitch_c||0).toFixed(2)+','+(r.pitch_cf||0).toFixed(1)+','+(r.roll_c||0).toFixed(2)+','+(r.roll_cf||0).toFixed(1)+','+(r.tilt_x||0).toFixed(4)+','+(r.tilt_y||0).toFixed(4)+'\n'});
+    let csv='time,speed,ax,ay,wz,mode,lat_g,lon_g,gps_lat,gps_lon,gps_valid,ekf_x,ekf_y,ekf_yaw,gps_course,lon_imu,lon_gps,gps_weight,pitch_corr,pitch_conf,roll_corr,roll_conf,tilt_x,tilt_y\n';
+    allData.forEach(r=>{const gc=r.gpsCourse;const gcStr=isNaN(gc)?'':gc.toFixed(4);csv+=r.t+','+r.sp+','+r.ax+','+r.ay+','+r.wz+','+r.mo+','+r.latg+','+r.lng+','+(r.lat||0)+','+(r.lon||0)+','+(r.gpsOk||0)+','+(r.ekfX||0).toFixed(3)+','+(r.ekfY||0).toFixed(3)+','+(r.ekfYaw||0).toFixed(4)+','+gcStr+','+(r.lon_imu||0).toFixed(4)+','+(r.lon_gps||0).toFixed(4)+','+(r.gps_wt||0).toFixed(2)+','+(r.pitch_c||0).toFixed(2)+','+(r.pitch_cf||0).toFixed(1)+','+(r.roll_c||0).toFixed(2)+','+(r.roll_cf||0).toFixed(1)+','+(r.tilt_x||0).toFixed(4)+','+(r.tilt_y||0).toFixed(4)+'\n'});
     const b=new Blob([csv],{type:'text/csv'}),u=URL.createObjectURL(b),a=document.createElement('a');
     a.href=u;a.download='blackbox_'+new Date(targetId).toISOString().slice(0,19).replace(/[T:]/g,'-')+'.csv';a.click();
     return{session,sampleCount:allData.length};
@@ -1286,9 +1286,13 @@ function formatDuration(ms){
 // TrackRecorder - Adaptive sampling for track recording with corner state machine
 class TrackRecorder{
     constructor(){this.config={minDistance:2,maxDistance:30,headingThreshold:0.15,cornerEntryThreshold:0.025,cornerExitThreshold:0.012,minCornerLength:3,minLoopDistance:150,closeProximity:25,headingTolerance:0.5};this.reset()}
-    reset(){this.recording=false;this.trackType='loop';this.startPos=null;this.startHeading=0;this.startTime=0;this.keyPoints=[];this.rawSamples=[];this.lastPos=null;this.lastSigma=3.0;this.totalDistance=0;this.loopDetected=false;this.inCorner=false;this.cornerCount=0;this.cornerEntryDist=0}
-    start(pos,trackType='loop'){if(this.recording)return false;this.reset();this.recording=true;this.trackType=trackType;this.startPos={x:pos.x,y:pos.y};this.startHeading=pos.heading||0;this.startTime=Date.now();this.keyPoints.push({x:pos.x,y:pos.y,heading:pos.heading||0,speed:pos.speed||0,sigma:pos.sigma||3.0,t:Date.now(),curvature:0,isCorner:false});this.lastPos={x:pos.x,y:pos.y,heading:pos.heading||0};return true}
-    addSample(pos){if(!this.recording||!this.lastPos)return{stored:false};const sigma=pos.sigma||3.0;this.lastSigma=sigma;const dx=pos.x-this.lastPos.x,dy=pos.y-this.lastPos.y,dist=Math.sqrt(dx*dx+dy*dy);if(dist<0.5)return{stored:false,stats:this.getStats()};const speedBasedMinDist=Math.max(this.config.minDistance,pos.speed*0.1);const headingChange=Math.abs(this._wrapAngle(pos.heading-this.lastPos.heading));const shouldStore=dist>=speedBasedMinDist||headingChange>=this.config.headingThreshold||dist>=this.config.maxDistance;if(!shouldStore)return{stored:false,stats:this.getStats()};const curvature=dist>0.1?headingChange/dist:0;let isCorner=false;if(!this.inCorner){if(curvature>this.config.cornerEntryThreshold){this.inCorner=true;this.cornerEntryDist=this.totalDistance;isCorner=true}}else{isCorner=true;if(curvature<this.config.cornerExitThreshold){const cornerLength=this.totalDistance-this.cornerEntryDist;if(cornerLength>=this.config.minCornerLength)this.cornerCount++;this.inCorner=false}}this.keyPoints.push({x:pos.x,y:pos.y,heading:pos.heading||0,speed:pos.speed||0,sigma:sigma,t:Date.now(),curvature:curvature,isCorner:isCorner});this.totalDistance+=dist;this.lastPos={x:pos.x,y:pos.y,heading:pos.heading||0};if(this.trackType==='loop'){const lr=this._checkLoopClosure(pos);if(lr.detected){this.loopDetected=true;return{stored:true,loopDetected:true,stats:this.getStats()}}}return{stored:true,curvature:curvature,isCorner:isCorner,stats:this.getStats()}}
+    reset(){this.recording=false;this.trackType='loop';this.startPos=null;this.startHeading=0;this.startTime=0;this.keyPoints=[];this.rawSamples=[];this.lastPos=null;this.lastSigma=3.0;this.totalDistance=0;this.loopDetected=false;this.inCorner=false;this.cornerCount=0;this.cornerEntryDist=0;this.speedGate=false}
+    start(pos,trackType='loop'){if(this.recording)return false;this.reset();this.recording=true;this.trackType=trackType;this.startPos={x:pos.x,y:pos.y};this.startHeading=pos.heading||0;this.startTime=Date.now();this.keyPoints.push({x:pos.x,y:pos.y,lat:pos.lat||0,lon:pos.lon||0,heading:pos.heading||0,speed:pos.speed||0,sigma:pos.sigma||3.0,t:Date.now(),curvature:0,isCorner:false});this.lastPos={x:pos.x,y:pos.y,heading:pos.heading||0};return true}
+    addSample(pos){if(!this.recording||!this.lastPos)return{stored:false};
+    // Check loop closure FIRST - even when stopped at start position
+    if(this.trackType==='loop'&&this.totalDistance>=this.config.minLoopDistance){const dts=Math.sqrt((pos.x-this.startPos.x)**2+(pos.y-this.startPos.y)**2);if(dts<this.config.closeProximity){const hd=Math.abs(this._wrapAngle(pos.heading-this.startHeading));if(hd<this.config.headingTolerance){this.loopDetected=true;return{stored:true,loopDetected:true,stats:this.getStats()}}}}
+    // Speed gate - skip samples while stationary (but loop check already ran above)
+    const spd=pos.speed||0;if(!this.speedGate){if(spd<2.0)return{stored:false,stats:this.getStats()};this.speedGate=true;this.lastPos={x:pos.x,y:pos.y,heading:pos.heading||0};if(this.keyPoints.length<=1){this.startHeading=pos.heading||0}}else{if(spd<0.5){this.speedGate=false;return{stored:false,stats:this.getStats()}}}const sigma=pos.sigma||3.0;this.lastSigma=sigma;const dx=pos.x-this.lastPos.x,dy=pos.y-this.lastPos.y,dist=Math.sqrt(dx*dx+dy*dy);if(dist<0.5)return{stored:false,stats:this.getStats()};const speedBasedMinDist=Math.max(this.config.minDistance,pos.speed*0.1);const headingChange=Math.abs(this._wrapAngle(pos.heading-this.lastPos.heading));const shouldStore=dist>=speedBasedMinDist||headingChange>=this.config.headingThreshold||dist>=this.config.maxDistance;if(!shouldStore)return{stored:false,stats:this.getStats()};const curvature=dist>0.1?headingChange/dist:0;let isCorner=false;if(!this.inCorner){if(curvature>this.config.cornerEntryThreshold){this.inCorner=true;this.cornerEntryDist=this.totalDistance;isCorner=true}}else{isCorner=true;if(curvature<this.config.cornerExitThreshold){const cornerLength=this.totalDistance-this.cornerEntryDist;if(cornerLength>=this.config.minCornerLength)this.cornerCount++;this.inCorner=false}}this.keyPoints.push({x:pos.x,y:pos.y,lat:pos.lat||0,lon:pos.lon||0,heading:pos.heading||0,speed:pos.speed||0,sigma:sigma,t:Date.now(),curvature:curvature,isCorner:isCorner});this.totalDistance+=dist;this.lastPos={x:pos.x,y:pos.y,heading:pos.heading||0};if(this.trackType==='loop'){const lr=this._checkLoopClosure(pos);if(lr.detected){this.loopDetected=true;return{stored:true,loopDetected:true,stats:this.getStats()}}}return{stored:true,curvature:curvature,isCorner:isCorner,stats:this.getStats()}}
     _checkLoopClosure(pos){if(this.totalDistance<this.config.minLoopDistance)return{detected:false};const dts=Math.sqrt((pos.x-this.startPos.x)**2+(pos.y-this.startPos.y)**2);if(dts>=this.config.closeProximity)return{detected:false};const hd=Math.abs(this._wrapAngle(pos.heading-this.startHeading));return hd<this.config.headingTolerance?{detected:true}:{detected:false}}
     _wrapAngle(a){while(a>Math.PI)a-=2*Math.PI;while(a<-Math.PI)a+=2*Math.PI;return a}
     getStats(){const displayCorners=this.inCorner?this.cornerCount+1:this.cornerCount;return{recording:this.recording,trackType:this.trackType,keyPointCount:this.keyPoints.length,totalDistance:this.totalDistance,loopDetected:this.loopDetected,elapsedMs:this.recording?Date.now()-this.startTime:0,gpsQuality:this._gpsQualityRating(this.lastSigma),corners:displayCorners,inCorner:this.inCorner}}
@@ -1308,7 +1312,14 @@ let trackDb=null,activeTrack=null,currentPos=null,suppressStartLineIndicator=fal
 let p2pNeedsWarmup=false,trackRecorder=null;
 let referenceLap=null,lapTracker=null,lastDeltaMs=0,deltaTrend=0;
 let currentSessionId=null,currentSessionStart=null;
-let lastPosSigma=3.0; // EKF position uncertainty from diagnostics (updated at 1Hz)
+
+// GPS Reference Tracking (mirrors firmware's algorithm: average of first 5 GPS fixes)
+let jsGpsRef=null,jsGpsRefSamples=[];
+function updateJsGpsRef(lat,lon){if(jsGpsRef||lat===0||lon===0)return;jsGpsRefSamples.push({lat,lon});if(jsGpsRefSamples.length>=5){const avgLat=jsGpsRefSamples.reduce((s,p)=>s+p.lat,0)/5;const avgLon=jsGpsRefSamples.reduce((s,p)=>s+p.lon,0)/5;jsGpsRef={lat:avgLat,lon:avgLon}}}
+function gpsToLocal(lat,lon){if(!jsGpsRef)return null;const latRad=jsGpsRef.lat*Math.PI/180;return{x:(lon-jsGpsRef.lon)*Math.cos(latRad)*111320,y:(lat-jsGpsRef.lat)*111320}}
+function localToGps(x,y){if(!jsGpsRef)return null;const latRad=jsGpsRef.lat*Math.PI/180;return{lat:jsGpsRef.lat+y/111320,lon:jsGpsRef.lon+x/(111320*Math.cos(latRad))}}
+function transformCoord(x,y,fromRef,toRef){const fLatRad=fromRef.lat*Math.PI/180;const lon=fromRef.lon+x/(111320*Math.cos(fLatRad));const lat=fromRef.lat+y/111320;const tLatRad=toRef.lat*Math.PI/180;return{x:(lon-toRef.lon)*Math.cos(tLatRad)*111320,y:(lat-toRef.lat)*111320}}
+function transformLine(line,fromRef,toRef){const p1=transformCoord(line.p1[0],line.p1[1],fromRef,toRef);const p2=transformCoord(line.p2[0],line.p2[1],fromRef,toRef);return{p1:[p1.x,p1.y],p2:[p2.x,p2.y],direction:line.direction}}
 
 // Track Auto-Detection
 class TrackAutoDetector{
@@ -1323,9 +1334,14 @@ class TrackAutoDetector{
         return null
     }
     scoreMatch(x,y,heading,track){
-        if(track.bounds){const m=100;if(x<track.bounds.minX-m||x>track.bounds.maxX+m||y<track.bounds.minY-m||y>track.bounds.maxY+m)return 0}
+        // Skip tracks from different sessions if we can't transform
+        if(track.gpsOrigin&&!jsGpsRef)return 0;
+        // Transform bounds check if needed
+        let bx=x,by=y;
+        if(track.gpsOrigin&&jsGpsRef){const t=transformCoord(x,y,jsGpsRef,track.gpsOrigin);bx=t.x;by=t.y}
+        if(track.bounds){const m=100;if(bx<track.bounds.minX-m||bx>track.bounds.maxX+m||by<track.bounds.minY-m||by>track.bounds.maxY+m)return 0}
         const cl=track.centerline||[];if(cl.length===0)return 0;
-        let minD=Infinity,nearP=null;for(const p of cl){const d=Math.sqrt((x-p.x)**2+(y-p.y)**2);if(d<minD){minD=d;nearP=p}}
+        let minD=Infinity,nearP=null;for(const p of cl){const d=Math.sqrt((bx-p.x)**2+(by-p.y)**2);if(d<minD){minD=d;nearP=p}}
         if(!nearP||minD>50)return 0;
         const distScore=Math.max(0,1-minD/50);
         const hdiff=Math.abs(wrapAngle(heading-(nearP.heading||0)));
@@ -1591,17 +1607,27 @@ async function clearTrackHistoryConfirm(id){
 
 async function activateTrack(track){
     const isP2P=track.type==='point_to_point';
-    const line=track.startLine;
+    // Warn if GPS reference not ready but track has origin (cross-session use)
+    if(track.gpsOrigin&&!jsGpsRef){alert('GPS not ready. Wait for GPS lock before activating saved tracks.');return}
+    // Transform coordinates if track was recorded with different GPS reference
+    let line=track.startLine,finLine=track.finishLine;
+    if(track.gpsOrigin&&jsGpsRef){
+        const dLat=(track.gpsOrigin.lat-jsGpsRef.lat)*111320;
+        const dLon=(track.gpsOrigin.lon-jsGpsRef.lon)*Math.cos(jsGpsRef.lat*Math.PI/180)*111320;
+        if(Math.sqrt(dLat*dLat+dLon*dLon)>1.0){
+            line=transformLine(track.startLine,track.gpsOrigin,jsGpsRef);
+            if(track.finishLine)finLine=transformLine(track.finishLine,track.gpsOrigin,jsGpsRef);
+        }
+    }
     let url;
-    if(isP2P&&track.finishLine){
-        const f=track.finishLine;
+    if(isP2P&&finLine){
         url='/api/laptimer/configure?type=point_to_point'+
             '&p1_x='+line.p1[0].toFixed(2)+'&p1_y='+line.p1[1].toFixed(2)+
             '&p2_x='+line.p2[0].toFixed(2)+'&p2_y='+line.p2[1].toFixed(2)+
             '&dir='+line.direction.toFixed(4)+
-            '&f_p1_x='+f.p1[0].toFixed(2)+'&f_p1_y='+f.p1[1].toFixed(2)+
-            '&f_p2_x='+f.p2[0].toFixed(2)+'&f_p2_y='+f.p2[1].toFixed(2)+
-            '&f_dir='+f.direction.toFixed(4);
+            '&f_p1_x='+finLine.p1[0].toFixed(2)+'&f_p1_y='+finLine.p1[1].toFixed(2)+
+            '&f_p2_x='+finLine.p2[0].toFixed(2)+'&f_p2_y='+finLine.p2[1].toFixed(2)+
+            '&f_dir='+finLine.direction.toFixed(4);
     }else{
         url='/api/laptimer/configure?type=loop'+
             '&p1_x='+line.p1[0].toFixed(2)+'&p1_y='+line.p1[1].toFixed(2)+
@@ -1612,7 +1638,7 @@ async function activateTrack(track){
         const r=await fetch(url);
         const j=await r.json();
         if(j.error){alert('Failed to configure lap timer: '+j.error);return}
-        activeTrack=track;
+        activeTrack={...track,startLine:line,finishLine:finLine};
         suppressStartLineIndicator=false;
         p2pNeedsWarmup=isP2P&&track.isNew;
         // Start new session for lap history
@@ -1651,7 +1677,7 @@ async function deactivateTrack(){
 function startTrackRecording(trackType='loop'){
     if(!currentPos||!currentPos.valid){alert('Position not available');return false}
     if(!trackRecorder)trackRecorder=new TrackRecorder();
-    const pos={x:currentPos.x,y:currentPos.y,heading:currentPos.yaw,speed:currentPos.speed,valid:true,sigma:currentPos.sigma||3.0};
+    const pos={x:currentPos.x,y:currentPos.y,lat:currentPos.lat,lon:currentPos.lon,heading:currentPos.yaw,speed:currentPos.speed,valid:true,sigma:currentPos.sigma||3.0};
     if(!trackRecorder.start(pos,trackType)){console.warn('Failed to start recording');return false}
     const overlay=$('record-overlay');overlay.classList.add('active');
     $('rec-title').textContent=trackType==='loop'?'Recording Circuit':'Recording Stage';
@@ -1663,7 +1689,9 @@ function startTrackRecording(trackType='loop'){
 }
 function updateTrackRecording(){
     if(!trackRecorder||!trackRecorder.recording||!currentPos||!currentPos.valid)return;
-    const pos={x:currentPos.x,y:currentPos.y,heading:currentPos.yaw,speed:currentPos.speed,valid:true,sigma:currentPos.sigma||3.0};
+    // Prefer GPS course (direct measurement) over EKF yaw when valid
+    const heading=currentPos.validGpsCourse?currentPos.gpsCourse:currentPos.yaw;
+    const pos={x:currentPos.x,y:currentPos.y,lat:currentPos.lat,lon:currentPos.lon,heading:heading,speed:currentPos.speed,valid:true,sigma:currentPos.sigma||3.0};
     const result=trackRecorder.addSample(pos);
     const stats=trackRecorder.getStats();
     const distVal=Math.round(stats.totalDistance);
@@ -1705,10 +1733,10 @@ async function finishTrackRecording(){
     if(!trackRecorder||!trackRecorder.recording)return;
     const defaultName=trackRecorder.trackType==='loop'?'New Circuit':'New Stage';
     const trackName=prompt('Enter track name:',defaultName);if(!trackName)return;
-    const trackData=trackRecorder.finish(trackName,null);
+    const trackData=trackRecorder.finish(trackName,jsGpsRef);
     if(!trackData){alert('Failed to create track: not enough data or poor quality');return}
     $('record-overlay').classList.remove('active');
-    const track={id:trackData.id,name:trackData.name,type:trackData.type,startLine:trackData.startLine,finishLine:trackData.finishLine,origin:trackData.origin,centerline:trackData.centerline,bounds:trackData.bounds,pathLength:trackData.totalDistance||0,quality:trackData.quality,bestLapMs:null,lapCount:0,corners:trackData.corners||0,keyPoints:(trackData.centerline&&trackData.centerline.length)||trackData.keyPoints||0,createdAt:trackData.created,isNew:true};
+    const track={id:trackData.id,name:trackData.name,type:trackData.type,startLine:trackData.startLine,finishLine:trackData.finishLine,origin:trackData.origin,gpsOrigin:trackData.gpsOrigin,centerline:trackData.centerline,bounds:trackData.bounds,pathLength:trackData.totalDistance||0,quality:trackData.quality,bestLapMs:null,lapCount:0,corners:trackData.corners||0,keyPoints:(trackData.centerline&&trackData.centerline.length)||trackData.keyPoints||0,createdAt:trackData.created,isNew:true};
     await saveTrack(track);await activateTrack(track);renderTrackList();
     alert('Track "'+track.name+'" saved!\\n'+track.centerline.length+' points · '+Math.round(track.pathLength||0)+'m');
 }
@@ -1975,22 +2003,30 @@ function process(buf){
     const d=new DataView(buf);
     const ax=d.getFloat32(7,1),ay=d.getFloat32(11,1),wz=d.getFloat32(19,1),sp=d.getFloat32(51,1),mo=d.getUint8(55);
     const lat=d.getFloat32(56,1),lon=d.getFloat32(60,1),gpsOk=d.getUint8(64);
+    // GPS course (radians) - only valid when moving, NaN when stationary
+    const gpsCourse=d.getFloat32(65,1);
     // EKF state for track manager
     const ekfYaw=d.getFloat32(31,1),ekfX=d.getFloat32(35,1),ekfY=d.getFloat32(39,1);
-    // Lap timer fields (74-byte protocol v2)
-    const lapTimeMs=buf.byteLength>=72?d.getUint32(65,1):0;
-    const lapCnt=buf.byteLength>=72?d.getUint16(69,1):0;
-    const lapFlags=buf.byteLength>=72?d.getUint8(71):0;
+    // Lap timer fields (78-byte protocol v3, shifted by 4 bytes for gps_course)
+    const lapTimeMs=buf.byteLength>=76?d.getUint32(69,1):0;
+    const lapCnt=buf.byteLength>=76?d.getUint16(73,1):0;
+    const lapFlags=buf.byteLength>=76?d.getUint8(75):0;
     const latg=ay/9.81,lng=-ax/9.81,yawDeg=Math.abs(wz*57.3);
+    // Track GPS reference (average of first 5 fixes, same as firmware)
+    if(gpsOk===1)updateJsGpsRef(lat,lon);
     // Update position for track manager and recording
-    currentPos={x:ekfX,y:ekfY,yaw:ekfYaw,speed:sp,valid:gpsOk===1,sigma:lastPosSigma};
+    // gpsCourse is the preferred heading source when valid (not NaN and speed > 2 km/h)
+    const validGpsCourse=!isNaN(gpsCourse)&&sp>2.0;
+    currentPos={x:ekfX,y:ekfY,yaw:ekfYaw,gpsCourse:gpsCourse,validGpsCourse:validGpsCourse,speed:sp,valid:gpsOk===1,sigma:3.0,lat:lat,lon:lon};
     updateTrackRecording();
     updateStartLineIndicator();
     updateFinishLineIndicator();
 
     // Track auto-detection (only when no active track and not recording)
+    // Use GPS course for heading when valid (more reliable than EKF yaw)
     if(!activeTrack&&!trackRecorder&&currentPos.valid){
-        trackAutoDetector.check(currentPos.x,currentPos.y,currentPos.yaw).then(detected=>{
+        const detHeading=currentPos.validGpsCourse?currentPos.gpsCourse:currentPos.yaw;
+        trackAutoDetector.check(currentPos.x,currentPos.y,detHeading).then(detected=>{
             if(detected)showTrackDetectedToast(detected.track)
         }).catch(()=>{})
     }
@@ -2044,7 +2080,7 @@ function process(buf){
 
     // Recording
     if(rec){
-        chunkBuffer.push({t:now,sp,ax,ay,wz,mo,latg,lng,lat,lon,gpsOk,lon_imu:fusion.lon_imu,lon_gps:fusion.lon_gps,gps_wt:fusion.gps_wt,pitch_c:fusion.pitch_c,pitch_cf:fusion.pitch_cf,roll_c:fusion.roll_c,roll_cf:fusion.roll_cf,tilt_x:fusion.tilt_x,tilt_y:fusion.tilt_y});
+        chunkBuffer.push({t:now,sp,ax,ay,wz,mo,latg,lng,lat,lon,gpsOk,ekfX,ekfY,ekfYaw,gpsCourse,lon_imu:fusion.lon_imu,lon_gps:fusion.lon_gps,gps_wt:fusion.gps_wt,pitch_c:fusion.pitch_c,pitch_cf:fusion.pitch_cf,roll_c:fusion.roll_c,roll_cf:fusion.roll_cf,tilt_x:fusion.tilt_x,tilt_y:fusion.tilt_y});
         if(now-lastSaveTime>=CHUNK_INTERVAL)saveChunk();
     }
 }
@@ -2101,7 +2137,6 @@ async function updateDiag(){
         $('gps-warmup').className='bbVal '+(d.gps.warmup?'ok':'warn');
         const ps=$('pos-sigma');ps.textContent=d.ekf.pos_sigma.toFixed(2)+' m';
         ps.className='bbVal bbNum '+(d.ekf.pos_sigma<5?'ok':(d.ekf.pos_sigma<10?'warn':'err'));
-        if(!isNaN(d.ekf.pos_sigma)&&d.ekf.pos_sigma>0)lastPosSigma=d.ekf.pos_sigma; // Store for track recorder GPS quality
         const vs=$('vel-sigma');vs.textContent=d.ekf.vel_sigma.toFixed(2)+' m/s';
         vs.className='bbVal bbNum '+(d.ekf.vel_sigma<0.5?'ok':(d.ekf.vel_sigma<1.0?'warn':'err'));
         const ys=$('yaw-sigma');ys.textContent=d.ekf.yaw_sigma_deg.toFixed(1)+'°';
@@ -2228,7 +2263,7 @@ async function renderTrackDataList(){
                 '</div>'+
             '</div>';
         }).join('');
-        listEl.querySelectorAll('.bbSessionBtn').forEach(btn=>{btn.onclick=()=>handleTrackAction(btn)});
+        listEl.querySelectorAll('.bbSessionBtn').forEach(btn=>{btn.onclick=()=>handleTrackDataAction(btn)});
     }catch(e){console.error('Failed to load tracks:',e);listEl.innerHTML='<div class=\"bbSessionEmpty\"><div class=\"icon\">⚠️</div>Error loading tracks</div>'}
 }
 
@@ -2245,7 +2280,7 @@ async function handleSessionAction(btn){
     }
 }
 
-async function handleTrackAction(btn){
+async function handleTrackDataAction(btn){
     const action=btn.dataset.action,item=btn.closest('.bbTrackDataItem'),trackId=item.dataset.trackId,trackName=item.querySelector('.bbTrackDataName').textContent;
     if(action==='clear-best'){
         if(!confirm('Clear best lap for \"'+trackName+'\"?\\n\\nThis cannot be undone.'))return;

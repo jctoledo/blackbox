@@ -6,15 +6,15 @@
 use core::mem;
 
 /// Current protocol version
-pub const PROTOCOL_VERSION: u8 = 2;
+pub const PROTOCOL_VERSION: u8 = 3;
 
-/// Telemetry packet structure (74 bytes total)
+/// Telemetry packet structure (78 bytes total)
 ///
 /// Layout:
 /// - Header (7 bytes): version, magic, timestamp
 /// - IMU data (24 bytes): ax, ay, az, wz, roll, pitch
 /// - EKF state (25 bytes): yaw, x, y, vx, vy, speed_kmh, mode
-/// - GPS data (9 bytes): lat, lon, gps_valid
+/// - GPS data (13 bytes): lat, lon, gps_valid, gps_course
 /// - Lap timer (7 bytes): lap_time_ms, lap_count, lap_flags
 /// - Checksum (2 bytes)
 #[repr(C, packed)]
@@ -41,10 +41,11 @@ pub struct TelemetryPacket {
     pub speed_kmh: f32,
     pub mode: u8, // 0=IDLE, 1=ACCEL, 2=BRAKE, 4=CORNER, 5=ACCEL+CORNER, 6=BRAKE+CORNER
 
-    // GPS data (9 bytes)
-    pub lat: f32, // degrees (f32 for size, ~1cm accuracy)
+    // GPS data (13 bytes)
+    pub lat: f32,      // degrees (f32 for size, ~1cm accuracy)
     pub lon: f32,
     pub gps_valid: u8, // 0/1
+    pub gps_course: f32, // Course over ground in radians (only valid when speed > ~1 m/s)
 
     // Lap timer (7 bytes)
     pub lap_time_ms: u32, // Current lap time in ms (0 if not timing)
@@ -76,6 +77,7 @@ impl TelemetryPacket {
             lat: 0.0,
             lon: 0.0,
             gps_valid: 0,
+            gps_course: 0.0,
             lap_time_ms: 0,
             lap_count: 0,
             lap_flags: 0,
@@ -181,14 +183,26 @@ mod tests {
 
     #[test]
     fn test_packet_size() {
-        assert_eq!(mem::size_of::<TelemetryPacket>(), 74);
+        assert_eq!(mem::size_of::<TelemetryPacket>(), 78);
     }
 
     #[test]
     fn test_version_field() {
         let packet = TelemetryPacket::new();
         assert_eq!(packet.version, PROTOCOL_VERSION);
-        assert_eq!(packet.version, 2);
+        assert_eq!(packet.version, 3);
+    }
+
+    #[test]
+    fn test_gps_course_field() {
+        let mut packet = TelemetryPacket::new();
+        // GPS course is in radians, test a typical value (90 degrees = π/2)
+        packet.gps_course = core::f32::consts::FRAC_PI_2;
+        assert!((packet.gps_course - 1.5707963).abs() < 0.0001);
+
+        // Test that NaN can be used to signal invalid course
+        packet.gps_course = f32::NAN;
+        assert!(packet.gps_course.is_nan());
     }
 
     #[test]

@@ -394,8 +394,16 @@ impl TelemetryPublisher {
             packet.lat = sensors.gps_parser.last_fix().lat as f32;
             packet.lon = sensors.gps_parser.last_fix().lon as f32;
             packet.gps_valid = 1;
+            // GPS course is only valid when moving (speed > ~1 m/s)
+            // Use NaN to signal invalid when stationary
+            if sensors.gps_parser.last_fix().speed > 1.0 {
+                packet.gps_course = sensors.gps_parser.last_fix().course;
+            } else {
+                packet.gps_course = f32::NAN;
+            }
         } else {
             packet.gps_valid = 0;
+            packet.gps_course = f32::NAN;
         }
 
         // Add lap timer data if available

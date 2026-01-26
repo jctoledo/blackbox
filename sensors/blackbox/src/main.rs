@@ -783,14 +783,11 @@ fn main() {
             if sensors.gps_parser.is_warmed_up() && sensors.gps_parser.last_fix().valid {
                 let (ax_corr, ay_corr, _) = sensors.imu_parser.get_accel_corrected();
 
-                // Update position from GPS (only when fix is valid)
-                if let Some((x, y)) = sensors.gps_parser.to_local_coords() {
-                    estimator.update_position(x, y);
-                }
-
+                // Check stationary FIRST - if stopped, lock position to prevent GPS noise
                 if sensors.is_stationary(ax_corr, ay_corr, sensors.imu_parser.data().wz) {
-                    // Vehicle stopped - perform ZUPT and bias estimation
+                    // Vehicle stopped - perform ZUPT, lock position, and bias estimation
                     estimator.zupt();
+                    estimator.ekf.lock_position(); // Prevent GPS noise from moving position
                     diagnostics.record_zupt();
 
                     let (ax_b, ay_b, _) = remove_gravity(
@@ -810,6 +807,11 @@ fn main() {
                     );
                     estimator.update_bias(ax_e, ay_e);
                     estimator.reset_speed();
+                } else {
+                    // Moving - update position from GPS (only when fix is valid)
+                    if let Some((x, y)) = sensors.gps_parser.to_local_coords() {
+                        estimator.update_position(x, y);
+                    }
                 }
 
                 // Update EKF with velocity components (requires full validity)

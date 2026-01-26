@@ -234,6 +234,25 @@ impl Ekf {
         self.update_velocity(0.0, 0.0);
         self.update_speed(0.0);
     }
+
+    /// Lock position when stationary - reduces position uncertainty to make EKF
+    /// resistant to GPS noise. This prevents phantom movement while parked.
+    ///
+    /// With P_pos = 0.01 and R_pos = 20.0, Kalman gain K = 0.01/20.01 ≈ 0.0005,
+    /// so GPS noise only affects position by 0.05% instead of 45%.
+    pub fn lock_position(&mut self) {
+        self.p[0] = 0.01;
+        self.p[1] = 0.01;
+    }
+
+    /// Skip IMU prediction (use when stationary to prevent drift)
+    /// Call this instead of predict() when vehicle is known to be stationary.
+    pub fn skip_prediction(&mut self) {
+        // Do nothing - position and velocity stay constant
+        // Covariance grows very slightly to allow eventual GPS correction
+        self.p[0] += 1e-6;
+        self.p[1] += 1e-6;
+    }
 }
 
 impl Default for Ekf {
