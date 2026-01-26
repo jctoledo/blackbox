@@ -4338,7 +4338,7 @@ function startTrackRecording(trackType = 'loop') {
         heading: currentSimPos.heading,
         speed: currentSimPos.speed,
         valid: true,
-        sigma: 2.5  // Simulate good GPS quality
+        sigma: currentSimPos.sigma || 2.5  // Use simulated sigma from position
     };
 
     // Start recording
@@ -4400,7 +4400,7 @@ function updateTrackRecording() {
         heading: currentSimPos.heading,
         speed: currentSimPos.speed,
         valid: true,
-        sigma: 2.5  // Simulate good GPS quality
+        sigma: currentSimPos.sigma || 2.5  // Use simulated sigma from position
     };
 
     // Add sample (returns object with stored, loopDetected, stats, etc.)
@@ -6181,7 +6181,8 @@ function simulate() {
             x: pos.x,
             y: pos.y,
             heading: pos.heading,
-            speed: pos.speed
+            speed: pos.speed,
+            sigma: 2.5  // Simulated good GPS quality
         };
 
         // Update start line indicator

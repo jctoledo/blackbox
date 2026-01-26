@@ -2073,23 +2073,24 @@ let peakHighlightTimeout=null;
 
 function process(buf){
     const d=new DataView(buf);
-    const ax=d.getFloat32(7,1),ay=d.getFloat32(11,1),wz=d.getFloat32(19,1),sp=d.getFloat32(51,1),mo=d.getUint8(55);
-    const lat=d.getFloat32(56,1),lon=d.getFloat32(60,1),gpsOk=d.getUint8(64);
+    const ax=d.getFloat32(7,1),ay=d.getFloat32(11,1),wz=d.getFloat32(19,1),sp=d.getFloat32(51,1);
+    const posSigma=d.getFloat32(55,1),mo=d.getUint8(59);
+    const lat=d.getFloat32(60,1),lon=d.getFloat32(64,1),gpsOk=d.getUint8(68);
     // GPS course (radians) - only valid when moving, NaN when stationary
-    const gpsCourse=d.getFloat32(65,1);
+    const gpsCourse=d.getFloat32(69,1);
     // EKF state for track manager
     const ekfYaw=d.getFloat32(31,1),ekfX=d.getFloat32(35,1),ekfY=d.getFloat32(39,1);
-    // Lap timer fields (78-byte protocol v3, shifted by 4 bytes for gps_course)
-    const lapTimeMs=buf.byteLength>=76?d.getUint32(69,1):0;
-    const lapCnt=buf.byteLength>=76?d.getUint16(73,1):0;
-    const lapFlags=buf.byteLength>=76?d.getUint8(75):0;
+    // Lap timer fields (82-byte protocol v4)
+    const lapTimeMs=buf.byteLength>=80?d.getUint32(73,1):0;
+    const lapCnt=buf.byteLength>=80?d.getUint16(77,1):0;
+    const lapFlags=buf.byteLength>=80?d.getUint8(79):0;
     const latg=ay/9.81,lng=-ax/9.81,yawDeg=Math.abs(wz*57.3);
     // Track GPS reference (average of first 5 fixes, same as firmware)
     if(gpsOk===1)updateJsGpsRef(lat,lon);
     // Update position for track manager and recording
     // gpsCourse is the preferred heading source when valid (not NaN and speed > 2 km/h)
     const validGpsCourse=!isNaN(gpsCourse)&&sp>2.0;
-    currentPos={x:ekfX,y:ekfY,yaw:ekfYaw,gpsCourse:gpsCourse,validGpsCourse:validGpsCourse,speed:sp,valid:gpsOk===1,sigma:3.0,lat:lat,lon:lon};
+    currentPos={x:ekfX,y:ekfY,yaw:ekfYaw,gpsCourse:gpsCourse,validGpsCourse:validGpsCourse,speed:sp,valid:gpsOk===1,sigma:posSigma,lat:lat,lon:lon};
     updateTrackRecording();
     updateStartLineIndicator();
     updateFinishLineIndicator();

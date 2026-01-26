@@ -6,14 +6,14 @@
 use core::mem;
 
 /// Current protocol version
-pub const PROTOCOL_VERSION: u8 = 3;
+pub const PROTOCOL_VERSION: u8 = 4;
 
-/// Telemetry packet structure (78 bytes total)
+/// Telemetry packet structure (82 bytes total)
 ///
 /// Layout:
 /// - Header (7 bytes): version, magic, timestamp
 /// - IMU data (24 bytes): ax, ay, az, wz, roll, pitch
-/// - EKF state (25 bytes): yaw, x, y, vx, vy, speed_kmh, mode
+/// - EKF state (29 bytes): yaw, x, y, vx, vy, speed_kmh, pos_sigma, mode
 /// - GPS data (13 bytes): lat, lon, gps_valid, gps_course
 /// - Lap timer (7 bytes): lap_time_ms, lap_count, lap_flags
 /// - Checksum (2 bytes)
@@ -32,13 +32,14 @@ pub struct TelemetryPacket {
     pub roll: f32, // radians
     pub pitch: f32,
 
-    // EKF state (25 bytes)
+    // EKF state (29 bytes)
     pub yaw: f32, // radians
     pub x: f32,   // meters
     pub y: f32,
     pub vx: f32, // m/s
     pub vy: f32,
     pub speed_kmh: f32,
+    pub pos_sigma: f32, // EKF position uncertainty (meters), for GPS quality indicator
     pub mode: u8, // 0=IDLE, 1=ACCEL, 2=BRAKE, 4=CORNER, 5=ACCEL+CORNER, 6=BRAKE+CORNER
 
     // GPS data (13 bytes)
@@ -73,6 +74,7 @@ impl TelemetryPacket {
             vx: 0.0,
             vy: 0.0,
             speed_kmh: 0.0,
+            pos_sigma: 0.0,
             mode: 0,
             lat: 0.0,
             lon: 0.0,
@@ -183,14 +185,14 @@ mod tests {
 
     #[test]
     fn test_packet_size() {
-        assert_eq!(mem::size_of::<TelemetryPacket>(), 78);
+        assert_eq!(mem::size_of::<TelemetryPacket>(), 82);
     }
 
     #[test]
     fn test_version_field() {
         let packet = TelemetryPacket::new();
         assert_eq!(packet.version, PROTOCOL_VERSION);
-        assert_eq!(packet.version, 3);
+        assert_eq!(packet.version, 4);
     }
 
     #[test]

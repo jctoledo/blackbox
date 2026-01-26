@@ -388,6 +388,8 @@ impl TelemetryPublisher {
         packet.vx = vx;
         packet.vy = vy;
         packet.speed_kmh = display_speed_kmh;
+        // EKF position uncertainty: sqrt(var_x + var_y) from diagonal of covariance matrix
+        packet.pos_sigma = (estimator.ekf.p[0] + estimator.ekf.p[1]).sqrt();
         packet.mode = estimator.mode_classifier.get_mode_u8();
 
         if sensors.gps_parser.last_fix().valid {
