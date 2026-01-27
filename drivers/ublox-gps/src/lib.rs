@@ -294,13 +294,17 @@ impl NmeaParser {
     /// Get velocity in ENU frame (East, North)
     ///
     /// Returns `None` if warmup not complete.
+    ///
+    /// GPS course convention: 0 = North, measured clockwise (radians)
+    /// ENU coordinates: x = East, y = North
+    /// Therefore: vx (east) = speed × sin(course), vy (north) = speed × cos(course)
     pub fn get_velocity_enu(&self) -> Option<(f32, f32)> {
         if !self.reference.set {
             return None;
         }
 
-        let vx = self.last_fix.speed * cos(self.last_fix.course as f64) as f32;
-        let vy = self.last_fix.speed * sin(self.last_fix.course as f64) as f32;
+        let vx = self.last_fix.speed * sin(self.last_fix.course as f64) as f32;
+        let vy = self.last_fix.speed * cos(self.last_fix.course as f64) as f32;
 
         Some((vx, vy))
     }
@@ -929,5 +933,54 @@ mod tests {
         assert!(!validate_nmea_checksum(
             "$GPRMC,123519,A,4807.038,S,01131.000,E,022.4,084.4,230394,003.1,W*6A"
         ));
+    }
+
+    #[test]
+    fn test_get_velocity_enu_direction() {
+        use core::f32::consts::{FRAC_PI_2, PI};
+
+        let mut parser = NmeaParser::new();
+        parser.reference.set = true;
+        parser.last_fix.speed = 10.0;
+
+        // Course 0 (North): velocity should be (east=0, north=speed)
+        parser.last_fix.course = 0.0;
+        let (vx, vy) = parser.get_velocity_enu().unwrap();
+        assert!(vx.abs() < 0.01, "North: east should be ~0, got {}", vx);
+        assert!(
+            (vy - 10.0).abs() < 0.01,
+            "North: north should be speed, got {}",
+            vy
+        );
+
+        // Course π/2 (East): velocity should be (east=speed, north=0)
+        parser.last_fix.course = FRAC_PI_2;
+        let (vx, vy) = parser.get_velocity_enu().unwrap();
+        assert!(
+            (vx - 10.0).abs() < 0.01,
+            "East: east should be speed, got {}",
+            vx
+        );
+        assert!(vy.abs() < 0.01, "East: north should be ~0, got {}", vy);
+
+        // Course π (South): velocity should be (east=0, north=-speed)
+        parser.last_fix.course = PI;
+        let (vx, vy) = parser.get_velocity_enu().unwrap();
+        assert!(vx.abs() < 0.01, "South: east should be ~0, got {}", vx);
+        assert!(
+            (vy + 10.0).abs() < 0.01,
+            "South: north should be -speed, got {}",
+            vy
+        );
+
+        // Course 3π/2 (West): velocity should be (east=-speed, north=0)
+        parser.last_fix.course = 3.0 * FRAC_PI_2;
+        let (vx, vy) = parser.get_velocity_enu().unwrap();
+        assert!(
+            (vx + 10.0).abs() < 0.01,
+            "West: east should be -speed, got {}",
+            vx
+        );
+        assert!(vy.abs() < 0.01, "West: north should be ~0, got {}", vy);
     }
 }
