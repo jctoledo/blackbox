@@ -566,26 +566,38 @@ impl Ekf {
     /// ZUPT bypasses innovation gating because we have high confidence
     /// the vehicle is stationary (verified by multiple sensors).
     /// If the EKF has drifted, ZUPT is the mechanism to recover.
+    ///
+    /// Note: We use moderate covariance (2.0) rather than tiny values (0.01)
+    /// because when the vehicle starts moving again, we need to accept GPS
+    /// velocity updates. With P=0.01 and R=0.2, a 5 m/s GPS velocity would
+    /// have Mahalanobis² = 25/0.21 ≈ 119, which exceeds the gate threshold
+    /// of 18 and gets rejected. P=2.0 allows velocities up to ~6 m/s (22 km/h)
+    /// to be accepted on the first update after stopping.
     pub fn zupt(&mut self) {
         // Force velocity to zero without gating
         // This is intentional - ZUPT is a recovery mechanism
         self.x[3] = 0.0;
         self.x[4] = 0.0;
 
-        // Reduce velocity covariance to reflect high confidence
-        // Using very small values (but not zero to maintain numerical stability)
-        self.p[3] = 0.01;
-        self.p[4] = 0.01;
+        // Use moderate covariance to allow subsequent GPS updates to be accepted
+        // P=2.0 gives s=2.2, allowing v² < 18*2.2 = 39.6, so v < 6.3 m/s (23 km/h)
+        self.p[3] = 2.0;
+        self.p[4] = 2.0;
     }
 
     /// Lock position when stationary - reduces position uncertainty to make EKF
     /// resistant to GPS noise. This prevents phantom movement while parked.
     ///
-    /// With P_pos = 0.01 and R_pos = 20.0, Kalman gain K = 0.01/20.01 ≈ 0.0005,
-    /// so GPS noise only affects position by 0.05% instead of 45%.
+    /// We use moderate covariance (1.0) rather than tiny values (0.01) because
+    /// when the car starts moving again, we need to accept GPS position updates.
+    /// With P=0.01 and R=20, K=0.0005 means a 10m error takes ~8 seconds to correct.
+    /// With P=1.0 and R=20, K=0.048 means a 10m error corrects in ~0.8 seconds.
+    ///
+    /// GPS noise (±2-3m) with P=1.0 causes ~0.1-0.15m position drift per update,
+    /// which is acceptable for a parked vehicle.
     pub fn lock_position(&mut self) {
-        self.p[0] = 0.01;
-        self.p[1] = 0.01;
+        self.p[0] = 1.0;
+        self.p[1] = 1.0;
     }
 
     /// Skip IMU prediction (use when stationary to prevent drift)
@@ -791,9 +803,10 @@ mod tests {
 
         assert!((ekf.x[3] - 0.0).abs() < 0.001);
         assert!((ekf.x[4] - 0.0).abs() < 0.001);
-        // Covariance should be reset to small value
-        assert!(ekf.p[3] < 0.1);
-        assert!(ekf.p[4] < 0.1);
+        // Covariance should be reset to moderate value (2.0) that allows
+        // subsequent GPS velocity updates to be accepted
+        assert!((ekf.p[3] - 2.0).abs() < 0.1);
+        assert!((ekf.p[4] - 2.0).abs() < 0.1);
     }
 
     #[test]
