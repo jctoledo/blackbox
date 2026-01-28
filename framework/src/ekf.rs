@@ -18,8 +18,9 @@ const N: usize = 7; // State dimension
 /// At 99% confidence: chi2 = 6.63 (rejects 1% of valid measurements)
 /// At 95% confidence: chi2 = 3.84 (rejects 5% of valid measurements)
 const CHI2_GATE_POSITION: f32 = 16.0; // ~4 sigma - reject extreme outliers only
-const CHI2_GATE_VELOCITY: f32 = 9.0; // ~3 sigma - moderately strict
 const CHI2_GATE_YAW: f32 = 12.0; // ~3.5 sigma - account for magnetic interference
+// Note: Velocity gating was removed because it caused runaway filter divergence.
+// GPS velocity is derived from Doppler shift and is very reliable - no gating needed.
 
 /// EKF tuning configuration
 /// Allows runtime adjustment of filter parameters (Open/Closed Principle)
@@ -436,46 +437,34 @@ impl Ekf {
 
     /// Update with GPS velocity measurement
     ///
-    /// Uses innovation gating to reject outliers (e.g., corrupt GPS data).
+    /// GPS velocity is always accepted (no innovation gating).
+    /// Unlike position (which can have multipath errors) or yaw (magnetic interference),
+    /// GPS velocity is derived from Doppler shift and is very reliable.
     ///
-    /// Returns UpdateResult::Accepted if measurement was used, Rejected if gated.
-    pub fn update_velocity(&mut self, z_vx: f32, z_vy: f32) -> UpdateResult {
-        // Compute innovations
-        let y_vx = z_vx - self.x[3];
-        let y_vy = z_vy - self.x[4];
-
-        // Innovation covariances
+    /// Innovation gating on velocity was removed because it caused runaway filter
+    /// divergence: once IMU integration error caused velocity to drift past the gate
+    /// threshold, ALL subsequent GPS updates were rejected, making recovery impossible.
+    pub fn update_velocity(&mut self, z_vx: f32, z_vy: f32) {
+        // VX update
         let s_x = self.p[3] + self.config.r_vel;
-        let s_y = self.p[4] + self.config.r_vel;
-
-        // Mahalanobis distance squared (2D velocity)
-        let mahal_sq = (y_vx * y_vx) / s_x + (y_vy * y_vy) / s_y;
-
-        // Chi-squared gate for 2 DOF
-        if mahal_sq > CHI2_GATE_VELOCITY * 2.0 {
-            self.rejected_velocity += 1;
-            return UpdateResult::Rejected;
-        }
-
-        // Apply Kalman update
         let k_x = self.p[3] / s_x;
-        self.x[3] += k_x * y_vx;
+        self.x[3] += k_x * (z_vx - self.x[3]);
         self.p[3] *= 1.0 - k_x;
 
+        // VY update
+        let s_y = self.p[4] + self.config.r_vel;
         let k_y = self.p[4] / s_y;
-        self.x[4] += k_y * y_vy;
+        self.x[4] += k_y * (z_vy - self.x[4]);
         self.p[4] *= 1.0 - k_y;
 
         self.accepted_velocity += 1;
-        UpdateResult::Accepted
     }
 
     /// Update with scalar speed measurement
     ///
-    /// Uses innovation gating to reject outlier speed measurements.
-    /// Note: Speed is always non-negative, so outliers are typically
-    /// from corrupt GPS data showing impossibly high speeds.
-    pub fn update_speed(&mut self, z_speed: f32) -> UpdateResult {
+    /// GPS speed is always accepted (no innovation gating) for the same reason
+    /// as velocity: gating caused runaway filter divergence.
+    pub fn update_speed(&mut self, z_speed: f32) {
         let r_spd = if z_speed < 0.3 { 0.20 } else { 0.04 }; // Adaptive R
 
         let v_est = self.speed().max(0.05); // Avoid division by zero
@@ -490,15 +479,6 @@ impl Ekf {
         // Innovation
         let y = z_speed - v_est;
 
-        // Mahalanobis distance squared (1 DOF for scalar speed)
-        let mahal_sq = (y * y) / s;
-
-        // Gate using velocity threshold (speed is derived from velocity)
-        if mahal_sq > CHI2_GATE_VELOCITY {
-            // Don't increment rejected_velocity here - it's a different measurement
-            return UpdateResult::Rejected;
-        }
-
         // Kalman gains
         let k_x = self.p[3] * h_x / s;
         let k_y = self.p[4] * h_y / s;
@@ -508,8 +488,6 @@ impl Ekf {
         self.x[4] += k_y * y;
         self.p[3] -= k_x * h_x * self.p[3];
         self.p[4] -= k_y * h_y * self.p[4];
-
-        UpdateResult::Accepted
     }
 
     /// Update with IMU yaw measurement (from magnetometer)
@@ -729,36 +707,37 @@ mod tests {
     }
 
     #[test]
-    fn test_velocity_gating_accepts_reasonable_measurement() {
+    fn test_velocity_update_always_accepted() {
         let mut ekf = Ekf::new();
         ekf.x[3] = 10.0; // Moving at 10 m/s
         ekf.x[4] = 0.0;
         ekf.p[3] = 1.0;
         ekf.p[4] = 1.0;
 
-        // Small velocity change is reasonable
-        let result = ekf.update_velocity(11.0, 1.0);
+        // Velocity update should always be accepted (no gating)
+        ekf.update_velocity(11.0, 1.0);
 
-        assert_eq!(result, UpdateResult::Accepted);
         assert_eq!(ekf.accepted_velocity, 1);
+        // Velocity should have moved toward measurement
+        assert!(ekf.x[3] > 10.0);
     }
 
     #[test]
-    fn test_velocity_gating_rejects_impossible_jump() {
+    fn test_velocity_update_even_large_jumps() {
+        // Velocity gating was removed because it caused runaway filter divergence.
+        // Even large velocity jumps should be accepted - GPS velocity is reliable.
         let mut ekf = Ekf::new();
-        ekf.x[3] = 10.0; // Moving at 10 m/s
+        ekf.x[3] = 10.0;
         ekf.x[4] = 0.0;
-        ekf.p[3] = 0.1; // Very confident in velocity
+        ekf.p[3] = 0.1;
         ekf.p[4] = 0.1;
 
-        // Jump from 10 m/s to 100 m/s is physically impossible
-        // Mahalanobis: (90² / (0.1+0.2)) = 27000 >> threshold
-        let result = ekf.update_velocity(100.0, 0.0);
+        // Large velocity change - should still be accepted
+        ekf.update_velocity(30.0, 0.0);
 
-        assert_eq!(result, UpdateResult::Rejected);
-        // Velocity should NOT have changed
-        assert!((ekf.x[3] - 10.0).abs() < 0.1);
-        assert_eq!(ekf.rejected_velocity, 1);
+        // Velocity should move toward measurement
+        assert!(ekf.x[3] > 10.0);
+        assert_eq!(ekf.accepted_velocity, 1);
     }
 
     #[test]
@@ -827,19 +806,19 @@ mod tests {
     }
 
     #[test]
-    fn test_speed_gating_rejects_impossible_speed() {
+    fn test_speed_update_always_accepted() {
+        // Speed gating was removed for same reason as velocity gating
         let mut ekf = Ekf::new();
         ekf.x[3] = 10.0;
         ekf.x[4] = 0.0;
-        ekf.p[3] = 0.1;
-        ekf.p[4] = 0.1;
+        ekf.p[3] = 1.0;
+        ekf.p[4] = 1.0;
 
-        // Current speed is ~10 m/s, claiming 200 m/s is impossible
-        let result = ekf.update_speed(200.0);
+        // Speed update should always be accepted
+        ekf.update_speed(15.0);
 
-        assert_eq!(result, UpdateResult::Rejected);
-        // Speed should NOT have changed much
-        assert!(ekf.speed() < 15.0);
+        // Speed should move toward measurement
+        assert!(ekf.speed() > 10.0);
     }
 
     // ========== Issue 3: Effective Uncertainty Tests ==========
