@@ -1005,4 +1005,168 @@ mod tests {
             change_normal
         );
     }
+
+    // ========== Predict Step Tests ==========
+
+    #[test]
+    fn test_predict_ca_model_straight_line() {
+        // Test constant acceleration model with known inputs
+        // Vehicle moving East at 10 m/s, no acceleration, no turn rate
+        let mut ekf = Ekf::new();
+        ekf.x[0] = 0.0; // x position
+        ekf.x[1] = 0.0; // y position
+        ekf.x[2] = 0.0; // yaw (facing East)
+        ekf.x[3] = 10.0; // vx = 10 m/s East
+        ekf.x[4] = 0.0; // vy = 0
+
+        let dt = 0.1; // 100ms
+        ekf.predict(0.0, 0.0, 0.0, dt);
+
+        // After 100ms at 10 m/s: x should move 1.0m East
+        assert!(
+            (ekf.x[0] - 1.0).abs() < 0.01,
+            "x should be ~1.0m, got {}",
+            ekf.x[0]
+        );
+        assert!(ekf.x[1].abs() < 0.01, "y should be ~0, got {}", ekf.x[1]);
+        // Velocity unchanged (no acceleration)
+        assert!(
+            (ekf.x[3] - 10.0).abs() < 0.01,
+            "vx should be ~10, got {}",
+            ekf.x[3]
+        );
+    }
+
+    #[test]
+    fn test_predict_ca_model_with_acceleration() {
+        // Test CA model with forward acceleration
+        // Starting stationary, accelerating at 2 m/s²
+        let mut ekf = Ekf::new();
+        ekf.x[0] = 0.0;
+        ekf.x[1] = 0.0;
+        ekf.x[2] = 0.0; // Facing East
+        ekf.x[3] = 0.0; // Initially stationary
+        ekf.x[4] = 0.0;
+
+        let ax = 2.0; // 2 m/s² acceleration in Earth frame X (East)
+        let dt = 1.0; // 1 second
+
+        ekf.predict(ax, 0.0, 0.0, dt);
+
+        // x = 0.5 * a * t² = 0.5 * 2 * 1 = 1.0m
+        // vx = a * t = 2 * 1 = 2.0 m/s
+        assert!(
+            (ekf.x[0] - 1.0).abs() < 0.1,
+            "x should be ~1.0m, got {}",
+            ekf.x[0]
+        );
+        assert!(
+            (ekf.x[3] - 2.0).abs() < 0.1,
+            "vx should be ~2.0 m/s, got {}",
+            ekf.x[3]
+        );
+    }
+
+    #[test]
+    fn test_predict_ctra_model_circular_motion() {
+        // Test CTRA model: vehicle in circular turn
+        // Moving at 10 m/s with 0.5 rad/s turn rate (constant speed turn)
+        let mut ekf = Ekf::new();
+        ekf.x[0] = 0.0;
+        ekf.x[1] = 0.0;
+        ekf.x[2] = 0.0; // Yaw = 0 (facing +X)
+        ekf.x[3] = 10.0; // vx = 10 m/s
+        ekf.x[4] = 0.0; // vy = 0
+
+        let wz = 0.5; // 0.5 rad/s turn rate (~28.6 deg/s)
+        let dt = 0.1;
+
+        // With CTRA: position follows circular arc, not straight line
+        ekf.predict(0.0, 0.0, wz, dt);
+
+        // Yaw should increase by wz * dt = 0.05 rad
+        assert!(
+            (ekf.x[2] - 0.05).abs() < 0.01,
+            "yaw should be ~0.05 rad, got {}",
+            ekf.x[2]
+        );
+
+        // Position should follow arc, not straight line
+        // For small dt, x ≈ v*dt ≈ 1.0m (approximately)
+        assert!(
+            ekf.x[0] > 0.9 && ekf.x[0] < 1.1,
+            "x should be ~1.0m, got {}",
+            ekf.x[0]
+        );
+        // Y should be small but non-zero (turning)
+        assert!(
+            ekf.x[1].abs() < 0.1,
+            "y should be small during turn start, got {}",
+            ekf.x[1]
+        );
+    }
+
+    #[test]
+    fn test_predict_covariance_grows() {
+        let mut ekf = Ekf::new();
+        ekf.p = [1.0, 1.0, 0.1, 0.5, 0.5, 0.01, 0.01];
+
+        let p_before = ekf.p.clone();
+
+        ekf.predict(0.0, 0.0, 0.0, 0.1);
+
+        // All covariances should grow (or stay same for biases)
+        assert!(ekf.p[0] > p_before[0], "P[x] should grow");
+        assert!(ekf.p[1] > p_before[1], "P[y] should grow");
+        assert!(ekf.p[2] > p_before[2], "P[yaw] should grow");
+        assert!(ekf.p[3] > p_before[3], "P[vx] should grow");
+        assert!(ekf.p[4] > p_before[4], "P[vy] should grow");
+        assert!(ekf.p[5] > p_before[5], "P[bax] should grow");
+        assert!(ekf.p[6] > p_before[6], "P[bay] should grow");
+    }
+
+    #[test]
+    fn test_predict_bias_subtraction() {
+        // Test that biases are subtracted from acceleration
+        let mut ekf = Ekf::new();
+        ekf.x[5] = 0.5; // X bias = 0.5 m/s²
+        ekf.x[6] = -0.3; // Y bias = -0.3 m/s²
+
+        // Apply "measured" acceleration that equals the bias
+        // Effective acceleration should be zero
+        let dt = 1.0;
+        ekf.predict(0.5, -0.3, 0.0, dt);
+
+        // With zero effective acceleration, velocity should not change
+        assert!(
+            ekf.x[3].abs() < 0.1,
+            "vx should be ~0 (bias cancelled), got {}",
+            ekf.x[3]
+        );
+        assert!(
+            ekf.x[4].abs() < 0.1,
+            "vy should be ~0 (bias cancelled), got {}",
+            ekf.x[4]
+        );
+    }
+
+    #[test]
+    fn test_predict_yaw_wrapping() {
+        // Test that yaw wraps correctly around ±π
+        let mut ekf = Ekf::new();
+        ekf.x[2] = 3.0; // Near +π
+        ekf.x[3] = 1.0; // Slow speed to force CA model
+
+        // Turn for enough time to wrap past π
+        for _ in 0..100 {
+            ekf.predict(0.0, 0.0, 0.1, 0.1); // 0.1 rad/s * 100 * 0.1s = 1.0 rad
+        }
+
+        // Yaw should be wrapped to [-π, π]
+        assert!(
+            ekf.x[2] >= -PI && ekf.x[2] <= PI,
+            "yaw should be in [-π, π], got {}",
+            ekf.x[2]
+        );
+    }
 }
