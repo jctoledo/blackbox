@@ -783,11 +783,21 @@ fn main() {
             if sensors.gps_parser.is_warmed_up() && sensors.gps_parser.last_fix().valid {
                 let (ax_corr, ay_corr, _) = sensors.imu_parser.get_accel_corrected();
 
+                // Always update position from GPS first (even when stationary)
+                // This prevents EKF from diverging during extended stops
+                if let Some((x, y)) = sensors.gps_parser.to_local_coords() {
+                    let (ekf_x, ekf_y) = estimator.ekf.position();
+                    let jump_dist = ((x - ekf_x).powi(2) + (y - ekf_y).powi(2)).sqrt();
+                    if jump_dist < 1000.0 {
+                        estimator.update_position(x, y);
+                    }
+                }
+
                 // Check stationary FIRST - if stopped, lock position to prevent GPS noise
                 if sensors.is_stationary(ax_corr, ay_corr, sensors.imu_parser.data().wz) {
-                    // Vehicle stopped - perform ZUPT, lock position, and bias estimation
+                    // Vehicle stopped - perform ZUPT and bias estimation
                     estimator.zupt();
-                    estimator.ekf.lock_position(); // Prevent GPS noise from moving position
+                    estimator.ekf.lock_position(); // Reduce position covariance
                                                    // Issue 4: Lock yaw to prevent magnetometer noise from drifting heading
                                                    // Magnetometer updates still occur but with very low gain (~1%)
                     estimator.ekf.lock_yaw();

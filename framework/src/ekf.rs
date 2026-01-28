@@ -103,6 +103,7 @@ pub struct Ekf {
     last_moving_yaw: f32,
     /// Whether we have a valid stored yaw from when moving
     has_last_moving_yaw: bool,
+
 }
 
 impl Ekf {
@@ -1169,4 +1170,5 @@ mod tests {
             ekf.x[2]
         );
     }
+
 }
