@@ -1725,15 +1725,28 @@ async function activateTrack(track){
         if(!lapTracker)lapTracker=new LapTracker();lapTracker.reset();lastDeltaMs=0;deltaTrend=0;
         // Update delta bar display
         updateDeltaBar({deltaMs:null,hasRef:!!referenceLap,isP2P})
+        // Activate lap timer UI immediately (don't wait for firmware crossing data)
+        lapTimerActive=true;
+        prevLapFlags=0;prevLapTimeMs=0;
         const sec=$('lap-section');
+        sec.classList.remove('inactive');
+        sec.classList.add('active');
         sec.classList.toggle('p2p',isP2P);
         sec.classList.toggle('first-run',!track.lapCount);
         sec.classList.toggle('has-ref',!!referenceLap);
+        sec.classList.remove('timing');
+        // Initialize timer display to Armed state
+        $('lap-time').textContent='0:00.000';
         $('lap-setup-text').textContent=track.name;
         $('lap-track-name').textContent=track.name;
         const unit=isP2P?'Run':'Lap';
-        const countEl=sec.querySelector('.bbLapCount');
-        if(countEl)countEl.textContent=unit+' 0';
+        $('lap-count').textContent=unit+' '+Math.max(1,track.lapCount||0);
+        $('lap-state').textContent='Armed';
+        $('lap-state').classList.remove('timing','finished');
+        $('best-lap').textContent=track.bestLapMs?fmtLapTime(track.bestLapMs):'—:——';
+        $('last-lap').textContent='—:——';
+        $('lap-delta').textContent='—';
+        $('lap-delta').className='bbLapHistValue bbNum delta';
         updateActiveTrackDisplay();
         console.log('Track activated:',track.name,'Type:',track.type);
     }catch(e){alert('Failed to configure lap timer: '+e.message)}
@@ -1744,8 +1757,16 @@ async function deactivateTrack(){
     activeTrack=null;referenceLap=null;clearSession();
     if(lapTracker)lapTracker.reset();
     p2pNeedsWarmup=false;
+    // Deactivate lap timer UI
+    lapTimerActive=false;
+    const sec=$('lap-section');
+    sec.classList.add('inactive');
+    sec.classList.remove('active','timing','p2p','first-run','has-ref');
     $('lap-setup-text').textContent='Tap to configure';
     $('lap-track-name').textContent='';
+    $('lap-time').textContent='0:00.000';
+    $('lap-state').textContent='Armed';
+    $('lap-state').classList.remove('timing','finished');
     updateActiveTrackDisplay();
 }
 
@@ -2013,10 +2034,10 @@ function fmtTime(ms){const s=Math.floor(ms/1000),m=Math.floor(s/60),h=Math.floor
 function fmtLapTime(ms){if(ms===0)return'0:00.000';const mins=Math.floor(ms/60000),secs=Math.floor((ms%60000)/1000),millis=ms%1000;return mins+':'+String(secs).padStart(2,'0')+'.'+String(millis).padStart(3,'0')}
 
 function updateLapTimer(lapTimeMs,lapCnt,lapFlags){
-    const sec=$('lap-section'),active=(lapFlags&LAP_FLAG_INVALID)===0&&(lapTimeMs>0||lapCnt>0||(lapFlags&(LAP_FLAG_CROSSED_START|LAP_FLAG_CROSSED_FINISH)));
-    if(active&&!lapTimerActive){sec.classList.remove('inactive');sec.classList.add('active');lapTimerActive=true}
-    else if(!active&&lapTimerActive){sec.classList.add('inactive');sec.classList.remove('active','timing','has-ref');lapTimerActive=false}
-    if(!lapTimerActive)return;
+    const sec=$('lap-section');
+    // Don't deactivate if we have an active track - firmware zeros just means "armed"
+    // Only deactivate via explicit deactivateTrack() call
+    if(!lapTimerActive||!activeTrack)return;
     // Update current lap time
     $('lap-time').textContent=fmtLapTime(lapTimeMs);
     const isP2P=activeTrack&&activeTrack.type==='point_to_point';
