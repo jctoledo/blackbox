@@ -637,6 +637,32 @@ mod tests {
     }
 
     #[test]
+    fn test_direction_valid_uses_math_convention() {
+        // IMPORTANT: direction uses MATH convention, NOT compass convention
+        // Math: 0 = East (+X), π/2 = North (+Y), counter-clockwise positive
+        // Compass: 0 = North, π/2 = East, clockwise positive
+        //
+        // Dashboard calculates direction via atan2(dy,dx) in _calculateTimingLine(),
+        // which is ALREADY math convention. Do NOT convert - pass directly to firmware.
+
+        // Driving East (vx=1, vy=0) should match direction=0 (East in math convention)
+        assert!(direction_valid((1.0, 0.0), 0.0, FRAC_PI_2));
+
+        // Driving North (vx=0, vy=1) should match direction=π/2 (North in math convention)
+        assert!(direction_valid((0.0, 1.0), FRAC_PI_2, FRAC_PI_2));
+
+        // Driving West (vx=-1, vy=0) should match direction=π (West in math convention)
+        assert!(direction_valid((-1.0, 0.0), PI, FRAC_PI_2));
+
+        // Driving South (vx=0, vy=-1) should match direction=-π/2 (South in math convention)
+        assert!(direction_valid((0.0, -1.0), -FRAC_PI_2, FRAC_PI_2));
+
+        // Cross-check: driving North should NOT match direction=0 (that's East!)
+        // This would fail if someone mistakenly used compass convention
+        assert!(!direction_valid((0.0, 1.0), 0.0, FRAC_PI_2 - 0.01));
+    }
+
+    #[test]
     fn test_timing_line_from_path_horizontal() {
         let line = timing_line_from_path((0.0, 0.0), (10.0, 0.0), 5.0);
 

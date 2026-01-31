@@ -4164,20 +4164,13 @@ class TrackRecorder {
             };
         }
 
-        // Weighted average position and heading
+        // Weighted average position (matching production websocket_server.rs)
         let sumX = 0, sumY = 0, sumWeight = 0;
-        let sumSin = 0, sumCos = 0;
 
         for (const p of window) {
-            const weight = p.confidence || 0.5;
-            const x = p.x || 0;
-            const y = p.y || 0;
-            const heading = p.heading || 0;
-
-            sumX += x * weight;
-            sumY += y * weight;
-            sumSin += Math.sin(heading) * weight;
-            sumCos += Math.cos(heading) * weight;
+            const weight = 1 / ((p.sigma || 3.0) + 0.5);  // Same weighting as production
+            sumX += (p.x || 0) * weight;
+            sumY += (p.y || 0) * weight;
             sumWeight += weight;
         }
 
@@ -4186,7 +4179,14 @@ class TrackRecorder {
 
         const centerX = sumX / sumWeight;
         const centerY = sumY / sumWeight;
-        const direction = Math.atan2(sumSin / sumWeight, sumCos / sumWeight);
+
+        // Direction from path coordinates (MATH convention: 0=East)
+        // This matches production which uses atan2(l.y-f.y, l.x-f.x)
+        let direction = 0;
+        if (window.length >= 2) {
+            const f = window[0], l = window[window.length - 1];
+            direction = Math.atan2((l.y || 0) - (f.y || 0), (l.x || 0) - (f.x || 0));
+        }
 
         // Guard: NaN values
         const safeCenterX = isNaN(centerX) ? 0 : centerX;
@@ -5162,6 +5162,7 @@ async function activateTrack(track) {
     const isP2P = track.type === 'point_to_point';
 
     // Set up timing lines from the track
+    // Direction is already in math convention (0=East, from atan2 in _calculateTimingLine)
     simTimingLine = {
         p1: track.startLine.p1,
         p2: track.startLine.p2,
@@ -5461,8 +5462,14 @@ function formatDistance(meters) {
 
 // Convert bearing to arrow character (cardinal direction relative to current heading)
 function bearingToArrow(bearing, currentHeading) {
-    // Relative bearing (how far to turn from current heading)
-    let relBearing = bearing - currentHeading;
+    // bearing is in math convention (from atan2): 0 = East, CCW positive
+    // currentHeading is in compass convention (from GPS/EKF): 0 = North, CW positive
+    // Convert compass heading to math convention: math = π/2 - compass
+    const mathHeading = Math.PI / 2 - currentHeading;
+
+    // Relative bearing: positive = target to the right, negative = target to the left
+    // (mathHeading - bearing) gives CW-positive convention matching arrow directions
+    let relBearing = mathHeading - bearing;
 
     // Normalize to [-π, π]
     while (relBearing > Math.PI) relBearing -= 2 * Math.PI;
@@ -5479,6 +5486,26 @@ function bearingToArrow(bearing, currentHeading) {
     if (deg > -112.5 && deg <= -67.5) return '←';   // Left
     if (deg > -67.5 && deg <= -22.5) return '↖';    // Ahead-left
     return '•';
+}
+
+// Self-test for bearingToArrow - call from console: _testBearingToArrow()
+function _testBearingToArrow() {
+    const PI = Math.PI, pass = [], fail = [];
+    // Test: User faces North (compass 0), target is East (math bearing 0) → should be RIGHT (→)
+    let r = bearingToArrow(0, 0);
+    (r === '→' ? pass : fail).push('North→East: expected → got ' + r);
+    // Test: User faces East (compass π/2), target is North (math bearing π/2) → should be LEFT (←)
+    r = bearingToArrow(PI / 2, PI / 2);
+    (r === '←' ? pass : fail).push('East→North: expected ← got ' + r);
+    // Test: User faces South (compass π), target is North (math bearing π/2) → should be AHEAD (↑)
+    r = bearingToArrow(PI / 2, PI);
+    (r === '↑' ? pass : fail).push('South→North: expected ↑ got ' + r);
+    // Test: User faces West (compass 3π/2), target is South (math bearing -π/2) → should be LEFT (←)
+    r = bearingToArrow(-PI / 2, 3 * PI / 2);
+    (r === '←' ? pass : fail).push('West→South: expected ← got ' + r);
+    console.log('bearingToArrow tests: ' + pass.length + ' passed, ' + fail.length + ' failed');
+    if (fail.length) console.error('FAILURES:', fail);
+    return fail.length === 0;
 }
 
 // Update the start line indicator UI
@@ -6169,10 +6196,12 @@ function simulate() {
         };
 
         // Update current position for track manager
+        // Convert heading from math convention (atan2: 0=East) to compass convention (0=North)
+        // This matches production where currentPos.yaw is EKF aligned heading (compass)
         currentSimPos = {
             x: pos.x,
             y: pos.y,
-            heading: pos.heading,
+            heading: Math.PI / 2 - pos.heading,  // math → compass
             speed: pos.speed,
             sigma: 2.5  // Simulated good GPS quality
         };

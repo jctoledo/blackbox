@@ -1290,23 +1290,35 @@ function formatDuration(ms){
 }
 
 // TrackRecorder - Adaptive sampling for track recording with corner state machine
+// ARCHITECTURE: Uses GPS lat/lon as ground truth for position. Computes local coordinates
+// from GPS using gpsRef (stored at recording start), NOT EKF x,y which are session-specific.
 class TrackRecorder{
     constructor(){this.config={minDistance:2,maxDistance:30,headingThreshold:0.15,cornerEntryThreshold:0.025,cornerExitThreshold:0.012,minCornerLength:3,minLoopDistance:150,closeProximity:12};this.reset()}
-    reset(){this.recording=false;this.trackType='loop';this.startPos=null;this.startGps=null;this.startHeading=0;this.startTime=0;this.keyPoints=[];this.rawSamples=[];this.lastPos=null;this.lastGps=null;this.lastSigma=3.0;this.totalDistance=0;this.gpsDistance=0;this.loopDetected=false;this.inCorner=false;this.cornerCount=0;this.cornerEntryDist=0;this.speedGate=false}
-    start(pos,trackType='loop'){if(this.recording)return false;this.reset();this.recording=true;this.trackType=trackType;this.startPos={x:pos.x,y:pos.y};this.startGps={lat:pos.lat||0,lon:pos.lon||0};this.startHeading=pos.heading||0;this.startTime=Date.now();this.keyPoints.push({x:pos.x,y:pos.y,lat:pos.lat||0,lon:pos.lon||0,heading:pos.heading||0,speed:pos.speed||0,sigma:pos.sigma||3.0,t:Date.now(),curvature:0,isCorner:false});this.lastPos={x:pos.x,y:pos.y,heading:pos.heading||0};this.lastGps={lat:pos.lat||0,lon:pos.lon||0};return true}
+    reset(){this.recording=false;this.trackType='loop';this.gpsRef=null;this.startPos=null;this.startGps=null;this.startHeading=0;this.startTime=0;this.keyPoints=[];this.rawSamples=[];this.lastPos=null;this.lastGps=null;this.lastSigma=3.0;this.totalDistance=0;this.gpsDistance=0;this.loopDetected=false;this.inCorner=false;this.cornerCount=0;this.cornerEntryDist=0;this.speedGate=false}
+    // Convert GPS lat/lon to local coordinates using gpsRef
+    _gpsToLocal(lat,lon){if(!this.gpsRef||!lat||!lon||lat===0||lon===0)return null;const latRad=this.gpsRef.lat*Math.PI/180;return{x:(lon-this.gpsRef.lon)*Math.cos(latRad)*111320,y:(lat-this.gpsRef.lat)*111320}}
+    start(pos,trackType='loop',gpsRef=null){if(this.recording)return false;this.reset();this.recording=true;this.trackType=trackType;this.gpsRef=gpsRef;
+        // Compute local coords from GPS (preferred) or fall back to EKF if no gpsRef
+        let localX=pos.x,localY=pos.y;
+        if(gpsRef&&pos.lat&&pos.lon){const local=this._gpsToLocal(pos.lat,pos.lon);if(local){localX=local.x;localY=local.y}}
+        this.startPos={x:localX,y:localY};this.startGps={lat:pos.lat||0,lon:pos.lon||0};this.startHeading=pos.heading||0;this.startTime=Date.now();this.keyPoints.push({x:localX,y:localY,lat:pos.lat||0,lon:pos.lon||0,heading:pos.heading||0,speed:pos.speed||0,sigma:pos.sigma||3.0,t:Date.now(),curvature:0,isCorner:false});this.lastPos={x:localX,y:localY,heading:pos.heading||0};this.lastGps={lat:pos.lat||0,lon:pos.lon||0};return true}
     _gpsDistanceMeters(lat1,lon1,lat2,lon2){const latRad=lat1*Math.PI/180;const dy=(lat2-lat1)*111320;const dx=(lon2-lon1)*Math.cos(latRad)*111320;return Math.sqrt(dx*dx+dy*dy)}
     addSample(pos){if(!this.recording||!this.lastPos)return{stored:false};
+    // Compute local coords from GPS (preferred) or fall back to EKF
+    let localX=pos.x,localY=pos.y;
+    if(this.gpsRef&&pos.lat&&pos.lon){const local=this._gpsToLocal(pos.lat,pos.lon);if(local){localX=local.x;localY=local.y}}
     // Check loop closure using GPS coordinates (EKF position can diverge, GPS is ground truth)
     if(this.trackType==='loop'&&this.gpsDistance>=this.config.minLoopDistance&&this.startGps&&pos.lat&&pos.lon){const dts=this._gpsDistanceMeters(pos.lat,pos.lon,this.startGps.lat,this.startGps.lon);if(dts<this.config.closeProximity){this.loopDetected=true;return{stored:true,loopDetected:true,stats:this.getStats()}}}
     // Speed gate - skip samples while stationary (but loop check already ran above)
-    const spd=pos.speed||0;if(!this.speedGate){if(spd<2.0)return{stored:false,stats:this.getStats()};this.speedGate=true;this.lastPos={x:pos.x,y:pos.y,heading:pos.heading||0};this.lastGps={lat:pos.lat||0,lon:pos.lon||0};if(this.keyPoints.length<=1){this.startHeading=pos.heading||0}}else{if(spd<0.5){this.speedGate=false;return{stored:false,stats:this.getStats()}}}const sigma=pos.sigma||3.0;this.lastSigma=sigma;const dx=pos.x-this.lastPos.x,dy=pos.y-this.lastPos.y,dist=Math.sqrt(dx*dx+dy*dy);if(dist<0.5)return{stored:false,stats:this.getStats()};const speedBasedMinDist=Math.max(this.config.minDistance,pos.speed*0.1);const headingChange=Math.abs(this._wrapAngle(pos.heading-this.lastPos.heading));const shouldStore=dist>=speedBasedMinDist||headingChange>=this.config.headingThreshold||dist>=this.config.maxDistance;if(!shouldStore)return{stored:false,stats:this.getStats()};const curvature=dist>0.1?headingChange/dist:0;let isCorner=false;if(!this.inCorner){if(curvature>this.config.cornerEntryThreshold){this.inCorner=true;this.cornerEntryDist=this.totalDistance;isCorner=true}}else{isCorner=true;if(curvature<this.config.cornerExitThreshold){const cornerLength=this.totalDistance-this.cornerEntryDist;if(cornerLength>=this.config.minCornerLength)this.cornerCount++;this.inCorner=false}}this.keyPoints.push({x:pos.x,y:pos.y,lat:pos.lat||0,lon:pos.lon||0,heading:pos.heading||0,speed:pos.speed||0,sigma:sigma,t:Date.now(),curvature:curvature,isCorner:isCorner});this.totalDistance+=dist;if(this.lastGps&&pos.lat&&pos.lon){this.gpsDistance+=this._gpsDistanceMeters(pos.lat,pos.lon,this.lastGps.lat,this.lastGps.lon)}this.lastPos={x:pos.x,y:pos.y,heading:pos.heading||0};this.lastGps={lat:pos.lat||0,lon:pos.lon||0};if(this.trackType==='loop'){const lr=this._checkLoopClosure(pos);if(lr.detected){this.loopDetected=true;return{stored:true,loopDetected:true,stats:this.getStats()}}}return{stored:true,curvature:curvature,isCorner:isCorner,stats:this.getStats()}}
+    const spd=pos.speed||0;if(!this.speedGate){if(spd<2.0)return{stored:false,stats:this.getStats()};this.speedGate=true;this.lastPos={x:localX,y:localY,heading:pos.heading||0};this.lastGps={lat:pos.lat||0,lon:pos.lon||0};if(this.keyPoints.length<=1){this.startHeading=pos.heading||0}}else{if(spd<0.5){this.speedGate=false;return{stored:false,stats:this.getStats()}}}const sigma=pos.sigma||3.0;this.lastSigma=sigma;const dx=localX-this.lastPos.x,dy=localY-this.lastPos.y,dist=Math.sqrt(dx*dx+dy*dy);if(dist<0.5)return{stored:false,stats:this.getStats()};const speedBasedMinDist=Math.max(this.config.minDistance,pos.speed*0.1);const headingChange=Math.abs(this._wrapAngle(pos.heading-this.lastPos.heading));const shouldStore=dist>=speedBasedMinDist||headingChange>=this.config.headingThreshold||dist>=this.config.maxDistance;if(!shouldStore)return{stored:false,stats:this.getStats()};const curvature=dist>0.1?headingChange/dist:0;let isCorner=false;if(!this.inCorner){if(curvature>this.config.cornerEntryThreshold){this.inCorner=true;this.cornerEntryDist=this.totalDistance;isCorner=true}}else{isCorner=true;if(curvature<this.config.cornerExitThreshold){const cornerLength=this.totalDistance-this.cornerEntryDist;if(cornerLength>=this.config.minCornerLength)this.cornerCount++;this.inCorner=false}}this.keyPoints.push({x:localX,y:localY,lat:pos.lat||0,lon:pos.lon||0,heading:pos.heading||0,speed:pos.speed||0,sigma:sigma,t:Date.now(),curvature:curvature,isCorner:isCorner});this.totalDistance+=dist;if(this.lastGps&&pos.lat&&pos.lon){this.gpsDistance+=this._gpsDistanceMeters(pos.lat,pos.lon,this.lastGps.lat,this.lastGps.lon)}this.lastPos={x:localX,y:localY,heading:pos.heading||0};this.lastGps={lat:pos.lat||0,lon:pos.lon||0};if(this.trackType==='loop'){const lr=this._checkLoopClosure(pos);if(lr.detected){this.loopDetected=true;return{stored:true,loopDetected:true,stats:this.getStats()}}}return{stored:true,curvature:curvature,isCorner:isCorner,stats:this.getStats()}}
     _checkLoopClosure(pos){if(this.gpsDistance<this.config.minLoopDistance)return{detected:false};if(!this.startGps||!pos.lat||!pos.lon)return{detected:false};const dts=this._gpsDistanceMeters(pos.lat,pos.lon,this.startGps.lat,this.startGps.lon);return dts<this.config.closeProximity?{detected:true}:{detected:false}}
     _wrapAngle(a){while(a>Math.PI)a-=2*Math.PI;while(a<-Math.PI)a+=2*Math.PI;return a}
     getStats(){const displayCorners=this.inCorner?this.cornerCount+1:this.cornerCount;return{recording:this.recording,trackType:this.trackType,keyPointCount:this.keyPoints.length,totalDistance:this.totalDistance,loopDetected:this.loopDetected,elapsedMs:this.recording?Date.now()-this.startTime:0,gpsQuality:this._gpsQualityRating(this.lastSigma),corners:displayCorners,inCorner:this.inCorner}}
     _gpsQualityRating(sigma){if(sigma<2.0)return'excellent';if(sigma<3.0)return'good';if(sigma<4.0)return'fair';return'poor'}
     cancel(){this.recording=false}
-    finish(trackName,gpsOrigin=null){if(!this.recording)return null;this.recording=false;if(this.keyPoints.length<10)return null;const centerline=this._smoothPath(this.keyPoints,3);const startLine=this._calculateTimingLine(centerline,'start');let finishLine=null;if(this.trackType==='point_to_point')finishLine=this._calculateTimingLine(centerline,'finish');const bounds=this._calculateBounds(centerline);const totalDist=this._calculatePathLength(centerline);const quality=this._assessQuality();return{id:'track_'+Date.now()+'_'+Math.random().toString(36).substr(2,9),name:trackName,type:this.trackType,created:Date.now(),startLine:startLine,finishLine:finishLine,centerline:centerline,bounds:bounds,totalDistance:totalDist,origin:{x:this.startPos.x,y:this.startPos.y},gpsOrigin:gpsOrigin,quality:quality,corners:this.cornerCount,keyPoints:this.keyPoints.length}}
-    _smoothPath(pts,ws){if(!pts||pts.length===0)return[];if(pts.length<=ws)return pts.map(p=>({...p}));const result=[];const hw=Math.floor(ws/2);for(let i=0;i<pts.length;i++){const s=Math.max(0,i-hw),e=Math.min(pts.length-1,i+hw),w=pts.slice(s,e+1);if(w.length===0){result.push({...pts[i]});continue}let sx=0,sy=0,sw=0;for(let j=0;j<w.length;j++){const df=Math.abs(j-(i-s)),pw=1/(1+df*0.5),sg=w[j].sigma||3.0,qw=1/(sg+0.5),wt=pw*qw;sx+=w[j].x*wt;sy+=w[j].y*wt;sw+=wt}const x=sw>0?sx/sw:pts[i].x,y=sw>0?sy/sw:pts[i].y;result.push({x:isNaN(x)?pts[i].x:x,y:isNaN(y)?pts[i].y:y,heading:pts[i].heading,speed:pts[i].speed,sigma:pts[i].sigma,t:pts[i].t,curvature:pts[i].curvature,isCorner:pts[i].isCorner})}return result}
+    // Finish recording - uses this.gpsRef (set at start) as the coordinate reference
+    finish(trackName){if(!this.recording)return null;this.recording=false;if(this.keyPoints.length<10)return null;const centerline=this._smoothPath(this.keyPoints,3);const startLine=this._calculateTimingLine(centerline,'start');let finishLine=null;if(this.trackType==='point_to_point')finishLine=this._calculateTimingLine(centerline,'finish');const bounds=this._calculateBounds(centerline);const totalDist=this._calculatePathLength(centerline);const quality=this._assessQuality();return{id:'track_'+Date.now()+'_'+Math.random().toString(36).substr(2,9),name:trackName,type:this.trackType,created:Date.now(),startLine:startLine,finishLine:finishLine,centerline:centerline,bounds:bounds,totalDistance:totalDist,origin:{x:this.startPos.x,y:this.startPos.y},gpsOrigin:this.gpsRef,quality:quality,corners:this.cornerCount,keyPoints:this.keyPoints.length}}
+    _smoothPath(pts,ws){if(!pts||pts.length===0)return[];if(pts.length<=ws)return pts.map(p=>({...p}));const result=[];const hw=Math.floor(ws/2);for(let i=0;i<pts.length;i++){const s=Math.max(0,i-hw),e=Math.min(pts.length-1,i+hw),w=pts.slice(s,e+1);if(w.length===0){result.push({...pts[i]});continue}let sx=0,sy=0,sw=0;for(let j=0;j<w.length;j++){const df=Math.abs(j-(i-s)),pw=1/(1+df*0.5),sg=w[j].sigma||3.0,qw=1/(sg+0.5),wt=pw*qw;sx+=w[j].x*wt;sy+=w[j].y*wt;sw+=wt}const x=sw>0?sx/sw:pts[i].x,y=sw>0?sy/sw:pts[i].y;result.push({x:isNaN(x)?pts[i].x:x,y:isNaN(y)?pts[i].y:y,lat:pts[i].lat,lon:pts[i].lon,heading:pts[i].heading,speed:pts[i].speed,sigma:pts[i].sigma,t:pts[i].t,curvature:pts[i].curvature,isCorner:pts[i].isCorner})}return result}
     _calculateTimingLine(cl,which='start'){if(!cl||cl.length===0)return{p1:[0,12],p2:[0,-12],direction:0};const idx=which==='start'?Math.min(2,cl.length-1):Math.max(0,cl.length-3);const ns=5,s=Math.max(0,idx-ns),e=Math.min(cl.length-1,idx+ns),pts=cl.slice(s,e+1);let sx=0,sy=0,sw=0;for(const p of pts){const wt=1/(p.sigma||3.0+0.5);sx+=p.x*wt;sy+=p.y*wt;sw+=wt}const cx=sw>0?sx/sw:cl[idx].x,cy=sw>0?sy/sw:cl[idx].y;const safeCx=isNaN(cx)?0:cx,safeCy=isNaN(cy)?0:cy;let dir=0;if(pts.length>=2){const f=pts[0],l=pts[pts.length-1];dir=Math.atan2(l.y-f.y,l.x-f.x)}const w=12,perp=dir+Math.PI/2;return{p1:[safeCx+Math.cos(perp)*w,safeCy+Math.sin(perp)*w],p2:[safeCx-Math.cos(perp)*w,safeCy-Math.sin(perp)*w],direction:dir}}
     _calculateBounds(cl){if(!cl||cl.length===0)return{minX:0,minY:0,maxX:100,maxY:100};let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;for(const p of cl){minX=Math.min(minX,p.x);minY=Math.min(minY,p.y);maxX=Math.max(maxX,p.x);maxY=Math.max(maxY,p.y)}return{minX,minY,maxX,maxY}}
     _calculatePathLength(cl){if(!cl||cl.length<2)return 0;let len=0;for(let i=1;i<cl.length;i++){const dx=cl[i].x-cl[i-1].x,dy=cl[i].y-cl[i-1].y;len+=Math.sqrt(dx*dx+dy*dy)}return len}
@@ -1327,6 +1339,38 @@ function gpsToLocal(lat,lon){if(!jsGpsRef)return null;const latRad=jsGpsRef.lat*
 function localToGps(x,y){if(!jsGpsRef)return null;const latRad=jsGpsRef.lat*Math.PI/180;return{lat:jsGpsRef.lat+y/111320,lon:jsGpsRef.lon+x/(111320*Math.cos(latRad))}}
 function transformCoord(x,y,fromRef,toRef){const fLatRad=fromRef.lat*Math.PI/180;const lon=fromRef.lon+x/(111320*Math.cos(fLatRad));const lat=fromRef.lat+y/111320;const tLatRad=toRef.lat*Math.PI/180;return{x:(lon-toRef.lon)*Math.cos(tLatRad)*111320,y:(lat-toRef.lat)*111320}}
 function transformLine(line,fromRef,toRef){const p1=transformCoord(line.p1[0],line.p1[1],fromRef,toRef);const p2=transformCoord(line.p2[0],line.p2[1],fromRef,toRef);return{p1:[p1.x,p1.y],p2:[p2.x,p2.y],direction:line.direction}}
+
+// Self-test for GPS coordinate functions - call from console: _testGpsCoordinates()
+function _testGpsCoordinates(){
+    const pass=[],fail=[];const eq=(a,b,tol=0.01)=>Math.abs(a-b)<tol;
+    // Save current state
+    const savedRef=jsGpsRef;
+    // Test 1: gpsToLocal/localToGps are inverses
+    jsGpsRef={lat:37.0,lon:-122.0};
+    const local1=gpsToLocal(37.001,-121.999);
+    const gps1=localToGps(local1.x,local1.y);
+    if(eq(gps1.lat,37.001,0.00001)&&eq(gps1.lon,-121.999,0.00001))pass.push('gpsToLocal/localToGps inverse');else fail.push('gpsToLocal/localToGps inverse: got ('+gps1.lat+','+gps1.lon+')');
+    // Test 2: gpsToLocal at origin returns (0,0)
+    const local2=gpsToLocal(37.0,-122.0);
+    if(eq(local2.x,0)&&eq(local2.y,0))pass.push('gpsToLocal at origin');else fail.push('gpsToLocal at origin: got ('+local2.x+','+local2.y+')');
+    // Test 3: 1 degree latitude ≈ 111320m
+    const local3=gpsToLocal(38.0,-122.0);
+    if(eq(local3.y,111320,100))pass.push('1 degree lat ≈ 111320m');else fail.push('1 degree lat: got '+local3.y);
+    // Test 4: transformCoord roundtrip
+    const ref1={lat:37.0,lon:-122.0},ref2={lat:37.001,lon:-122.001};
+    const t1=transformCoord(100,200,ref1,ref2);
+    const t2=transformCoord(t1.x,t1.y,ref2,ref1);
+    if(eq(t2.x,100,0.1)&&eq(t2.y,200,0.1))pass.push('transformCoord roundtrip');else fail.push('transformCoord roundtrip: got ('+t2.x+','+t2.y+')');
+    // Test 5: TrackRecorder._gpsToLocal matches gpsToLocal
+    const tr=new TrackRecorder();tr.gpsRef=jsGpsRef;
+    const trLocal=tr._gpsToLocal(37.001,-121.999);
+    if(eq(trLocal.x,local1.x)&&eq(trLocal.y,local1.y))pass.push('TrackRecorder._gpsToLocal matches');else fail.push('TrackRecorder._gpsToLocal: got ('+trLocal.x+','+trLocal.y+') vs ('+local1.x+','+local1.y+')');
+    // Restore state
+    jsGpsRef=savedRef;
+    console.log('GPS coordinate tests: '+pass.length+' passed, '+fail.length+' failed');
+    if(fail.length>0)console.log('Failures:',fail);
+    return{pass,fail};
+}
 
 // Track Auto-Detection
 class TrackAutoDetector{
@@ -1695,20 +1739,24 @@ async function activateTrack(track){
             if(track.finishLine)finLine=transformLine(track.finishLine,track.gpsOrigin,jsGpsRef);
         }
     }
+    // Direction is already in math convention (from atan2 in _calculateTimingLine)
+    // Firmware expects math convention (0=East, CCW positive)
+    const startDir=line.direction;
     let url;
     if(isP2P&&finLine){
+        const finDir=finLine.direction;
         url='/api/laptimer/configure?type=point_to_point'+
             '&p1_x='+line.p1[0].toFixed(2)+'&p1_y='+line.p1[1].toFixed(2)+
             '&p2_x='+line.p2[0].toFixed(2)+'&p2_y='+line.p2[1].toFixed(2)+
-            '&dir='+line.direction.toFixed(4)+
+            '&dir='+startDir.toFixed(4)+
             '&f_p1_x='+finLine.p1[0].toFixed(2)+'&f_p1_y='+finLine.p1[1].toFixed(2)+
             '&f_p2_x='+finLine.p2[0].toFixed(2)+'&f_p2_y='+finLine.p2[1].toFixed(2)+
-            '&f_dir='+finLine.direction.toFixed(4);
+            '&f_dir='+finDir.toFixed(4);
     }else{
         url='/api/laptimer/configure?type=loop'+
             '&p1_x='+line.p1[0].toFixed(2)+'&p1_y='+line.p1[1].toFixed(2)+
             '&p2_x='+line.p2[0].toFixed(2)+'&p2_y='+line.p2[1].toFixed(2)+
-            '&dir='+line.direction.toFixed(4);
+            '&dir='+startDir.toFixed(4);
     }
     try{
         const r=await fetch(url);
@@ -1773,11 +1821,13 @@ async function deactivateTrack(){
 // Track Recording Functions
 function startTrackRecording(trackType='loop'){
     if(!currentPos||!currentPos.valid){alert('Position not available');return false}
+    if(!jsGpsRef){alert('GPS reference not yet established. Wait for GPS lock.');return false}
     if(!trackRecorder)trackRecorder=new TrackRecorder();
     // Use GPS course if valid, else EKF yaw (heading used for corner detection, not loop closure)
     const heading=currentPos.validGpsCourse?currentPos.gpsCourse:currentPos.yaw;
     const pos={x:currentPos.x,y:currentPos.y,lat:currentPos.lat,lon:currentPos.lon,heading:heading,speed:currentPos.speed,valid:true,sigma:currentPos.sigma||3.0};
-    if(!trackRecorder.start(pos,trackType)){console.warn('Failed to start recording');return false}
+    // Pass jsGpsRef so all coordinates are computed relative to it (not firmware's GPS origin)
+    if(!trackRecorder.start(pos,trackType,jsGpsRef)){console.warn('Failed to start recording');return false}
     const overlay=$('record-overlay');overlay.classList.add('active');
     $('rec-title').textContent=trackType==='loop'?'Recording Circuit':'Recording Stage';
     $('rec-distance').textContent='0';$('rec-corners').textContent='0';$('rec-points').textContent='0';$('rec-elapsed').textContent='0:00';
@@ -1832,7 +1882,8 @@ async function finishTrackRecording(){
     if(!trackRecorder||!trackRecorder.recording)return;
     const defaultName=trackRecorder.trackType==='loop'?'New Circuit':'New Stage';
     const trackName=prompt('Enter track name:',defaultName);if(!trackName)return;
-    const trackData=trackRecorder.finish(trackName,jsGpsRef);
+    // Coordinates are already computed relative to gpsRef (set at start time)
+    const trackData=trackRecorder.finish(trackName);
     if(!trackData){alert('Failed to create track: not enough data or poor quality');return}
     $('record-overlay').classList.remove('active');
     const track={id:trackData.id,name:trackData.name,type:trackData.type,startLine:trackData.startLine,finishLine:trackData.finishLine,origin:trackData.origin,gpsOrigin:trackData.gpsOrigin,centerline:trackData.centerline,bounds:trackData.bounds,pathLength:trackData.totalDistance||0,quality:trackData.quality,bestLapMs:null,lapCount:0,corners:trackData.corners||0,keyPoints:(trackData.centerline&&trackData.centerline.length)||trackData.keyPoints||0,createdAt:trackData.created,isNew:true};
@@ -1881,7 +1932,13 @@ function getDistanceToStartLine(){
 function formatDistance(m){return m>=1000?(m/1000).toFixed(1)+'km':Math.round(m)+'m'}
 
 function bearingToArrow(bearing,heading){
-    let rel=bearing-heading;
+    // bearing is in math convention (atan2): 0 = East, CCW positive
+    // heading is in compass convention (GPS/EKF): 0 = North, CW positive
+    // Convert compass heading to math convention: math = π/2 - compass
+    const mathHeading=Math.PI/2-heading;
+    // Relative angle: positive = target to the right, negative = target to the left
+    // (mathHeading - bearing) gives CW-positive convention matching arrow directions
+    let rel=mathHeading-bearing;
     while(rel>Math.PI)rel-=2*Math.PI;
     while(rel<-Math.PI)rel+=2*Math.PI;
     const deg=rel*180/Math.PI;
@@ -1894,6 +1951,26 @@ function bearingToArrow(bearing,heading){
     if(deg>-112.5&&deg<=-67.5)return'←';
     if(deg>-67.5&&deg<=-22.5)return'↖';
     return'•';
+}
+
+// Self-test for bearingToArrow - call from console: _testBearingToArrow()
+function _testBearingToArrow(){
+    const PI=Math.PI,pass=[],fail=[];
+    // Test: User faces North (compass 0), target is East (math bearing 0) → should be RIGHT (→)
+    let r=bearingToArrow(0,0);
+    (r==='→'?pass:fail).push('North→East: expected → got '+r);
+    // Test: User faces East (compass π/2), target is North (math bearing π/2) → should be LEFT (←)
+    r=bearingToArrow(PI/2,PI/2);
+    (r==='←'?pass:fail).push('East→North: expected ← got '+r);
+    // Test: User faces South (compass π), target is North (math bearing π/2) → should be AHEAD (↑)
+    r=bearingToArrow(PI/2,PI);
+    (r==='↑'?pass:fail).push('South→North: expected ↑ got '+r);
+    // Test: User faces West (compass 3π/2), target is South (math bearing -π/2) → should be LEFT (←)
+    r=bearingToArrow(-PI/2,3*PI/2);
+    (r==='←'?pass:fail).push('West→South: expected ← got '+r);
+    console.log('bearingToArrow tests: '+pass.length+' passed, '+fail.length+' failed');
+    if(fail.length)console.error('FAILURES:',fail);
+    return fail.length===0;
 }
 
 function updateStartLineIndicator(){
@@ -2115,9 +2192,12 @@ function process(buf){
     // Track GPS reference (average of first 5 fixes, same as firmware)
     if(gpsOk===1)updateJsGpsRef(lat,lon);
     // Update position for track manager and recording
-    // gpsCourse is the preferred heading source when valid (not NaN and speed > 2 km/h)
+    // ARCHITECTURE: Use GPS-derived local coordinates (relative to jsGpsRef) for consistency
+    // with track coordinates. Don't use EKF x,y which are in firmware's session-specific frame.
+    let localX=ekfX,localY=ekfY; // fallback to EKF if GPS not ready
+    if(jsGpsRef&&gpsOk===1&&lat&&lon){const local=gpsToLocal(lat,lon);if(local){localX=local.x;localY=local.y}}
     const validGpsCourse=!isNaN(gpsCourse)&&sp>2.0;
-    currentPos={x:ekfX,y:ekfY,yaw:ekfYaw,gpsCourse:gpsCourse,validGpsCourse:validGpsCourse,speed:sp,valid:gpsOk===1,sigma:posSigma,lat:lat,lon:lon};
+    currentPos={x:localX,y:localY,yaw:ekfYaw,gpsCourse:gpsCourse,validGpsCourse:validGpsCourse,speed:sp,valid:gpsOk===1,sigma:posSigma,lat:lat,lon:lon};
     updateTrackRecording();
     updateStartLineIndicator();
     updateFinishLineIndicator();
