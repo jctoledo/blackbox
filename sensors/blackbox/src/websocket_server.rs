@@ -445,7 +445,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
 .bbMini{display:grid;grid-template-columns:auto 7ch;column-gap:10px;align-items:baseline}
 .bbMiniLbl{font-size:11px;color:var(--text-tertiary);opacity:.75;white-space:nowrap}
 .bbMiniVal{font-size:13px;font-weight:600;color:var(--text-secondary);text-align:left;justify-self:start}
-.bbLapCard.timing~.bbGCard .bbGPlotFrame{max-height:min(32vh,280px);max-width:min(32vh,280px);transition:max-height 0.25s ease,max-width 0.25s ease}
+.bbLapCard.timing~.bbGCard .bbGPlotFrame{width:min(32vh,280px);height:min(32vh,280px);transition:width 0.25s ease,height 0.25s ease}
 .bbLapCard.timing~.bbGCard .bbGReadoutRow{padding:8px 18px;transition:padding 0.25s ease}
 .bbLapCard.timing~.bbGCard .bbGReadoutVal{font-size:clamp(22px,5vw,28px);margin-top:4px;transition:font-size 0.25s ease}
 .bbLapCard.timing~.bbGCard .bbGDivider{height:32px;transition:height 0.25s ease}
@@ -453,7 +453,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
 .bbLapCard.timing~.bbGCard .bbMiniLbl{font-size:10px}
 .bbLapCard.timing~.bbGCard .bbMiniVal{font-size:11px}
 @media(max-height:750px){.bbTopbar{padding:10px 14px}.bbGTop{padding:8px 16px 4px}.bbGReadoutRow{padding:10px 16px}.bbGReadoutVal{font-size:28px}.bbGMax{padding:10px 20px 14px;gap:6px 12px}.bbLapTime{font-size:38px}.bbLapMain{padding:12px 16px 8px}.bbDeltaText{font-size:24px}.bbLapHistory{padding:8px 16px}.bbLapHistValue{font-size:17px}}
-@media(max-height:700px){.bbLapCard.timing~.bbGCard .bbGMax{display:none}}
+@media(max-height:700px){.bbLapCard.timing~.bbGCard .bbGMax{display:none}.bbLapCard.timing~.bbGCard .bbGPlotFrame{width:min(28vh,240px);height:min(28vh,240px)}.bbLapCard.timing~.bbGCard .bbGReadoutVal{font-size:22px}.bbLapCard.timing~.bbGCard .bbGDivider{height:24px}.bbTelemetryStrip{padding:8px 0 6px}}
 .bbTelemetryStrip{display:flex;gap:14px;justify-content:center;padding:14px 0 10px;font-size:11px;color:var(--text-tertiary);flex-shrink:0}
 .bbTItem{display:flex;align-items:baseline;gap:3px}
 .bbTItem .bbNum{color:var(--text-secondary);font-weight:500;display:inline-block;text-align:right}
@@ -504,7 +504,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
 .bbLapCount{font-size:17px;font-weight:600;color:var(--text);opacity:0.6}
 .bbLapState{font-size:11px;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-tertiary);opacity:0.5}
 .bbLapState.timing{color:var(--ok);opacity:0.9}
-.bbDeltaBar{display:none;flex-direction:column;align-items:center;gap:4px;margin:6px 0 8px}
+.bbDeltaBar{display:none;flex-direction:column;align-items:center;gap:4px;margin:6px 0 8px;width:100%}
 .bbLapCard.timing .bbDeltaBar{display:flex}
 .bbDeltaText{font-size:28px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-0.02em;color:var(--text);text-shadow:0 2px 6px rgba(0,0,0,0.25);transition:color 0.12s ease;line-height:1}
 .bbDeltaText.ahead{color:var(--ok);text-shadow:0 0 16px rgba(52,199,89,0.5),0 2px 6px rgba(0,0,0,0.2)}
@@ -1797,7 +1797,7 @@ async function activateTrack(track){
         updateDeltaBar({deltaMs:null,hasRef:!!referenceLap,isP2P})
         // Activate lap timer UI immediately (don't wait for firmware crossing data)
         lapTimerActive=true;
-        prevLapFlags=0;prevLapTimeMs=0;
+        prevLapFlags=0;prevLapTimeMs=0;prevLapCnt=0;
         const sec=$('lap-section');
         sec.classList.remove('inactive');
         sec.classList.add('active');
@@ -2150,10 +2150,10 @@ let cnt=0,lastSeq=0;
 let maxL=0,maxR=0,maxA=0,maxB=0,peak=0;
 let speed_ema=0,displaySessionStart=Date.now();
 let emaGx=0,emaGy=0,lastT=0;
-const EMA_TAU=0.15;
+const EMA_TAU=0.07;
 let lastGpsState=0;
 let fusion={lon_imu:0,lon_gps:0,gps_wt:0,gps_rate:0,pitch_c:0,pitch_cf:0,roll_c:0,roll_cf:0,tilt_x:0,tilt_y:0};
-let lapTimerActive=false,lapCount=0,bestLapMs=0,lastLapMs=0,prevLapFlags=0,prevLapTimeMs=0;
+let lapTimerActive=false,lapCount=0,bestLapMs=0,lastLapMs=0,prevLapFlags=0,prevLapTimeMs=0,prevLapCnt=0;
 
 function fmtGSigned(v){const sign=v>=0?'+':'−';return{sign,num:Math.abs(v).toFixed(2)}}
 function fmtTime(ms){const s=Math.floor(ms/1000),m=Math.floor(s/60),h=Math.floor(m/60);if(h>0)return h+':'+String(m%60).padStart(2,'0')+':'+String(s%60).padStart(2,'0');return m+':'+String(s%60).padStart(2,'0')}
@@ -2195,9 +2195,12 @@ function updateLapTimer(lapTimeMs,lapCnt,lapFlags){
         // Save reference lap for delta (use prevLapTimeMs which is the completed lap time)
         if(activeTrack&&lapTracker&&lapTracker.isValid()&&prevLapTimeMs>0){saveNewRefLap(activeTrack.id,prevLapTimeMs,lapTracker)}
     }
-    // Handle new lap flag - save completed lap time to track and reset lap tracker
-    if((lapFlags&LAP_FLAG_NEW_LAP)&&!(prevLapFlags&LAP_FLAG_NEW_LAP)){
-        sec.classList.add('bbLapFlash');setTimeout(()=>sec.classList.remove('bbLapFlash'),600);
+    // Handle new lap - detect via flag OR via lapCnt increase (fallback for missed flags)
+    // Firmware flag only lasts ~40ms but we poll at 60-70ms, so we often miss it
+    const flagTriggered=(lapFlags&LAP_FLAG_NEW_LAP)&&!(prevLapFlags&LAP_FLAG_NEW_LAP);
+    const cntTriggered=lapCnt>prevLapCnt&&prevLapCnt>0&&prevLapTimeMs>5000;
+    if(flagTriggered||cntTriggered){
+        sec.classList.remove('bbLapFlash');void sec.offsetWidth;sec.classList.add('bbLapFlash');setTimeout(()=>sec.classList.remove('bbLapFlash'),850);
         // prevLapTimeMs contains the completed lap time (before reset)
         if(prevLapTimeMs>0){
             // Update last lap display
@@ -2223,6 +2226,7 @@ function updateLapTimer(lapTimeMs,lapCnt,lapFlags){
     }
     prevLapTimeMs=lapTimeMs;
     prevLapFlags=lapFlags;
+    prevLapCnt=lapCnt;
 }
 
 function updateReadouts(lat,lon){
