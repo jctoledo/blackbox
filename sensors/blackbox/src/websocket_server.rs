@@ -415,14 +415,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
 .bbBack:active{opacity:.7}
 .bbKebab{background:none;border:0;padding:4px;font-size:24px;line-height:1;opacity:.6;cursor:pointer;color:inherit}
 .bbApp{flex:1;display:flex;flex-direction:column;padding:0 12px 8px;min-height:0;overflow-y:auto}
-.bbCard{background:var(--surface);border-radius:16px;overflow:hidden}
+.bbCard{background:var(--surface);border-radius:16px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04)}
+.dark .bbCard{box-shadow:0 0 0 1px rgba(255,255,255,0.04),0 2px 8px rgba(0,0,0,0.3)}
 .bbGCard{flex:1;display:flex;flex-direction:column;margin-bottom:4px}
 .bbGTop{display:flex;justify-content:space-between;align-items:flex-start;padding:12px 18px 6px;flex-shrink:0}
 .bbSpeedLine{display:flex;align-items:baseline;gap:4px}
-.bbSpeed{font-size:22px;font-weight:600;opacity:.75;transition:color 0.3s,opacity 0.3s}
-.bbSpeed.peak{color:var(--amber);opacity:1}
-.bbUnit{font-size:12px;opacity:.45}
-.bbManeuver{font-size:14px;font-weight:600;margin-top:4px;min-width:7ch;transition:color 0.15s}
+.bbSpeed{font-size:26px;font-weight:700;opacity:.85;transition:color 0.3s,opacity 0.3s;letter-spacing:-0.02em}
+.bbSpeed.peak{color:var(--amber);opacity:1;text-shadow:0 0 20px rgba(255,149,0,0.4)}
+.bbUnit{font-size:13px;opacity:.50;font-weight:500}
+.bbManeuver{font-size:13px;font-weight:700;margin-top:3px;min-width:6ch;transition:color 0.15s;letter-spacing:0.04em}
 .bbGTopRight{font-size:11px;opacity:.50}
 .bbGPlotWrap{display:flex;justify-content:center;padding:2px 18px 0}
 .bbGPlotFrame{position:relative;width:min(560px, 100%);aspect-ratio:1/1}
@@ -436,7 +437,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
 .bbGReadoutRow{display:flex;justify-content:center;align-items:center;gap:0;padding:16px 18px;flex-shrink:0;margin:auto 0}
 .bbGReadoutCol{flex:1;display:flex;flex-direction:column;align-items:center;text-align:center}
 .bbGReadoutLbl{font-size:11px;letter-spacing:.02em;text-transform:uppercase;opacity:.55;color:var(--text-tertiary)}
-.bbGReadoutVal{margin-top:8px;font-size:34px;font-weight:600;line-height:1.0;min-width:8ch;display:inline-flex;align-items:baseline;justify-content:center;gap:2px}
+.bbGReadoutVal{margin-top:8px;font-size:34px;font-weight:600;line-height:1.0;min-width:8ch;display:inline-flex;align-items:baseline;justify-content:center;gap:2px;font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1,"lnum" 1}
 .bbSign{display:inline-block;width:1.2ch;text-align:right;opacity:.9;margin-right:2px}
 .bbGUnit{font-size:.5em;opacity:.55;margin-left:2px}
 .bbGDivider{width:1px;height:48px;background:var(--divider);margin:0 12px;flex-shrink:0}
@@ -444,6 +445,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
 .bbMini{display:grid;grid-template-columns:auto 7ch;column-gap:10px;align-items:baseline}
 .bbMiniLbl{font-size:11px;color:var(--text-tertiary);opacity:.75;white-space:nowrap}
 .bbMiniVal{font-size:13px;font-weight:600;color:var(--text-secondary);text-align:left;justify-self:start}
+.bbLapCard.timing~.bbGCard .bbGPlotFrame{max-height:min(32vh,280px);max-width:min(32vh,280px);transition:max-height 0.25s ease,max-width 0.25s ease}
+.bbLapCard.timing~.bbGCard .bbGReadoutRow{padding:8px 18px;transition:padding 0.25s ease}
+.bbLapCard.timing~.bbGCard .bbGReadoutVal{font-size:clamp(22px,5vw,28px);margin-top:4px;transition:font-size 0.25s ease}
+.bbLapCard.timing~.bbGCard .bbGDivider{height:32px;transition:height 0.25s ease}
+.bbLapCard.timing~.bbGCard .bbGMax{padding:8px 24px 10px;transition:padding 0.25s ease}
+.bbLapCard.timing~.bbGCard .bbMiniLbl{font-size:10px}
+.bbLapCard.timing~.bbGCard .bbMiniVal{font-size:11px}
+@media(max-height:750px){.bbTopbar{padding:10px 14px}.bbGTop{padding:8px 16px 4px}.bbGReadoutRow{padding:10px 16px}.bbGReadoutVal{font-size:28px}.bbGMax{padding:10px 20px 14px;gap:6px 12px}.bbLapTime{font-size:38px}.bbLapMain{padding:12px 16px 8px}.bbDeltaText{font-size:24px}.bbLapHistory{padding:8px 16px}.bbLapHistValue{font-size:17px}}
+@media(max-height:700px){.bbLapCard.timing~.bbGCard .bbGMax{display:none}}
 .bbTelemetryStrip{display:flex;gap:14px;justify-content:center;padding:14px 0 10px;font-size:11px;color:var(--text-tertiary);flex-shrink:0}
 .bbTItem{display:flex;align-items:baseline;gap:3px}
 .bbTItem .bbNum{color:var(--text-secondary);font-weight:500;display:inline-block;text-align:right}
@@ -488,7 +498,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
 .bbLapStop:active{transform:scale(0.95);background:rgba(255,59,48,0.2);color:#ff3b30}
 .bbLapCard.active .bbLapSetup{display:none}
 .bbLapMain{display:flex;flex-direction:column;align-items:center;padding:16px 18px 12px}
-.bbLapTime{font-size:44px;font-weight:600;line-height:1}
+.bbLapTime{font-size:44px;font-weight:700;line-height:1;letter-spacing:-0.02em}
 .bbLapMeta{display:flex;align-items:center;gap:12px;margin-top:6px}
 .bbLapTrackName{font-size:12px;font-weight:500;opacity:0.45;margin-top:4px;letter-spacing:0.02em;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bbLapCount{font-size:17px;font-weight:600;color:var(--text);opacity:0.6}
@@ -499,7 +509,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
 .bbDeltaText{font-size:28px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-0.02em;color:var(--text);text-shadow:0 2px 6px rgba(0,0,0,0.25);transition:color 0.12s ease;line-height:1}
 .bbDeltaText.ahead{color:var(--ok);text-shadow:0 0 16px rgba(52,199,89,0.5),0 2px 6px rgba(0,0,0,0.2)}
 .bbDeltaText.behind{color:var(--red);text-shadow:0 0 16px rgba(255,59,48,0.5),0 2px 6px rgba(0,0,0,0.2)}
-.bbDeltaTrack{position:relative;width:84%;height:10px;background:linear-gradient(180deg,rgba(255,255,255,0.04) 0%,rgba(0,0,0,0.12) 100%);border:1px solid rgba(255,255,255,0.06);border-radius:5px;overflow:hidden}
+.bbDeltaTrack{position:relative;width:100%;height:12px;background:linear-gradient(180deg,rgba(255,255,255,0.06) 0%,rgba(0,0,0,0.15) 100%);border:1px solid rgba(255,255,255,0.08);border-radius:6px;overflow:hidden}
 .bbDeltaCenter{position:absolute;left:50%;top:-1px;bottom:-1px;width:2px;background:rgba(255,255,255,0.3);transform:translateX(-50%);border-radius:1px;z-index:1}
 .bbDeltaFill{position:absolute;top:0;height:100%;width:0%;left:50%;background:var(--ok);transition:width 0.08s cubic-bezier(0.25,0.46,0.45,0.94),left 0.08s cubic-bezier(0.25,0.46,0.45,0.94),background 0.12s ease,box-shadow 0.15s ease;border-radius:5px}
 .bbDeltaFill.ahead{background:linear-gradient(90deg,var(--ok) 0%,rgba(52,199,89,0.8) 100%)}
@@ -770,8 +780,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
         </div>
         <div class="bbGPlotWrap">
             <div class="bbGPlotFrame">
-                <div class="bbAxis bbAxis--top">Accel</div>
-                <div class="bbAxis bbAxis--bottom">Brake</div>
+                <div class="bbAxis bbAxis--top">Brake</div>
+                <div class="bbAxis bbAxis--bottom">Accel</div>
                 <div class="bbAxis bbAxis--left">Left</div>
                 <div class="bbAxis bbAxis--right">Right</div>
                 <div class="bbPlotMeta" id="range-val">Range ±0.5g</div>
@@ -1031,7 +1041,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
 
 <script>
 const $=id=>document.getElementById(id);
-const MODES={0:'IDLE',1:'ACCEL',2:'BRAKE',4:'CORNER',5:'ACCEL',6:'BRAKE'};
+const MODES={0:'IDLE',1:'ACCEL',2:'BRAKE',4:'CORNER',5:'EXIT',6:'TRAIL'};
 const MODE_COLORS={0:'var(--mode-idle)',1:'var(--mode-accel)',2:'var(--mode-brake)',4:'var(--mode-idle)',5:'var(--mode-accel)',6:'var(--mode-brake)'};
 const LAP_FLAG_CROSSED_START=1,LAP_FLAG_CROSSED_FINISH=2,LAP_FLAG_NEW_LAP=4,LAP_FLAG_NEW_BEST=8,LAP_FLAG_INVALID=16;
 const DB_NAME='blackbox-rec',DB_VERSION=2,CHUNK_INTERVAL=60000;
@@ -1316,7 +1326,7 @@ class TrackRecorder{
     _checkLoopClosure(pos){if(this.gpsDistance<this.config.minLoopDistance)return{detected:false};if(!this.startGps||!pos.lat||!pos.lon)return{detected:false};const dts=this._gpsDistanceMeters(pos.lat,pos.lon,this.startGps.lat,this.startGps.lon);return dts<this.config.closeProximity?{detected:true}:{detected:false}}
     _wrapAngle(a){while(a>Math.PI)a-=2*Math.PI;while(a<-Math.PI)a+=2*Math.PI;return a}
     getStats(){const displayCorners=this.inCorner?this.cornerCount+1:this.cornerCount;return{recording:this.recording,trackType:this.trackType,keyPointCount:this.keyPoints.length,totalDistance:this.totalDistance,loopDetected:this.loopDetected,elapsedMs:this.recording?Date.now()-this.startTime:0,gpsQuality:this._gpsQualityRating(this.lastSigma),corners:displayCorners,inCorner:this.inCorner}}
-    _gpsQualityRating(sigma){if(sigma<2.0)return'excellent';if(sigma<3.0)return'good';if(sigma<4.0)return'fair';return'poor'}
+    _gpsQualityRating(sigma){if(sigma<2.5)return'excellent';if(sigma<4.0)return'good';if(sigma<6.0)return'fair';return'poor'}
     cancel(){this.recording=false}
     // Finish recording - uses this.gpsRef (set at start) as the coordinate reference
     finish(trackName){if(!this.recording)return null;this.recording=false;if(this.keyPoints.length<10)return null;const centerline=this._smoothPath(this.keyPoints,3);const startLine=this._calculateTimingLine(centerline,'start');let finishLine=null;if(this.trackType==='point_to_point')finishLine=this._calculateTimingLine(centerline,'finish');const bounds=this._calculateBounds(centerline);const totalDist=this._calculatePathLength(centerline);const quality=this._assessQuality();return{id:'track_'+Date.now()+'_'+Math.random().toString(36).substr(2,9),name:trackName,type:this.trackType,created:Date.now(),startLine:startLine,finishLine:finishLine,centerline:centerline,bounds:bounds,totalDistance:totalDist,origin:{x:this.startPos.x,y:this.startPos.y},gpsOrigin:this.gpsRef,quality:quality,corners:this.cornerCount,keyPoints:this.keyPoints.length}}
@@ -1324,7 +1334,7 @@ class TrackRecorder{
     _calculateTimingLine(cl,which='start'){if(!cl||cl.length===0)return{p1:[0,12],p2:[0,-12],direction:0};const idx=which==='start'?Math.min(2,cl.length-1):Math.max(0,cl.length-3);const ns=5,s=Math.max(0,idx-ns),e=Math.min(cl.length-1,idx+ns),pts=cl.slice(s,e+1);let sx=0,sy=0,sw=0;for(const p of pts){const wt=1/(p.sigma||3.0+0.5);sx+=p.x*wt;sy+=p.y*wt;sw+=wt}const cx=sw>0?sx/sw:cl[idx].x,cy=sw>0?sy/sw:cl[idx].y;const safeCx=isNaN(cx)?0:cx,safeCy=isNaN(cy)?0:cy;let dir=0;if(pts.length>=2){const f=pts[0],l=pts[pts.length-1];dir=Math.atan2(l.y-f.y,l.x-f.x)}const w=12,perp=dir+Math.PI/2;return{p1:[safeCx+Math.cos(perp)*w,safeCy+Math.sin(perp)*w],p2:[safeCx-Math.cos(perp)*w,safeCy-Math.sin(perp)*w],direction:dir}}
     _calculateBounds(cl){if(!cl||cl.length===0)return{minX:0,minY:0,maxX:100,maxY:100};let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;for(const p of cl){minX=Math.min(minX,p.x);minY=Math.min(minY,p.y);maxX=Math.max(maxX,p.x);maxY=Math.max(maxY,p.y)}return{minX,minY,maxX,maxY}}
     _calculatePathLength(cl){if(!cl||cl.length<2)return 0;let len=0;for(let i=1;i<cl.length;i++){const dx=cl[i].x-cl[i-1].x,dy=cl[i].y-cl[i-1].y;len+=Math.sqrt(dx*dx+dy*dy)}return len}
-    _assessQuality(){if(this.keyPoints.length===0)return{rating:'poor',avgUncertainty:5.0,goodSampleRatio:0,corners:0,totalPoints:0};const vp=this.keyPoints.filter(p=>p.sigma<3.0);const ts=this.keyPoints.reduce((s,p)=>s+(p.sigma||3.0),0);const as=ts/this.keyPoints.length;const displayCorners=this.inCorner?this.cornerCount+1:this.cornerCount;const gr=vp.length/this.keyPoints.length;let rating='good';if(isNaN(as)||as>3.5||gr<0.7)rating='fair';if(isNaN(as)||as>4.5||gr<0.5)rating='poor';return{rating:rating,avgUncertainty:isNaN(as)?3.0:as,goodSampleRatio:isNaN(gr)?0.5:gr,corners:displayCorners,totalPoints:this.keyPoints.length}}
+    _assessQuality(){if(this.keyPoints.length===0)return{rating:'poor',avgUncertainty:5.0,goodSampleRatio:0,corners:0,totalPoints:0};const vp=this.keyPoints.filter(p=>p.sigma<4.0);const ts=this.keyPoints.reduce((s,p)=>s+(p.sigma||3.0),0);const as=ts/this.keyPoints.length;const displayCorners=this.inCorner?this.cornerCount+1:this.cornerCount;const gr=vp.length/this.keyPoints.length;let rating='good';if(isNaN(as)||as>4.5||gr<0.7)rating='fair';if(isNaN(as)||as>6.0||gr<0.5)rating='poor';return{rating:rating,avgUncertainty:isNaN(as)?3.0:as,goodSampleRatio:isNaN(gr)?0.5:gr,corners:displayCorners,totalPoints:this.keyPoints.length}}
 }
 
 // Track Manager IndexedDB (v3 adds lap_history for session history)
@@ -2041,7 +2051,7 @@ function updateFinishLineIndicator(){
 const cv=$('gcanvas'),ctx=cv.getContext('2d');
 const SCALE_STEPS=[0.3,0.5,0.8,1.0,1.5,2.0];
 let currentScale=0.5,magHist=[];
-const TRAIL_DURATION_MS=2500,TRAIL_MAX_POINTS=60,TRAIL_JITTER_THRESHOLD=0.008;
+const TRAIL_DURATION_MS=6000,TRAIL_MAX_POINTS=120,TRAIL_JITTER_THRESHOLD=0.015;
 
 function resize(){
     const frame=cv.parentElement,rect=frame.getBoundingClientRect();
@@ -2078,32 +2088,60 @@ let trail=[];
 function drawG(){
     const size=cv.width/devicePixelRatio,cx=size/2,cy=size/2,r=size*0.38;
     ctx.clearRect(0,0,size,size);
-    const ringColor=isDark?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.06)';
-    const axisColor=isDark?'rgba(255,255,255,0.25)':'rgba(0,0,0,0.18)';
-    ctx.lineWidth=1;ctx.strokeStyle=ringColor;
-    [0.2,0.4,0.6,0.8].forEach(f=>{ctx.beginPath();ctx.arc(cx,cy,r*f,0,Math.PI*2);ctx.stroke()});
-    ctx.strokeStyle=axisColor;ctx.lineWidth=2.5;
+    const ringColor=isDark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.05)';
+    const axisColor=isDark?'rgba(255,255,255,0.15)':'rgba(0,0,0,0.12)';
+    // Subtle concentric rings with dashed style
+    ctx.setLineDash([4,4]);ctx.lineWidth=1;ctx.strokeStyle=ringColor;
+    [0.25,0.5,0.75,1.0].forEach(f=>{ctx.beginPath();ctx.arc(cx,cy,r*f,0,Math.PI*2);ctx.stroke()});
+    ctx.setLineDash([]);
+    // Cross axes - more refined
+    ctx.strokeStyle=axisColor;ctx.lineWidth=1.5;
     ctx.beginPath();ctx.moveTo(cx-r,cy);ctx.lineTo(cx+r,cy);ctx.moveTo(cx,cy-r);ctx.lineTo(cx,cy+r);ctx.stroke();
-    ctx.fillStyle=isDark?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.06)';
-    ctx.beginPath();ctx.arc(cx,cy,2,0,Math.PI*2);ctx.fill();
+    // Center reference dot
+    ctx.fillStyle=isDark?'rgba(255,255,255,0.12)':'rgba(0,0,0,0.08)';
+    ctx.beginPath();ctx.arc(cx,cy,3,0,Math.PI*2);ctx.fill();
     const now=Date.now(),recentTrail=trail.filter(p=>now-p.t<TRAIL_DURATION_MS);
     const displayTrail=downsampleTrail(recentTrail,TRAIL_MAX_POINTS);
     if(displayTrail.length>1){
         ctx.lineCap='round';ctx.lineJoin='round';
-        for(let i=1;i<displayTrail.length;i++){
+        const trailLen=displayTrail.length;
+        for(let i=1;i<trailLen;i++){
             const p0=displayTrail[i-1],p1=displayTrail[i];
-            const age=(now-p1.t)/TRAIL_DURATION_MS,alpha=Math.max(0.05,0.35*(1-age*0.85));
-            ctx.strokeStyle=hexToRgba(currentModeColor,alpha);ctx.lineWidth=1.5-age*0.6;
+            const age=(now-p1.t)/TRAIL_DURATION_MS;
+            const freshness=1-age;
+            // Thickness: 6px at newest, tapering to 1px
+            const width=1+freshness*5;
+            // Opacity: 0.7 at newest, fading to 0.04
+            const alpha=Math.max(0.04,0.7*Math.pow(freshness,0.6));
+            // Add subtle glow for the newest 25% of trail
+            if(freshness>0.75){ctx.shadowColor=currentModeColor;ctx.shadowBlur=8*freshness}else{ctx.shadowBlur=0}
+            ctx.strokeStyle=hexToRgba(currentModeColor,alpha);ctx.lineWidth=width;
             ctx.beginPath();
             ctx.moveTo(cx+(p0.x/currentScale)*r,cy-(p0.y/currentScale)*r);
             ctx.lineTo(cx+(p1.x/currentScale)*r,cy-(p1.y/currentScale)*r);
             ctx.stroke();
         }
+        ctx.shadowBlur=0;
     }
     if(trail.length>0){
         const cur=trail[trail.length-1],x=cx+(cur.x/currentScale)*r,y=cy-(cur.y/currentScale)*r;
-        ctx.strokeStyle='#ffffff';ctx.lineWidth=2;ctx.lineCap='round';
-        ctx.beginPath();ctx.moveTo(x-8,y);ctx.lineTo(x+8,y);ctx.moveTo(x,y-8);ctx.lineTo(x,y+8);ctx.stroke();
+        const mag=Math.sqrt(cur.x*cur.x+cur.y*cur.y);
+        const intensity=Math.min(1,mag/0.8); // Intensity based on G-force
+        const baseRadius=7+intensity*3; // 7-10px radius based on G
+        // Outer glow ring
+        ctx.shadowColor=currentModeColor;ctx.shadowBlur=16+intensity*8;
+        ctx.strokeStyle=hexToRgba(currentModeColor,0.6);ctx.lineWidth=2;
+        ctx.beginPath();ctx.arc(x,y,baseRadius+3,0,Math.PI*2);ctx.stroke();
+        // Filled circle with mode color
+        ctx.shadowBlur=8;
+        ctx.fillStyle=currentModeColor;
+        ctx.beginPath();ctx.arc(x,y,baseRadius,0,Math.PI*2);ctx.fill();
+        // Inner highlight (gives 3D ball effect)
+        ctx.shadowBlur=0;
+        const grad=ctx.createRadialGradient(x-baseRadius*0.3,y-baseRadius*0.3,0,x,y,baseRadius);
+        grad.addColorStop(0,'rgba(255,255,255,0.8)');grad.addColorStop(0.3,'rgba(255,255,255,0.2)');grad.addColorStop(1,'rgba(255,255,255,0)');
+        ctx.fillStyle=grad;
+        ctx.beginPath();ctx.arc(x,y,baseRadius,0,Math.PI*2);ctx.fill();
     }
 }
 
@@ -2112,7 +2150,7 @@ let cnt=0,lastSeq=0;
 let maxL=0,maxR=0,maxA=0,maxB=0,peak=0;
 let speed_ema=0,displaySessionStart=Date.now();
 let emaGx=0,emaGy=0,lastT=0;
-const EMA_TAU=0.10;
+const EMA_TAU=0.15;
 let lastGpsState=0;
 let fusion={lon_imu:0,lon_gps:0,gps_wt:0,gps_rate:0,pitch_c:0,pitch_cf:0,roll_c:0,roll_cf:0,tilt_x:0,tilt_y:0};
 let lapTimerActive=false,lapCount=0,bestLapMs=0,lastLapMs=0,prevLapFlags=0,prevLapTimeMs=0;
@@ -2152,6 +2190,8 @@ function updateLapTimer(lapTimeMs,lapCnt,lapFlags){
     // Handle new best flag FIRST - save as reference lap before reset
     if((lapFlags&LAP_FLAG_NEW_BEST)&&!(prevLapFlags&LAP_FLAG_NEW_BEST)){
         const bestEl=$('best-lap');bestEl.classList.add('bbLapBestFlash');setTimeout(()=>bestEl.classList.remove('bbLapBestFlash'),800);
+        // Update best lap display with completed lap time
+        if(prevLapTimeMs>0)bestEl.textContent=fmtLapTime(prevLapTimeMs);
         // Save reference lap for delta (use prevLapTimeMs which is the completed lap time)
         if(activeTrack&&lapTracker&&lapTracker.isValid()&&prevLapTimeMs>0){saveNewRefLap(activeTrack.id,prevLapTimeMs,lapTracker)}
     }
@@ -2159,7 +2199,22 @@ function updateLapTimer(lapTimeMs,lapCnt,lapFlags){
     if((lapFlags&LAP_FLAG_NEW_LAP)&&!(prevLapFlags&LAP_FLAG_NEW_LAP)){
         sec.classList.add('bbLapFlash');setTimeout(()=>sec.classList.remove('bbLapFlash'),600);
         // prevLapTimeMs contains the completed lap time (before reset)
-        if(prevLapTimeMs>0)updateTrackBestLap(prevLapTimeMs);
+        if(prevLapTimeMs>0){
+            // Update last lap display
+            $('last-lap').textContent=fmtLapTime(prevLapTimeMs);
+            // Calculate and display delta (last - best)
+            const bestMs=activeTrack&&activeTrack.bestLapMs;
+            if(bestMs&&bestMs>0){
+                const deltaMs=prevLapTimeMs-bestMs;
+                const deltaEl=$('lap-delta');
+                const sign=deltaMs>=0?'+':'';
+                const absDelta=Math.abs(deltaMs);
+                const secs=(absDelta/1000).toFixed(3);
+                deltaEl.textContent=sign+secs+'s';
+                deltaEl.className='bbLapHistValue bbNum delta '+(deltaMs<0?'faster':'slower');
+            }
+            updateTrackBestLap(prevLapTimeMs);
+        }
         // Reset lap tracker for next lap
         if(lapTracker){lapTracker.reset();lastDeltaMs=0;deltaTrend=0}
         updateDeltaBar({deltaMs:0,trend:0,hasRef:!!referenceLap,isP2P:activeTrack&&activeTrack.type==='point_to_point'})
@@ -2250,7 +2305,7 @@ function process(buf){
     el.textContent=MODES[mo]||'IDLE';
     el.style.color=MODE_COLORS[mo]||MODE_COLORS[0];
 
-    updateReadouts(gx,gy);
+    updateReadouts(-gx,-gy);
     $('yaw').textContent=Math.round(yawDeg);
 
     if(latg<0&&Math.abs(latg)>maxL){maxL=Math.abs(latg);$('max-l').textContent=maxL.toFixed(2)+'g'}
@@ -2261,8 +2316,10 @@ function process(buf){
     if(speed_ema>=2){updateScale(gx,gy)}else{magHist=[];currentScale=SCALE_STEPS[0];$('range-val').textContent='Range ±'+currentScale.toFixed(1)+'g'}
 
     const lastPt=trail.length>0?trail[trail.length-1]:null;
-    const dx=lastPt?Math.abs(gx-lastPt.x):1,dy=lastPt?Math.abs(gy-lastPt.y):1;
-    if(!lastPt||dx>TRAIL_JITTER_THRESHOLD||dy>TRAIL_JITTER_THRESHOLD){trail.push({x:gx,y:gy,t:now})}
+    // Flip axes for driver's perspective: brake=up, accel=down, left turn=right, right turn=left
+    const plotX=-gx,plotY=-gy;
+    const dx=lastPt?Math.abs(plotX-lastPt.x):1,dy=lastPt?Math.abs(plotY-lastPt.y):1;
+    if(!lastPt||dx>TRAIL_JITTER_THRESHOLD||dy>TRAIL_JITTER_THRESHOLD){trail.push({x:plotX,y:plotY,t:now})}
     trail=trail.filter(p=>now-p.t<TRAIL_DURATION_MS+200);
 
     lastGpsState=gpsOk;
@@ -2511,7 +2568,7 @@ setInterval(()=>{
     $('session-time').textContent=fmtTime(Date.now()-displaySessionStart);
     if(lastGpsState){$('gpsDot').classList.add('on');$('gpsHz').textContent='GPS '+Math.round(fusion.gps_rate)}
     else{$('gpsDot').classList.remove('on');$('gpsHz').textContent='GPS --'}
-    $('gps-acc').textContent=lastGpsState?'2':'--';
+    $('gps-acc').textContent=lastGpsState&&currentPos&&currentPos.sigma>0?currentPos.sigma.toFixed(1):'--';
     updateRecUI();
 },1000);
 

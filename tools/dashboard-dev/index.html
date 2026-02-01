@@ -104,7 +104,9 @@ body{
     background:var(--surface);
     border-radius:16px;
     overflow:hidden;
+    box-shadow:0 1px 3px rgba(0,0,0,0.04);
 }
+.dark .bbCard{box-shadow:0 0 0 1px rgba(255,255,255,0.04),0 2px 8px rgba(0,0,0,0.3)}
 .bbGCard{
     flex:1;
     display:flex;
@@ -122,10 +124,10 @@ body{
 }
 .bbGTopLeft{}
 .bbSpeedLine{display:flex;align-items:baseline;gap:4px}
-.bbSpeed{font-size:22px;font-weight:600;opacity:.75;transition:color 0.3s,opacity 0.3s}
-.bbSpeed.peak{color:var(--amber);opacity:1}
-.bbUnit{font-size:12px;opacity:.45}
-.bbManeuver{font-size:14px;font-weight:600;margin-top:4px;min-width:7ch;transition:color 0.15s}
+.bbSpeed{font-size:26px;font-weight:700;opacity:.85;transition:color 0.3s,opacity 0.3s;letter-spacing:-0.02em}
+.bbSpeed.peak{color:var(--amber);opacity:1;text-shadow:0 0 20px rgba(255,149,0,0.4)}
+.bbUnit{font-size:13px;opacity:.50;font-weight:500}
+.bbManeuver{font-size:13px;font-weight:700;margin-top:3px;min-width:6ch;transition:color 0.15s;letter-spacing:0.04em}
 .bbGTopRight{font-size:11px;opacity:.50}
 
 /* PLOT AREA */
@@ -204,6 +206,8 @@ body{
     align-items:baseline;
     justify-content:center;
     gap:2px;
+    font-variant-numeric:tabular-nums;
+    font-feature-settings:"tnum" 1,"lnum" 1;
 }
 .bbSign{display:inline-block;width:1.2ch;text-align:right;opacity:.9;margin-right:2px}
 .bbGUnit{font-size:.5em;opacity:.55;margin-left:2px}
@@ -232,6 +236,15 @@ body{
 }
 .bbMiniLbl{font-size:11px;color:var(--text-tertiary);opacity:.75;white-space:nowrap}
 .bbMiniVal{font-size:13px;font-weight:600;color:var(--text-secondary);text-align:left;justify-self:start}
+
+/* Responsive g-meter when lap timer is timing */
+.bbLapCard.timing ~ .bbGCard .bbGPlotFrame{max-height:min(32vh,280px);max-width:min(32vh,280px);transition:max-height 0.25s ease,max-width 0.25s ease}
+.bbLapCard.timing ~ .bbGCard .bbGReadoutRow{padding:8px 18px;transition:padding 0.25s ease}
+.bbLapCard.timing ~ .bbGCard .bbGReadoutVal{font-size:clamp(22px,5vw,28px);margin-top:4px;transition:font-size 0.25s ease}
+.bbLapCard.timing ~ .bbGCard .bbGDivider{height:32px;transition:height 0.25s ease}
+.bbLapCard.timing ~ .bbGCard .bbGMax{padding:8px 24px 10px;transition:padding 0.25s ease}
+.bbLapCard.timing ~ .bbGCard .bbMiniLbl{font-size:10px}
+.bbLapCard.timing ~ .bbGCard .bbMiniVal{font-size:11px}
 
 /* CSV PROGRESS BAR */
 .bbCsvRow{
@@ -478,11 +491,11 @@ body{
 /* Bar track - the background groove BELOW the text */
 .bbDeltaTrack{
     position:relative;
-    width:84%;
-    height:10px;
-    background:linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(0,0,0,0.12) 100%);
-    border:1px solid rgba(255,255,255,0.06);
-    border-radius:5px;
+    width:100%;
+    height:12px;
+    background:linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(0,0,0,0.15) 100%);
+    border:1px solid rgba(255,255,255,0.08);
+    border-radius:6px;
     overflow:hidden;
 }
 
@@ -1674,8 +1687,8 @@ body{
 
         <div class="bbGPlotWrap">
             <div class="bbGPlotFrame">
-                <div class="bbAxis bbAxis--top">Accel</div>
-                <div class="bbAxis bbAxis--bottom">Brake</div>
+                <div class="bbAxis bbAxis--top">Brake</div>
+                <div class="bbAxis bbAxis--bottom">Accel</div>
                 <div class="bbAxis bbAxis--left">Left</div>
                 <div class="bbAxis bbAxis--right">Right</div>
                 <div class="bbPlotMeta" id="range-val">Range ±0.5g</div>
@@ -2265,7 +2278,7 @@ let simFinishLine = null;  // For point-to-point tracks - finish line
 let simPrevPos = null;     // Previous position for crossing detection
 
 const $ = id => document.getElementById(id);
-const MODES = {0:'IDLE', 1:'ACCEL', 2:'BRAKE', 4:'CORNER', 5:'ACCEL', 6:'BRAKE'};
+const MODES = {0:'IDLE', 1:'ACCEL', 2:'BRAKE', 4:'CORNER', 5:'EXIT', 6:'TRAIL'};
 const MODE_COLORS = {
     0: 'var(--mode-idle)',
     1: 'var(--mode-accel)',
@@ -2318,7 +2331,20 @@ function getAutoValues(timeMs) {
     };
 }
 
-function addNoise(val, amount) { return val + (Math.random() - 0.5) * amount * 0.15; }
+// Road jitter simulation - base noise plus occasional bumps
+let lastBumpTime = 0;
+function addNoise(val, amount) {
+    const now = Date.now();
+    let noise = (Math.random() - 0.5) * amount * 0.4; // Base road texture
+    // Occasional larger bumps (pothole/road seam every 2-5 seconds)
+    if (now - lastBumpTime > 2000 + Math.random() * 3000) {
+        if (Math.random() < 0.15) { // 15% chance of bump
+            noise += (Math.random() - 0.5) * amount * 1.5;
+            lastBumpTime = now;
+        }
+    }
+    return val + noise;
+}
 
 // === CSV REPLAY ===
 let dataSource = 'loop';
@@ -5917,10 +5943,10 @@ function simulateLapTimerUpdate(now, posData) {
 }
 let trail = [], maxL = 0, maxR = 0, maxA = 0, maxB = 0, peak = 0;
 let emaGx = 0, emaGy = 0, lastT = 0, speed_ema = 0;
-const EMA_TAU = 0.10;
-const TRAIL_DURATION_MS = 2500;
-const TRAIL_MAX_POINTS = 60;
-const TRAIL_JITTER_THRESHOLD = 0.008;
+const EMA_TAU = 0.15;
+const TRAIL_DURATION_MS = 6000;
+const TRAIL_MAX_POINTS = 120;
+const TRAIL_JITTER_THRESHOLD = 0.015;
 
 const SCALE_STEPS = [0.3, 0.5, 0.8, 1.0, 1.5, 2.0];
 let currentScale = 0.5;
@@ -6015,27 +6041,32 @@ function drawG() {
 
     ctx.clearRect(0, 0, size, size);
 
-    const ringColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
-    const axisColor = isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.18)';
+    const ringColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)';
+    const axisColor = isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)';
 
+    // Subtle concentric rings with dashed style
+    ctx.setLineDash([4, 4]);
     ctx.lineWidth = 1;
     ctx.strokeStyle = ringColor;
-    [0.2, 0.4, 0.6, 0.8].forEach((f) => {
+    [0.25, 0.5, 0.75, 1.0].forEach((f) => {
         ctx.beginPath();
         ctx.arc(cx, cy, r * f, 0, Math.PI * 2);
         ctx.stroke();
     });
+    ctx.setLineDash([]);
 
+    // Cross axes - more refined
     ctx.strokeStyle = axisColor;
-    ctx.lineWidth = 2.5;
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.moveTo(cx - r, cy); ctx.lineTo(cx + r, cy);
     ctx.moveTo(cx, cy - r); ctx.lineTo(cx, cy + r);
     ctx.stroke();
 
-    ctx.fillStyle = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
+    // Center reference dot
+    ctx.fillStyle = isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)';
     ctx.beginPath();
-    ctx.arc(cx, cy, 2, 0, Math.PI * 2);
+    ctx.arc(cx, cy, 3, 0, Math.PI * 2);
     ctx.fill();
 
     const now = Date.now();
@@ -6045,13 +6076,20 @@ function drawG() {
     if (displayTrail.length > 1) {
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
-        for (let i = 1; i < displayTrail.length; i++) {
+        const trailLen = displayTrail.length;
+        for (let i = 1; i < trailLen; i++) {
             const p0 = displayTrail[i - 1];
             const p1 = displayTrail[i];
             const age = (now - p1.t) / TRAIL_DURATION_MS;
-            const alpha = Math.max(0.05, 0.35 * (1 - age * 0.85));
+            const freshness = 1 - age;
+            // Thickness: 6px at newest, tapering to 1px
+            const width = 1 + freshness * 5;
+            // Opacity: 0.7 at newest, fading to 0.04
+            const alpha = Math.max(0.04, 0.7 * Math.pow(freshness, 0.6));
+            // Add subtle glow for the newest 25% of trail
+            if (freshness > 0.75) { ctx.shadowColor = currentModeColor; ctx.shadowBlur = 8 * freshness; } else { ctx.shadowBlur = 0; }
             ctx.strokeStyle = hexToRgba(currentModeColor, alpha);
-            ctx.lineWidth = 1.5 - age * 0.6;
+            ctx.lineWidth = width;
             ctx.beginPath();
             const x0 = cx + (p0.x / currentScale) * r;
             const y0 = cy - (p0.y / currentScale) * r;
@@ -6061,22 +6099,30 @@ function drawG() {
             ctx.lineTo(x1, y1);
             ctx.stroke();
         }
+        ctx.shadowBlur = 0;
     }
 
     if (trail.length > 0) {
         const cur = trail[trail.length - 1];
         const x = cx + (cur.x / currentScale) * r;
         const y = cy - (cur.y / currentScale) * r;
-        const crossSize = 8;
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 2;
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.moveTo(x - crossSize, y);
-        ctx.lineTo(x + crossSize, y);
-        ctx.moveTo(x, y - crossSize);
-        ctx.lineTo(x, y + crossSize);
-        ctx.stroke();
+        const mag = Math.sqrt(cur.x * cur.x + cur.y * cur.y);
+        const intensity = Math.min(1, mag / 0.8); // Intensity based on G-force
+        const baseRadius = 7 + intensity * 3; // 7-10px radius based on G
+        // Outer glow ring
+        ctx.shadowColor = currentModeColor; ctx.shadowBlur = 16 + intensity * 8;
+        ctx.strokeStyle = hexToRgba(currentModeColor, 0.6); ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(x, y, baseRadius + 3, 0, Math.PI * 2); ctx.stroke();
+        // Filled circle with mode color
+        ctx.shadowBlur = 8;
+        ctx.fillStyle = currentModeColor;
+        ctx.beginPath(); ctx.arc(x, y, baseRadius, 0, Math.PI * 2); ctx.fill();
+        // Inner highlight (gives 3D ball effect)
+        ctx.shadowBlur = 0;
+        const grad = ctx.createRadialGradient(x - baseRadius * 0.3, y - baseRadius * 0.3, 0, x, y, baseRadius);
+        grad.addColorStop(0, 'rgba(255,255,255,0.8)'); grad.addColorStop(0.3, 'rgba(255,255,255,0.2)'); grad.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath(); ctx.arc(x, y, baseRadius, 0, Math.PI * 2); ctx.fill();
     }
 }
 
@@ -6177,9 +6223,9 @@ function simulate() {
         }
 
         const auto = getAutoValues(simElapsed);
-        sp = addNoise(auto.speed, 2);
-        longRaw = addNoise(auto.lonG, 0.02);
-        latRaw = addNoise(auto.latG, 0.02);
+        sp = addNoise(auto.speed, 3);
+        longRaw = addNoise(auto.lonG, 0.08);
+        latRaw = addNoise(auto.latG, 0.08);
         yawDeg = Math.abs(addNoise(auto.yawDeg, 1));
         yawRad = auto.yawDeg * Math.PI / 180;
         speedMs = sp / 3.6;
@@ -6246,7 +6292,8 @@ function simulate() {
     speedEl.textContent = dspd;
 
     updateModeDisplay(mo);
-    updateReadouts(lat, lon);
+    // Flip axes for driver's perspective (readouts show felt G-force direction)
+    updateReadouts(-lat, -lon);
     $('yaw').textContent = Math.round(yawDeg);
 
     if (latRaw < 0 && Math.abs(latRaw) > maxL) { maxL = Math.abs(latRaw); $('max-l').textContent = maxL.toFixed(2) + 'g'; }
@@ -6262,11 +6309,13 @@ function simulate() {
         $('range-val').textContent = 'Range ±' + currentScale.toFixed(1) + 'g';
     }
 
+    // Flip axes for driver's perspective: brake=up, accel=down, left turn=right, right turn=left
+    const plotX = -lat, plotY = -lon;
     const lastPt = trail.length > 0 ? trail[trail.length - 1] : null;
-    const dx = lastPt ? Math.abs(lat - lastPt.x) : 1;
-    const dy = lastPt ? Math.abs(lon - lastPt.y) : 1;
+    const dx = lastPt ? Math.abs(plotX - lastPt.x) : 1;
+    const dy = lastPt ? Math.abs(plotY - lastPt.y) : 1;
     if (!lastPt || dx > TRAIL_JITTER_THRESHOLD || dy > TRAIL_JITTER_THRESHOLD) {
-        trail.push({ x: lat, y: lon, t: now });
+        trail.push({ x: plotX, y: plotY, t: now });
     }
     trail = trail.filter(p => now - p.t < TRAIL_DURATION_MS + 200);
     drawG();
