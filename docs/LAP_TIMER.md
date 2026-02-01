@@ -192,13 +192,13 @@ Access via **Data** in hamburger menu.
 - Not close enough to line (GPS inaccuracy)
 - Wrong direction approach
 - For new P2P tracks: warmup not complete (must be 50m+ away first)
-- Device restarted → GPS origin shifted
+- GPS signal lost or degraded
 
 **Solutions:**
 - Drive closer to recorded start
 - Ensure correct direction
 - For new P2P: drive away, then return
-- Re-record track if GPS origin shifted
+- Wait for GPS lock (cyan LED pulse) before starting
 
 ### Delta Shows "No Best"
 Complete at least one full lap. First completed lap becomes reference.
@@ -258,3 +258,63 @@ State machine with hysteresis:
 | Price | ~$50 | $1,160 | $700 |
 
 Main tradeoffs: timing precision (adequate for amateur use) and phone as display instead of dedicated screen.
+
+---
+
+## GPS Coordinate Architecture
+
+The lap timer uses **GPS lat/lon coordinates** instead of local EKF (Extended Kalman Filter) coordinates for timing line detection. This architectural choice ensures tracks work across device restarts and sessions.
+
+### Why GPS Instead of EKF?
+
+**The Problem:** Each time the device starts, the EKF computes a new local coordinate origin from the first few GPS fixes. This "GPS origin" varies by several meters between sessions. Tracks saved in one session had timing lines in that session's coordinate frame—unusable in a different session.
+
+**The Solution:** Store and transmit timing lines as absolute GPS lat/lon coordinates. The firmware receives GPS directly from the sensor, eliminating any coordinate frame mismatch.
+
+### How It Works
+
+1. **Track Recording:** Dashboard records track using current GPS origin for local display
+2. **Track Saving:** Timing line stored as local x,y + `gpsOrigin` reference
+3. **Track Activation:** Dashboard converts local→GPS using track's own `gpsOrigin`
+4. **Firmware API:** Receives GPS lat/lon directly (no session dependency)
+5. **Line Detection:** Firmware converts GPS to local coords relative to timing line's p1
+
+The key insight: each timing line carries its own GPS reference (the p1 endpoint). All coordinate math uses this consistent reference point.
+
+### Known Limitations & Mitigations
+
+#### GPS Noise (~1m jitter at 25Hz)
+
+**Issue:** Consumer GPS has position noise of approximately 1 meter.
+
+**Mitigation:** The lap timer uses trajectory-based intersection detection—it checks if the *path* from previous position to current position crosses the timing line, not just proximity. This is robust to per-sample noise.
+
+**Why it works:** A 24-meter timing line (12m each side of track center) easily absorbs 1m of noise. False triggers are prevented by direction validation (must be traveling the correct way).
+
+#### GPS Dropout
+
+**Issue:** During brief GPS signal loss (tunnels, heavy tree cover), no crossings are detected.
+
+**Current Behavior:** The lap timer only processes valid GPS fixes. No detection during dropout is correct behavior—better than wrong detections.
+
+**Potential Enhancement:** Fall back to EKF position during GPS dropout by converting EKF (x,y) to GPS using firmware's GPS origin:
+```rust
+// Pseudocode for potential enhancement
+if gps_fix.valid {
+    lap_timer.update(gps_fix.lat, gps_fix.lon, ...);
+} else if gps_parser.is_warmed_up() {
+    // Convert EKF position to GPS using firmware's origin
+    let (ekf_x, ekf_y) = ekf.position();
+    let ref_origin = gps_parser.reference();
+    let fallback_lat = ref_origin.lat + ekf_y / 111320.0;
+    let fallback_lon = ref_origin.lon + ekf_x / (111320.0 * cos(ref_origin.lat));
+    lap_timer.update(fallback_lat, fallback_lon, ...);
+}
+```
+This maintains session independence while providing continuity during brief dropouts.
+
+#### Coordinate Precision
+
+**f64 (double) Precision:** GPS coordinates use f64 for approximately 1mm precision at equator. More than sufficient for timing applications.
+
+**Local Conversion:** The `to_local()` function uses the timing line's p1 as reference, converting both line endpoints and vehicle position consistently. The intersection calculation uses f64 throughout.
