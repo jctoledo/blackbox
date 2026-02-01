@@ -555,32 +555,38 @@ fn main() {
                     }
                     LapTimerConfig::Loop(line) => {
                         lap_timer.configure_loop(TimingLine::new(
-                            (line.p1_x, line.p1_y),
-                            (line.p2_x, line.p2_y),
+                            line.p1_lat,
+                            line.p1_lon,
+                            line.p2_lat,
+                            line.p2_lon,
                             line.direction,
                         ));
                         info!(
-                            ">>> Lap timer configured: loop track, line ({:.1},{:.1})-({:.1},{:.1})",
-                            line.p1_x, line.p1_y, line.p2_x, line.p2_y
+                            ">>> Lap timer configured: loop track, line ({:.6},{:.6})-({:.6},{:.6})",
+                            line.p1_lat, line.p1_lon, line.p2_lat, line.p2_lon
                         );
                     }
                     LapTimerConfig::PointToPoint { start, finish } => {
                         lap_timer.configure_point_to_point(
                             TimingLine::new(
-                                (start.p1_x, start.p1_y),
-                                (start.p2_x, start.p2_y),
+                                start.p1_lat,
+                                start.p1_lon,
+                                start.p2_lat,
+                                start.p2_lon,
                                 start.direction,
                             ),
                             TimingLine::new(
-                                (finish.p1_x, finish.p1_y),
-                                (finish.p2_x, finish.p2_y),
+                                finish.p1_lat,
+                                finish.p1_lon,
+                                finish.p2_lat,
+                                finish.p2_lon,
                                 finish.direction,
                             ),
                         );
                         info!(
-                            ">>> Lap timer configured: point-to-point, start ({:.1},{:.1})-({:.1},{:.1}), finish ({:.1},{:.1})-({:.1},{:.1})",
-                            start.p1_x, start.p1_y, start.p2_x, start.p2_y,
-                            finish.p1_x, finish.p1_y, finish.p2_x, finish.p2_y
+                            ">>> Lap timer configured: point-to-point, start ({:.6},{:.6})-({:.6},{:.6}), finish ({:.6},{:.6})-({:.6},{:.6})",
+                            start.p1_lat, start.p1_lon, start.p2_lat, start.p2_lon,
+                            finish.p1_lat, finish.p1_lon, finish.p2_lat, finish.p2_lon
                         );
                     }
                 }
@@ -615,14 +621,17 @@ fn main() {
                 estimator.ekf.x[6], // bias_y
             );
 
-            // GPS health
+            // GPS health (includes GPS reference point for lap timer coordinate alignment)
             let gps_fix = sensors.gps_parser.last_fix();
+            let gps_ref = sensors.gps_parser.reference();
             diagnostics.update_gps(
                 gps_fix.valid,
                 sensors.gps_parser.is_warmed_up(),
                 gps_fix.satellites,
                 gps_fix.hdop,
                 gps_fix.pdop,
+                gps_ref.lat,
+                gps_ref.lon,
             );
 
             // Note: Fusion diagnostics now updated at telemetry rate (see telemetry block)
@@ -906,10 +915,12 @@ fn main() {
                 speed,
             );
 
-            // Update lap timer with EKF position and velocity
-            let (ekf_x, ekf_y) = estimator.ekf.position();
+            // Update lap timer with GPS lat/lon and EKF velocity
+            // GPS lat/lon is session-independent, enabling timing lines to work across restarts
+            let gps_fix = sensors.gps_parser.last_fix();
             let (ekf_vx, ekf_vy) = estimator.ekf.velocity();
-            let lap_flags = lap_timer.update((ekf_x, ekf_y), (ekf_vx, ekf_vy), now_ms, speed);
+            let lap_flags =
+                lap_timer.update(gps_fix.lat, gps_fix.lon, (ekf_vx, ekf_vy), now_ms, speed);
             let lap_timer_data =
                 Some((lap_timer.current_lap_ms(), lap_timer.lap_count(), lap_flags));
 

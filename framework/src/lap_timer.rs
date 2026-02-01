@@ -35,21 +35,51 @@
 
 use core::f32::consts::PI;
 
-/// A timing line defined by two endpoints and a valid crossing direction
+/// A timing line defined by two GPS endpoints and a valid crossing direction
+///
+/// Uses GPS lat/lon coordinates directly for session-independent timing.
+/// This eliminates coordinate frame mismatches between firmware sessions.
 #[derive(Clone, Copy, Debug)]
 pub struct TimingLine {
-    /// First endpoint in local meters
-    pub p1: (f32, f32),
-    /// Second endpoint in local meters
-    pub p2: (f32, f32),
-    /// Valid crossing direction in radians (0 = +X, π/2 = +Y)
+    /// First endpoint latitude (degrees)
+    pub p1_lat: f64,
+    /// First endpoint longitude (degrees)
+    pub p1_lon: f64,
+    /// Second endpoint latitude (degrees)
+    pub p2_lat: f64,
+    /// Second endpoint longitude (degrees)
+    pub p2_lon: f64,
+    /// Valid crossing direction in radians (math convention: 0 = East, π/2 = North)
     pub direction: f32,
 }
 
 impl TimingLine {
-    /// Create a new timing line
-    pub fn new(p1: (f32, f32), p2: (f32, f32), direction: f32) -> Self {
-        Self { p1, p2, direction }
+    /// Create a new timing line from GPS coordinates
+    pub fn new(p1_lat: f64, p1_lon: f64, p2_lat: f64, p2_lon: f64, direction: f32) -> Self {
+        Self {
+            p1_lat,
+            p1_lon,
+            p2_lat,
+            p2_lon,
+            direction,
+        }
+    }
+
+    /// Convert GPS coordinates to local meters for intersection test
+    /// Uses the line's center as reference to minimize projection error
+    fn to_local(self, lat: f64, lon: f64) -> (f64, f64) {
+        let ref_lat = (self.p1_lat + self.p2_lat) / 2.0;
+        let cos_lat = (ref_lat * core::f64::consts::PI / 180.0).cos();
+        let x = (lon - self.p1_lon) * cos_lat * 111320.0;
+        let y = (lat - self.p1_lat) * 111320.0;
+        (x, y)
+    }
+
+    /// Get line endpoints in local meters (relative to p1)
+    fn endpoints_local(&self) -> ((f64, f64), (f64, f64)) {
+        let p1 = (0.0, 0.0); // p1 is origin
+        let p2 = self.to_local(self.p2_lat, self.p2_lon);
+        (p1, p2)
     }
 }
 
@@ -144,14 +174,19 @@ impl TimingState {
     /// Check for crossing on a loop track
     fn check_loop_crossing(
         &mut self,
-        prev: (f32, f32),
-        pos: (f32, f32),
+        prev: (f64, f64),
+        pos: (f64, f64),
         velocity: (f32, f32),
         timestamp_ms: u32,
         line: &TimingLine,
     ) {
+        // Convert GPS positions to local meters for intersection test
+        let prev_local = line.to_local(prev.0, prev.1);
+        let pos_local = line.to_local(pos.0, pos.1);
+        let (line_p1, line_p2) = line.endpoints_local();
+
         // Check if movement segment crosses timing line
-        if line_segment_intersection(prev, pos, line.p1, line.p2).is_some() {
+        if line_segment_intersection_f64(prev_local, pos_local, line_p1, line_p2).is_some() {
             // Validate direction
             if !direction_valid(velocity, line.direction, self.direction_tolerance) {
                 self.frame_flags |= INVALID_LAP;
@@ -207,15 +242,20 @@ impl TimingState {
     /// Check for crossing on a point-to-point track
     fn check_point_to_point_crossing(
         &mut self,
-        prev: (f32, f32),
-        pos: (f32, f32),
+        prev: (f64, f64),
+        pos: (f64, f64),
         velocity: (f32, f32),
         timestamp_ms: u32,
         start: &TimingLine,
         finish: &TimingLine,
     ) {
+        // Convert GPS positions to local meters for start line intersection test
+        let prev_start = start.to_local(prev.0, prev.1);
+        let pos_start = start.to_local(pos.0, pos.1);
+        let (start_p1, start_p2) = start.endpoints_local();
+
         // Check start line crossing
-        if line_segment_intersection(prev, pos, start.p1, start.p2).is_some()
+        if line_segment_intersection_f64(prev_start, pos_start, start_p1, start_p2).is_some()
             && direction_valid(velocity, start.direction, self.direction_tolerance)
         {
             // Debounce only applies if we're already timing (re-crossing start)
@@ -234,8 +274,13 @@ impl TimingState {
         }
 
         // Check finish line crossing (only if we crossed start)
+        // Convert GPS positions to local meters for finish line intersection test
+        let prev_finish = finish.to_local(prev.0, prev.1);
+        let pos_finish = finish.to_local(pos.0, pos.1);
+        let (finish_p1, finish_p2) = finish.endpoints_local();
+
         if self.crossed_start_this_run
-            && line_segment_intersection(prev, pos, finish.p1, finish.p2).is_some()
+            && line_segment_intersection_f64(prev_finish, pos_finish, finish_p1, finish_p2).is_some()
             && direction_valid(velocity, finish.direction, self.direction_tolerance)
         {
             let lap_time = timestamp_ms.saturating_sub(self.lap_start_ms);
@@ -267,7 +312,8 @@ impl TimingState {
 pub struct LapTimer {
     track: Option<TrackType>,
     timing: TimingState,
-    prev_pos: Option<(f32, f32)>,
+    /// Previous GPS position (lat, lon) for crossing detection
+    prev_pos: Option<(f64, f64)>,
 }
 
 impl LapTimer {
@@ -304,11 +350,12 @@ impl LapTimer {
         self.prev_pos = None;
     }
 
-    /// Update with new position. Returns flags for this frame.
-    /// Call at telemetry rate (20-30Hz) from main loop.
+    /// Update with new GPS position. Returns flags for this frame.
+    /// Call at GPS update rate (typically 25Hz) from main loop.
     ///
     /// # Arguments
-    /// * `pos` - Current position in local meters (x, y)
+    /// * `lat` - Current GPS latitude (degrees)
+    /// * `lon` - Current GPS longitude (degrees)
     /// * `velocity` - Current velocity in m/s (vx, vy) for direction validation
     /// * `timestamp_ms` - Current timestamp in milliseconds
     /// * `speed_mps` - Current speed in m/s (for minimum speed check)
@@ -317,11 +364,13 @@ impl LapTimer {
     /// Bitfield of flags (CROSSED_START, CROSSED_FINISH, NEW_LAP, NEW_BEST, INVALID_LAP)
     pub fn update(
         &mut self,
-        pos: (f32, f32),
+        lat: f64,
+        lon: f64,
         velocity: (f32, f32),
         timestamp_ms: u32,
         speed_mps: f32,
     ) -> u8 {
+        let pos = (lat, lon);
         // Clear per-frame flags
         self.timing.frame_flags = FLAG_NONE;
 
@@ -438,6 +487,49 @@ pub fn line_segment_intersection(
     }
 }
 
+/// Line segment intersection test using parametric form (f64 version)
+///
+/// Tests if segment (p1, p2) intersects segment (p3, p4).
+/// Returns Some(t) where t is the interpolation factor along (p1, p2)
+/// if they intersect (0 <= t <= 1 means intersection is on segment).
+fn line_segment_intersection_f64(
+    p1: (f64, f64),
+    p2: (f64, f64),
+    p3: (f64, f64),
+    p4: (f64, f64),
+) -> Option<f64> {
+    let d1x = p2.0 - p1.0;
+    let d1y = p2.1 - p1.1;
+    let d2x = p4.0 - p3.0;
+    let d2y = p4.1 - p3.1;
+
+    // Cross product of direction vectors
+    let cross = d1x * d2y - d1y * d2x;
+
+    // Parallel or nearly parallel lines (no intersection)
+    if cross.abs() < 1e-12 {
+        return None;
+    }
+
+    // Vector from p1 to p3
+    let dx = p3.0 - p1.0;
+    let dy = p3.1 - p1.1;
+
+    // Solve for t and u
+    let t = (dx * d2y - dy * d2x) / cross;
+    let u = (dx * d1y - dy * d1x) / cross;
+
+    // Check if intersection is within both segments
+    // Use small epsilon for numerical stability at endpoints
+    const EPSILON: f64 = 1e-9;
+    let valid_range = -EPSILON..=(1.0 + EPSILON);
+    if valid_range.contains(&t) && valid_range.contains(&u) {
+        Some(t.clamp(0.0, 1.0))
+    } else {
+        None
+    }
+}
+
 /// Normalize angle to [-π, π]
 fn wrap_angle(mut angle: f32) -> f32 {
     while angle > PI {
@@ -470,43 +562,6 @@ pub fn direction_valid(velocity: (f32, f32), expected_dir: f32, tolerance: f32) 
     let diff = wrap_angle(vel_dir - expected_dir);
 
     diff.abs() <= tolerance
-}
-
-/// Calculate perpendicular timing line from two path points
-///
-/// Given two consecutive points on a path, creates a timing line perpendicular
-/// to the direction of travel, centered on the first point.
-///
-/// # Arguments
-/// * `p0` - Position where timing line should be placed
-/// * `p1` - Next position along the path (defines direction of travel)
-/// * `width` - Half-width of timing line (line extends this far on each side)
-///
-/// # Returns
-/// TimingLine perpendicular to travel direction, with direction set to travel direction
-pub fn timing_line_from_path(p0: (f32, f32), p1: (f32, f32), width: f32) -> TimingLine {
-    let dx = p1.0 - p0.0;
-    let dy = p1.1 - p0.1;
-    let len = (dx * dx + dy * dy).sqrt();
-
-    if len < 1e-6 {
-        // Points too close, create horizontal line facing north
-        return TimingLine {
-            p1: (p0.0 - width, p0.1),
-            p2: (p0.0 + width, p0.1),
-            direction: PI / 2.0,
-        };
-    }
-
-    // Perpendicular direction (90° counterclockwise)
-    let perp_x = -dy / len;
-    let perp_y = dx / len;
-
-    TimingLine {
-        p1: (p0.0 + perp_x * width, p0.1 + perp_y * width),
-        p2: (p0.0 - perp_x * width, p0.1 - perp_y * width),
-        direction: dy.atan2(dx),
-    }
 }
 
 #[cfg(test)]
@@ -662,28 +717,6 @@ mod tests {
         assert!(!direction_valid((0.0, 1.0), 0.0, FRAC_PI_2 - 0.01));
     }
 
-    #[test]
-    fn test_timing_line_from_path_horizontal() {
-        let line = timing_line_from_path((0.0, 0.0), (10.0, 0.0), 5.0);
-
-        // Traveling +X, perpendicular line should be vertical
-        assert!((line.p1.0 - 0.0).abs() < 1e-6);
-        assert!((line.p2.0 - 0.0).abs() < 1e-6);
-        assert!((line.p1.1 - 5.0).abs() < 1e-6);
-        assert!((line.p2.1 - (-5.0)).abs() < 1e-6);
-        assert!((line.direction - 0.0).abs() < 1e-6);
-    }
-
-    #[test]
-    fn test_timing_line_from_path_vertical() {
-        let line = timing_line_from_path((0.0, 0.0), (0.0, 10.0), 5.0);
-
-        // Traveling +Y, perpendicular line should be horizontal
-        assert!((line.p1.1 - 0.0).abs() < 1e-6);
-        assert!((line.p2.1 - 0.0).abs() < 1e-6);
-        assert!((line.direction - FRAC_PI_2).abs() < 1e-6);
-    }
-
     // ========================================================================
     // Lap timer state machine tests
     // ========================================================================
@@ -696,10 +729,31 @@ mod tests {
         assert_eq!(timer.lap_count(), 0);
     }
 
+    // ========================================================================
+    // GPS coordinate test helpers
+    // ========================================================================
+    // Using coordinates near equator where 0.00001° ≈ 1.1m
+    // Line at lat=0 from lon=-0.0001 to lon=0.0001 (about 22m wide E-W line)
+    // Direction FRAC_PI_2 = crossing North (increasing lat)
+
+    /// Create a test timing line at the equator
+    /// Line runs East-West at lat=0, valid crossing direction is North
+    fn test_line() -> TimingLine {
+        // p1: lat=0, lon=-0.0001 (west endpoint)
+        // p2: lat=0, lon=0.0001 (east endpoint)
+        // direction: π/2 = North (increasing latitude)
+        TimingLine::new(0.0, -0.0001, 0.0, 0.0001, FRAC_PI_2)
+    }
+
+    /// Create a test timing line at a specific latitude
+    fn test_line_at_lat(lat: f64) -> TimingLine {
+        TimingLine::new(lat, -0.0001, lat, 0.0001, FRAC_PI_2)
+    }
+
     #[test]
     fn test_lap_timer_configure_loop() {
         let mut timer = LapTimer::new();
-        timer.configure_loop(TimingLine::new((-10.0, 0.0), (10.0, 0.0), FRAC_PI_2));
+        timer.configure_loop(test_line());
 
         assert_eq!(timer.timing.state, LapTimerState::Armed);
         assert!(timer.track.is_some());
@@ -708,14 +762,14 @@ mod tests {
     #[test]
     fn test_lap_timer_loop_first_crossing() {
         let mut timer = LapTimer::new();
-        timer.configure_loop(TimingLine::new((-10.0, 0.0), (10.0, 0.0), FRAC_PI_2));
+        timer.configure_loop(test_line());
 
-        // Start below line
-        timer.update((0.0, -5.0), (0.0, 10.0), 0, 10.0);
+        // Start south of line (lat=-0.00005 ≈ 5.5m south)
+        timer.update(-0.00005, 0.0, (0.0, 10.0), 0, 10.0);
         assert_eq!(timer.timing.state, LapTimerState::Armed);
 
-        // Cross line moving north
-        let flags = timer.update((0.0, 5.0), (0.0, 10.0), 100, 10.0);
+        // Cross line moving north (lat=0.00005 ≈ 5.5m north)
+        let flags = timer.update(0.00005, 0.0, (0.0, 10.0), 100, 10.0);
 
         assert!(flags & CROSSED_START != 0, "Should have CROSSED_START flag");
         assert_eq!(timer.timing.state, LapTimerState::Timing);
@@ -726,20 +780,20 @@ mod tests {
     fn test_lap_timer_loop_complete_lap() {
         let mut timer = LapTimer::new();
         timer.timing.min_lap_time_ms = 1000; // 1 second minimum
-        timer.configure_loop(TimingLine::new((-10.0, 0.0), (10.0, 0.0), FRAC_PI_2));
+        timer.configure_loop(test_line());
 
         // First crossing - starts timing
-        timer.update((0.0, -5.0), (0.0, 10.0), 0, 10.0);
-        timer.update((0.0, 5.0), (0.0, 10.0), 100, 10.0);
+        timer.update(-0.00005, 0.0, (0.0, 10.0), 0, 10.0);
+        timer.update(0.00005, 0.0, (0.0, 10.0), 100, 10.0);
         assert_eq!(timer.timing.state, LapTimerState::Timing);
 
-        // Simulate driving around (position changes but doesn't cross line)
-        timer.update((50.0, 50.0), (10.0, 0.0), 30_000, 10.0);
-        timer.update((50.0, -50.0), (0.0, -10.0), 45_000, 10.0);
+        // Simulate driving around (position changes but doesn't cross line at lat=0)
+        timer.update(0.0005, 0.0005, (10.0, 0.0), 30_000, 10.0);
+        timer.update(-0.0005, 0.0005, (0.0, -10.0), 45_000, 10.0);
 
         // Complete lap - cross line again
-        timer.update((0.0, -5.0), (0.0, 10.0), 59_000, 10.0);
-        let flags = timer.update((0.0, 5.0), (0.0, 10.0), 60_000, 10.0);
+        timer.update(-0.00005, 0.0, (0.0, 10.0), 59_000, 10.0);
+        let flags = timer.update(0.00005, 0.0, (0.0, 10.0), 60_000, 10.0);
 
         assert!(flags & NEW_LAP != 0, "Should have NEW_LAP flag");
         assert!(flags & NEW_BEST != 0, "Should have NEW_BEST flag (first lap)");
@@ -749,11 +803,11 @@ mod tests {
     #[test]
     fn test_lap_timer_wrong_direction_rejected() {
         let mut timer = LapTimer::new();
-        timer.configure_loop(TimingLine::new((-10.0, 0.0), (10.0, 0.0), FRAC_PI_2));
+        timer.configure_loop(test_line());
 
         // Try to cross going south (wrong direction)
-        timer.update((0.0, 5.0), (0.0, -10.0), 0, 10.0);
-        let flags = timer.update((0.0, -5.0), (0.0, -10.0), 100, 10.0);
+        timer.update(0.00005, 0.0, (0.0, -10.0), 0, 10.0);
+        let flags = timer.update(-0.00005, 0.0, (0.0, -10.0), 100, 10.0);
 
         assert!(flags & INVALID_LAP != 0, "Should have INVALID_LAP flag");
         assert_eq!(
@@ -767,16 +821,16 @@ mod tests {
     fn test_lap_timer_debounce() {
         let mut timer = LapTimer::new();
         timer.timing.crossing_debounce_ms = 500;
-        timer.configure_loop(TimingLine::new((-10.0, 0.0), (10.0, 0.0), FRAC_PI_2));
+        timer.configure_loop(test_line());
 
         // First crossing
-        timer.update((0.0, -5.0), (0.0, 10.0), 0, 10.0);
-        let flags1 = timer.update((0.0, 5.0), (0.0, 10.0), 100, 10.0);
+        timer.update(-0.00005, 0.0, (0.0, 10.0), 0, 10.0);
+        let flags1 = timer.update(0.00005, 0.0, (0.0, 10.0), 100, 10.0);
         assert!(flags1 & CROSSED_START != 0);
 
         // Try to cross again too soon (within debounce)
-        timer.update((0.0, -5.0), (0.0, -10.0), 200, 10.0); // Go back
-        let flags2 = timer.update((0.0, 5.0), (0.0, 10.0), 300, 10.0); // Try crossing again
+        timer.update(-0.00005, 0.0, (0.0, -10.0), 200, 10.0); // Go back
+        let flags2 = timer.update(0.00005, 0.0, (0.0, 10.0), 300, 10.0); // Try crossing again
         assert_eq!(flags2, FLAG_NONE, "Should be rejected by debounce");
     }
 
@@ -784,21 +838,20 @@ mod tests {
     fn test_lap_timer_min_lap_time() {
         let mut timer = LapTimer::new();
         timer.timing.min_lap_time_ms = 10_000; // 10 second minimum
-        timer.configure_loop(TimingLine::new((-10.0, 0.0), (10.0, 0.0), FRAC_PI_2));
+        timer.configure_loop(test_line());
 
         // Start timing - cross line at t=100
-        timer.update((0.0, -5.0), (0.0, 10.0), 0, 10.0);
-        timer.update((0.0, 5.0), (0.0, 10.0), 100, 10.0);
+        timer.update(-0.00005, 0.0, (0.0, 10.0), 0, 10.0);
+        timer.update(0.00005, 0.0, (0.0, 10.0), 100, 10.0);
         assert_eq!(timer.timing.state, LapTimerState::Timing);
 
-        // Drive around track (positions that don't cross line at y=0)
-        timer.update((50.0, 50.0), (10.0, 0.0), 2000, 10.0);
-        timer.update((50.0, -50.0), (0.0, -10.0), 4000, 10.0);
+        // Drive around track (positions that don't cross line at lat=0)
+        timer.update(0.0005, 0.0005, (10.0, 0.0), 2000, 10.0);
+        timer.update(-0.0005, 0.0005, (0.0, -10.0), 4000, 10.0);
 
         // Try to complete lap too fast (only ~5 seconds since start)
-        // Cross from south to north
-        timer.update((0.0, -5.0), (0.0, 10.0), 5000, 10.0);
-        let flags = timer.update((0.0, 5.0), (0.0, 10.0), 5100, 10.0);
+        timer.update(-0.00005, 0.0, (0.0, 10.0), 5000, 10.0);
+        let flags = timer.update(0.00005, 0.0, (0.0, 10.0), 5100, 10.0);
 
         assert!(flags & INVALID_LAP != 0, "Should have INVALID_LAP flag");
         assert_eq!(timer.lap_count(), 0, "Lap should not be counted");
@@ -808,44 +861,44 @@ mod tests {
     fn test_lap_timer_best_lap_tracking() {
         let mut timer = LapTimer::new();
         timer.timing.min_lap_time_ms = 1000;
-        timer.configure_loop(TimingLine::new((-10.0, 0.0), (10.0, 0.0), FRAC_PI_2));
+        timer.configure_loop(test_line());
 
         // Lap 1: Start timing (cross at t=100)
-        timer.update((0.0, -5.0), (0.0, 10.0), 0, 10.0);
-        timer.update((0.0, 5.0), (0.0, 10.0), 100, 10.0);
+        timer.update(-0.00005, 0.0, (0.0, 10.0), 0, 10.0);
+        timer.update(0.00005, 0.0, (0.0, 10.0), 100, 10.0);
         assert_eq!(timer.timing.state, LapTimerState::Timing);
 
         // Drive around track (positions away from finish line)
-        timer.update((100.0, 100.0), (10.0, 0.0), 30_000, 10.0);
-        timer.update((100.0, -100.0), (0.0, -10.0), 50_000, 10.0);
+        timer.update(0.001, 0.001, (10.0, 0.0), 30_000, 10.0);
+        timer.update(-0.001, 0.001, (0.0, -10.0), 50_000, 10.0);
 
         // Complete lap 1: 60 seconds (cross at t=60100)
-        timer.update((0.0, -5.0), (0.0, 10.0), 60_000, 10.0);
-        let flags1 = timer.update((0.0, 5.0), (0.0, 10.0), 60_100, 10.0);
+        timer.update(-0.00005, 0.0, (0.0, 10.0), 60_000, 10.0);
+        let flags1 = timer.update(0.00005, 0.0, (0.0, 10.0), 60_100, 10.0);
         assert!(flags1 & NEW_LAP != 0, "Should complete lap");
         assert!(flags1 & NEW_BEST != 0, "First lap should be best");
         assert_eq!(timer.lap_count(), 1);
         assert_eq!(timer.timing.best_lap_ms, Some(60_000));
 
         // Drive lap 2 (positions away from finish line)
-        timer.update((100.0, 100.0), (10.0, 0.0), 90_000, 10.0);
-        timer.update((100.0, -100.0), (0.0, -10.0), 110_000, 10.0);
+        timer.update(0.001, 0.001, (10.0, 0.0), 90_000, 10.0);
+        timer.update(-0.001, 0.001, (0.0, -10.0), 110_000, 10.0);
 
         // Complete lap 2: 55 seconds (new best)
-        timer.update((0.0, -5.0), (0.0, 10.0), 115_000, 10.0);
-        let flags2 = timer.update((0.0, 5.0), (0.0, 10.0), 115_100, 10.0);
+        timer.update(-0.00005, 0.0, (0.0, 10.0), 115_000, 10.0);
+        let flags2 = timer.update(0.00005, 0.0, (0.0, 10.0), 115_100, 10.0);
         assert!(flags2 & NEW_LAP != 0);
         assert!(flags2 & NEW_BEST != 0, "55s should be new best");
         assert_eq!(timer.lap_count(), 2);
         assert_eq!(timer.timing.best_lap_ms, Some(55_000));
 
         // Drive lap 3 (positions away from finish line)
-        timer.update((100.0, 100.0), (10.0, 0.0), 150_000, 10.0);
-        timer.update((100.0, -100.0), (0.0, -10.0), 170_000, 10.0);
+        timer.update(0.001, 0.001, (10.0, 0.0), 150_000, 10.0);
+        timer.update(-0.001, 0.001, (0.0, -10.0), 170_000, 10.0);
 
         // Complete lap 3: 58 seconds (NOT a new best)
-        timer.update((0.0, -5.0), (0.0, 10.0), 173_000, 10.0);
-        let flags3 = timer.update((0.0, 5.0), (0.0, 10.0), 173_100, 10.0);
+        timer.update(-0.00005, 0.0, (0.0, 10.0), 173_000, 10.0);
+        let flags3 = timer.update(0.00005, 0.0, (0.0, 10.0), 173_100, 10.0);
         assert!(flags3 & NEW_LAP != 0);
         assert!(flags3 & NEW_BEST == 0, "58s should NOT be new best");
         assert_eq!(timer.lap_count(), 3);
@@ -856,25 +909,26 @@ mod tests {
     fn test_lap_timer_point_to_point() {
         let mut timer = LapTimer::new();
         timer.timing.min_lap_time_ms = 1000;
+        // Start line at lat=0, finish line at lat=0.001 (~111m north)
         timer.configure_point_to_point(
-            TimingLine::new((-10.0, 0.0), (10.0, 0.0), FRAC_PI_2),   // Start
-            TimingLine::new((-10.0, 100.0), (10.0, 100.0), FRAC_PI_2), // Finish
+            test_line_at_lat(0.0),   // Start
+            test_line_at_lat(0.001), // Finish (~111m north)
         );
 
         assert_eq!(timer.timing.state, LapTimerState::Armed);
 
         // Cross start line
-        timer.update((0.0, -5.0), (0.0, 10.0), 0, 10.0);
-        let flags1 = timer.update((0.0, 5.0), (0.0, 10.0), 100, 10.0);
+        timer.update(-0.00005, 0.0, (0.0, 10.0), 0, 10.0);
+        let flags1 = timer.update(0.00005, 0.0, (0.0, 10.0), 100, 10.0);
         assert!(flags1 & CROSSED_START != 0);
         assert_eq!(timer.timing.state, LapTimerState::Timing);
 
         // Drive towards finish
-        timer.update((0.0, 50.0), (0.0, 10.0), 15_000, 10.0);
+        timer.update(0.0005, 0.0, (0.0, 10.0), 15_000, 10.0);
 
-        // Cross finish line
-        timer.update((0.0, 95.0), (0.0, 10.0), 29_000, 10.0);
-        let flags2 = timer.update((0.0, 105.0), (0.0, 10.0), 30_000, 10.0);
+        // Cross finish line (lat=0.001)
+        timer.update(0.00095, 0.0, (0.0, 10.0), 29_000, 10.0);
+        let flags2 = timer.update(0.00105, 0.0, (0.0, 10.0), 30_000, 10.0);
 
         assert!(flags2 & CROSSED_FINISH != 0);
         assert!(flags2 & NEW_LAP != 0);
@@ -885,11 +939,11 @@ mod tests {
     #[test]
     fn test_lap_timer_clear() {
         let mut timer = LapTimer::new();
-        timer.configure_loop(TimingLine::new((-10.0, 0.0), (10.0, 0.0), FRAC_PI_2));
+        timer.configure_loop(test_line());
 
         // Do some timing
-        timer.update((0.0, -5.0), (0.0, 10.0), 0, 10.0);
-        timer.update((0.0, 5.0), (0.0, 10.0), 100, 10.0);
+        timer.update(-0.00005, 0.0, (0.0, 10.0), 0, 10.0);
+        timer.update(0.00005, 0.0, (0.0, 10.0), 100, 10.0);
 
         // Clear
         timer.clear();
@@ -902,11 +956,11 @@ mod tests {
     #[test]
     fn test_lap_timer_stationary_ignored() {
         let mut timer = LapTimer::new();
-        timer.configure_loop(TimingLine::new((-10.0, 0.0), (10.0, 0.0), FRAC_PI_2));
+        timer.configure_loop(test_line());
 
         // Try crossing while nearly stationary
-        timer.update((0.0, -0.1), (0.0, 0.1), 0, 0.1);
-        let flags = timer.update((0.0, 0.1), (0.0, 0.1), 100, 0.1);
+        timer.update(-0.000001, 0.0, (0.0, 0.1), 0, 0.1);
+        let flags = timer.update(0.000001, 0.0, (0.0, 0.1), 100, 0.1);
 
         assert_eq!(flags, FLAG_NONE, "Should ignore crossing when stationary");
         assert_eq!(timer.timing.state, LapTimerState::Armed);

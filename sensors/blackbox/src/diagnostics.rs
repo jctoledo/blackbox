@@ -59,6 +59,10 @@ pub struct GpsHealth {
     pub hdop: f32,
     /// PDOP (position dilution of precision)
     pub pdop: f32,
+    /// GPS reference latitude (origin for local coordinates)
+    pub ref_lat: f64,
+    /// GPS reference longitude (origin for local coordinates)
+    pub ref_lon: f64,
 }
 
 /// System resource usage
@@ -324,6 +328,7 @@ impl DiagnosticsState {
     }
 
     /// Update GPS status
+    #[allow(clippy::too_many_arguments)]
     pub fn update_gps(
         &self,
         fix_valid: bool,
@@ -331,6 +336,8 @@ impl DiagnosticsState {
         satellites: u8,
         hdop: f32,
         pdop: f32,
+        ref_lat: f64,
+        ref_lon: f64,
     ) {
         if let Ok(mut inner) = self.inner.lock() {
             inner.gps_health.fix_valid = fix_valid;
@@ -338,6 +345,8 @@ impl DiagnosticsState {
             inner.gps_health.satellites = satellites;
             inner.gps_health.hdop = hdop;
             inner.gps_health.pdop = pdop;
+            inner.gps_health.ref_lat = ref_lat;
+            inner.gps_health.ref_lon = ref_lon;
         }
     }
 

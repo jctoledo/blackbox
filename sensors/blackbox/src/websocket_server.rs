@@ -11,13 +11,14 @@ use log::info;
 
 use crate::diagnostics::DiagnosticsState;
 
-/// Lap timer timing line configuration
+/// Lap timer timing line configuration using GPS coordinates
+/// Uses GPS lat/lon for session-independent timing (no coordinate frame issues)
 #[derive(Clone, Copy, Debug)]
 pub struct TimingLineConfig {
-    pub p1_x: f32,
-    pub p1_y: f32,
-    pub p2_x: f32,
-    pub p2_y: f32,
+    pub p1_lat: f64,
+    pub p1_lon: f64,
+    pub p2_lat: f64,
+    pub p2_lon: f64,
     pub direction: f32,
 }
 
@@ -260,101 +261,102 @@ fn parse_lap_timer_config(uri: &str, state: &TelemetryServerState) -> (String, u
             (r#"{"status":"ok","config":"cleared"}"#.to_string(), 200)
         }
         "loop" => {
-            // Parse timing line parameters
-            let p1_x = params.get("p1_x").and_then(|v| v.parse::<f32>().ok());
-            let p1_y = params.get("p1_y").and_then(|v| v.parse::<f32>().ok());
-            let p2_x = params.get("p2_x").and_then(|v| v.parse::<f32>().ok());
-            let p2_y = params.get("p2_y").and_then(|v| v.parse::<f32>().ok());
+            // Parse timing line parameters (GPS coordinates)
+            let p1_lat = params.get("p1_lat").and_then(|v| v.parse::<f64>().ok());
+            let p1_lon = params.get("p1_lon").and_then(|v| v.parse::<f64>().ok());
+            let p2_lat = params.get("p2_lat").and_then(|v| v.parse::<f64>().ok());
+            let p2_lon = params.get("p2_lon").and_then(|v| v.parse::<f64>().ok());
             let dir = params.get("dir").and_then(|v| v.parse::<f32>().ok());
 
-            match (p1_x, p1_y, p2_x, p2_y, dir) {
-                (Some(p1_x), Some(p1_y), Some(p2_x), Some(p2_y), Some(direction)) => {
+            match (p1_lat, p1_lon, p2_lat, p2_lon, dir) {
+                (Some(p1_lat), Some(p1_lon), Some(p2_lat), Some(p2_lon), Some(direction)) => {
                     let line = TimingLineConfig {
-                        p1_x,
-                        p1_y,
-                        p2_x,
-                        p2_y,
+                        p1_lat,
+                        p1_lon,
+                        p2_lat,
+                        p2_lon,
                         direction,
                     };
                     state.set_lap_timer_config(LapTimerConfig::Loop(line));
                     info!(
-                        "Lap timer configured: loop track, line ({:.1},{:.1})-({:.1},{:.1}) dir={:.2}",
-                        p1_x, p1_y, p2_x, p2_y, direction
+                        "Lap timer configured: loop track, line ({:.6},{:.6})-({:.6},{:.6}) dir={:.2}",
+                        p1_lat, p1_lon, p2_lat, p2_lon, direction
                     );
                     (
                         format!(
-                            r#"{{"status":"ok","config":"loop","line":{{"p1":[{},{}],"p2":[{},{}],"dir":{}}}}}"#,
-                            p1_x, p1_y, p2_x, p2_y, direction
+                            r#"{{"status":"ok","config":"loop","line":{{"p1":{{"lat":{},"lon":{}}},"p2":{{"lat":{},"lon":{}}},"dir":{}}}}}"#,
+                            p1_lat, p1_lon, p2_lat, p2_lon, direction
                         ),
                         200,
                     )
                 }
                 _ => (
-                    r#"{"error":"missing parameters for loop config (p1_x, p1_y, p2_x, p2_y, dir)"}"#
+                    r#"{"error":"missing parameters for loop config (p1_lat, p1_lon, p2_lat, p2_lon, dir)"}"#
                         .to_string(),
                     400,
                 ),
             }
         }
         "point_to_point" => {
-            // Parse start line
-            let p1_x = params.get("p1_x").and_then(|v| v.parse::<f32>().ok());
-            let p1_y = params.get("p1_y").and_then(|v| v.parse::<f32>().ok());
-            let p2_x = params.get("p2_x").and_then(|v| v.parse::<f32>().ok());
-            let p2_y = params.get("p2_y").and_then(|v| v.parse::<f32>().ok());
+            // Parse start line (GPS coordinates)
+            let p1_lat = params.get("p1_lat").and_then(|v| v.parse::<f64>().ok());
+            let p1_lon = params.get("p1_lon").and_then(|v| v.parse::<f64>().ok());
+            let p2_lat = params.get("p2_lat").and_then(|v| v.parse::<f64>().ok());
+            let p2_lon = params.get("p2_lon").and_then(|v| v.parse::<f64>().ok());
             let dir = params.get("dir").and_then(|v| v.parse::<f32>().ok());
             // Parse finish line (f_ prefix)
-            let f_p1_x = params.get("f_p1_x").and_then(|v| v.parse::<f32>().ok());
-            let f_p1_y = params.get("f_p1_y").and_then(|v| v.parse::<f32>().ok());
-            let f_p2_x = params.get("f_p2_x").and_then(|v| v.parse::<f32>().ok());
-            let f_p2_y = params.get("f_p2_y").and_then(|v| v.parse::<f32>().ok());
+            let f_p1_lat = params.get("f_p1_lat").and_then(|v| v.parse::<f64>().ok());
+            let f_p1_lon = params.get("f_p1_lon").and_then(|v| v.parse::<f64>().ok());
+            let f_p2_lat = params.get("f_p2_lat").and_then(|v| v.parse::<f64>().ok());
+            let f_p2_lon = params.get("f_p2_lon").and_then(|v| v.parse::<f64>().ok());
             let f_dir = params.get("f_dir").and_then(|v| v.parse::<f32>().ok());
 
             match (
-                p1_x, p1_y, p2_x, p2_y, dir, f_p1_x, f_p1_y, f_p2_x, f_p2_y, f_dir,
+                p1_lat, p1_lon, p2_lat, p2_lon, dir,
+                f_p1_lat, f_p1_lon, f_p2_lat, f_p2_lon, f_dir,
             ) {
                 (
-                    Some(p1_x),
-                    Some(p1_y),
-                    Some(p2_x),
-                    Some(p2_y),
+                    Some(p1_lat),
+                    Some(p1_lon),
+                    Some(p2_lat),
+                    Some(p2_lon),
                     Some(direction),
-                    Some(f_p1_x),
-                    Some(f_p1_y),
-                    Some(f_p2_x),
-                    Some(f_p2_y),
+                    Some(f_p1_lat),
+                    Some(f_p1_lon),
+                    Some(f_p2_lat),
+                    Some(f_p2_lon),
                     Some(f_direction),
                 ) => {
                     let start = TimingLineConfig {
-                        p1_x,
-                        p1_y,
-                        p2_x,
-                        p2_y,
+                        p1_lat,
+                        p1_lon,
+                        p2_lat,
+                        p2_lon,
                         direction,
                     };
                     let finish = TimingLineConfig {
-                        p1_x: f_p1_x,
-                        p1_y: f_p1_y,
-                        p2_x: f_p2_x,
-                        p2_y: f_p2_y,
+                        p1_lat: f_p1_lat,
+                        p1_lon: f_p1_lon,
+                        p2_lat: f_p2_lat,
+                        p2_lon: f_p2_lon,
                         direction: f_direction,
                     };
                     state.set_lap_timer_config(LapTimerConfig::PointToPoint { start, finish });
                     info!(
-                        "Lap timer configured: point-to-point, start ({:.1},{:.1})-({:.1},{:.1}), finish ({:.1},{:.1})-({:.1},{:.1})",
-                        p1_x, p1_y, p2_x, p2_y, f_p1_x, f_p1_y, f_p2_x, f_p2_y
+                        "Lap timer configured: point-to-point, start ({:.6},{:.6})-({:.6},{:.6}), finish ({:.6},{:.6})-({:.6},{:.6})",
+                        p1_lat, p1_lon, p2_lat, p2_lon, f_p1_lat, f_p1_lon, f_p2_lat, f_p2_lon
                     );
                     (
                         format!(
-                            r#"{{"status":"ok","config":"point_to_point","start":{{"p1":[{},{}],"p2":[{},{}],"dir":{}}},"finish":{{"p1":[{},{}],"p2":[{},{}],"dir":{}}}}}"#,
-                            p1_x, p1_y, p2_x, p2_y, direction,
-                            f_p1_x, f_p1_y, f_p2_x, f_p2_y, f_direction
+                            r#"{{"status":"ok","config":"point_to_point","start":{{"p1":{{"lat":{},"lon":{}}},"p2":{{"lat":{},"lon":{}}},"dir":{}}},"finish":{{"p1":{{"lat":{},"lon":{}}},"p2":{{"lat":{},"lon":{}}},"dir":{}}}}}"#,
+                            p1_lat, p1_lon, p2_lat, p2_lon, direction,
+                            f_p1_lat, f_p1_lon, f_p2_lat, f_p2_lon, f_direction
                         ),
                         200,
                     )
                 }
                 _ => (
-                    r#"{"error":"missing parameters for point_to_point config (start: p1_x, p1_y, p2_x, p2_y, dir; finish: f_p1_x, f_p1_y, f_p2_x, f_p2_y, f_dir)"}"#
+                    r#"{"error":"missing parameters for point_to_point config (start: p1_lat, p1_lon, p2_lat, p2_lon, dir; finish: f_p1_lat, f_p1_lon, f_p2_lat, f_p2_lon, f_dir)"}"#
                         .to_string(),
                     400,
                 ),
@@ -1332,11 +1334,18 @@ let p2pNeedsWarmup=false,trackRecorder=null;
 let referenceLap=null,lapTracker=null,lastDeltaMs=0,deltaTrend=0;
 let currentSessionId=null,currentSessionStart=null;
 
-// GPS Reference Tracking (mirrors firmware's algorithm: average of first 5 GPS fixes)
-let jsGpsRef=null,jsGpsRefSamples=[];
+// GPS Reference Tracking (for display and track auto-detection only)
+// NOTE: Lap timer timing lines now use GPS lat/lon directly, not local coordinates.
+// These references are only needed for:
+// - Converting GPS to local coords for track map display
+// - Track auto-detection (matching current position to saved tracks)
+let jsGpsRef=null,jsGpsRefSamples=[],firmwareGpsRef=null,firmwareGpsRefFetching=false;
 function updateJsGpsRef(lat,lon){if(jsGpsRef||lat===0||lon===0)return;jsGpsRefSamples.push({lat,lon});if(jsGpsRefSamples.length>=5){const avgLat=jsGpsRefSamples.reduce((s,p)=>s+p.lat,0)/5;const avgLon=jsGpsRefSamples.reduce((s,p)=>s+p.lon,0)/5;jsGpsRef={lat:avgLat,lon:avgLon}}}
-function gpsToLocal(lat,lon){if(!jsGpsRef)return null;const latRad=jsGpsRef.lat*Math.PI/180;return{x:(lon-jsGpsRef.lon)*Math.cos(latRad)*111320,y:(lat-jsGpsRef.lat)*111320}}
-function localToGps(x,y){if(!jsGpsRef)return null;const latRad=jsGpsRef.lat*Math.PI/180;return{lat:jsGpsRef.lat+y/111320,lon:jsGpsRef.lon+x/(111320*Math.cos(latRad))}}
+async function fetchFirmwareGpsRef(){if(firmwareGpsRef||firmwareGpsRefFetching)return;firmwareGpsRefFetching=true;try{const r=await fetch('/api/diagnostics');const d=await r.json();if(d.gps&&d.gps.ref_lat&&d.gps.ref_lon&&d.gps.ref_lat!==0){firmwareGpsRef={lat:d.gps.ref_lat,lon:d.gps.ref_lon};console.log('Firmware GPS ref:',firmwareGpsRef)}}catch(e){console.warn('Failed to fetch firmware GPS ref:',e)}finally{firmwareGpsRefFetching=false}}
+// Use firmware GPS reference for coordinates (fall back to jsGpsRef if not available)
+function getGpsRef(){return firmwareGpsRef||jsGpsRef}
+function gpsToLocal(lat,lon){const ref=getGpsRef();if(!ref)return null;const latRad=ref.lat*Math.PI/180;return{x:(lon-ref.lon)*Math.cos(latRad)*111320,y:(lat-ref.lat)*111320}}
+function localToGps(x,y){const ref=getGpsRef();if(!ref)return null;const latRad=ref.lat*Math.PI/180;return{lat:ref.lat+y/111320,lon:ref.lon+x/(111320*Math.cos(latRad))}}
 function transformCoord(x,y,fromRef,toRef){const fLatRad=fromRef.lat*Math.PI/180;const lon=fromRef.lon+x/(111320*Math.cos(fLatRad));const lat=fromRef.lat+y/111320;const tLatRad=toRef.lat*Math.PI/180;return{x:(lon-toRef.lon)*Math.cos(tLatRad)*111320,y:(lat-toRef.lat)*111320}}
 function transformLine(line,fromRef,toRef){const p1=transformCoord(line.p1[0],line.p1[1],fromRef,toRef);const p2=transformCoord(line.p2[0],line.p2[1],fromRef,toRef);return{p1:[p1.x,p1.y],p2:[p2.x,p2.y],direction:line.direction}}
 
@@ -1386,10 +1395,10 @@ class TrackAutoDetector{
     }
     scoreMatch(x,y,heading,track){
         // Skip tracks from different sessions if we can't transform
-        if(track.gpsOrigin&&!jsGpsRef)return 0;
+        const ref=getGpsRef();if(track.gpsOrigin&&!ref)return 0;
         // Transform bounds check if needed
         let bx=x,by=y;
-        if(track.gpsOrigin&&jsGpsRef){const t=transformCoord(x,y,jsGpsRef,track.gpsOrigin);bx=t.x;by=t.y}
+        if(track.gpsOrigin&&ref){const t=transformCoord(x,y,ref,track.gpsOrigin);bx=t.x;by=t.y}
         if(track.bounds){const m=100;if(bx<track.bounds.minX-m||bx>track.bounds.maxX+m||by<track.bounds.minY-m||by>track.bounds.maxY+m)return 0}
         const cl=track.centerline||[];if(cl.length===0)return 0;
         let minD=Infinity,nearP=null;for(const p of cl){const d=Math.sqrt((bx-p.x)**2+(by-p.y)**2);if(d<minD){minD=d;nearP=p}}
@@ -1727,35 +1736,38 @@ async function clearTrackHistoryConfirm(id){
 
 async function activateTrack(track){
     const isP2P=track.type==='point_to_point';
-    // Warn if GPS reference not ready but track has origin (cross-session use)
-    if(track.gpsOrigin&&!jsGpsRef){alert('GPS not ready. Wait for GPS lock before activating saved tracks.');return}
-    // Transform coordinates if track was recorded with different GPS reference
-    let line=track.startLine,finLine=track.finishLine;
-    if(track.gpsOrigin&&jsGpsRef){
-        const dLat=(track.gpsOrigin.lat-jsGpsRef.lat)*111320;
-        const dLon=(track.gpsOrigin.lon-jsGpsRef.lon)*Math.cos(jsGpsRef.lat*Math.PI/180)*111320;
-        if(Math.sqrt(dLat*dLat+dLon*dLon)>1.0){
-            line=transformLine(track.startLine,track.gpsOrigin,jsGpsRef);
-            if(track.finishLine)finLine=transformLine(track.finishLine,track.gpsOrigin,jsGpsRef);
-        }
-    }
+    // Track must have gpsOrigin to convert timing line to GPS coordinates
+    if(!track.gpsOrigin){alert('Track missing GPS origin. Cannot activate.');return}
+    // Convert local timing line coordinates to GPS lat/lon using track's own origin
+    // Firmware receives GPS coords and converts to local using its own origin
+    // This eliminates cross-session coordinate frame mismatch!
+    const origin=track.gpsOrigin;
+    const latRad=origin.lat*Math.PI/180;
+    const cosLat=Math.cos(latRad);
+    // Helper to convert local (x,y) back to GPS using track's origin
+    function toGps(x,y){return{lat:origin.lat+y/111320,lon:origin.lon+x/(111320*cosLat)}}
+    const line=track.startLine,finLine=track.finishLine;
+    const p1=toGps(line.p1[0],line.p1[1]);
+    const p2=toGps(line.p2[0],line.p2[1]);
     // Direction is already in math convention (from atan2 in _calculateTimingLine)
     // Firmware expects math convention (0=East, CCW positive)
     const startDir=line.direction;
     let url;
     if(isP2P&&finLine){
+        const fp1=toGps(finLine.p1[0],finLine.p1[1]);
+        const fp2=toGps(finLine.p2[0],finLine.p2[1]);
         const finDir=finLine.direction;
         url='/api/laptimer/configure?type=point_to_point'+
-            '&p1_x='+line.p1[0].toFixed(2)+'&p1_y='+line.p1[1].toFixed(2)+
-            '&p2_x='+line.p2[0].toFixed(2)+'&p2_y='+line.p2[1].toFixed(2)+
+            '&p1_lat='+p1.lat.toFixed(7)+'&p1_lon='+p1.lon.toFixed(7)+
+            '&p2_lat='+p2.lat.toFixed(7)+'&p2_lon='+p2.lon.toFixed(7)+
             '&dir='+startDir.toFixed(4)+
-            '&f_p1_x='+finLine.p1[0].toFixed(2)+'&f_p1_y='+finLine.p1[1].toFixed(2)+
-            '&f_p2_x='+finLine.p2[0].toFixed(2)+'&f_p2_y='+finLine.p2[1].toFixed(2)+
+            '&f_p1_lat='+fp1.lat.toFixed(7)+'&f_p1_lon='+fp1.lon.toFixed(7)+
+            '&f_p2_lat='+fp2.lat.toFixed(7)+'&f_p2_lon='+fp2.lon.toFixed(7)+
             '&f_dir='+finDir.toFixed(4);
     }else{
         url='/api/laptimer/configure?type=loop'+
-            '&p1_x='+line.p1[0].toFixed(2)+'&p1_y='+line.p1[1].toFixed(2)+
-            '&p2_x='+line.p2[0].toFixed(2)+'&p2_y='+line.p2[1].toFixed(2)+
+            '&p1_lat='+p1.lat.toFixed(7)+'&p1_lon='+p1.lon.toFixed(7)+
+            '&p2_lat='+p2.lat.toFixed(7)+'&p2_lon='+p2.lon.toFixed(7)+
             '&dir='+startDir.toFixed(4);
     }
     try{
@@ -1821,13 +1833,13 @@ async function deactivateTrack(){
 // Track Recording Functions
 function startTrackRecording(trackType='loop'){
     if(!currentPos||!currentPos.valid){alert('Position not available');return false}
-    if(!jsGpsRef){alert('GPS reference not yet established. Wait for GPS lock.');return false}
+    const ref=getGpsRef();if(!ref){alert('GPS reference not yet established. Wait for GPS lock.');return false}
     if(!trackRecorder)trackRecorder=new TrackRecorder();
     // Use GPS course if valid, else EKF yaw (heading used for corner detection, not loop closure)
     const heading=currentPos.validGpsCourse?currentPos.gpsCourse:currentPos.yaw;
     const pos={x:currentPos.x,y:currentPos.y,lat:currentPos.lat,lon:currentPos.lon,heading:heading,speed:currentPos.speed,valid:true,sigma:currentPos.sigma||3.0};
-    // Pass jsGpsRef so all coordinates are computed relative to it (not firmware's GPS origin)
-    if(!trackRecorder.start(pos,trackType,jsGpsRef)){console.warn('Failed to start recording');return false}
+    // Pass GPS reference so all coordinates are computed in firmware's frame (for timing line alignment)
+    if(!trackRecorder.start(pos,trackType,ref)){console.warn('Failed to start recording');return false}
     const overlay=$('record-overlay');overlay.classList.add('active');
     $('rec-title').textContent=trackType==='loop'?'Recording Circuit':'Recording Stage';
     $('rec-distance').textContent='0';$('rec-corners').textContent='0';$('rec-points').textContent='0';$('rec-elapsed').textContent='0:00';
@@ -2189,13 +2201,13 @@ function process(buf){
     const lapCnt=buf.byteLength>=80?d.getUint16(77,1):0;
     const lapFlags=buf.byteLength>=80?d.getUint8(79):0;
     const latg=ay/9.81,lng=-ax/9.81,yawDeg=Math.abs(wz*57.3);
-    // Track GPS reference (average of first 5 fixes, same as firmware)
-    if(gpsOk===1)updateJsGpsRef(lat,lon);
+    // Track GPS reference - fetch firmware's actual GPS origin for coordinate alignment
+    if(gpsOk===1){updateJsGpsRef(lat,lon);if(!firmwareGpsRef)fetchFirmwareGpsRef()}
     // Update position for track manager and recording
-    // ARCHITECTURE: Use GPS-derived local coordinates (relative to jsGpsRef) for consistency
-    // with track coordinates. Don't use EKF x,y which are in firmware's session-specific frame.
-    let localX=ekfX,localY=ekfY; // fallback to EKF if GPS not ready
-    if(jsGpsRef&&gpsOk===1&&lat&&lon){const local=gpsToLocal(lat,lon);if(local){localX=local.x;localY=local.y}}
+    // ARCHITECTURE: Use GPS-derived local coordinates relative to firmware's GPS origin (via gpsToLocal)
+    // This ensures dashboard coords match firmware's EKF coordinate frame for timing line crossing.
+    let localX=ekfX,localY=ekfY; // fallback to EKF if GPS ref not ready
+    const ref=getGpsRef();if(ref&&gpsOk===1&&lat&&lon){const local=gpsToLocal(lat,lon);if(local){localX=local.x;localY=local.y}}
     const validGpsCourse=!isNaN(gpsCourse)&&sp>2.0;
     currentPos={x:localX,y:localY,yaw:ekfYaw,gpsCourse:gpsCourse,validGpsCourse:validGpsCourse,speed:sp,valid:gpsOk===1,sigma:posSigma,lat:lat,lon:lon};
     updateTrackRecording();
@@ -2764,7 +2776,7 @@ impl TelemetryServer {
                             r#"{{"sensor_rates":{{"imu_hz":{:.1},"gps_hz":{:.1},"loop_hz":{:.0},"imu_expected":{:.0},"gps_expected":{:.0},"zupt_per_min":{:.1},"ekf_per_gps":{:.1}}},"#,
                             r#""ekf":{{"pos_sigma":{:.2},"vel_sigma":{:.2},"yaw_sigma_deg":{:.1},"bias_x":{:.4},"bias_y":{:.4}}},"#,
                             r#""system":{{"heap_free":{},"uptime_s":{},"tx_ok":{},"tx_fail":{}}},"#,
-                            r#""gps":{{"model":"{}","rate_hz":{},"fix":{},"warmup":{},"satellites":{},"hdop":{:.1}}},"#,
+                            r#""gps":{{"model":"{}","rate_hz":{},"fix":{},"warmup":{},"satellites":{},"hdop":{:.1},"ref_lat":{:.8},"ref_lon":{:.8}}},"#,
                             r#""wifi":{{"mode":"{}","ssid":"{}"}},"#,
                             r#""config":{{"telemetry_hz":{},"gps_model":"{}","warmup_fixes":{}}},"#,
                             r#""fusion":{{"lon_raw":{:.3},"lon_filtered":{:.3},"lon_blended":{:.3},"gps_weight":{:.2},"gps_accel":{:.3},"gps_rate":{:.1},"gps_rejected":{},"pitch_corr":{:.1},"roll_corr":{:.1},"pitch_conf":{:.0},"roll_conf":{:.0},"yaw_bias":{:.4},"yaw_calibrated":{},"tilt_x":{:.3},"tilt_y":{:.3},"tilt_valid":{}}}}}"#
@@ -2779,6 +2791,7 @@ impl TelemetryServer {
                         d.gps_health.model_name, d.gps_health.configured_rate_hz,
                         d.gps_health.fix_valid, d.gps_health.warmup_complete,
                         d.gps_health.satellites, d.gps_health.hdop,
+                        d.gps_health.ref_lat, d.gps_health.ref_lon,
                         d.wifi_status.mode, d.wifi_status.ssid,
                         d.config.telemetry_rate_hz, d.config.gps_model, d.config.gps_warmup_fixes,
                         // Fusion diagnostics
