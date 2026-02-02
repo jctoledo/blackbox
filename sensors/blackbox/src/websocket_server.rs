@@ -445,7 +445,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
 .bbMini{display:grid;grid-template-columns:auto 7ch;column-gap:10px;align-items:baseline}
 .bbMiniLbl{font-size:11px;color:var(--text-tertiary);opacity:.75;white-space:nowrap}
 .bbMiniVal{font-size:13px;font-weight:600;color:var(--text-secondary);text-align:left;justify-self:start}
-.bbLapCard.timing~.bbGCard .bbGPlotFrame{width:min(32vh,280px);height:min(32vh,280px);transition:width 0.25s ease,height 0.25s ease}
+.bbLapCard.timing~.bbGCard .bbGPlotFrame{width:min(32vh,280px);height:min(32vh,280px);margin:0 auto;transition:width 0.25s ease,height 0.25s ease}
 .bbLapCard.timing~.bbGCard .bbGReadoutRow{padding:8px 18px;transition:padding 0.25s ease}
 .bbLapCard.timing~.bbGCard .bbGReadoutVal{font-size:clamp(22px,5vw,28px);margin-top:4px;transition:font-size 0.25s ease}
 .bbLapCard.timing~.bbGCard .bbGDivider{height:32px;transition:height 0.25s ease}
@@ -453,7 +453,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
 .bbLapCard.timing~.bbGCard .bbMiniLbl{font-size:10px}
 .bbLapCard.timing~.bbGCard .bbMiniVal{font-size:11px}
 @media(max-height:750px){.bbTopbar{padding:10px 14px}.bbGTop{padding:8px 16px 4px}.bbGReadoutRow{padding:10px 16px}.bbGReadoutVal{font-size:28px}.bbGMax{padding:10px 20px 14px;gap:6px 12px}.bbLapTime{font-size:38px}.bbLapMain{padding:12px 16px 8px}.bbDeltaText{font-size:24px}.bbLapHistory{padding:8px 16px}.bbLapHistValue{font-size:17px}}
-@media(max-height:700px){.bbLapCard.timing~.bbGCard .bbGMax{display:none}.bbLapCard.timing~.bbGCard .bbGPlotFrame{width:min(28vh,240px);height:min(28vh,240px)}.bbLapCard.timing~.bbGCard .bbGReadoutVal{font-size:22px}.bbLapCard.timing~.bbGCard .bbGDivider{height:24px}.bbTelemetryStrip{padding:8px 0 6px}}
+@media(max-height:700px){.bbLapCard.timing~.bbGCard .bbGMax{display:none}.bbLapCard.timing~.bbGCard .bbGPlotFrame{width:min(28vh,240px);height:min(28vh,240px);margin:0 auto}.bbLapCard.timing~.bbGCard .bbGReadoutVal{font-size:22px}.bbLapCard.timing~.bbGCard .bbGDivider{height:24px}.bbTelemetryStrip{padding:8px 0 6px}}
 .bbTelemetryStrip{display:flex;gap:14px;justify-content:center;padding:14px 0 10px;font-size:11px;color:var(--text-tertiary);flex-shrink:0}
 .bbTItem{display:flex;align-items:baseline;gap:3px}
 .bbTItem .bbNum{color:var(--text-secondary);font-weight:500;display:inline-block;text-align:right}
@@ -2174,6 +2174,7 @@ function updateLapTimer(lapTimeMs,lapCnt,lapFlags){
     const stateEl=$('lap-state');
     if(lapTimeMs>0){
         stateEl.textContent=isP2P?'Running':'Timing';stateEl.classList.add('timing');sec.classList.add('timing');suppressStartLineIndicator=false;
+        if(prevLapTimeMs===0)setTimeout(resize,300);
         // Track distance and calculate delta
         if(lapTracker&&currentPos&&currentPos.valid){
             const dist=lapTracker.update(currentPos.x,currentPos.y,lapTimeMs);
@@ -2186,7 +2187,7 @@ function updateLapTimer(lapTimeMs,lapCnt,lapFlags){
                 }
             }else{updateDeltaBar({deltaMs:null,hasRef:false,isP2P})}
         }
-    }else{stateEl.textContent='Armed';stateEl.classList.remove('timing');sec.classList.remove('timing')}
+    }else{stateEl.textContent='Armed';stateEl.classList.remove('timing');sec.classList.remove('timing');if(prevLapTimeMs>0)setTimeout(resize,300)}
     // Handle new best flag FIRST - save as reference lap before reset
     if((lapFlags&LAP_FLAG_NEW_BEST)&&!(prevLapFlags&LAP_FLAG_NEW_BEST)){
         const bestEl=$('best-lap');bestEl.classList.add('bbLapBestFlash');setTimeout(()=>bestEl.classList.remove('bbLapBestFlash'),800);
