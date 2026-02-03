@@ -916,7 +916,8 @@ fn main() {
             );
 
             // Update lap timer with GPS lat/lon and EKF velocity
-            // GPS lat/lon is session-independent, enabling timing lines to work across restarts
+            // GPS lat/lon is session-independent, enabling timing lines to work across
+            // restarts
             let gps_fix = sensors.gps_parser.last_fix();
             let (ekf_vx, ekf_vy) = estimator.ekf.velocity();
             let lap_flags =
