@@ -9,7 +9,7 @@ import csv
 import math
 from pathlib import Path
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
 @dataclass
 class Sample:
@@ -125,7 +125,7 @@ def analyze_file(filepath: str):
         if prev and s.gps_valid and prev.gps_valid:
             dx = s.gps_local_x - prev.gps_local_x
             dy = s.gps_local_y - prev.gps_local_y
-            s.dist_from_prev = math.sqrt(dx*dx + dy*dy)
+            s.dist_from_prev = math.sqrt(dx * dx + dy * dy)
             s.time_delta_ms = s.timestamp_ms - prev.timestamp_ms
         prev = s
 
@@ -232,7 +232,7 @@ def analyze_file(filepath: str):
     # Check start to end distance using GPS-derived local coords
     start = valid_samples[0]
     end = valid_samples[-1]
-    start_end_dist = math.sqrt((end.gps_local_x - start.gps_local_x)**2 + (end.gps_local_y - start.gps_local_y)**2)
+    start_end_dist = math.sqrt((end.gps_local_x - start.gps_local_x) ** 2 + (end.gps_local_y - start.gps_local_y) ** 2)
     print(f"    GPS Start position: ({start.gps_local_x:.2f}, {start.gps_local_y:.2f})")
     print(f"    GPS End position: ({end.gps_local_x:.2f}, {end.gps_local_y:.2f})")
     print(f"    GPS Start-to-end distance: {start_end_dist:.1f}m")
@@ -244,7 +244,7 @@ def analyze_file(filepath: str):
 
     # If EKF data available, also check EKF-based loop closure
     if has_ekf:
-        ekf_start_end_dist = math.sqrt((end.ekf_x - start.ekf_x)**2 + (end.ekf_y - start.ekf_y)**2)
+        ekf_start_end_dist = math.sqrt((end.ekf_x - start.ekf_x) ** 2 + (end.ekf_y - start.ekf_y) ** 2)
         print(f"\n    EKF Start position: ({start.ekf_x:.2f}, {start.ekf_y:.2f})")
         print(f"    EKF End position: ({end.ekf_x:.2f}, {end.ekf_y:.2f})")
         print(f"    EKF Start-to-end distance: {ekf_start_end_dist:.1f}m")
@@ -276,7 +276,7 @@ def analyze_file(filepath: str):
         # Calculate distance between EKF and GPS positions
         diffs = []
         for s in valid_samples:
-            diff = math.sqrt((s.ekf_x - s.gps_local_x)**2 + (s.ekf_y - s.gps_local_y)**2)
+            diff = math.sqrt((s.ekf_x - s.gps_local_x) ** 2 + (s.ekf_y - s.gps_local_y) ** 2)
             diffs.append((s, diff))
 
         diff_values = [d[1] for d in diffs]
@@ -305,7 +305,7 @@ def analyze_file(filepath: str):
         prev = None
         for i, s in enumerate(valid_samples):
             if prev:
-                ekf_dist = math.sqrt((s.ekf_x - prev.ekf_x)**2 + (s.ekf_y - prev.ekf_y)**2)
+                ekf_dist = math.sqrt((s.ekf_x - prev.ekf_x) ** 2 + (s.ekf_y - prev.ekf_y) ** 2)
                 ekf_jumps.append((i, s, ekf_dist, prev))
             prev = s
 

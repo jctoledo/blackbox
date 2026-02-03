@@ -19,8 +19,8 @@ const N: usize = 7; // State dimension
 /// At 95% confidence: chi2 = 3.84 (rejects 5% of valid measurements)
 const CHI2_GATE_POSITION: f32 = 16.0; // ~4 sigma - reject extreme outliers only
 const CHI2_GATE_YAW: f32 = 12.0; // ~3.5 sigma - account for magnetic interference
-// Note: Velocity gating was removed because it caused runaway filter divergence.
-// GPS velocity is derived from Doppler shift and is very reliable - no gating needed.
+                                 // Note: Velocity gating was removed because it caused runaway filter divergence.
+                                 // GPS velocity is derived from Doppler shift and is very reliable - no gating needed.
 
 /// EKF tuning configuration
 /// Allows runtime adjustment of filter parameters (Open/Closed Principle)
@@ -103,7 +103,6 @@ pub struct Ekf {
     last_moving_yaw: f32,
     /// Whether we have a valid stored yaw from when moving
     has_last_moving_yaw: bool,
-
 }
 
 impl Ekf {
@@ -688,11 +687,7 @@ mod tests {
         }
 
         // Now covariance should be larger (not huge, but growing)
-        assert!(
-            ekf.p[0] > 1.5,
-            "Covariance should grow: {}",
-            ekf.p[0]
-        );
+        assert!(ekf.p[0] > 1.5, "Covariance should grow: {}", ekf.p[0]);
 
         // The key insight: covariance growth allows larger innovations
         // With very high uncertainty, even extreme measurements get accepted
@@ -1170,5 +1165,4 @@ mod tests {
             ekf.x[2]
         );
     }
-
 }

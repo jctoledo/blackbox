@@ -766,7 +766,7 @@ impl HeadingAligner {
             offset: 0.0,
             valid: false,
             update_count: 0,
-            alpha: 0.1, // Start with moderate learning rate
+            alpha: 0.1,     // Start with moderate learning rate
             min_speed: 5.0, // ~18 km/h - GPS course is reliable
             last_gps_course: 0.0,
             time_since_gps: 999.0,

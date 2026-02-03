@@ -280,7 +280,8 @@ impl TimingState {
         let (finish_p1, finish_p2) = finish.endpoints_local();
 
         if self.crossed_start_this_run
-            && line_segment_intersection_f64(prev_finish, pos_finish, finish_p1, finish_p2).is_some()
+            && line_segment_intersection_f64(prev_finish, pos_finish, finish_p1, finish_p2)
+                .is_some()
             && direction_valid(velocity, finish.direction, self.direction_tolerance)
         {
             let lap_time = timestamp_ms.saturating_sub(self.lap_start_ms);
@@ -409,8 +410,14 @@ impl LapTimer {
                 ref start,
                 ref finish,
             } => {
-                self.timing
-                    .check_point_to_point_crossing(prev, pos, velocity, timestamp_ms, start, finish);
+                self.timing.check_point_to_point_crossing(
+                    prev,
+                    pos,
+                    velocity,
+                    timestamp_ms,
+                    start,
+                    finish,
+                );
             }
         }
 
@@ -796,7 +803,10 @@ mod tests {
         let flags = timer.update(0.00005, 0.0, (0.0, 10.0), 60_000, 10.0);
 
         assert!(flags & NEW_LAP != 0, "Should have NEW_LAP flag");
-        assert!(flags & NEW_BEST != 0, "Should have NEW_BEST flag (first lap)");
+        assert!(
+            flags & NEW_BEST != 0,
+            "Should have NEW_BEST flag (first lap)"
+        );
         assert_eq!(timer.lap_count(), 1);
     }
 

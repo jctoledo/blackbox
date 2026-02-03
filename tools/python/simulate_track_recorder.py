@@ -311,7 +311,6 @@ def simulate_track_recording(filepath: str):
         pos = Position(x=x, y=y, speed=speed, heading=heading, lat=lat, lon=lon,
                        timestamp=timestamp, gps_course=gps_course)
         positions.append(pos)
-        prev_pos = pos
 
     if has_gps_course:
         print(f"Using GPS course for heading when valid ({gps_course_used_count}/{len(positions)} samples)")
@@ -360,7 +359,7 @@ def simulate_track_recording(filepath: str):
     # Start/end proximity (key for loop detection)
     start_pos = positions[0]
     end_pos = positions[-1]
-    start_end_dist = math.sqrt((end_pos.x - start_pos.x)**2 + (end_pos.y - start_pos.y)**2)
+    start_end_dist = math.sqrt((end_pos.x - start_pos.x) ** 2 + (end_pos.y - start_pos.y) ** 2)
     print(f"\nStart position: ({start_pos.x:.1f}, {start_pos.y:.1f})")
     print(f"End position: ({end_pos.x:.1f}, {end_pos.y:.1f})")
     print(f"Start-to-end distance: {start_end_dist:.1f} m (threshold: {CLOSE_PROXIMITY} m)")
@@ -368,15 +367,15 @@ def simulate_track_recording(filepath: str):
     # Check if loop should close
     total_dist_raw = 0
     for i in range(1, len(positions)):
-        d = math.sqrt((positions[i].x - positions[i-1].x)**2 +
-                      (positions[i].y - positions[i-1].y)**2)
+        d = math.sqrt((positions[i].x - positions[i-1].x) ** 2 +
+                      (positions[i].y - positions[i-1].y) ** 2)
         total_dist_raw += d
     print(f"Total raw distance: {total_dist_raw:.1f} m (threshold: {MIN_LOOP_DISTANCE} m)")
 
     # Find when we return near start
     print(f"\n--- PROXIMITY TO START OVER TIME ---")
     for i, pos in enumerate(positions):
-        dist_to_start = math.sqrt((pos.x - start_pos.x)**2 + (pos.y - start_pos.y)**2)
+        dist_to_start = math.sqrt((pos.x - start_pos.x) ** 2 + (pos.y - start_pos.y) ** 2)
         if dist_to_start < 50:  # Show when close to start
             print(f"  Sample {i}: dist_to_start={dist_to_start:.1f}m speed={pos.speed:.1f}km/h")
 
@@ -458,21 +457,21 @@ def simulate_track_recording(filepath: str):
     print("\nActual position jumps in CSV data:")
     jumps = []
     for i in range(1, len(positions)):
-        dist = math.sqrt((positions[i].x - positions[i-1].x)**2 +
-                        (positions[i].y - positions[i-1].y)**2)
+        dist = math.sqrt((positions[i].x - positions[i-1].x) ** 2 +
+                        (positions[i].y - positions[i-1].y) ** 2)
         jumps.append((i, dist, positions[i].speed))
 
     # Sort by jump size
     jumps.sort(key=lambda x: x[1], reverse=True)
     print("  Top 10 largest jumps:")
     for idx, (i, dist, speed) in enumerate(jumps[:10]):
-        print(f"    {idx+1}. Sample {i}: {dist:.2f}m at {speed:.1f}km/h")
+        print(f"    {idx + 1}. Sample {i}: {dist:.2f}m at {speed:.1f}km/h")
 
     # Impact on loop detection
     print("\n14Hz Impact on Loop Detection:")
     print(f"  Close proximity threshold: {CLOSE_PROXIMITY}m")
-    print(f"  At 30 km/h (8.3 m/s): {8.3/14:.2f}m between samples")
-    print(f"  At 50 km/h (13.9 m/s): {13.9/14:.2f}m between samples")
+    print(f"  At 30 km/h (8.3 m/s): {8.3 / 14:.2f}m between samples")
+    print(f"  At 50 km/h (13.9 m/s): {13.9 / 14:.2f}m between samples")
     print(f"  -> Even at highway speeds, samples are <1m apart")
     print(f"  -> With 25m proximity threshold, loop should always detect")
 
@@ -480,11 +479,13 @@ def simulate_track_recording(filepath: str):
     print("\nHeading Analysis at End of Recording:")
     for i in range(-10, 0):
         pos = positions[i]
-        dist_to_start = math.sqrt((pos.x - start_pos.x)**2 + (pos.y - start_pos.y)**2)
+        dist_to_start = math.sqrt((pos.x - start_pos.x) ** 2 + (pos.y - start_pos.y) ** 2)
         heading_diff = abs(recorder_new._wrap_angle(pos.heading - recorder_new.start_heading))
         within_prox = "YES" if dist_to_start < CLOSE_PROXIMITY else "no"
         within_head = "YES" if heading_diff < HEADING_TOLERANCE else "no"
-        print(f"  Sample {i}: dist={dist_to_start:.1f}m ({within_prox}) heading_diff={math.degrees(heading_diff):.1f}° ({within_head}) speed={pos.speed:.1f}km/h")
+        print(f"  Sample {i}: dist={dist_to_start:.1f}m ({within_prox}) "
+              f"heading_diff={math.degrees(heading_diff):.1f}° ({within_head}) "
+              f"speed={pos.speed:.1f}km/h")
 
 
 def main():

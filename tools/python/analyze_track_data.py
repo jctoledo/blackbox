@@ -79,7 +79,7 @@ def analyze_csv(filepath):
     for i in range(1, len(positions)):
         x1, y1, s1 = positions[i-1]
         x2, y2, s2 = positions[i]
-        dist = math.sqrt((x2-x1)**2 + (y2-y1)**2)
+        dist = math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
         total_distance += dist
         max_jump = max(max_jump, dist)
 
@@ -105,7 +105,7 @@ def analyze_csv(filepath):
     # Start/end distance (for loop detection)
     start_x, start_y, _ = positions[0]
     end_x, end_y, _ = positions[-1]
-    start_end_dist = math.sqrt((end_x-start_x)**2 + (end_y-start_y)**2)
+    start_end_dist = math.sqrt((end_x - start_x) ** 2 + (end_y - start_y) ** 2)
 
     print(f"\n  Movement Analysis:")
     print(f"    Total distance: {total_distance:.1f} m")
@@ -115,8 +115,8 @@ def analyze_csv(filepath):
     print(f"    Position drift while stationary: {stationary_samples} samples")
 
     print(f"\n  Position Bounds:")
-    print(f"    X range: {min_x:.1f} to {max_x:.1f} m (span: {max_x-min_x:.1f} m)")
-    print(f"    Y range: {min_y:.1f} to {max_y:.1f} m (span: {max_y-min_y:.1f} m)")
+    print(f"    X range: {min_x:.1f} to {max_x:.1f} m (span: {max_x - min_x:.1f} m)")
+    print(f"    Y range: {min_y:.1f} to {max_y:.1f} m (span: {max_y - min_y:.1f} m)")
 
     print(f"\n  Loop Analysis:")
     print(f"    Start to end distance: {start_end_dist:.1f} m")
