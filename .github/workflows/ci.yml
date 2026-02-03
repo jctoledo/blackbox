@@ -230,6 +230,7 @@ jobs:
           cargo espflash save-image \
             --chip esp32c3 \
             --merge \
+            --partition-table ../../partitions.csv \
             --release \
             ../../target/blackbox.bin
           ls -lh ../../target/blackbox.bin
