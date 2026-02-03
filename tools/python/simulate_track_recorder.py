@@ -268,7 +268,6 @@ def simulate_track_recording(filepath: str):
 
     # Convert all valid samples to positions with local coordinates
     positions = []
-    prev_pos = None
     gps_course_used_count = 0
     for i, row in enumerate(rows):
         if row['gps_valid'] != '1':
