@@ -8,8 +8,6 @@ runner = "espflash flash --monitor"
 [env]
 ESP_IDF_SYS_ROOT_CRATE = "blackbox"
 MCU = "esp32c3"
-# Partition table - use relative path from sensors/blackbox
-ESP_IDF_PART_TABLE_FILE = { value = "partitions.csv", relative = true }
 
 [unstable]
 build-std = ["std", "panic_abort"]
