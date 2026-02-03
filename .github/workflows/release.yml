@@ -87,9 +87,11 @@ jobs:
 
           # Generate merged binary that can be flashed directly
           # Note: cargo espflash save-image builds from the project, no input binary needed
+          # --partition-table is required for custom 2.5MB app partition
           cargo espflash save-image \
             --chip esp32c3 \
             --merge \
+            --partition-table ../../partitions.csv \
             --release \
             ../../firmware-output/${{ matrix.project }}.bin
 

@@ -23,12 +23,26 @@
         "operatingSystem": "ESP32-C3",
         "description": "Open-source GPS + IMU sensor fusion firmware for vehicle dynamics tracking with lap timer and mobile dashboard.",
         "url": "https://jctoledo.github.io/blackbox/",
-        "downloadUrl": "https://github.com/jctoledo/blackbox",
-        "softwareVersion": "0.3.0",
-        "dateModified": "2026-01-25",
+        "downloadUrl": "https://github.com/jctoledo/blackbox/releases",
+        "softwareVersion": "0.0.3",
+        "dateModified": "2026-02-02",
         "author": {"@type": "Person", "name": "Jose Cruz Toledo"},
         "license": "https://opensource.org/licenses/MIT",
-        "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}
+        "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"},
+        "screenshot": "https://jctoledo.github.io/blackbox/dashboard-screenshot.jpg",
+        "releaseNotes": "https://github.com/jctoledo/blackbox/releases/tag/v0.0.3",
+        "softwareRequirements": "ESP32-C3, WT901 IMU, u-blox GPS module",
+        "featureList": [
+            "Real-time G-meter with lateral and longitudinal forces",
+            "GPS-based lap timer with delta-to-best display",
+            "7-state Extended Kalman Filter sensor fusion",
+            "200Hz IMU sampling with 25Hz GPS correction",
+            "Mobile dashboard via built-in WiFi AP",
+            "Track recording with circuit and point-to-point modes",
+            "Driving mode detection (IDLE, ACCEL, BRAKE, CORNER)",
+            "Zero-velocity updates for drift elimination"
+        ],
+        "keywords": "vehicle telemetry, lap timer, ESP32, sensor fusion, GPS, IMU, track day, autocross, g-meter"
     }
     </script>
 
