@@ -1,5 +1,3 @@
-#![allow(dead_code)] // API methods for future use
-
 /// Driving mode classifier
 /// Detects IDLE, ACCEL, BRAKE, CORNER, ACCEL+CORNER, and BRAKE+CORNER modes
 /// based on acceleration and yaw rate
@@ -281,18 +279,6 @@ impl ModeClassifier {
         self.v_disp < 0.1 // < 0.36 km/h
     }
 
-    /// Get EMA filtered lateral acceleration (for diagnostics)
-    #[allow(dead_code)]
-    pub fn get_a_lat_ema(&self) -> f32 {
-        self.a_lat_ema
-    }
-
-    /// Get EMA filtered yaw rate (for diagnostics)
-    #[allow(dead_code)]
-    pub fn get_yaw_ema(&self) -> f32 {
-        self.yaw_ema
-    }
-
     /// Update configuration (e.g., from MQTT)
     pub fn update_config(&mut self, config: ModeConfig) {
         self.config = config;
@@ -372,11 +358,6 @@ impl ModeClassifier {
         } else if !self.mode.has_accel() && self.a_lon_ema < self.config.brake_thr {
             self.mode.set_brake(true);
         }
-    }
-
-    /// Get EMA filtered longitudinal acceleration (for diagnostics)
-    pub fn get_a_lon_ema(&self) -> f32 {
-        self.a_lon_ema
     }
 }
 

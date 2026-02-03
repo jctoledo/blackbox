@@ -1,8 +1,26 @@
 /// Extended Kalman Filter for vehicle state estimation
 /// 7-state: [x, y, ψ, vx, vy, bax, bay]
+///
+/// Features:
+/// - CTRA (Constant Turn Rate and Acceleration) motion model at speed
+/// - CA (Constant Acceleration) model when slow/straight
+/// - Innovation gating to reject outlier measurements (prevents position explosion)
+/// - Diagonal covariance approximation for embedded efficiency
 use core::f32::consts::PI;
 
 const N: usize = 7; // State dimension
+
+/// Chi-squared thresholds for innovation gating (1 DOF)
+/// These values determine how many standard deviations a measurement can be
+/// before it's rejected as an outlier.
+///
+/// At 99.5% confidence: chi2 = 7.88 (rejects 0.5% of valid measurements)
+/// At 99% confidence: chi2 = 6.63 (rejects 1% of valid measurements)
+/// At 95% confidence: chi2 = 3.84 (rejects 5% of valid measurements)
+const CHI2_GATE_POSITION: f32 = 16.0; // ~4 sigma - reject extreme outliers only
+const CHI2_GATE_YAW: f32 = 12.0; // ~3.5 sigma - account for magnetic interference
+                                 // Note: Velocity gating was removed because it caused runaway filter divergence.
+                                 // GPS velocity is derived from Doppler shift and is very reliable - no gating needed.
 
 /// EKF tuning configuration
 /// Allows runtime adjustment of filter parameters (Open/Closed Principle)
@@ -36,6 +54,19 @@ impl Default for EkfConfig {
     }
 }
 
+/// Result of a measurement update, indicating whether it was accepted or rejected
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum UpdateResult {
+    /// Measurement was accepted and state was updated
+    Accepted,
+    /// Measurement was rejected due to innovation gating (outlier)
+    Rejected,
+}
+
+/// Minimum position sigma floor (meters)
+/// EKF can't know position better than GPS accuracy (~2-3m for M9N)
+const POS_SIGMA_FLOOR: f32 = 2.5;
+
 /// EKF state and covariance
 pub struct Ekf {
     /// State: [x, y, ψ, vx, vy, bax, bay]
@@ -46,6 +77,32 @@ pub struct Ekf {
 
     /// Filter configuration
     pub config: EkfConfig,
+
+    /// Innovation gating statistics (for diagnostics)
+    pub rejected_position: u32,
+    pub rejected_velocity: u32,
+    pub rejected_yaw: u32,
+    pub accepted_position: u32,
+    pub accepted_velocity: u32,
+    pub accepted_yaw: u32,
+
+    // Issue 3: Innovation tracking for uncertainty estimation
+    /// Sum of normalized innovation squared (NIS) for position updates
+    nis_position_sum: f32,
+    /// Count of position updates for NIS average
+    nis_position_count: u32,
+    /// Last accepted GPS position X (for discrepancy check)
+    last_gps_x: f32,
+    /// Last accepted GPS position Y (for discrepancy check)
+    last_gps_y: f32,
+    /// Whether we have a valid last GPS position
+    has_last_gps: bool,
+
+    // Issue 4: Yaw stabilization when stationary
+    /// Last valid heading before stopping (radians, aligned to GPS course)
+    last_moving_yaw: f32,
+    /// Whether we have a valid stored yaw from when moving
+    has_last_moving_yaw: bool,
 }
 
 impl Ekf {
@@ -58,7 +115,47 @@ impl Ekf {
             x: [0.0; N],
             p: [100.0, 100.0, 100.0, 100.0, 100.0, 1.0, 1.0],
             config,
+            rejected_position: 0,
+            rejected_velocity: 0,
+            rejected_yaw: 0,
+            accepted_position: 0,
+            accepted_velocity: 0,
+            accepted_yaw: 0,
+            // Issue 3: Innovation tracking
+            nis_position_sum: 0.0,
+            nis_position_count: 0,
+            last_gps_x: 0.0,
+            last_gps_y: 0.0,
+            has_last_gps: false,
+            // Issue 4: Yaw stabilization
+            last_moving_yaw: 0.0,
+            has_last_moving_yaw: false,
         }
+    }
+
+    /// Get innovation gating statistics (accepted, rejected) for position
+    pub fn position_gate_stats(&self) -> (u32, u32) {
+        (self.accepted_position, self.rejected_position)
+    }
+
+    /// Get innovation gating statistics (accepted, rejected) for velocity
+    pub fn velocity_gate_stats(&self) -> (u32, u32) {
+        (self.accepted_velocity, self.rejected_velocity)
+    }
+
+    /// Get innovation gating statistics (accepted, rejected) for yaw
+    pub fn yaw_gate_stats(&self) -> (u32, u32) {
+        (self.accepted_yaw, self.rejected_yaw)
+    }
+
+    /// Reset gating statistics (call periodically for rate calculation)
+    pub fn reset_gate_stats(&mut self) {
+        self.rejected_position = 0;
+        self.rejected_velocity = 0;
+        self.rejected_yaw = 0;
+        self.accepted_position = 0;
+        self.accepted_velocity = 0;
+        self.accepted_yaw = 0;
     }
 
     /// Get position (x, y)
@@ -79,6 +176,151 @@ impl Ekf {
     /// Get speed (magnitude of velocity)
     pub fn speed(&self) -> f32 {
         (self.x[3] * self.x[3] + self.x[4] * self.x[4]).sqrt()
+    }
+
+    // ============== Issue 3: Effective Uncertainty Estimation ==============
+
+    /// Get average normalized innovation squared (NIS) for position
+    ///
+    /// NIS should average ~2.0 for 2D position if filter is consistent.
+    /// Values significantly higher indicate model/measurement mismatch.
+    ///
+    /// Returns 2.0 (ideal) if no updates yet.
+    pub fn get_nis_position_avg(&self) -> f32 {
+        if self.nis_position_count > 0 {
+            self.nis_position_sum / self.nis_position_count as f32
+        } else {
+            2.0 // Expected value for 2 DOF
+        }
+    }
+
+    /// Reset NIS statistics (call periodically to track recent performance)
+    pub fn reset_nis_stats(&mut self) {
+        self.nis_position_sum = 0.0;
+        self.nis_position_count = 0;
+    }
+
+    /// Get distance between EKF position and last GPS measurement (meters)
+    ///
+    /// Large discrepancy indicates EKF may have drifted from reality.
+    /// Returns 0.0 if no GPS position stored yet.
+    pub fn get_gps_discrepancy(&self) -> f32 {
+        if self.has_last_gps {
+            let dx = self.x[0] - self.last_gps_x;
+            let dy = self.x[1] - self.last_gps_y;
+            (dx * dx + dy * dy).sqrt()
+        } else {
+            0.0
+        }
+    }
+
+    /// Get effective position sigma that accounts for uncertainty beyond covariance
+    ///
+    /// The raw covariance P may not reflect true uncertainty when:
+    /// - Innovation statistics indicate model mismatch (NIS >> expected)
+    /// - EKF has drifted far from GPS measurements
+    ///
+    /// This method returns an adjusted sigma that:
+    /// 1. Starts with sqrt(P[0] + P[1]) as base
+    /// 2. Inflates based on NIS average (if significantly above expected)
+    /// 3. Inflates based on GPS discrepancy
+    /// 4. Applies minimum floor (GPS can't be more accurate than ~2-3m)
+    pub fn get_effective_pos_sigma(&self) -> f32 {
+        // Base sigma from covariance
+        let base_sigma = (self.p[0] + self.p[1]).sqrt();
+
+        // NIS inflation factor: if NIS is higher than expected, uncertainty is understated
+        // Expected NIS for 2 DOF is ~2.0. If it's 4.0, our uncertainty is 2x understated.
+        let nis_avg = self.get_nis_position_avg();
+        let nis_inflation = if nis_avg > 2.0 {
+            (nis_avg / 2.0).sqrt() // sqrt to convert variance ratio to sigma ratio
+        } else {
+            1.0
+        };
+
+        // GPS discrepancy inflation: if EKF is far from GPS, uncertainty is understated
+        let discrepancy = self.get_gps_discrepancy();
+        let discrepancy_inflation = if discrepancy > 5.0 {
+            // If discrepancy > 5m, add it to sigma (conservative)
+            1.0 + (discrepancy - 5.0) / 10.0
+        } else {
+            1.0
+        };
+
+        // Combine inflations (multiplicative)
+        let inflated_sigma = base_sigma * nis_inflation * discrepancy_inflation;
+
+        // Apply floor: EKF can't know position better than GPS (~2-3m for M9N)
+        inflated_sigma.max(POS_SIGMA_FLOOR)
+    }
+
+    // ============== Issue 4: Yaw Stabilization When Stationary ==============
+
+    /// Store current yaw as the last known heading while moving
+    ///
+    /// Call this while vehicle is moving (before it stops) to remember
+    /// the heading for stabilization when stationary.
+    pub fn store_moving_yaw(&mut self, yaw: f32) {
+        self.last_moving_yaw = yaw;
+        self.has_last_moving_yaw = true;
+    }
+
+    /// Get the last stored yaw from when the vehicle was moving
+    ///
+    /// Returns None if no yaw has been stored yet.
+    pub fn get_last_moving_yaw(&self) -> Option<f32> {
+        if self.has_last_moving_yaw {
+            Some(self.last_moving_yaw)
+        } else {
+            None
+        }
+    }
+
+    /// Lock yaw when stationary - reduces yaw uncertainty to prevent
+    /// magnetometer noise from corrupting heading while parked
+    ///
+    /// Similar to lock_position(), this makes the EKF resistant to
+    /// noisy magnetometer updates when we're confident about heading.
+    ///
+    /// With P_yaw = 0.001 and R_yaw = 0.10, Kalman gain K ≈ 0.01,
+    /// so magnetometer updates only affect yaw by ~1% instead of ~50%.
+    pub fn lock_yaw(&mut self) {
+        self.p[2] = 0.001; // Very confident in current yaw
+    }
+
+    /// Update yaw with soft constraint (higher measurement noise)
+    ///
+    /// Use this when stationary to allow slow yaw updates without
+    /// letting magnetometer noise cause rapid drift.
+    ///
+    /// # Arguments
+    /// * `z_yaw` - Yaw measurement in radians
+    /// * `r_yaw_factor` - Multiplier for measurement noise (>1 = less trust)
+    pub fn update_yaw_soft(&mut self, z_yaw: f32, r_yaw_factor: f32) -> UpdateResult {
+        // Wrap innovation to [-π, π]
+        let dy = wrap_angle(z_yaw - self.x[2]);
+
+        // Use inflated measurement noise
+        let r_yaw = self.config.r_yaw * r_yaw_factor;
+        let s = self.p[2] + r_yaw;
+
+        // Mahalanobis distance squared (1 DOF)
+        let mahal_sq = (dy * dy) / s;
+
+        // Chi-squared gate (same as regular update_yaw)
+        if mahal_sq > CHI2_GATE_YAW {
+            self.rejected_yaw += 1;
+            return UpdateResult::Rejected;
+        }
+
+        // Apply Kalman update with reduced gain due to higher R
+        let k = self.p[2] / s;
+        self.x[2] += k * dy;
+        self.x[2] = wrap_angle(self.x[2]);
+        self.p[2] *= 1.0 - k;
+
+        self.accepted_yaw += 1;
+        UpdateResult::Accepted
     }
 
     /// Get accelerometer biases (bax, bay)
@@ -143,21 +385,65 @@ impl Ekf {
     }
 
     /// Update with GPS position measurement
-    pub fn update_position(&mut self, z_x: f32, z_y: f32) {
-        // X position update
+    ///
+    /// Uses innovation gating (Mahalanobis distance test) to reject outliers.
+    /// This prevents corrupt GPS data from causing position explosion.
+    ///
+    /// Returns UpdateResult::Accepted if measurement was used, Rejected if gated.
+    pub fn update_position(&mut self, z_x: f32, z_y: f32) -> UpdateResult {
+        // Compute innovations (measurement residuals)
+        let y_x = z_x - self.x[0];
+        let y_y = z_y - self.x[1];
+
+        // Innovation covariances (diagonal)
         let s_x = self.p[0] + self.config.r_pos;
+        let s_y = self.p[1] + self.config.r_pos;
+
+        // Mahalanobis distance squared (sum for 2D position)
+        // For diagonal covariance: d² = y_x²/s_x + y_y²/s_y
+        let mahal_sq = (y_x * y_x) / s_x + (y_y * y_y) / s_y;
+
+        // Chi-squared gate: reject if measurement is too far from prediction
+        // For 2 DOF at 99.9% confidence, chi2 ≈ 13.8
+        // Using sum of individual 1-DOF tests with CHI2_GATE_POSITION each
+        if mahal_sq > CHI2_GATE_POSITION * 2.0 {
+            self.rejected_position += 1;
+            return UpdateResult::Rejected;
+        }
+
+        // Issue 3: Track normalized innovation squared (NIS) for uncertainty estimation
+        // NIS = innovation² / S, should average ~1.0 if filter is consistent
+        // High NIS average indicates model/measurement mismatch
+        self.nis_position_sum += mahal_sq;
+        self.nis_position_count += 1;
+
+        // Store GPS position for discrepancy checking
+        self.last_gps_x = z_x;
+        self.last_gps_y = z_y;
+        self.has_last_gps = true;
+
+        // Measurement passed gating - apply standard Kalman update
         let k_x = self.p[0] / s_x;
-        self.x[0] += k_x * (z_x - self.x[0]);
+        self.x[0] += k_x * y_x;
         self.p[0] *= 1.0 - k_x;
 
-        // Y position update
-        let s_y = self.p[1] + self.config.r_pos;
         let k_y = self.p[1] / s_y;
-        self.x[1] += k_y * (z_y - self.x[1]);
+        self.x[1] += k_y * y_y;
         self.p[1] *= 1.0 - k_y;
+
+        self.accepted_position += 1;
+        UpdateResult::Accepted
     }
 
     /// Update with GPS velocity measurement
+    ///
+    /// GPS velocity is always accepted (no innovation gating).
+    /// Unlike position (which can have multipath errors) or yaw (magnetic interference),
+    /// GPS velocity is derived from Doppler shift and is very reliable.
+    ///
+    /// Innovation gating on velocity was removed because it caused runaway filter
+    /// divergence: once IMU integration error caused velocity to drift past the gate
+    /// threshold, ALL subsequent GPS updates were rejected, making recovery impossible.
     pub fn update_velocity(&mut self, z_vx: f32, z_vy: f32) {
         // VX update
         let s_x = self.p[3] + self.config.r_vel;
@@ -170,9 +456,14 @@ impl Ekf {
         let k_y = self.p[4] / s_y;
         self.x[4] += k_y * (z_vy - self.x[4]);
         self.p[4] *= 1.0 - k_y;
+
+        self.accepted_velocity += 1;
     }
 
     /// Update with scalar speed measurement
+    ///
+    /// GPS speed is always accepted (no innovation gating) for the same reason
+    /// as velocity: gating caused runaway filter divergence.
     pub fn update_speed(&mut self, z_speed: f32) {
         let r_spd = if z_speed < 0.3 { 0.20 } else { 0.04 }; // Adaptive R
 
@@ -185,12 +476,12 @@ impl Ekf {
         // Innovation covariance
         let s = h_x * h_x * self.p[3] + h_y * h_y * self.p[4] + r_spd;
 
+        // Innovation
+        let y = z_speed - v_est;
+
         // Kalman gains
         let k_x = self.p[3] * h_x / s;
         let k_y = self.p[4] * h_y / s;
-
-        // Innovation
-        let y = z_speed - v_est;
 
         // Update
         self.x[3] += k_x * y;
@@ -200,16 +491,35 @@ impl Ekf {
     }
 
     /// Update with IMU yaw measurement (from magnetometer)
-    pub fn update_yaw(&mut self, z_yaw: f32) {
+    ///
+    /// Uses innovation gating to reject outliers (e.g., magnetic interference).
+    /// Note: Innovation is wrapped to [-π, π] before gating.
+    ///
+    /// Returns UpdateResult::Accepted if measurement was used, Rejected if gated.
+    pub fn update_yaw(&mut self, z_yaw: f32) -> UpdateResult {
         // Wrap innovation to [-π, π]
         let dy = wrap_angle(z_yaw - self.x[2]);
 
+        // Innovation covariance
         let s = self.p[2] + self.config.r_yaw;
-        let k = self.p[2] / s;
 
+        // Mahalanobis distance squared (1 DOF)
+        let mahal_sq = (dy * dy) / s;
+
+        // Chi-squared gate
+        if mahal_sq > CHI2_GATE_YAW {
+            self.rejected_yaw += 1;
+            return UpdateResult::Rejected;
+        }
+
+        // Apply Kalman update
+        let k = self.p[2] / s;
         self.x[2] += k * dy;
         self.x[2] = wrap_angle(self.x[2]);
         self.p[2] *= 1.0 - k;
+
+        self.accepted_yaw += 1;
+        UpdateResult::Accepted
     }
 
     /// Update accelerometer biases when stationary
@@ -230,9 +540,51 @@ impl Ekf {
     }
 
     /// Zero-velocity update (ZUPT) - force velocity to zero
+    ///
+    /// ZUPT bypasses innovation gating because we have high confidence
+    /// the vehicle is stationary (verified by multiple sensors).
+    /// If the EKF has drifted, ZUPT is the mechanism to recover.
+    ///
+    /// Note: We use moderate covariance (2.0) rather than tiny values (0.01)
+    /// because when the vehicle starts moving again, we need to accept GPS
+    /// velocity updates. With P=0.01 and R=0.2, a 5 m/s GPS velocity would
+    /// have Mahalanobis² = 25/0.21 ≈ 119, which exceeds the gate threshold
+    /// of 18 and gets rejected. P=2.0 allows velocities up to ~6 m/s (22 km/h)
+    /// to be accepted on the first update after stopping.
     pub fn zupt(&mut self) {
-        self.update_velocity(0.0, 0.0);
-        self.update_speed(0.0);
+        // Force velocity to zero without gating
+        // This is intentional - ZUPT is a recovery mechanism
+        self.x[3] = 0.0;
+        self.x[4] = 0.0;
+
+        // Use moderate covariance to allow subsequent GPS updates to be accepted
+        // P=2.0 gives s=2.2, allowing v² < 18*2.2 = 39.6, so v < 6.3 m/s (23 km/h)
+        self.p[3] = 2.0;
+        self.p[4] = 2.0;
+    }
+
+    /// Lock position when stationary - reduces position uncertainty to make EKF
+    /// resistant to GPS noise. This prevents phantom movement while parked.
+    ///
+    /// We use moderate covariance (1.0) rather than tiny values (0.01) because
+    /// when the car starts moving again, we need to accept GPS position updates.
+    /// With P=0.01 and R=20, K=0.0005 means a 10m error takes ~8 seconds to correct.
+    /// With P=1.0 and R=20, K=0.048 means a 10m error corrects in ~0.8 seconds.
+    ///
+    /// GPS noise (±2-3m) with P=1.0 causes ~0.1-0.15m position drift per update,
+    /// which is acceptable for a parked vehicle.
+    pub fn lock_position(&mut self) {
+        self.p[0] = 1.0;
+        self.p[1] = 1.0;
+    }
+
+    /// Skip IMU prediction (use when stationary to prevent drift)
+    /// Call this instead of predict() when vehicle is known to be stationary.
+    pub fn skip_prediction(&mut self) {
+        // Do nothing - position and velocity stay constant
+        // Covariance grows very slightly to allow eventual GPS correction
+        self.p[0] += 1e-6;
+        self.p[1] += 1e-6;
     }
 }
 
@@ -270,5 +622,547 @@ mod tests {
         assert!((wrap_angle(0.0) - 0.0).abs() < 0.001);
         assert!((wrap_angle(4.0 * PI) - 0.0).abs() < 0.001);
         assert!((wrap_angle(PI + 0.1) - (-PI + 0.1)).abs() < 0.001);
+    }
+
+    // ========== Innovation Gating Tests ==========
+
+    #[test]
+    fn test_position_gating_accepts_reasonable_measurement() {
+        let mut ekf = Ekf::new();
+        // Initialize at origin with some uncertainty
+        ekf.x[0] = 0.0;
+        ekf.x[1] = 0.0;
+        ekf.p[0] = 10.0; // 10m² variance = ~3m std dev
+        ekf.p[1] = 10.0;
+
+        // Measurement within ~3 sigma (sqrt(10+20) = 5.5m std dev)
+        // 5m is within reasonable range
+        let result = ekf.update_position(5.0, 5.0);
+
+        assert_eq!(result, UpdateResult::Accepted);
+        assert!(ekf.x[0] > 0.0); // State should have moved toward measurement
+        assert!(ekf.x[1] > 0.0);
+        assert_eq!(ekf.accepted_position, 1);
+        assert_eq!(ekf.rejected_position, 0);
+    }
+
+    #[test]
+    fn test_position_gating_rejects_extreme_outlier() {
+        let mut ekf = Ekf::new();
+        // Initialize at origin with tight uncertainty
+        ekf.x[0] = 0.0;
+        ekf.x[1] = 0.0;
+        ekf.p[0] = 1.0; // 1m² variance = 1m std dev
+        ekf.p[1] = 1.0;
+
+        // Extreme outlier: 1000m away when EKF thinks we're at origin with 1m uncertainty
+        // Mahalanobis: (1000² / (1+20)) = 47619 >> threshold
+        let result = ekf.update_position(1000.0, 1000.0);
+
+        assert_eq!(result, UpdateResult::Rejected);
+        // State should NOT have moved
+        assert!((ekf.x[0] - 0.0).abs() < 0.001);
+        assert!((ekf.x[1] - 0.0).abs() < 0.001);
+        assert_eq!(ekf.accepted_position, 0);
+        assert_eq!(ekf.rejected_position, 1);
+    }
+
+    #[test]
+    fn test_position_gating_accepts_after_covariance_grows() {
+        let mut ekf = Ekf::new();
+        ekf.x[0] = 0.0;
+        ekf.x[1] = 0.0;
+        ekf.p[0] = 1.0;
+        ekf.p[1] = 1.0;
+
+        // First: 100m measurement rejected when uncertainty is low
+        let result1 = ekf.update_position(100.0, 100.0);
+        assert_eq!(result1, UpdateResult::Rejected);
+
+        // Simulate many prediction steps that grow covariance
+        // qx = 0.25 * q_acc * dt² = 0.25 * 0.40 * 0.01 = 0.001 per step
+        // After 1000 steps: P grows by ~1.0
+        for _ in 0..1000 {
+            ekf.predict(0.0, 0.0, 0.0, 0.1);
+        }
+
+        // Now covariance should be larger (not huge, but growing)
+        assert!(ekf.p[0] > 1.5, "Covariance should grow: {}", ekf.p[0]);
+
+        // The key insight: covariance growth allows larger innovations
+        // With very high uncertainty, even extreme measurements get accepted
+        // Let's verify by setting high uncertainty manually
+        ekf.p[0] = 10000.0; // Very uncertain
+        ekf.p[1] = 10000.0;
+        let result2 = ekf.update_position(100.0, 100.0);
+        assert_eq!(
+            result2,
+            UpdateResult::Accepted,
+            "Should accept when uncertainty is high"
+        );
+    }
+
+    #[test]
+    fn test_velocity_update_always_accepted() {
+        let mut ekf = Ekf::new();
+        ekf.x[3] = 10.0; // Moving at 10 m/s
+        ekf.x[4] = 0.0;
+        ekf.p[3] = 1.0;
+        ekf.p[4] = 1.0;
+
+        // Velocity update should always be accepted (no gating)
+        ekf.update_velocity(11.0, 1.0);
+
+        assert_eq!(ekf.accepted_velocity, 1);
+        // Velocity should have moved toward measurement
+        assert!(ekf.x[3] > 10.0);
+    }
+
+    #[test]
+    fn test_velocity_update_even_large_jumps() {
+        // Velocity gating was removed because it caused runaway filter divergence.
+        // Even large velocity jumps should be accepted - GPS velocity is reliable.
+        let mut ekf = Ekf::new();
+        ekf.x[3] = 10.0;
+        ekf.x[4] = 0.0;
+        ekf.p[3] = 0.1;
+        ekf.p[4] = 0.1;
+
+        // Large velocity change - should still be accepted
+        ekf.update_velocity(30.0, 0.0);
+
+        // Velocity should move toward measurement
+        assert!(ekf.x[3] > 10.0);
+        assert_eq!(ekf.accepted_velocity, 1);
+    }
+
+    #[test]
+    fn test_yaw_gating_accepts_small_correction() {
+        let mut ekf = Ekf::new();
+        ekf.x[2] = 0.0; // Facing east
+        ekf.p[2] = 0.1; // ~18° std dev
+
+        // Small yaw correction (10°)
+        let result = ekf.update_yaw(0.17); // ~10°
+
+        assert_eq!(result, UpdateResult::Accepted);
+        assert!(ekf.x[2] > 0.0); // Yaw moved toward measurement
+    }
+
+    #[test]
+    fn test_yaw_gating_rejects_magnetic_spike() {
+        let mut ekf = Ekf::new();
+        ekf.x[2] = 0.0;
+        ekf.p[2] = 0.01; // Very confident
+
+        // Sudden 180° flip (magnetic interference near metal)
+        let result = ekf.update_yaw(PI);
+
+        assert_eq!(result, UpdateResult::Rejected);
+        // Yaw should NOT have flipped
+        assert!(ekf.x[2].abs() < 0.1);
+        assert_eq!(ekf.rejected_yaw, 1);
+    }
+
+    #[test]
+    fn test_zupt_bypasses_gating() {
+        let mut ekf = Ekf::new();
+        // EKF thinks we're moving fast
+        ekf.x[3] = 50.0; // 50 m/s
+        ekf.x[4] = 50.0;
+        ekf.p[3] = 0.01; // Very confident (incorrectly)
+        ekf.p[4] = 0.01;
+
+        // ZUPT should FORCE velocity to zero regardless of gating
+        ekf.zupt();
+
+        assert!((ekf.x[3] - 0.0).abs() < 0.001);
+        assert!((ekf.x[4] - 0.0).abs() < 0.001);
+        // Covariance should be reset to moderate value (2.0) that allows
+        // subsequent GPS velocity updates to be accepted
+        assert!((ekf.p[3] - 2.0).abs() < 0.1);
+        assert!((ekf.p[4] - 2.0).abs() < 0.1);
+    }
+
+    #[test]
+    fn test_gating_stats_reset() {
+        let mut ekf = Ekf::new();
+        ekf.p[0] = 0.1;
+        ekf.p[1] = 0.1;
+
+        // Generate some rejections
+        ekf.update_position(1000.0, 1000.0);
+        ekf.update_position(1000.0, 1000.0);
+        assert_eq!(ekf.rejected_position, 2);
+
+        // Reset stats
+        ekf.reset_gate_stats();
+        assert_eq!(ekf.rejected_position, 0);
+        assert_eq!(ekf.accepted_position, 0);
+    }
+
+    #[test]
+    fn test_speed_update_always_accepted() {
+        // Speed gating was removed for same reason as velocity gating
+        let mut ekf = Ekf::new();
+        ekf.x[3] = 10.0;
+        ekf.x[4] = 0.0;
+        ekf.p[3] = 1.0;
+        ekf.p[4] = 1.0;
+
+        // Speed update should always be accepted
+        ekf.update_speed(15.0);
+
+        // Speed should move toward measurement
+        assert!(ekf.speed() > 10.0);
+    }
+
+    // ========== Issue 3: Effective Uncertainty Tests ==========
+
+    #[test]
+    fn test_nis_tracking() {
+        let mut ekf = Ekf::new();
+        ekf.x[0] = 0.0;
+        ekf.x[1] = 0.0;
+        ekf.p[0] = 10.0;
+        ekf.p[1] = 10.0;
+
+        // Initial NIS average should be 2.0 (expected for 2 DOF)
+        assert!((ekf.get_nis_position_avg() - 2.0).abs() < 0.01);
+
+        // Accept a measurement - NIS should be tracked
+        ekf.update_position(2.0, 2.0);
+        assert_eq!(ekf.nis_position_count, 1);
+
+        // NIS for this measurement: (2² + 2²) / (10+20) / 2 per dim
+        // Should be small since measurement is close
+        assert!(ekf.get_nis_position_avg() < 1.0);
+    }
+
+    #[test]
+    fn test_nis_reset() {
+        let mut ekf = Ekf::new();
+        ekf.p[0] = 10.0;
+        ekf.p[1] = 10.0;
+
+        ekf.update_position(1.0, 1.0);
+        ekf.update_position(2.0, 2.0);
+        assert_eq!(ekf.nis_position_count, 2);
+
+        ekf.reset_nis_stats();
+        assert_eq!(ekf.nis_position_count, 0);
+        assert!((ekf.get_nis_position_avg() - 2.0).abs() < 0.01); // Back to default
+    }
+
+    #[test]
+    fn test_gps_discrepancy() {
+        let mut ekf = Ekf::new();
+        ekf.x[0] = 0.0;
+        ekf.x[1] = 0.0;
+        ekf.p[0] = 100.0;
+        ekf.p[1] = 100.0;
+
+        // No GPS yet - discrepancy should be 0
+        assert!((ekf.get_gps_discrepancy() - 0.0).abs() < 0.01);
+
+        // Accept GPS at (10, 0)
+        ekf.update_position(10.0, 0.0);
+
+        // EKF should have moved toward GPS, but discrepancy should be low
+        assert!(ekf.get_gps_discrepancy() < 2.0);
+
+        // Now simulate EKF drift: manually set EKF position far from last GPS
+        ekf.x[0] = 50.0;
+        ekf.x[1] = 0.0;
+
+        // Discrepancy should now be ~40m (50 - 10)
+        let discrepancy = ekf.get_gps_discrepancy();
+        assert!(
+            discrepancy > 35.0 && discrepancy < 45.0,
+            "Discrepancy should be ~40m, got {}",
+            discrepancy
+        );
+    }
+
+    #[test]
+    fn test_effective_pos_sigma_floor() {
+        let mut ekf = Ekf::new();
+        // Very confident EKF (low covariance)
+        ekf.p[0] = 0.01;
+        ekf.p[1] = 0.01;
+
+        // Even with low covariance, effective sigma should have floor
+        let sigma = ekf.get_effective_pos_sigma();
+        assert!(
+            sigma >= POS_SIGMA_FLOOR,
+            "Sigma {} should be >= floor {}",
+            sigma,
+            POS_SIGMA_FLOOR
+        );
+    }
+
+    #[test]
+    fn test_effective_pos_sigma_inflates_with_discrepancy() {
+        let mut ekf = Ekf::new();
+        ekf.p[0] = 10.0;
+        ekf.p[1] = 10.0;
+
+        // Accept GPS at origin
+        ekf.update_position(0.0, 0.0);
+        let sigma_no_discrepancy = ekf.get_effective_pos_sigma();
+
+        // Simulate drift: move EKF far from last GPS
+        ekf.x[0] = 20.0;
+        ekf.x[1] = 0.0;
+
+        let sigma_with_discrepancy = ekf.get_effective_pos_sigma();
+        assert!(
+            sigma_with_discrepancy > sigma_no_discrepancy,
+            "Sigma should inflate with discrepancy: {} > {}",
+            sigma_with_discrepancy,
+            sigma_no_discrepancy
+        );
+    }
+
+    // ========== Issue 4: Yaw Stabilization Tests ==========
+
+    #[test]
+    fn test_store_moving_yaw() {
+        let mut ekf = Ekf::new();
+
+        // Initially no stored yaw
+        assert!(ekf.get_last_moving_yaw().is_none());
+
+        // Store yaw
+        ekf.store_moving_yaw(1.5);
+        assert!(ekf.get_last_moving_yaw().is_some());
+        assert!((ekf.get_last_moving_yaw().unwrap() - 1.5).abs() < 0.01);
+
+        // Update stored yaw
+        ekf.store_moving_yaw(2.0);
+        assert!((ekf.get_last_moving_yaw().unwrap() - 2.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_lock_yaw_reduces_sensitivity() {
+        let mut ekf = Ekf::new();
+        ekf.x[2] = 0.5; // Current yaw
+        ekf.p[2] = 0.1; // Normal uncertainty
+
+        // Normal yaw update
+        let yaw_before = ekf.x[2];
+        ekf.update_yaw(1.0);
+        let change_normal = (ekf.x[2] - yaw_before).abs();
+
+        // Reset
+        ekf.x[2] = 0.5;
+        ekf.p[2] = 0.1;
+
+        // Lock yaw then update
+        ekf.lock_yaw();
+        let yaw_before_locked = ekf.x[2];
+        ekf.update_yaw(1.0);
+        let change_locked = (ekf.x[2] - yaw_before_locked).abs();
+
+        // Locked update should have much smaller effect
+        assert!(
+            change_locked < change_normal * 0.1,
+            "Locked change {} should be << normal change {}",
+            change_locked,
+            change_normal
+        );
+    }
+
+    #[test]
+    fn test_update_yaw_soft() {
+        let mut ekf = Ekf::new();
+        ekf.x[2] = 0.0;
+        ekf.p[2] = 0.1;
+
+        // Soft update with 10x noise factor
+        let yaw_before = ekf.x[2];
+        ekf.update_yaw_soft(0.5, 10.0);
+        let change_soft = (ekf.x[2] - yaw_before).abs();
+
+        // Reset
+        ekf.x[2] = 0.0;
+        ekf.p[2] = 0.1;
+
+        // Normal update
+        let yaw_before_normal = ekf.x[2];
+        ekf.update_yaw(0.5);
+        let change_normal = (ekf.x[2] - yaw_before_normal).abs();
+
+        // Soft update should have smaller effect
+        assert!(
+            change_soft < change_normal,
+            "Soft change {} should be < normal change {}",
+            change_soft,
+            change_normal
+        );
+    }
+
+    // ========== Predict Step Tests ==========
+
+    #[test]
+    fn test_predict_ca_model_straight_line() {
+        // Test constant acceleration model with known inputs
+        // Vehicle moving East at 10 m/s, no acceleration, no turn rate
+        let mut ekf = Ekf::new();
+        ekf.x[0] = 0.0; // x position
+        ekf.x[1] = 0.0; // y position
+        ekf.x[2] = 0.0; // yaw (facing East)
+        ekf.x[3] = 10.0; // vx = 10 m/s East
+        ekf.x[4] = 0.0; // vy = 0
+
+        let dt = 0.1; // 100ms
+        ekf.predict(0.0, 0.0, 0.0, dt);
+
+        // After 100ms at 10 m/s: x should move 1.0m East
+        assert!(
+            (ekf.x[0] - 1.0).abs() < 0.01,
+            "x should be ~1.0m, got {}",
+            ekf.x[0]
+        );
+        assert!(ekf.x[1].abs() < 0.01, "y should be ~0, got {}", ekf.x[1]);
+        // Velocity unchanged (no acceleration)
+        assert!(
+            (ekf.x[3] - 10.0).abs() < 0.01,
+            "vx should be ~10, got {}",
+            ekf.x[3]
+        );
+    }
+
+    #[test]
+    fn test_predict_ca_model_with_acceleration() {
+        // Test CA model with forward acceleration
+        // Starting stationary, accelerating at 2 m/s²
+        let mut ekf = Ekf::new();
+        ekf.x[0] = 0.0;
+        ekf.x[1] = 0.0;
+        ekf.x[2] = 0.0; // Facing East
+        ekf.x[3] = 0.0; // Initially stationary
+        ekf.x[4] = 0.0;
+
+        let ax = 2.0; // 2 m/s² acceleration in Earth frame X (East)
+        let dt = 1.0; // 1 second
+
+        ekf.predict(ax, 0.0, 0.0, dt);
+
+        // x = 0.5 * a * t² = 0.5 * 2 * 1 = 1.0m
+        // vx = a * t = 2 * 1 = 2.0 m/s
+        assert!(
+            (ekf.x[0] - 1.0).abs() < 0.1,
+            "x should be ~1.0m, got {}",
+            ekf.x[0]
+        );
+        assert!(
+            (ekf.x[3] - 2.0).abs() < 0.1,
+            "vx should be ~2.0 m/s, got {}",
+            ekf.x[3]
+        );
+    }
+
+    #[test]
+    fn test_predict_ctra_model_circular_motion() {
+        // Test CTRA model: vehicle in circular turn
+        // Moving at 10 m/s with 0.5 rad/s turn rate (constant speed turn)
+        let mut ekf = Ekf::new();
+        ekf.x[0] = 0.0;
+        ekf.x[1] = 0.0;
+        ekf.x[2] = 0.0; // Yaw = 0 (facing +X)
+        ekf.x[3] = 10.0; // vx = 10 m/s
+        ekf.x[4] = 0.0; // vy = 0
+
+        let wz = 0.5; // 0.5 rad/s turn rate (~28.6 deg/s)
+        let dt = 0.1;
+
+        // With CTRA: position follows circular arc, not straight line
+        ekf.predict(0.0, 0.0, wz, dt);
+
+        // Yaw should increase by wz * dt = 0.05 rad
+        assert!(
+            (ekf.x[2] - 0.05).abs() < 0.01,
+            "yaw should be ~0.05 rad, got {}",
+            ekf.x[2]
+        );
+
+        // Position should follow arc, not straight line
+        // For small dt, x ≈ v*dt ≈ 1.0m (approximately)
+        assert!(
+            ekf.x[0] > 0.9 && ekf.x[0] < 1.1,
+            "x should be ~1.0m, got {}",
+            ekf.x[0]
+        );
+        // Y should be small but non-zero (turning)
+        assert!(
+            ekf.x[1].abs() < 0.1,
+            "y should be small during turn start, got {}",
+            ekf.x[1]
+        );
+    }
+
+    #[test]
+    fn test_predict_covariance_grows() {
+        let mut ekf = Ekf::new();
+        ekf.p = [1.0, 1.0, 0.1, 0.5, 0.5, 0.01, 0.01];
+
+        let p_before = ekf.p.clone();
+
+        ekf.predict(0.0, 0.0, 0.0, 0.1);
+
+        // All covariances should grow (or stay same for biases)
+        assert!(ekf.p[0] > p_before[0], "P[x] should grow");
+        assert!(ekf.p[1] > p_before[1], "P[y] should grow");
+        assert!(ekf.p[2] > p_before[2], "P[yaw] should grow");
+        assert!(ekf.p[3] > p_before[3], "P[vx] should grow");
+        assert!(ekf.p[4] > p_before[4], "P[vy] should grow");
+        assert!(ekf.p[5] > p_before[5], "P[bax] should grow");
+        assert!(ekf.p[6] > p_before[6], "P[bay] should grow");
+    }
+
+    #[test]
+    fn test_predict_bias_subtraction() {
+        // Test that biases are subtracted from acceleration
+        let mut ekf = Ekf::new();
+        ekf.x[5] = 0.5; // X bias = 0.5 m/s²
+        ekf.x[6] = -0.3; // Y bias = -0.3 m/s²
+
+        // Apply "measured" acceleration that equals the bias
+        // Effective acceleration should be zero
+        let dt = 1.0;
+        ekf.predict(0.5, -0.3, 0.0, dt);
+
+        // With zero effective acceleration, velocity should not change
+        assert!(
+            ekf.x[3].abs() < 0.1,
+            "vx should be ~0 (bias cancelled), got {}",
+            ekf.x[3]
+        );
+        assert!(
+            ekf.x[4].abs() < 0.1,
+            "vy should be ~0 (bias cancelled), got {}",
+            ekf.x[4]
+        );
+    }
+
+    #[test]
+    fn test_predict_yaw_wrapping() {
+        // Test that yaw wraps correctly around ±π
+        let mut ekf = Ekf::new();
+        ekf.x[2] = 3.0; // Near +π
+        ekf.x[3] = 1.0; // Slow speed to force CA model
+
+        // Turn for enough time to wrap past π
+        for _ in 0..100 {
+            ekf.predict(0.0, 0.0, 0.1, 0.1); // 0.1 rad/s * 100 * 0.1s = 1.0 rad
+        }
+
+        // Yaw should be wrapped to [-π, π]
+        assert!(
+            ekf.x[2] >= -PI && ekf.x[2] <= PI,
+            "yaw should be in [-π, π], got {}",
+            ekf.x[2]
+        );
     }
 }

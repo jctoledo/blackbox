@@ -29,9 +29,10 @@ use log::info;
 use mqtt::MqttClient;
 use rgb_led::RgbLed;
 use sensor_fusion::transforms::{body_to_earth, remove_gravity}; // Used for EKF prediction
+use sensor_fusion::{LapTimer, TimingLine};
 use system::{SensorManager, StateEstimator, StatusManager, TelemetryPublisher};
 use udp_stream::UdpTelemetryStream;
-use websocket_server::{TelemetryServer, TelemetryServerState};
+use websocket_server::{LapTimerConfig, TelemetryServer, TelemetryServerState};
 use wifi::WifiManager;
 
 fn main() {
@@ -446,6 +447,9 @@ fn main() {
     let mut estimator = StateEstimator::new();
     let mut publisher = TelemetryPublisher::new(udp_stream, mqtt_opt, telemetry_state.clone());
 
+    // Create lap timer (configured via HTTP API)
+    let mut lap_timer = LapTimer::new();
+
     // Create sensor fusion for mode detection
     //
     // Uses GPS-corrected orientation (ArduPilot-style approach):
@@ -541,6 +545,52 @@ fn main() {
                 }
                 status_mgr.led_mut().set_low().unwrap();
             }
+
+            // Check for lap timer config changes from web UI
+            if let Some(config) = state.take_lap_timer_config() {
+                match config {
+                    LapTimerConfig::None => {
+                        lap_timer.clear();
+                        info!(">>> Lap timer cleared");
+                    }
+                    LapTimerConfig::Loop(line) => {
+                        lap_timer.configure_loop(TimingLine::new(
+                            line.p1_lat,
+                            line.p1_lon,
+                            line.p2_lat,
+                            line.p2_lon,
+                            line.direction,
+                        ));
+                        info!(
+                            ">>> Lap timer configured: loop track, line ({:.6},{:.6})-({:.6},{:.6})",
+                            line.p1_lat, line.p1_lon, line.p2_lat, line.p2_lon
+                        );
+                    }
+                    LapTimerConfig::PointToPoint { start, finish } => {
+                        lap_timer.configure_point_to_point(
+                            TimingLine::new(
+                                start.p1_lat,
+                                start.p1_lon,
+                                start.p2_lat,
+                                start.p2_lon,
+                                start.direction,
+                            ),
+                            TimingLine::new(
+                                finish.p1_lat,
+                                finish.p1_lon,
+                                finish.p2_lat,
+                                finish.p2_lon,
+                                finish.direction,
+                            ),
+                        );
+                        info!(
+                            ">>> Lap timer configured: point-to-point, start ({:.6},{:.6})-({:.6},{:.6}), finish ({:.6},{:.6})-({:.6},{:.6})",
+                            start.p1_lat, start.p1_lon, start.p2_lat, start.p2_lon,
+                            finish.p1_lat, finish.p1_lon, finish.p2_lat, finish.p2_lon
+                        );
+                    }
+                }
+            }
         }
 
         // Periodic diagnostics (serial log every 5s)
@@ -571,38 +621,21 @@ fn main() {
                 estimator.ekf.x[6], // bias_y
             );
 
-            // GPS health
+            // GPS health (includes GPS reference point for lap timer coordinate alignment)
             let gps_fix = sensors.gps_parser.last_fix();
+            let gps_ref = sensors.gps_parser.reference();
             diagnostics.update_gps(
                 gps_fix.valid,
                 sensors.gps_parser.is_warmed_up(),
                 gps_fix.satellites,
                 gps_fix.hdop,
                 gps_fix.pdop,
+                gps_ref.lat,
+                gps_ref.lon,
             );
 
-            // Fusion diagnostics (filter pipeline, GPS blending, calibrators)
-            let (tilt_x, tilt_y, tilt_valid) = sensor_fusion.get_tilt_offsets();
-            let (pitch_corr, roll_corr) = sensor_fusion.get_orientation_correction();
-            let (pitch_conf, roll_conf) = sensor_fusion.get_orientation_confidence();
-            diagnostics.update_fusion(FusionDiagnostics {
-                lon_imu_raw: sensor_fusion.get_lon_imu_raw(),
-                lon_imu_filtered: sensor_fusion.get_lon_imu_filtered(),
-                lon_blended: sensor_fusion.get_lon_blended(),
-                gps_weight: sensor_fusion.get_last_gps_weight(),
-                gps_accel: sensor_fusion.get_gps_accel(),
-                gps_rate: sensor_fusion.get_gps_rate(),
-                gps_rejected: sensor_fusion.is_gps_rejected(),
-                pitch_correction_deg: pitch_corr,
-                roll_correction_deg: roll_corr,
-                pitch_confidence: pitch_conf,
-                roll_confidence: roll_conf,
-                yaw_bias: sensor_fusion.yaw_rate_calibrator.get_bias(),
-                yaw_calibrated: sensor_fusion.yaw_rate_calibrator.is_valid(),
-                tilt_offset_x: tilt_x,
-                tilt_offset_y: tilt_y,
-                tilt_valid,
-            });
+            // Note: Fusion diagnostics now updated at telemetry rate (see telemetry block)
+            // for synchronized CSV export data
 
             publisher.reset_stats();
             loop_count = 0;
@@ -759,14 +792,24 @@ fn main() {
             if sensors.gps_parser.is_warmed_up() && sensors.gps_parser.last_fix().valid {
                 let (ax_corr, ay_corr, _) = sensors.imu_parser.get_accel_corrected();
 
-                // Update position from GPS (only when fix is valid)
+                // Always update position from GPS first (even when stationary)
+                // This prevents EKF from diverging during extended stops
                 if let Some((x, y)) = sensors.gps_parser.to_local_coords() {
-                    estimator.update_position(x, y);
+                    let (ekf_x, ekf_y) = estimator.ekf.position();
+                    let jump_dist = ((x - ekf_x).powi(2) + (y - ekf_y).powi(2)).sqrt();
+                    if jump_dist < 1000.0 {
+                        estimator.update_position(x, y);
+                    }
                 }
 
+                // Check stationary FIRST - if stopped, lock position to prevent GPS noise
                 if sensors.is_stationary(ax_corr, ay_corr, sensors.imu_parser.data().wz) {
                     // Vehicle stopped - perform ZUPT and bias estimation
                     estimator.zupt();
+                    estimator.ekf.lock_position(); // Reduce position covariance
+                                                   // Issue 4: Lock yaw to prevent magnetometer noise from drifting heading
+                                                   // Magnetometer updates still occur but with very low gain (~1%)
+                    estimator.ekf.lock_yaw();
                     diagnostics.record_zupt();
 
                     let (ax_b, ay_b, _) = remove_gravity(
@@ -786,13 +829,40 @@ fn main() {
                     );
                     estimator.update_bias(ax_e, ay_e);
                     estimator.reset_speed();
+                } else {
+                    // Issue 4: Store current aligned heading while moving
+                    // This preserves heading for when we stop
+                    estimator
+                        .ekf
+                        .store_moving_yaw(sensor_fusion.get_aligned_heading());
+                    // Moving - update position from GPS (only when fix is valid)
+                    if let Some((x, y)) = sensors.gps_parser.to_local_coords() {
+                        // Sanity check: reject extreme position jumps (> 1000m)
+                        // This catches corrupt GPS data that passes checksum (rare but possible)
+                        // Normal driving: max 42 m/s (150 km/h) × 0.04s = 1.7m between 25Hz fixes
+                        let (ekf_x, ekf_y) = estimator.ekf.position();
+                        let jump_dist = ((x - ekf_x).powi(2) + (y - ekf_y).powi(2)).sqrt();
+
+                        if jump_dist < 1000.0 {
+                            estimator.update_position(x, y);
+                        } else {
+                            // Log rejected update (uncomment for debugging)
+                            // info!("GPS rejected: jump={:.0}m,
+                            // gps=({:.1},{:.1}), ekf=({:.1},{:.1})",
+                            //       jump_dist, x, y, ekf_x, ekf_y);
+                        }
+                    }
                 }
 
                 // Update EKF with velocity components (requires full validity)
                 if let Some((vx, vy)) = sensors.gps_parser.get_velocity_enu() {
                     let speed = (vx * vx + vy * vy).sqrt();
-                    estimator.update_velocity(vx, vy);
-                    estimator.update_speed(speed);
+                    // Sanity check: reject extreme velocities (> 100 m/s = 360 km/h)
+                    // This catches NaN and corrupt GPS data
+                    if speed < 100.0 && speed.is_finite() {
+                        estimator.update_velocity(vx, vy);
+                        estimator.update_speed(speed);
+                    }
                 }
             }
         }
@@ -845,10 +915,46 @@ fn main() {
                 speed,
             );
 
-            // Publish telemetry with tilt-corrected accelerations
+            // Update lap timer with GPS lat/lon and EKF velocity
+            // GPS lat/lon is session-independent, enabling timing lines to work across
+            // restarts
+            let gps_fix = sensors.gps_parser.last_fix();
+            let (ekf_vx, ekf_vy) = estimator.ekf.velocity();
+            let lap_flags =
+                lap_timer.update(gps_fix.lat, gps_fix.lon, (ekf_vx, ekf_vy), now_ms, speed);
+            let lap_timer_data =
+                Some((lap_timer.current_lap_ms(), lap_timer.lap_count(), lap_flags));
+
+            // Publish telemetry with tilt-corrected accelerations and lap timer data
             publisher
-                .publish_telemetry(&sensors, &estimator, &sensor_fusion, now_ms)
+                .publish_telemetry(&sensors, &estimator, &sensor_fusion, now_ms, lap_timer_data)
                 .ok();
+
+            // Update fusion diagnostics at telemetry rate for synchronized CSV export
+            // This ensures fusion data (lon_imu, lon_gps, etc.) matches the telemetry
+            // packet
+            let (tilt_x, tilt_y, tilt_valid) = sensor_fusion.get_tilt_offsets();
+            let (pitch_corr, roll_corr) = sensor_fusion.get_orientation_correction();
+            let (pitch_conf, roll_conf) = sensor_fusion.get_orientation_confidence();
+            diagnostics.update_fusion(FusionDiagnostics {
+                lon_imu_raw: sensor_fusion.get_lon_imu_raw(),
+                lon_imu_filtered: sensor_fusion.get_lon_imu_filtered(),
+                lon_blended: sensor_fusion.get_lon_blended(),
+                gps_weight: sensor_fusion.get_last_gps_weight(),
+                gps_accel: sensor_fusion.get_gps_accel(),
+                gps_rate: sensor_fusion.get_gps_rate(),
+                gps_rejected: sensor_fusion.is_gps_rejected(),
+                pitch_correction_deg: pitch_corr,
+                roll_correction_deg: roll_corr,
+                pitch_confidence: pitch_conf,
+                roll_confidence: roll_conf,
+                yaw_bias: sensor_fusion.yaw_rate_calibrator.get_bias(),
+                yaw_calibrated: sensor_fusion.yaw_rate_calibrator.is_valid(),
+                tilt_offset_x: tilt_x,
+                tilt_offset_y: tilt_y,
+                tilt_valid,
+            });
+
             last_telemetry_ms = now_ms;
         }
 

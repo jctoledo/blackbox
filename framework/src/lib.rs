@@ -134,6 +134,7 @@
 pub mod ekf;
 pub mod filter;
 pub mod fusion;
+pub mod lap_timer;
 pub mod mode;
 pub mod sensor_framework;
 pub mod sensors;
@@ -143,15 +144,22 @@ pub mod velocity;
 // Re-export mode detection types
 pub use mode::{Mode, ModeClassifier, ModeConfig, DEFAULT_MODE_ALPHA};
 
+// Re-export lap timer types
+pub use lap_timer::{
+    direction_valid, line_segment_intersection, LapTimer, LapTimerState, TimingLine, TrackType,
+    CROSSED_FINISH, CROSSED_START, DEFAULT_CROSSING_DEBOUNCE_MS, DEFAULT_DIRECTION_TOLERANCE,
+    DEFAULT_MIN_LAP_TIME_MS, FLAG_NONE, INVALID_LAP, NEW_BEST, NEW_LAP,
+};
+
 // Re-export sensor fusion types
 pub use fusion::{
-    FusionConfig, GpsAcceleration, OrientationCorrector, SensorFusion, TiltEstimator,
-    YawRateCalibrator,
+    FusionConfig, GpsAcceleration, HeadingAligner, OrientationCorrector, SensorFusion,
+    TiltEstimator, YawRateCalibrator,
 };
 
 // Re-export commonly used types from sensor_framework
-// Re-export EKF
-pub use ekf::Ekf;
+// Re-export EKF types
+pub use ekf::{Ekf, EkfConfig, UpdateResult};
 // Legacy (deprecated) - kept for backward compatibility
 #[allow(deprecated)]
 pub use sensor_framework::SensorData;

@@ -711,6 +711,170 @@ fn angle_diff(a: f32, b: f32) -> f32 {
     diff
 }
 
+/// Wrap angle to [-π, π]
+fn wrap_angle(angle: f32) -> f32 {
+    let mut a = angle;
+    while a > core::f32::consts::PI {
+        a -= 2.0 * core::f32::consts::PI;
+    }
+    while a < -core::f32::consts::PI {
+        a += 2.0 * core::f32::consts::PI;
+    }
+    a
+}
+
+/// Heading Aligner - aligns EKF yaw (arbitrary reference) to GPS course (absolute, north-referenced)
+///
+/// Problem: EKF yaw is measured from the heading at boot time (arbitrary reference).
+/// GPS course is absolute (0 = North, clockwise). Comparing them directly causes bugs.
+///
+/// Solution: Learn the offset between them when GPS course is reliable (moving).
+/// Then always output `heading = ekf_yaw + offset` for a consistent absolute reference.
+///
+/// ## When to learn
+/// - Speed > 5 m/s (GPS course is reliable)
+/// - GPS course is fresh (not stale)
+/// - After GPS warmup is complete
+///
+/// ## How it works
+/// 1. When conditions are met, compute offset = GPS_course - EKF_yaw
+/// 2. Use EMA filter to smooth the offset (handles noise)
+/// 3. After initial learning, use smaller alpha for stability
+/// 4. Output aligned_heading = EKF_yaw + offset (always in absolute reference)
+pub struct HeadingAligner {
+    /// Learned offset: GPS_course - EKF_yaw (radians)
+    offset: f32,
+    /// Is the offset valid (learned at least once)?
+    valid: bool,
+    /// Number of learning updates
+    update_count: u32,
+    /// EMA alpha for offset learning
+    alpha: f32,
+    /// Minimum speed for learning (m/s)
+    min_speed: f32,
+    /// Last GPS course for freshness tracking
+    last_gps_course: f32,
+    /// Time since last GPS course update (seconds)
+    time_since_gps: f32,
+    /// Maximum age of GPS course before considered stale (seconds)
+    max_gps_age: f32,
+}
+
+impl HeadingAligner {
+    pub fn new() -> Self {
+        Self {
+            offset: 0.0,
+            valid: false,
+            update_count: 0,
+            alpha: 0.1,     // Start with moderate learning rate
+            min_speed: 5.0, // ~18 km/h - GPS course is reliable
+            last_gps_course: 0.0,
+            time_since_gps: 999.0,
+            max_gps_age: 0.5, // 500ms
+        }
+    }
+
+    /// Update with GPS course (call when GPS is valid and speed > threshold)
+    ///
+    /// # Arguments
+    /// * `gps_course` - GPS course over ground in radians (0 = North, clockwise)
+    pub fn update_gps_course(&mut self, gps_course: f32) {
+        self.last_gps_course = gps_course;
+        self.time_since_gps = 0.0;
+    }
+
+    /// Update offset learning (call at telemetry rate)
+    ///
+    /// # Arguments
+    /// * `ekf_yaw` - EKF yaw estimate in radians
+    /// * `speed` - Vehicle speed in m/s
+    /// * `dt` - Time step in seconds
+    ///
+    /// # Returns
+    /// true if offset was updated
+    pub fn update(&mut self, ekf_yaw: f32, speed: f32, dt: f32) -> bool {
+        self.time_since_gps += dt;
+
+        // Only learn when conditions are good
+        if speed < self.min_speed || self.time_since_gps > self.max_gps_age {
+            return false;
+        }
+
+        // Compute offset: GPS_course - EKF_yaw
+        // Handle wrap-around properly
+        let new_offset = angle_diff(self.last_gps_course, ekf_yaw);
+
+        if !self.valid {
+            // First learning - use new_offset directly
+            self.offset = new_offset;
+            self.valid = true;
+            self.update_count = 1;
+            return true;
+        }
+
+        // EMA update with wrap-around handling
+        // Compute the innovation (difference from current estimate)
+        let innovation = angle_diff(new_offset, self.offset);
+
+        // Use smaller alpha after initial learning for stability
+        let effective_alpha = if self.update_count < 50 {
+            self.alpha // 0.1 for first 50 updates
+        } else {
+            0.02 // Very slow update after that
+        };
+
+        self.offset = wrap_angle(self.offset + effective_alpha * innovation);
+        self.update_count = self.update_count.saturating_add(1);
+
+        true
+    }
+
+    /// Get aligned heading (EKF yaw transformed to absolute reference)
+    ///
+    /// # Arguments
+    /// * `ekf_yaw` - Current EKF yaw estimate in radians
+    ///
+    /// # Returns
+    /// Aligned heading in radians (0 = North, positive clockwise)
+    /// Returns ekf_yaw unchanged if offset not yet learned
+    pub fn get_aligned_heading(&self, ekf_yaw: f32) -> f32 {
+        if self.valid {
+            wrap_angle(ekf_yaw + self.offset)
+        } else {
+            ekf_yaw
+        }
+    }
+
+    /// Check if alignment is valid
+    pub fn is_valid(&self) -> bool {
+        self.valid
+    }
+
+    /// Get the learned offset (for diagnostics)
+    pub fn get_offset(&self) -> f32 {
+        self.offset
+    }
+
+    /// Get confidence level (0-1) based on update count
+    pub fn get_confidence(&self) -> f32 {
+        (self.update_count as f32 / 100.0).min(1.0)
+    }
+
+    /// Reset alignment (e.g., after device remount)
+    pub fn reset(&mut self) {
+        self.offset = 0.0;
+        self.valid = false;
+        self.update_count = 0;
+        self.time_since_gps = 999.0;
+    }
+}
+
+impl Default for HeadingAligner {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Main sensor fusion processor
 pub struct SensorFusion {
     pub config: FusionConfig,
@@ -722,6 +886,8 @@ pub struct SensorFusion {
     pub tilt_estimator: TiltEstimator,
     /// Yaw rate calibrator (learns gyro bias while driving straight)
     pub yaw_rate_calibrator: YawRateCalibrator,
+    /// Heading aligner (aligns EKF yaw to GPS course reference)
+    pub heading_aligner: HeadingAligner,
     /// Butterworth low-pass filter for IMU longitudinal (removes engine vibration)
     lon_filter: BiquadFilter,
     /// Blended longitudinal acceleration (m/s²)
@@ -742,6 +908,8 @@ pub struct SensorFusion {
     last_gps_weight: f32,
     /// Was stationary last update?
     was_stationary: bool,
+    /// Current aligned heading (radians, 0=North)
+    aligned_heading: f32,
 }
 
 impl SensorFusion {
@@ -751,6 +919,7 @@ impl SensorFusion {
             orientation_corrector: OrientationCorrector::new(),
             tilt_estimator: TiltEstimator::new(config.tilt_learn_time),
             yaw_rate_calibrator: YawRateCalibrator::new(),
+            heading_aligner: HeadingAligner::new(),
             lon_filter: BiquadFilter::new_lowpass(config.lon_filter_cutoff, config.lon_sample_rate),
             blended_lon: 0.0,
             lon_display: 0.0,
@@ -761,6 +930,7 @@ impl SensorFusion {
             lat_imu: 0.0,
             last_gps_weight: 0.0,
             was_stationary: false,
+            aligned_heading: 0.0,
             config,
         }
     }
@@ -919,6 +1089,10 @@ impl SensorFusion {
         self.blended_lon = lon_blended;
         self.lon_display = lon_blended;
 
+        // Step 13: Update heading alignment (learn offset when moving)
+        self.heading_aligner.update(yaw, speed, dt);
+        self.aligned_heading = self.heading_aligner.get_aligned_heading(yaw);
+
         // Return blended longitudinal and centripetal lateral
         (lon_blended, self.lat_centripetal)
     }
@@ -932,13 +1106,14 @@ impl SensorFusion {
         self.gps_accel.update(speed, time);
     }
 
-    /// Process GPS heading update for yaw rate calibration
+    /// Process GPS heading update for yaw rate calibration and heading alignment
     /// Call this at GPS rate when GPS is valid and speed > 0
     ///
     /// # Arguments
-    /// * `heading` - Course over ground in radians
+    /// * `heading` - Course over ground in radians (0 = North, clockwise)
     pub fn process_gps_heading(&mut self, heading: f32) {
         self.yaw_rate_calibrator.update_heading(heading);
+        self.heading_aligner.update_gps_course(heading);
     }
 
     /// Update GPS rate estimate (call periodically, e.g., every second)
@@ -1035,6 +1210,42 @@ impl SensorFusion {
     /// Reset orientation corrector (call after device remount)
     pub fn reset_orientation_corrector(&mut self) {
         self.orientation_corrector.reset();
+    }
+
+    // ========== Heading alignment getters ==========
+
+    /// Get aligned heading (absolute reference, 0 = North)
+    ///
+    /// This is the EKF yaw transformed to match GPS course reference.
+    /// Use this for all external heading display and comparisons.
+    /// Returns radians, 0 = North, positive clockwise.
+    pub fn get_aligned_heading(&self) -> f32 {
+        self.aligned_heading
+    }
+
+    /// Check if heading alignment is valid
+    ///
+    /// Returns true if the offset between EKF yaw and GPS course has been learned.
+    /// If false, get_aligned_heading() returns raw EKF yaw (arbitrary reference).
+    pub fn is_heading_aligned(&self) -> bool {
+        self.heading_aligner.is_valid()
+    }
+
+    /// Get heading alignment offset (for diagnostics)
+    ///
+    /// Returns the learned offset in radians: GPS_course - EKF_yaw
+    pub fn get_heading_offset(&self) -> f32 {
+        self.heading_aligner.get_offset()
+    }
+
+    /// Get heading alignment confidence (0-1)
+    pub fn get_heading_confidence(&self) -> f32 {
+        self.heading_aligner.get_confidence()
+    }
+
+    /// Reset heading alignment (call after device remount or GPS warmup)
+    pub fn reset_heading_aligner(&mut self) {
+        self.heading_aligner.reset();
     }
 }
 
@@ -2059,6 +2270,254 @@ mod tests {
         assert!(
             corrector.pitch_correction.abs() > 0.001,
             "Pitch should be learning during acceleration"
+        );
+    }
+
+    // ============== HeadingAligner Tests ==============
+
+    #[test]
+    fn test_heading_aligner_init() {
+        let aligner = HeadingAligner::new();
+        assert!(!aligner.is_valid());
+        assert_eq!(aligner.get_offset(), 0.0);
+        assert_eq!(aligner.get_confidence(), 0.0);
+    }
+
+    #[test]
+    fn test_heading_aligner_learns_offset() {
+        let mut aligner = HeadingAligner::new();
+
+        // Simulate: GPS course = 0.5 rad (North-ish), EKF yaw = 0 rad
+        // Expected offset = 0.5 - 0 = 0.5 rad
+        aligner.update_gps_course(0.5);
+
+        // Update with EKF yaw at good speed
+        let learned = aligner.update(0.0, 10.0, 0.05);
+
+        assert!(learned, "Should learn on first update");
+        assert!(aligner.is_valid());
+        assert!(
+            (aligner.get_offset() - 0.5).abs() < 0.01,
+            "Offset should be ~0.5, got {}",
+            aligner.get_offset()
+        );
+    }
+
+    #[test]
+    fn test_heading_aligner_aligned_heading() {
+        let mut aligner = HeadingAligner::new();
+
+        // Learn offset: GPS=1.0, EKF=0.3 → offset=0.7
+        aligner.update_gps_course(1.0);
+        aligner.update(0.3, 10.0, 0.05);
+
+        // Aligned heading should be EKF + offset
+        let aligned = aligner.get_aligned_heading(0.3);
+        assert!(
+            (aligned - 1.0).abs() < 0.01,
+            "Aligned heading should match GPS course: {} vs 1.0",
+            aligned
+        );
+
+        // Different EKF yaw should also be offset
+        let aligned2 = aligner.get_aligned_heading(0.5);
+        assert!(
+            (aligned2 - 1.2).abs() < 0.01,
+            "Aligned heading for 0.5 should be ~1.2: got {}",
+            aligned2
+        );
+    }
+
+    #[test]
+    fn test_heading_aligner_handles_wrap_around() {
+        let mut aligner = HeadingAligner::new();
+
+        // GPS course = -3.0 rad (near -π), EKF yaw = 3.0 rad (near +π)
+        // Both represent similar directions but wrap around
+        aligner.update_gps_course(-3.0);
+        aligner.update(3.0, 10.0, 0.05);
+
+        // Offset should be small (wrapping difference, not 6.0)
+        // angle_diff(-3.0, 3.0) = -3.0 - 3.0 + 2π = 0.28 rad
+        let offset = aligner.get_offset();
+        assert!(
+            offset.abs() < 1.0,
+            "Offset should handle wrap-around: got {}",
+            offset
+        );
+    }
+
+    #[test]
+    fn test_heading_aligner_ignores_low_speed() {
+        let mut aligner = HeadingAligner::new();
+
+        aligner.update_gps_course(1.0);
+
+        // Low speed - should not learn
+        let learned = aligner.update(0.0, 2.0, 0.05); // Below min_speed (5.0)
+
+        assert!(!learned, "Should not learn at low speed");
+        assert!(!aligner.is_valid());
+    }
+
+    #[test]
+    fn test_heading_aligner_ignores_stale_gps() {
+        let mut aligner = HeadingAligner::new();
+
+        // Don't call update_gps_course - GPS is stale from the start
+        // (time_since_gps is initialized to 999.0)
+
+        // Try to learn without valid GPS
+        for _ in 0..20 {
+            let learned = aligner.update(0.0, 10.0, 0.05);
+            assert!(!learned, "Should not learn without GPS");
+        }
+
+        // Aligner should still not be valid
+        assert!(!aligner.is_valid(), "Should not be valid with stale GPS");
+
+        // Now feed GPS and verify it CAN learn when GPS is fresh
+        aligner.update_gps_course(1.0);
+        let learned = aligner.update(0.0, 10.0, 0.05);
+        assert!(learned, "Should learn when GPS is fresh");
+        assert!(aligner.is_valid());
+    }
+
+    #[test]
+    fn test_heading_aligner_continues_updating() {
+        let mut aligner = HeadingAligner::new();
+
+        // Initial learning
+        aligner.update_gps_course(0.5);
+        aligner.update(0.0, 10.0, 0.05);
+        let initial_offset = aligner.get_offset();
+
+        // GPS course changes slightly (vehicle turned)
+        aligner.update_gps_course(0.6);
+        aligner.update(0.1, 10.0, 0.05);
+
+        // Offset should update via EMA
+        let new_offset = aligner.get_offset();
+        assert!(
+            (new_offset - initial_offset).abs() < 0.1,
+            "Offset should update smoothly"
+        );
+    }
+
+    #[test]
+    fn test_heading_aligner_reset() {
+        let mut aligner = HeadingAligner::new();
+
+        // Learn something
+        aligner.update_gps_course(1.0);
+        aligner.update(0.0, 10.0, 0.05);
+        assert!(aligner.is_valid());
+
+        // Reset
+        aligner.reset();
+        assert!(!aligner.is_valid());
+        assert_eq!(aligner.get_offset(), 0.0);
+        assert_eq!(aligner.get_confidence(), 0.0);
+    }
+
+    #[test]
+    fn test_heading_aligner_confidence_grows() {
+        let mut aligner = HeadingAligner::new();
+
+        aligner.update_gps_course(0.5);
+
+        // Multiple updates should increase confidence
+        for i in 0..150 {
+            aligner.update_gps_course(0.5); // Keep GPS fresh
+            aligner.update(0.0, 10.0, 0.01);
+        }
+
+        assert!(
+            aligner.get_confidence() > 0.9,
+            "Confidence should be high after many updates: {}",
+            aligner.get_confidence()
+        );
+    }
+
+    #[test]
+    fn test_heading_aligner_in_sensor_fusion() {
+        // Integration test: verify heading alignment works through SensorFusion
+        let config = FusionConfig::default();
+        let mut fusion = SensorFusion::new(config);
+
+        // Feed GPS course while moving
+        for i in 0..50 {
+            // GPS says we're heading North (0 rad)
+            fusion.process_gps_heading(0.0);
+
+            // Process IMU with EKF yaw = 1.5 rad (different reference)
+            fusion.process_imu(
+                0.0, 0.0, G, // Body accel
+                0.0, 0.0,   // Roll, pitch
+                1.5,   // EKF yaw (arbitrary reference)
+                15.0,  // Speed
+                0.0,   // Yaw rate
+                0.05,  // dt
+                false, // Not stationary
+            );
+        }
+
+        // Aligned heading should be close to GPS course (0)
+        let aligned = fusion.get_aligned_heading();
+        assert!(
+            aligned.abs() < 0.2,
+            "Aligned heading should be ~0 (matching GPS): got {}",
+            aligned
+        );
+
+        // Alignment should be valid
+        assert!(fusion.is_heading_aligned());
+    }
+
+    #[test]
+    fn test_loop_detection_would_work_with_aligned_heading() {
+        // This test simulates the bug scenario that was fixed:
+        // - Start recording at GPS course = 0 (North)
+        // - Drive around block
+        // - Return to start, GPS course = 0 again
+        // - But EKF yaw might be different (arbitrary reference)
+        // - With alignment, both headings should match
+
+        let config = FusionConfig::default();
+        let mut fusion = SensorFusion::new(config);
+
+        // Start: GPS course = 0, EKF yaw = 2.0 (arbitrary)
+        for _ in 0..30 {
+            fusion.process_gps_heading(0.0);
+            fusion.process_imu(0.0, 0.0, G, 0.0, 0.0, 2.0, 15.0, 0.0, 0.05, false);
+        }
+
+        let start_heading = fusion.get_aligned_heading();
+
+        // Drive around (heading changes)
+        for i in 0..100 {
+            let gps_course = (i as f32 * 0.06) % (2.0 * core::f32::consts::PI); // Varies
+            let ekf_yaw = 2.0 + (i as f32 * 0.06) % (2.0 * core::f32::consts::PI);
+            fusion.process_gps_heading(gps_course);
+            fusion.process_imu(0.0, 0.0, G, 0.0, 0.0, ekf_yaw, 15.0, 0.3, 0.05, false);
+        }
+
+        // Return to start: GPS course = 0 again, EKF yaw back to ~2.0
+        for _ in 0..30 {
+            fusion.process_gps_heading(0.0);
+            fusion.process_imu(0.0, 0.0, G, 0.0, 0.0, 2.0, 15.0, 0.0, 0.05, false);
+        }
+
+        let end_heading = fusion.get_aligned_heading();
+
+        // Key assertion: headings should be close (both near 0 = North)
+        let heading_diff = angle_diff(end_heading, start_heading).abs();
+        assert!(
+            heading_diff < 0.3, // ~17 degrees tolerance
+            "Start and end headings should match: start={}, end={}, diff={}",
+            start_heading,
+            end_heading,
+            heading_diff
         );
     }
 }

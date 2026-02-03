@@ -332,12 +332,17 @@ impl TelemetryPublisher {
     }
 
     /// Publish binary telemetry packet via UDP and/or HTTP server state
+    ///
+    /// # Arguments
+    /// * `lap_timer_data` - Optional tuple of (lap_time_ms, lap_count,
+    ///   lap_flags)
     pub fn publish_telemetry(
         &mut self,
         sensors: &SensorManager,
         estimator: &StateEstimator,
         sensor_fusion: &crate::fusion::SensorFusion,
         now_ms: u32,
+        lap_timer_data: Option<(u32, u16, u8)>,
     ) -> Result<(), SystemError> {
         // Get accelerations for display
         // lon: GPS-derived when fresh (no vibration), otherwise blended with heavy
@@ -363,7 +368,10 @@ impl TelemetryPublisher {
         packet.wz = sensors.imu_parser.data().wz;
         packet.roll = sensors.imu_parser.data().roll.to_radians();
         packet.pitch = sensors.imu_parser.data().pitch.to_radians();
-        packet.yaw = estimator.ekf.yaw();
+        // Use aligned heading (EKF yaw + learned offset to match GPS course reference)
+        // This ensures heading is always in absolute reference (0 = North)
+        // Fixes the GPS course vs EKF yaw reference frame mismatch bug
+        packet.yaw = sensor_fusion.get_aligned_heading();
 
         let (ekf_x, ekf_y) = estimator.ekf.position();
 
@@ -384,14 +392,33 @@ impl TelemetryPublisher {
         packet.vx = vx;
         packet.vy = vy;
         packet.speed_kmh = display_speed_kmh;
+        // EKF position uncertainty: uses effective sigma that accounts for
+        // innovation statistics, GPS discrepancy, and minimum floor (~2-3m)
+        // This prevents false confidence when EKF may have drifted
+        packet.pos_sigma = estimator.ekf.get_effective_pos_sigma();
         packet.mode = estimator.mode_classifier.get_mode_u8();
 
         if sensors.gps_parser.last_fix().valid {
             packet.lat = sensors.gps_parser.last_fix().lat as f32;
             packet.lon = sensors.gps_parser.last_fix().lon as f32;
             packet.gps_valid = 1;
+            // GPS course is only valid when moving (speed > ~1 m/s)
+            // Use NaN to signal invalid when stationary
+            if sensors.gps_parser.last_fix().speed > 1.0 {
+                packet.gps_course = sensors.gps_parser.last_fix().course;
+            } else {
+                packet.gps_course = f32::NAN;
+            }
         } else {
             packet.gps_valid = 0;
+            packet.gps_course = f32::NAN;
+        }
+
+        // Add lap timer data if available
+        if let Some((lap_time_ms, lap_count, lap_flags)) = lap_timer_data {
+            packet.lap_time_ms = lap_time_ms;
+            packet.lap_count = lap_count;
+            packet.lap_flags = lap_flags;
         }
 
         let bytes = packet.to_bytes();
