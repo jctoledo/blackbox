@@ -1,6 +1,4 @@
-use std::env;
-use std::fs;
-use std::path::PathBuf;
+use std::{env, fs, path::PathBuf};
 
 fn main() {
     // Provide app_main stub for ESP-IDF
@@ -13,8 +11,7 @@ fn main() {
     // This is needed because CONFIG_PARTITION_TABLE_CUSTOM_FILENAME is resolved
     // relative to the cmake build directory, not the source directory
     if let Ok(out_dir) = env::var("OUT_DIR") {
-        let src = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap())
-            .join("partitions.csv");
+        let src = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()).join("partitions.csv");
         let dst = PathBuf::from(&out_dir).join("partitions.csv");
 
         if src.exists() {
