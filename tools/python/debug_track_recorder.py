@@ -153,7 +153,8 @@ def analyze_file(filepath: str):
         print(f"\n    Largest position jumps:")
         sorted_jumps = sorted(jumps_2m, key=lambda x: x[1].dist_from_prev, reverse=True)[:10]
         for idx, s in sorted_jumps:
-            print(f"      Sample {idx}: {s.dist_from_prev:.2f}m jump, speed={s.speed_kmh:.1f}km/h, dt={s.time_delta_ms}ms")
+            print(f"      Sample {idx}: {s.dist_from_prev:.2f}m jump, "
+                  f"speed={s.speed_kmh:.1f}km/h, dt={s.time_delta_ms}ms")
 
     print(f"\n[3] STATIONARY ANALYSIS (speed < 2 km/h)")
 
@@ -217,10 +218,13 @@ def analyze_file(filepath: str):
         wz_vals = [s.wz for s in stationary_samples]
 
         print(f"    Stationary samples: {len(stationary_samples)}")
-        print(f"    Accel X: mean={sum(ax_vals)/len(ax_vals):.3f}, range=[{min(ax_vals):.3f}, {max(ax_vals):.3f}] m/s²")
-        print(f"    Accel Y: mean={sum(ay_vals)/len(ay_vals):.3f}, range=[{min(ay_vals):.3f}, {max(ay_vals):.3f}] m/s²")
-        print(f"    Accel Z: mean={sum(az_vals)/len(az_vals):.3f}, range=[{min(az_vals):.3f}, {max(az_vals):.3f}] m/s²")
-        print(f"    Yaw rate: mean={sum(wz_vals)/len(wz_vals):.4f}, range=[{min(wz_vals):.4f}, {max(wz_vals):.4f}] rad/s")
+        n = len(ax_vals)
+        ax_mean, ay_mean = sum(ax_vals) / n, sum(ay_vals) / n
+        az_mean, wz_mean = sum(az_vals) / n, sum(wz_vals) / n
+        print(f"    Accel X: mean={ax_mean:.3f}, range=[{min(ax_vals):.3f}, {max(ax_vals):.3f}] m/s²")
+        print(f"    Accel Y: mean={ay_mean:.3f}, range=[{min(ay_vals):.3f}, {max(ay_vals):.3f}] m/s²")
+        print(f"    Accel Z: mean={az_mean:.3f}, range=[{min(az_vals):.3f}, {max(az_vals):.3f}] m/s²")
+        print(f"    Yaw rate: mean={wz_mean:.4f}, range=[{min(wz_vals):.4f}, {max(wz_vals):.4f}] rad/s")
 
         # Check if accelerations are suspiciously high when stationary
         high_accel = [s for s in stationary_samples if abs(s.ax) > 1.0 or abs(s.ay) > 1.0]
@@ -295,7 +299,9 @@ def analyze_file(filepath: str):
             print(f"\n    Largest EKF-GPS differences:")
             sorted_diffs = sorted(diffs, key=lambda x: x[1], reverse=True)[:5]
             for s, diff in sorted_diffs:
-                print(f"      GPS:({s.gps_local_x:.1f},{s.gps_local_y:.1f}) EKF:({s.ekf_x:.1f},{s.ekf_y:.1f}) diff={diff:.1f}m speed={s.speed_kmh:.1f}km/h")
+                print(f"      GPS:({s.gps_local_x:.1f},{s.gps_local_y:.1f}) "
+                      f"EKF:({s.ekf_x:.1f},{s.ekf_y:.1f}) "
+                      f"diff={diff:.1f}m speed={s.speed_kmh:.1f}km/h")
         else:
             print(f"    EKF-GPS tracking looks good (no large divergences)")
 
@@ -322,7 +328,9 @@ def analyze_file(filepath: str):
         stationary_ekf_movement = [(i, s, d, p) for i, s, d, p in ekf_jumps if d >= 0.5 and s.speed_kmh < 2.0]
         if stationary_ekf_movement:
             total_phantom = sum(d for _, _, d, _ in stationary_ekf_movement)
-            print(f"    EKF movement while stationary (speed<2km/h): {len(stationary_ekf_movement)} events, {total_phantom:.1f}m total")
+            num_events = len(stationary_ekf_movement)
+            print(f"    EKF movement while stationary (speed<2km/h): {num_events} events, "
+                  f"{total_phantom:.1f}m total")
             print(f"    THIS IS THE BUG - EKF position changing when vehicle is stopped")
             print(f"\n    Examples of EKF phantom movement:")
             for i, s, d, p in stationary_ekf_movement[:5]:

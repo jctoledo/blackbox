@@ -77,7 +77,7 @@ def analyze_csv(filepath):
     moving_samples = 0
 
     for i in range(1, len(positions)):
-        x1, y1, s1 = positions[i-1]
+        x1, y1, s1 = positions[i - 1]
         x2, y2, s2 = positions[i]
         dist = math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
         total_distance += dist

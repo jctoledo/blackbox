@@ -8,7 +8,7 @@ import sys
 import csv
 import math
 from pathlib import Path
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional, List, Tuple
 
 # Constants matching JavaScript TrackRecorder
@@ -104,10 +104,9 @@ class TrackRecorder:
 
         # Loop closure check (too late - already filtered by speed!)
         if self.track_type == 'loop' and self.total_distance >= self.config.min_loop_distance:
-            dist_to_start = math.sqrt(
-                (pos.x - self.start_pos.x) ** 2 +
-                (pos.y - self.start_pos.y) ** 2
-            )
+            dx = pos.x - self.start_pos.x
+            dy = pos.y - self.start_pos.y
+            dist_to_start = math.sqrt(dx ** 2 + dy ** 2)
             if dist_to_start < self.config.close_proximity:
                 heading_diff = abs(self._wrap_angle(pos.heading - self.start_heading))
                 if heading_diff < self.config.heading_tolerance:
@@ -115,10 +114,9 @@ class TrackRecorder:
                     return {'stored': True, 'loop_detected': True}
 
         # Distance check
-        dist = math.sqrt(
-            (pos.x - self.last_pos.x) ** 2 +
-            (pos.y - self.last_pos.y) ** 2
-        )
+        dx = pos.x - self.last_pos.x
+        dy = pos.y - self.last_pos.y
+        dist = math.sqrt(dx ** 2 + dy ** 2)
         if dist < self.config.min_sample_distance:
             self.rejected_distance += 1
             return {'stored': False, 'reason': 'distance_too_small'}
@@ -136,10 +134,9 @@ class TrackRecorder:
 
         # FIX: Check loop closure FIRST - even when stopped at start position
         if self.track_type == 'loop' and self.total_distance >= self.config.min_loop_distance:
-            dist_to_start = math.sqrt(
-                (pos.x - self.start_pos.x) ** 2 +
-                (pos.y - self.start_pos.y) ** 2
-            )
+            dx = pos.x - self.start_pos.x
+            dy = pos.y - self.start_pos.y
+            dist_to_start = math.sqrt(dx ** 2 + dy ** 2)
             if dist_to_start < self.config.close_proximity:
                 heading_diff = abs(self._wrap_angle(pos.heading - self.start_heading))
                 if heading_diff < self.config.heading_tolerance:
@@ -160,7 +157,8 @@ class TrackRecorder:
                 old_heading = self.start_heading
                 self.start_heading = pos.heading
                 self.heading_captured_while_moving = True
-                print(f"  Updated startHeading: {math.degrees(old_heading):.1f}° → {math.degrees(pos.heading):.1f}° (captured when moving)")
+                print(f"  Updated startHeading: {math.degrees(old_heading):.1f}° → "
+                      f"{math.degrees(pos.heading):.1f}° (captured when moving)")
         else:
             if spd < SPEED_EXIT_THRESHOLD:
                 self.speed_gate = False
@@ -168,10 +166,9 @@ class TrackRecorder:
                 return {'stored': False, 'reason': 'speed_gate_exit'}
 
         # Distance check
-        dist = math.sqrt(
-            (pos.x - self.last_pos.x) ** 2 +
-            (pos.y - self.last_pos.y) ** 2
-        )
+        dx = pos.x - self.last_pos.x
+        dy = pos.y - self.last_pos.y
+        dist = math.sqrt(dx ** 2 + dy ** 2)
         if dist < self.config.min_sample_distance:
             self.rejected_distance += 1
             return {'stored': False, 'reason': 'distance_too_small'}
@@ -229,10 +226,10 @@ def integrate_yaw_from_rate(rows: List[dict], start_yaw: float = 0.0) -> List[fl
 
 def simulate_track_recording(filepath: str):
     """Simulate track recording with CSV data."""
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print(f"TRACK RECORDER SIMULATION")
     print(f"File: {filepath}")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
 
     rows, has_ekf, has_gps_course = load_csv(filepath)
     if not rows:
@@ -333,7 +330,7 @@ def simulate_track_recording(filepath: str):
     # Time analysis
     dt_samples = []
     for i in range(1, len(positions)):
-        dt = (positions[i].timestamp - positions[i-1].timestamp) / 1000.0
+        dt = (positions[i].timestamp - positions[i - 1].timestamp) / 1000.0
         if dt > 0:
             dt_samples.append(dt)
 
@@ -367,22 +364,25 @@ def simulate_track_recording(filepath: str):
     # Check if loop should close
     total_dist_raw = 0
     for i in range(1, len(positions)):
-        d = math.sqrt((positions[i].x - positions[i-1].x) ** 2 +
-                      (positions[i].y - positions[i-1].y) ** 2)
+        dx = positions[i].x - positions[i - 1].x
+        dy = positions[i].y - positions[i - 1].y
+        d = math.sqrt(dx ** 2 + dy ** 2)
         total_dist_raw += d
     print(f"Total raw distance: {total_dist_raw:.1f} m (threshold: {MIN_LOOP_DISTANCE} m)")
 
     # Find when we return near start
     print(f"\n--- PROXIMITY TO START OVER TIME ---")
     for i, pos in enumerate(positions):
-        dist_to_start = math.sqrt((pos.x - start_pos.x) ** 2 + (pos.y - start_pos.y) ** 2)
+        dx = pos.x - start_pos.x
+        dy = pos.y - start_pos.y
+        dist_to_start = math.sqrt(dx ** 2 + dy ** 2)
         if dist_to_start < 50:  # Show when close to start
             print(f"  Sample {i}: dist_to_start={dist_to_start:.1f}m speed={pos.speed:.1f}km/h")
 
     # === SIMULATE OLD LOGIC ===
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print("SIMULATION: OLD BUGGY LOGIC (speed gate before loop check)")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
 
     recorder_old = TrackRecorder(track_type='loop')
     recorder_old.start(positions[0])
@@ -402,9 +402,9 @@ def simulate_track_recording(filepath: str):
     print(f"  Rejected (distance < {MIN_SAMPLE_DISTANCE}m): {recorder_old.rejected_distance}")
 
     # === SIMULATE NEW LOGIC (heading from start) ===
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print("SIMULATION: NEW LOGIC (heading captured at start, speed=0)")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
 
     recorder_new = TrackRecorder(track_type='loop')
     recorder_new.start(positions[0], capture_heading_when_moving=False)
@@ -419,9 +419,9 @@ def simulate_track_recording(filepath: str):
     print(f"  Loop detected: {recorder_new.loop_detected}")
 
     # === SIMULATE NEW LOGIC WITH HEADING FIX ===
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print("SIMULATION: NEW LOGIC + HEADING FIX (heading captured when moving)")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
 
     recorder_fixed = TrackRecorder(track_type='loop')
     recorder_fixed.start(positions[0], capture_heading_when_moving=True)
@@ -441,9 +441,9 @@ def simulate_track_recording(filepath: str):
     print(f"  Rejected (distance < {MIN_SAMPLE_DISTANCE}m): {recorder_new.rejected_distance}")
 
     # === 14Hz IMPACT ANALYSIS ===
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print("14Hz IMPACT ANALYSIS")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
 
     # At 14Hz, samples are ~71ms apart
     # Calculate max position jump at various speeds
@@ -457,8 +457,9 @@ def simulate_track_recording(filepath: str):
     print("\nActual position jumps in CSV data:")
     jumps = []
     for i in range(1, len(positions)):
-        dist = math.sqrt((positions[i].x - positions[i-1].x) ** 2 +
-                        (positions[i].y - positions[i-1].y) ** 2)
+        dx = positions[i].x - positions[i - 1].x
+        dy = positions[i].y - positions[i - 1].y
+        dist = math.sqrt(dx ** 2 + dy ** 2)
         jumps.append((i, dist, positions[i].speed))
 
     # Sort by jump size
