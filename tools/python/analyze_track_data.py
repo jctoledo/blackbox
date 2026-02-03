@@ -134,7 +134,7 @@ def analyze_csv(filepath):
         print(f"    {i}: ({x:7.2f}, {y:7.2f}) @ {s:.1f} km/h")
 
     print(f"\n  Last 5 positions (x, y, speed):")
-    for i in range(max(0, len(positions)-5), len(positions)):
+    for i in range(max(0, len(positions) - 5), len(positions)):
         x, y, s = positions[i]
         print(f"    {i}: ({x:7.2f}, {y:7.2f}) @ {s:.1f} km/h")
 
