@@ -146,9 +146,10 @@ pub use mode::{Mode, ModeClassifier, ModeConfig, DEFAULT_MODE_ALPHA};
 
 // Re-export lap timer types
 pub use lap_timer::{
-    direction_valid, line_segment_intersection, LapTimer, LapTimerState, TimingLine, TrackType,
-    CROSSED_FINISH, CROSSED_START, DEFAULT_CROSSING_DEBOUNCE_MS, DEFAULT_DIRECTION_TOLERANCE,
-    DEFAULT_MIN_LAP_TIME_MS, FLAG_NONE, INVALID_LAP, NEW_BEST, NEW_LAP,
+    direction_valid, line_segment_intersection, LapTimer, LapTimerState, LocalTimingLine,
+    LocalTrackType, TimingLine, TrackType, CROSSED_FINISH, CROSSED_START,
+    DEFAULT_CROSSING_DEBOUNCE_MS, DEFAULT_DIRECTION_TOLERANCE, DEFAULT_MIN_LAP_TIME_MS, FLAG_NONE,
+    INVALID_LAP, NEW_BEST, NEW_LAP,
 };
 
 // Re-export sensor fusion types

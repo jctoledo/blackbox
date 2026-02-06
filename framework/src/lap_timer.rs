@@ -81,6 +81,25 @@ impl TimingLine {
         let p2 = self.to_local(self.p2_lat, self.p2_lon);
         (p1, p2)
     }
+
+    /// Convert GPS timing line to local meters relative to a GPS reference point
+    ///
+    /// Call when track is configured AND GPS origin is available.
+    /// Returns a LocalTimingLine for use with high-frequency EKF position updates.
+    pub fn to_local_line(&self, ref_lat: f64, ref_lon: f64) -> LocalTimingLine {
+        let cos_lat = (ref_lat * core::f64::consts::PI / 180.0).cos();
+        LocalTimingLine {
+            p1: (
+                ((self.p1_lon - ref_lon) * cos_lat * 111320.0) as f32,
+                ((self.p1_lat - ref_lat) * 111320.0) as f32,
+            ),
+            p2: (
+                ((self.p2_lon - ref_lon) * cos_lat * 111320.0) as f32,
+                ((self.p2_lat - ref_lat) * 111320.0) as f32,
+            ),
+            direction: self.direction,
+        }
+    }
 }
 
 /// Track configuration
@@ -92,6 +111,29 @@ pub enum TrackType {
     PointToPoint {
         start: TimingLine,
         finish: TimingLine,
+    },
+}
+
+/// A timing line in local meter coordinates (cached for 200Hz updates)
+#[derive(Clone, Copy, Debug)]
+pub struct LocalTimingLine {
+    /// Endpoint 1 in local meters (x, y)
+    pub p1: (f32, f32),
+    /// Endpoint 2 in local meters (x, y)
+    pub p2: (f32, f32),
+    /// Valid crossing direction (radians, math convention: 0 = East, π/2 = North)
+    pub direction: f32,
+}
+
+/// Track with cached local coordinates for high-frequency updates
+#[derive(Clone, Copy, Debug)]
+pub enum LocalTrackType {
+    /// Single start/finish line (circuit racing)
+    Loop { line: LocalTimingLine },
+    /// Separate start and finish lines (hill climb, rally stage)
+    PointToPoint {
+        start: LocalTimingLine,
+        finish: LocalTimingLine,
     },
 }
 
@@ -307,6 +349,153 @@ impl TimingState {
             self.current_lap_ms = 0;
         }
     }
+
+    /// Check for crossing on a loop track using local coordinates with timestamp interpolation
+    ///
+    /// Uses f32 local meter positions for 200Hz EKF updates.
+    /// Interpolates crossing timestamp for sub-millisecond precision.
+    fn check_local_loop_crossing(
+        &mut self,
+        prev: (f32, f32),
+        pos: (f32, f32),
+        velocity: (f32, f32),
+        prev_ts: u32,
+        timestamp_ms: u32,
+        line: &LocalTimingLine,
+    ) {
+        // Check if movement segment crosses timing line
+        if let Some(t) = line_segment_intersection(prev, pos, line.p1, line.p2) {
+            // Validate direction
+            if !direction_valid(velocity, line.direction, self.direction_tolerance) {
+                self.frame_flags |= INVALID_LAP;
+                return;
+            }
+
+            // Interpolate crossing timestamp using the intersection fraction
+            let dt = timestamp_ms.saturating_sub(prev_ts);
+            let crossing_time = prev_ts + (t * dt as f32) as u32;
+
+            // Check debounce (only applies after first crossing, when timing is active)
+            if self.state == LapTimerState::Timing
+                && crossing_time.saturating_sub(self.last_crossing_ms) < self.crossing_debounce_ms
+            {
+                return;
+            }
+            self.last_crossing_ms = crossing_time;
+
+            // Handle based on current state
+            match self.state {
+                LapTimerState::Idle => {}
+                LapTimerState::Armed => {
+                    // First crossing starts timing - use interpolated time
+                    self.frame_flags |= CROSSED_START;
+                    self.lap_start_ms = crossing_time;
+                    self.current_lap_ms = 0;
+                    self.state = LapTimerState::Timing;
+                }
+                LapTimerState::Timing => {
+                    // Subsequent crossing completes lap - use interpolated time
+                    let lap_time = crossing_time.saturating_sub(self.lap_start_ms);
+
+                    // Validate lap time
+                    if lap_time < self.min_lap_time_ms {
+                        self.frame_flags |= INVALID_LAP;
+                        return;
+                    }
+
+                    // Record lap
+                    self.frame_flags |= CROSSED_START | NEW_LAP;
+                    self.lap_count = self.lap_count.saturating_add(1);
+
+                    // Check for new best
+                    if self.best_lap_ms.is_none_or(|best| lap_time < best) {
+                        self.best_lap_ms = Some(lap_time);
+                        self.frame_flags |= NEW_BEST;
+                    }
+
+                    // Start new lap with interpolated time
+                    self.lap_start_ms = crossing_time;
+                    self.current_lap_ms = 0;
+                }
+            }
+        }
+    }
+
+    /// Check for crossing on a point-to-point track using local coordinates with timestamp interpolation
+    ///
+    /// Uses f32 local meter positions for 200Hz EKF updates.
+    /// Interpolates crossing timestamp for sub-millisecond precision.
+    ///
+    /// # Arguments
+    /// * `timestamps` - (prev_ts, current_ts) for interpolation
+    /// * `lines` - (start, finish) timing lines
+    #[allow(clippy::too_many_arguments)]
+    fn check_local_p2p_crossing(
+        &mut self,
+        prev: (f32, f32),
+        pos: (f32, f32),
+        velocity: (f32, f32),
+        prev_ts: u32,
+        timestamp_ms: u32,
+        start: &LocalTimingLine,
+        finish: &LocalTimingLine,
+    ) {
+        // Calculate dt once for interpolation
+        let dt = timestamp_ms.saturating_sub(prev_ts);
+
+        // Check start line crossing
+        if let Some(t) = line_segment_intersection(prev, pos, start.p1, start.p2) {
+            if direction_valid(velocity, start.direction, self.direction_tolerance) {
+                // Interpolate crossing timestamp
+                let crossing_time = prev_ts + (t * dt as f32) as u32;
+
+                // Debounce only applies if we're already timing (re-crossing start)
+                if self.state == LapTimerState::Timing {
+                    let since_last = crossing_time.saturating_sub(self.last_crossing_ms);
+                    if since_last < self.crossing_debounce_ms {
+                        return;
+                    }
+                }
+                self.last_crossing_ms = crossing_time;
+                self.frame_flags |= CROSSED_START;
+                self.crossed_start_this_run = true;
+                self.lap_start_ms = crossing_time;
+                self.current_lap_ms = 0;
+                self.state = LapTimerState::Timing;
+            }
+        }
+
+        // Check finish line crossing (only if we crossed start)
+        if self.crossed_start_this_run {
+            if let Some(t) = line_segment_intersection(prev, pos, finish.p1, finish.p2) {
+                if direction_valid(velocity, finish.direction, self.direction_tolerance) {
+                    // Interpolate crossing timestamp
+                    let crossing_time = prev_ts + (t * dt as f32) as u32;
+                    let lap_time = crossing_time.saturating_sub(self.lap_start_ms);
+
+                    // Validate lap time
+                    if lap_time < self.min_lap_time_ms {
+                        self.frame_flags |= INVALID_LAP;
+                        return;
+                    }
+
+                    self.frame_flags |= CROSSED_FINISH | NEW_LAP;
+                    self.lap_count = self.lap_count.saturating_add(1);
+
+                    // Check for new best
+                    if self.best_lap_ms.is_none_or(|best| lap_time < best) {
+                        self.best_lap_ms = Some(lap_time);
+                        self.frame_flags |= NEW_BEST;
+                    }
+
+                    // Reset for next run
+                    self.crossed_start_this_run = false;
+                    self.state = LapTimerState::Armed;
+                    self.current_lap_ms = 0;
+                }
+            }
+        }
+    }
 }
 
 /// Main lap timer struct
@@ -315,6 +504,14 @@ pub struct LapTimer {
     timing: TimingState,
     /// Previous GPS position (lat, lon) for crossing detection
     prev_pos: Option<(f64, f64)>,
+    /// Cached local coordinates for high-frequency updates (200Hz)
+    local_track: Option<LocalTrackType>,
+    /// Previous EKF position for 200Hz crossing detection
+    prev_ekf_pos: Option<(f32, f32)>,
+    /// Previous EKF timestamp for interpolation
+    prev_ekf_ts: u32,
+    /// Accumulated flags from 200Hz updates (cleared on read)
+    accumulated_flags: u8,
 }
 
 impl LapTimer {
@@ -324,6 +521,10 @@ impl LapTimer {
             track: None,
             timing: TimingState::new(),
             prev_pos: None,
+            local_track: None,
+            prev_ekf_pos: None,
+            prev_ekf_ts: 0,
+            accumulated_flags: FLAG_NONE,
         }
     }
 
@@ -333,6 +534,11 @@ impl LapTimer {
         self.timing.state = LapTimerState::Armed;
         self.timing.reset();
         self.prev_pos = None;
+        // Reset local track (will be set when GPS reference becomes available)
+        self.local_track = None;
+        self.prev_ekf_pos = None;
+        self.prev_ekf_ts = 0;
+        self.accumulated_flags = FLAG_NONE;
     }
 
     /// Configure for point-to-point (separate start and finish lines)
@@ -341,6 +547,11 @@ impl LapTimer {
         self.timing.state = LapTimerState::Armed;
         self.timing.reset();
         self.prev_pos = None;
+        // Reset local track (will be set when GPS reference becomes available)
+        self.local_track = None;
+        self.prev_ekf_pos = None;
+        self.prev_ekf_ts = 0;
+        self.accumulated_flags = FLAG_NONE;
     }
 
     /// Clear configuration and return to idle
@@ -349,6 +560,10 @@ impl LapTimer {
         self.timing.state = LapTimerState::Idle;
         self.timing.reset();
         self.prev_pos = None;
+        self.local_track = None;
+        self.prev_ekf_pos = None;
+        self.prev_ekf_ts = 0;
+        self.accumulated_flags = FLAG_NONE;
     }
 
     /// Update with new GPS position. Returns flags for this frame.
@@ -432,6 +647,128 @@ impl LapTimer {
     /// Get completed lap count
     pub fn lap_count(&self) -> u16 {
         self.timing.lap_count
+    }
+
+    /// Check if track configuration exists
+    pub fn has_track(&self) -> bool {
+        self.track.is_some()
+    }
+
+    /// Convert GPS timing lines to local meters using GPS reference point
+    ///
+    /// Call when track is configured AND GPS origin is available.
+    /// Returns true if local track was successfully created.
+    pub fn set_gps_reference(&mut self, ref_lat: f64, ref_lon: f64) -> bool {
+        let Some(track) = &self.track else {
+            return false;
+        };
+
+        self.local_track = Some(match track {
+            TrackType::Loop { line } => LocalTrackType::Loop {
+                line: line.to_local_line(ref_lat, ref_lon),
+            },
+            TrackType::PointToPoint { start, finish } => LocalTrackType::PointToPoint {
+                start: start.to_local_line(ref_lat, ref_lon),
+                finish: finish.to_local_line(ref_lat, ref_lon),
+            },
+        });
+
+        // Reset EKF tracking state for fresh start
+        self.prev_ekf_pos = None;
+        self.prev_ekf_ts = 0;
+        self.accumulated_flags = FLAG_NONE;
+
+        true
+    }
+
+    /// Check if local track is established (ready for 200Hz updates)
+    pub fn has_local_track(&self) -> bool {
+        self.local_track.is_some()
+    }
+
+    /// High-frequency update using EKF position (local meters)
+    ///
+    /// Call at 200Hz from IMU polling block for sub-millisecond precision.
+    /// Uses timestamp interpolation for precise crossing time.
+    ///
+    /// # Arguments
+    /// * `pos` - EKF position in local meters (x, y)
+    /// * `velocity` - EKF velocity in m/s (vx, vy) for direction validation
+    /// * `timestamp_ms` - Current timestamp in milliseconds
+    /// * `speed_mps` - Current speed in m/s (for minimum speed check)
+    ///
+    /// # Returns
+    /// Bitfield of flags (CROSSED_START, CROSSED_FINISH, NEW_LAP, NEW_BEST, INVALID_LAP)
+    pub fn update_ekf(
+        &mut self,
+        pos: (f32, f32),
+        velocity: (f32, f32),
+        timestamp_ms: u32,
+        speed_mps: f32,
+    ) -> u8 {
+        // Clear per-frame flags
+        self.timing.frame_flags = FLAG_NONE;
+
+        // Update current lap time if timing
+        if self.timing.state == LapTimerState::Timing {
+            self.timing.current_lap_ms = timestamp_ms.saturating_sub(self.timing.lap_start_ms);
+        }
+
+        // Need previous position for crossing detection
+        let Some(prev) = self.prev_ekf_pos else {
+            self.prev_ekf_pos = Some(pos);
+            self.prev_ekf_ts = timestamp_ms;
+            return self.timing.frame_flags;
+        };
+
+        let prev_ts = self.prev_ekf_ts;
+
+        // Update previous position for next frame
+        self.prev_ekf_pos = Some(pos);
+        self.prev_ekf_ts = timestamp_ms;
+
+        // Skip if no local track configured
+        let Some(local_track) = &self.local_track else {
+            return self.timing.frame_flags;
+        };
+
+        // Skip if nearly stationary (avoid false crossings while parked on line)
+        if speed_mps < 0.5 {
+            return self.timing.frame_flags;
+        }
+
+        // Check for line crossings with interpolation
+        match local_track {
+            LocalTrackType::Loop { line } => {
+                self.timing
+                    .check_local_loop_crossing(prev, pos, velocity, prev_ts, timestamp_ms, line);
+            }
+            LocalTrackType::PointToPoint { start, finish } => {
+                self.timing.check_local_p2p_crossing(
+                    prev,
+                    pos,
+                    velocity,
+                    prev_ts,
+                    timestamp_ms,
+                    start,
+                    finish,
+                );
+            }
+        }
+
+        // Accumulate flags for telemetry block
+        self.accumulated_flags |= self.timing.frame_flags;
+
+        self.timing.frame_flags
+    }
+
+    /// Take accumulated flags from 200Hz updates (clears on read)
+    ///
+    /// Call from telemetry block to get all flags since last read.
+    pub fn take_accumulated_flags(&mut self) -> u8 {
+        let flags = self.accumulated_flags;
+        self.accumulated_flags = FLAG_NONE;
+        flags
     }
 }
 
@@ -974,5 +1311,254 @@ mod tests {
 
         assert_eq!(flags, FLAG_NONE, "Should ignore crossing when stationary");
         assert_eq!(timer.timing.state, LapTimerState::Armed);
+    }
+
+    // ========================================================================
+    // 200Hz EKF update tests (local coordinates)
+    // ========================================================================
+
+    #[test]
+    fn test_timing_line_to_local_line() {
+        // Create a timing line at the equator
+        let line = test_line();
+
+        // Reference point at equator origin
+        let local = line.to_local_line(0.0, 0.0);
+
+        // At equator, 0.0001° longitude ≈ 11.132 meters
+        // p1 is at lon=-0.0001, so x should be about -11.1m
+        // p2 is at lon=0.0001, so x should be about +11.1m
+        // Both at lat=0 (y=0)
+        assert!(
+            (local.p1.0 - (-11.132)).abs() < 0.1,
+            "p1.x expected ~-11.1, got {}",
+            local.p1.0
+        );
+        assert!(
+            local.p1.1.abs() < 0.1,
+            "p1.y expected ~0, got {}",
+            local.p1.1
+        );
+        assert!(
+            (local.p2.0 - 11.132).abs() < 0.1,
+            "p2.x expected ~11.1, got {}",
+            local.p2.0
+        );
+        assert!(
+            local.p2.1.abs() < 0.1,
+            "p2.y expected ~0, got {}",
+            local.p2.1
+        );
+        assert_eq!(local.direction, FRAC_PI_2);
+    }
+
+    #[test]
+    fn test_timing_line_to_local_with_offset_reference() {
+        // Create a timing line at equator
+        let line = test_line();
+
+        // Reference point offset 0.001° south (about 111m south)
+        let local = line.to_local_line(-0.001, 0.0);
+
+        // Line is at lat=0, reference is at lat=-0.001
+        // So line should be about 111m NORTH of reference (positive Y)
+        assert!(
+            (local.p1.1 - 111.32).abs() < 1.0,
+            "p1.y expected ~111, got {}",
+            local.p1.1
+        );
+        assert!(
+            (local.p2.1 - 111.32).abs() < 1.0,
+            "p2.y expected ~111, got {}",
+            local.p2.1
+        );
+    }
+
+    #[test]
+    fn test_set_gps_reference() {
+        let mut timer = LapTimer::new();
+        timer.configure_loop(test_line());
+
+        // Before setting reference, no local track
+        assert!(!timer.has_local_track());
+
+        // Set GPS reference
+        assert!(timer.set_gps_reference(0.0, 0.0));
+        assert!(timer.has_local_track());
+
+        // Verify local track was created correctly
+        match timer.local_track {
+            Some(LocalTrackType::Loop { line }) => {
+                assert!(
+                    (line.p1.0 - (-11.132)).abs() < 0.1,
+                    "p1.x expected ~-11.1, got {}",
+                    line.p1.0
+                );
+            }
+            _ => panic!("Expected LocalTrackType::Loop"),
+        }
+    }
+
+    #[test]
+    fn test_update_ekf_crossing_interpolation() {
+        let mut timer = LapTimer::new();
+        timer.timing.min_lap_time_ms = 1000;
+        timer.configure_loop(test_line());
+        timer.set_gps_reference(0.0, 0.0);
+
+        // Line is at y=0 (East-West), crossing direction is North (+Y)
+        // Local coords: line from (-11.1, 0) to (11.1, 0)
+
+        // First position: south of line at y=-5m
+        timer.update_ekf((0.0, -5.0), (0.0, 10.0), 0, 10.0);
+        assert_eq!(timer.timing.state, LapTimerState::Armed);
+
+        // Cross line: move from y=-5 to y=+5 (10m total)
+        // Crossing happens at y=0, which is 50% of the way (t=0.5)
+        // With timestamps 0 to 10ms, crossing should be at 5ms
+        let flags = timer.update_ekf((0.0, 5.0), (0.0, 10.0), 10, 10.0);
+
+        assert!(flags & CROSSED_START != 0, "Should have CROSSED_START flag");
+        assert_eq!(timer.timing.state, LapTimerState::Timing);
+
+        // lap_start_ms should be interpolated to ~5ms (halfway between 0 and 10)
+        assert_eq!(
+            timer.timing.lap_start_ms, 5,
+            "lap_start_ms should be interpolated to 5"
+        );
+    }
+
+    #[test]
+    fn test_update_ekf_complete_lap_with_interpolation() {
+        let mut timer = LapTimer::new();
+        timer.timing.min_lap_time_ms = 1000;
+        timer.configure_loop(test_line());
+        timer.set_gps_reference(0.0, 0.0);
+
+        // First crossing at t=0-10ms (interpolated to 5ms)
+        // From y=-5 to y=+5, crossing at y=0 is fraction t=0.5
+        // crossing_time = 0 + 0.5 * (10-0) = 5ms
+        timer.update_ekf((0.0, -5.0), (0.0, 10.0), 0, 10.0);
+        timer.update_ekf((0.0, 5.0), (0.0, 10.0), 10, 10.0);
+        assert_eq!(timer.timing.state, LapTimerState::Timing);
+        assert_eq!(timer.timing.lap_start_ms, 5);
+
+        // Drive around track (all positions stay north of y=0 to avoid crossing)
+        timer.update_ekf((50.0, 50.0), (10.0, 0.0), 30_000, 10.0);
+        timer.update_ekf((100.0, 100.0), (10.0, 10.0), 40_000, 10.0);
+        timer.update_ekf((50.0, 100.0), (-10.0, 0.0), 50_000, 10.0);
+        timer.update_ekf((0.0, 50.0), (0.0, -10.0), 55_000, 10.0);
+
+        // Approach from south to cross going north again
+        timer.update_ekf((0.0, -5.0), (0.0, -10.0), 60_000, 10.0);
+
+        // Complete lap: from y=-5 to y=+5 at t=60000-60010ms
+        // Crossing at y=0 is fraction t=0.5
+        // crossing_time = 60000 + 0.5 * (60010-60000) = 60005ms
+        // Lap time = 60005 - 5 = 60000ms
+        let flags = timer.update_ekf((0.0, 5.0), (0.0, 10.0), 60_010, 10.0);
+
+        assert!(flags & NEW_LAP != 0, "Should have NEW_LAP flag");
+        assert!(flags & NEW_BEST != 0, "Should have NEW_BEST flag");
+        assert_eq!(timer.lap_count(), 1);
+
+        // Lap time should be 60005 - 5 = 60000ms
+        assert_eq!(timer.timing.best_lap_ms, Some(60_000));
+    }
+
+    #[test]
+    fn test_accumulated_flags() {
+        let mut timer = LapTimer::new();
+        timer.configure_loop(test_line());
+        timer.set_gps_reference(0.0, 0.0);
+
+        // Initially no flags
+        assert_eq!(timer.take_accumulated_flags(), FLAG_NONE);
+
+        // Cross line - should accumulate CROSSED_START
+        timer.update_ekf((0.0, -5.0), (0.0, 10.0), 0, 10.0);
+        timer.update_ekf((0.0, 5.0), (0.0, 10.0), 10, 10.0);
+
+        // Flags should be accumulated
+        let flags = timer.take_accumulated_flags();
+        assert!(flags & CROSSED_START != 0);
+
+        // After taking, should be cleared
+        assert_eq!(timer.take_accumulated_flags(), FLAG_NONE);
+    }
+
+    #[test]
+    fn test_fallback_without_local_track() {
+        let mut timer = LapTimer::new();
+        timer.configure_loop(test_line());
+
+        // Don't set GPS reference - should use GPS-based update
+        assert!(!timer.has_local_track());
+
+        // GPS-based update should work
+        timer.update(-0.00005, 0.0, (0.0, 10.0), 0, 10.0);
+        let flags = timer.update(0.00005, 0.0, (0.0, 10.0), 100, 10.0);
+
+        assert!(flags & CROSSED_START != 0, "GPS fallback should work");
+        assert_eq!(timer.timing.state, LapTimerState::Timing);
+    }
+
+    #[test]
+    fn test_update_ekf_stationary_ignored() {
+        let mut timer = LapTimer::new();
+        timer.configure_loop(test_line());
+        timer.set_gps_reference(0.0, 0.0);
+
+        // Try crossing while nearly stationary
+        timer.update_ekf((0.0, -0.1), (0.0, 0.1), 0, 0.1);
+        let flags = timer.update_ekf((0.0, 0.1), (0.0, 0.1), 10, 0.1);
+
+        assert_eq!(flags, FLAG_NONE, "Should ignore crossing when stationary");
+        assert_eq!(timer.timing.state, LapTimerState::Armed);
+    }
+
+    #[test]
+    fn test_update_ekf_point_to_point() {
+        let mut timer = LapTimer::new();
+        timer.timing.min_lap_time_ms = 1000;
+        // Start line at lat=0, finish line at lat=0.001 (~111m north)
+        timer.configure_point_to_point(test_line_at_lat(0.0), test_line_at_lat(0.001));
+        timer.set_gps_reference(0.0, 0.0);
+
+        // Start line is at y=0, finish line is at y≈111m
+
+        // Cross start line
+        timer.update_ekf((0.0, -5.0), (0.0, 10.0), 0, 10.0);
+        let flags1 = timer.update_ekf((0.0, 5.0), (0.0, 10.0), 10, 10.0);
+        assert!(flags1 & CROSSED_START != 0);
+        assert_eq!(timer.timing.state, LapTimerState::Timing);
+
+        // Drive towards finish
+        timer.update_ekf((0.0, 50.0), (0.0, 10.0), 15_000, 10.0);
+        timer.update_ekf((0.0, 105.0), (0.0, 10.0), 28_000, 10.0);
+
+        // Cross finish line (at y≈111m)
+        timer.update_ekf((0.0, 106.0), (0.0, 10.0), 29_000, 10.0);
+        let flags2 = timer.update_ekf((0.0, 116.0), (0.0, 10.0), 30_000, 10.0);
+
+        assert!(flags2 & CROSSED_FINISH != 0);
+        assert!(flags2 & NEW_LAP != 0);
+        assert_eq!(timer.lap_count(), 1);
+        assert_eq!(timer.timing.state, LapTimerState::Armed);
+    }
+
+    #[test]
+    fn test_clear_resets_local_track() {
+        let mut timer = LapTimer::new();
+        timer.configure_loop(test_line());
+        timer.set_gps_reference(0.0, 0.0);
+
+        assert!(timer.has_local_track());
+
+        timer.clear();
+
+        assert!(!timer.has_local_track());
+        assert!(timer.prev_ekf_pos.is_none());
+        assert_eq!(timer.accumulated_flags, FLAG_NONE);
     }
 }

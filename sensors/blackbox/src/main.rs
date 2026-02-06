@@ -729,6 +729,21 @@ fn main() {
             unsafe { EKF_RESET_DONE = true };
         }
 
+        // Convert GPS timing line to local meters when GPS origin available
+        // This enables 200Hz lap timer updates using EKF position
+        if sensors.gps_parser.is_warmed_up()
+            && lap_timer.has_track()
+            && !lap_timer.has_local_track()
+        {
+            let ref_pt = sensors.gps_parser.reference();
+            if lap_timer.set_gps_reference(ref_pt.lat, ref_pt.lon) {
+                info!(
+                    ">>> Lap timer: converted timing line to local coordinates (ref: {:.6}, {:.6})",
+                    ref_pt.lat, ref_pt.lon
+                );
+            }
+        }
+
         // Poll IMU and update EKF prediction (only after GPS warmup AND reset)
         if let Some((dt, _, accel_count)) = sensors.poll_imu() {
             // Record all processed Accel packets for accurate rate measurement
@@ -758,6 +773,18 @@ fn main() {
                 // Update yaw from magnetometer
                 let yaw_mag = sensors.imu_parser.data().yaw.to_radians();
                 estimator.update_yaw(yaw_mag);
+
+                // High-frequency lap timer update using EKF position (200Hz precision)
+                if lap_timer.has_local_track() {
+                    let (ekf_x, ekf_y) = estimator.ekf.position();
+                    let (ekf_vx, ekf_vy) = estimator.ekf.velocity();
+                    lap_timer.update_ekf(
+                        (ekf_x, ekf_y),
+                        (ekf_vx, ekf_vy),
+                        now_ms,
+                        estimator.ekf.speed(),
+                    );
+                }
             }
         }
 
@@ -915,13 +942,17 @@ fn main() {
                 speed,
             );
 
-            // Update lap timer with GPS lat/lon and EKF velocity
-            // GPS lat/lon is session-independent, enabling timing lines to work across
-            // restarts
-            let gps_fix = sensors.gps_parser.last_fix();
-            let (ekf_vx, ekf_vy) = estimator.ekf.velocity();
-            let lap_flags =
-                lap_timer.update(gps_fix.lat, gps_fix.lon, (ekf_vx, ekf_vy), now_ms, speed);
+            // Update lap timer - use 200Hz accumulated flags if available, else GPS fallback
+            // 200Hz EKF updates provide ~1-2ms precision vs ~33ms at telemetry rate
+            let lap_flags = if lap_timer.has_local_track() {
+                // Take accumulated flags from 200Hz updates (IMU polling block)
+                lap_timer.take_accumulated_flags()
+            } else {
+                // Fallback to GPS-based update (before GPS warmup or no track configured)
+                let gps_fix = sensors.gps_parser.last_fix();
+                let (ekf_vx, ekf_vy) = estimator.ekf.velocity();
+                lap_timer.update(gps_fix.lat, gps_fix.lon, (ekf_vx, ekf_vy), now_ms, speed)
+            };
             let lap_timer_data =
                 Some((lap_timer.current_lap_ms(), lap_timer.lap_count(), lap_flags));
 
