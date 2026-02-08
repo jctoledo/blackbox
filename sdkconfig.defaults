@@ -4,7 +4,7 @@ CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
 CONFIG_ESP_SYSTEM_EVENT_TASK_STACK_SIZE=4096
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
 # Note: Custom partition table disabled - using default partition layout
-# To use custom 2.5 MB app partition locally, uncomment and ensure partitions.csv exists:
+# espflash uses --partition-table flag instead (configured in .cargo/config.toml)
 # CONFIG_PARTITION_TABLE_CUSTOM=y
 # CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 CONFIG_COMPILER_OPTIMIZATION_SIZE=y
