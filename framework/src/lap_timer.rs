@@ -1561,4 +1561,204 @@ mod tests {
         assert!(timer.prev_ekf_pos.is_none());
         assert_eq!(timer.accumulated_flags, FLAG_NONE);
     }
+
+    // ========================================================================
+    // Realistic crossing scenario tests
+    // ========================================================================
+
+    /// Create a timing line from GPS coordinates mimicking a real track recording.
+    /// Uses coords near a real circuit (lat ~40.37, lon ~-3.72) with a given
+    /// compass heading converted to math convention for direction.
+    fn realistic_line(lat: f64, lon: f64, compass_heading_deg: f64) -> TimingLine {
+        // Line is ~24m wide, perpendicular to driving direction
+        let heading_rad = compass_heading_deg * core::f64::consts::PI / 180.0;
+        // Math convention direction for crossing
+        let math_dir = core::f32::consts::FRAC_PI_2 - compass_heading_deg as f32 * PI / 180.0;
+        let math_dir = wrap_angle(math_dir);
+        // Perpendicular to heading for line endpoints (geodetic: lat=north, lon=east)
+        // Forward in geodetic: d_lat=cos(h), d_lon=sin(h)
+        // Perpendicular (right): d_lat=-sin(h), d_lon=cos(h)
+        let cos_lat = (lat * core::f64::consts::PI / 180.0).cos();
+        let w_deg_lon = 12.0 / (111320.0 * cos_lat); // 12m in degrees longitude
+        let w_deg_lat = 12.0 / 111320.0; // 12m in degrees latitude
+        let perp_dlat = -heading_rad.sin();
+        let perp_dlon = heading_rad.cos();
+        TimingLine::new(
+            lat + perp_dlat * w_deg_lat,
+            lon + perp_dlon * w_deg_lon,
+            lat - perp_dlat * w_deg_lat,
+            lon - perp_dlon * w_deg_lon,
+            math_dir,
+        )
+    }
+
+    #[test]
+    fn test_realistic_circuit_crossing_northbound() {
+        // Simulates a car crossing a start/finish line while heading north
+        // at a track near Madrid (lat≈40.37°N)
+        let line = realistic_line(40.37, -3.72, 0.0); // Heading north (compass 0°)
+        let ref_lat = 40.3695;
+        let ref_lon = -3.72;
+        let local = line.to_local_line(ref_lat, ref_lon);
+
+        // Direction should be ≈π/2 (math convention for north)
+        assert!(
+            (local.direction - FRAC_PI_2).abs() < 0.01,
+            "Expected dir≈π/2, got {}",
+            local.direction
+        );
+
+        // Car approaches from 10m south and crosses to 10m north of line
+        let line_y = ((40.37 - ref_lat) * 111320.0) as f32;
+        let prev = (0.0, line_y - 10.0);
+        let curr = (0.0, line_y + 10.0);
+
+        let t = line_segment_intersection(
+            prev,
+            curr,
+            local.p1,
+            local.p2,
+        );
+        assert!(t.is_some(), "Should detect crossing");
+        let t = t.unwrap();
+        assert!(
+            t > 0.0 && t < 1.0,
+            "Crossing fraction should be in (0,1), got {}",
+            t
+        );
+
+        // Direction validation: velocity heading north
+        assert!(
+            direction_valid((0.0, 10.0), local.direction, FRAC_PI_2),
+            "Northbound crossing should be valid"
+        );
+        // Opposite direction should be rejected
+        assert!(
+            !direction_valid((0.0, -10.0), local.direction, FRAC_PI_2),
+            "Southbound crossing should be rejected"
+        );
+    }
+
+    #[test]
+    fn test_realistic_circuit_crossing_eastbound() {
+        // Car heading east (compass 90°) crossing a timing line
+        let line = realistic_line(40.37, -3.72, 90.0);
+        let ref_lat = 40.37;
+        let ref_lon = -3.7205;
+        let local = line.to_local_line(ref_lat, ref_lon);
+
+        // Direction should be ≈0 (math convention for east)
+        assert!(
+            local.direction.abs() < 0.01,
+            "Expected dir≈0, got {}",
+            local.direction
+        );
+
+        // Car approaches from 10m west and crosses to 10m east of line
+        let cos_lat = (ref_lat * core::f64::consts::PI / 180.0).cos();
+        let line_x = ((-3.72 - ref_lon) * cos_lat * 111320.0) as f32;
+        let prev = (line_x - 10.0, 0.0);
+        let curr = (line_x + 10.0, 0.0);
+
+        let t = line_segment_intersection(
+            prev,
+            curr,
+            local.p1,
+            local.p2,
+        );
+        assert!(t.is_some(), "Should detect eastbound crossing");
+
+        assert!(
+            direction_valid((10.0, 0.0), local.direction, FRAC_PI_2),
+            "Eastbound crossing should be valid"
+        );
+        assert!(
+            !direction_valid((-10.0, 0.0), local.direction, FRAC_PI_2),
+            "Westbound crossing should be rejected"
+        );
+    }
+
+    #[test]
+    fn test_realistic_p2p_start_and_finish() {
+        // Point-to-point: start line heading NE (45°), finish line 500m north heading NE
+        let start = realistic_line(40.370, -3.720, 45.0);
+        let finish = realistic_line(40.3745, -3.720, 45.0); // ~500m north
+
+        let mut timer = LapTimer::new();
+        timer.timing.min_lap_time_ms = 1000;
+        timer.configure_point_to_point(start, finish);
+        timer.set_gps_reference(40.369, -3.721);
+
+        // Math direction for 45° compass = π/2 - π/4 = π/4
+        let expected_dir = PI / 4.0;
+
+        // Approach start line from SW, cross going NE
+        let cos_lat = (40.370_f64 * core::f64::consts::PI / 180.0).cos();
+        let start_x = ((-3.720 - (-3.721)) * cos_lat * 111320.0) as f32;
+        let start_y = ((40.370 - 40.369) * 111320.0) as f32;
+
+        // Before start line (10m behind in NE direction)
+        let offset = 10.0;
+        let prev_x = start_x - offset * expected_dir.cos();
+        let prev_y = start_y - offset * expected_dir.sin();
+        timer.update_ekf((prev_x, prev_y), (7.07, 7.07), 0, 10.0);
+
+        // Cross start line (10m ahead in NE direction)
+        let next_x = start_x + offset * expected_dir.cos();
+        let next_y = start_y + offset * expected_dir.sin();
+        let flags1 = timer.update_ekf((next_x, next_y), (7.07, 7.07), 100, 10.0);
+        assert!(
+            flags1 & CROSSED_START != 0,
+            "Should cross start line, flags={}",
+            flags1
+        );
+        assert_eq!(timer.timing.state, LapTimerState::Timing);
+
+        // Drive north towards finish (intermediate positions away from both lines)
+        let mid_y = ((40.372 - 40.369) * 111320.0) as f32;
+        timer.update_ekf((start_x, mid_y), (7.07, 7.07), 15_000, 10.0);
+
+        // Approach finish line
+        let finish_y = ((40.3745 - 40.369) * 111320.0) as f32;
+        let prev_fx = start_x - offset * expected_dir.cos();
+        let prev_fy = finish_y - offset * expected_dir.sin();
+        timer.update_ekf((prev_fx, prev_fy), (7.07, 7.07), 29_000, 10.0);
+
+        // Cross finish line
+        let next_fx = start_x + offset * expected_dir.cos();
+        let next_fy = finish_y + offset * expected_dir.sin();
+        let flags2 = timer.update_ekf((next_fx, next_fy), (7.07, 7.07), 30_000, 10.0);
+        assert!(
+            flags2 & CROSSED_FINISH != 0,
+            "Should cross finish line, flags={}",
+            flags2
+        );
+        assert!(flags2 & NEW_LAP != 0, "Should complete run");
+        assert_eq!(timer.lap_count(), 1);
+        assert_eq!(timer.timing.state, LapTimerState::Armed);
+    }
+
+    #[test]
+    fn test_direction_valid_diagonal_headings() {
+        // NE direction: math convention = π/4
+        let ne_dir = PI / 4.0;
+        // Velocity heading NE (equal vx, vy)
+        assert!(direction_valid((7.07, 7.07), ne_dir, FRAC_PI_2));
+        // Velocity heading N (vx=0, vy=10) should be within ±90° of NE
+        assert!(direction_valid((0.0, 10.0), ne_dir, FRAC_PI_2));
+        // Velocity heading E (vx=10, vy=0) should be within ±90° of NE
+        assert!(direction_valid((10.0, 0.0), ne_dir, FRAC_PI_2));
+        // Velocity heading SW (opposite of NE) should be rejected
+        assert!(!direction_valid((-7.07, -7.07), ne_dir, FRAC_PI_2));
+
+        // SE direction: math convention = -π/4
+        let se_dir = -PI / 4.0;
+        assert!(direction_valid((7.07, -7.07), se_dir, FRAC_PI_2));
+        assert!(!direction_valid((-7.07, 7.07), se_dir, FRAC_PI_2));
+
+        // NW direction: math convention = 3π/4
+        let nw_dir = 3.0 * PI / 4.0;
+        assert!(direction_valid((-7.07, 7.07), nw_dir, FRAC_PI_2));
+        assert!(!direction_valid((7.07, -7.07), nw_dir, FRAC_PI_2));
+    }
 }

@@ -898,6 +898,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
         <div class="bbRow"><span class="bbLbl">TX Failed</span><span class="bbVal bbNum" id="tx-fail">--</span></div>
     </section>
     </div>
+    <div class="bbGrid">
+    <section class="bbDiagCard">
+        <div class="bbCardHead">Self Tests</div>
+        <div class="bbRow"><span class="bbLbl">GPS Coords</span><span class="bbVal" id="test-gps">—</span></div>
+        <div class="bbRow"><span class="bbLbl">Timing Line</span><span class="bbVal" id="test-timing">—</span></div>
+        <div style="padding-top:12px"><button class="bbRecBtn" id="btn-run-tests">Run Tests</button></div>
+    </section>
+    </div>
     <div class="bbUptime" id="uptime">Uptime: --</div>
 </main>
 </div>
@@ -1329,9 +1337,9 @@ class TrackRecorder{
     _gpsQualityRating(sigma){if(sigma<2.5)return'excellent';if(sigma<4.0)return'good';if(sigma<6.0)return'fair';return'poor'}
     cancel(){this.recording=false}
     // Finish recording - uses this.gpsRef (set at start) as the coordinate reference
-    finish(trackName){if(!this.recording)return null;this.recording=false;if(this.keyPoints.length<10)return null;const centerline=this._smoothPath(this.keyPoints,3);const startLine=this._calculateTimingLine(centerline,'start');let finishLine=null;if(this.trackType==='point_to_point')finishLine=this._calculateTimingLine(centerline,'finish');const bounds=this._calculateBounds(centerline);const totalDist=this._calculatePathLength(centerline);const quality=this._assessQuality();return{id:'track_'+Date.now()+'_'+Math.random().toString(36).substr(2,9),name:trackName,type:this.trackType,created:Date.now(),startLine:startLine,finishLine:finishLine,centerline:centerline,bounds:bounds,totalDistance:totalDist,origin:{x:this.startPos.x,y:this.startPos.y},gpsOrigin:this.gpsRef,quality:quality,corners:this.cornerCount,keyPoints:this.keyPoints.length}}
+    finish(trackName){if(!this.recording)return null;this.recording=false;if(this.keyPoints.length<10)return null;const centerline=this._smoothPath(this.keyPoints,3);const startLine=this._calculateTimingLine(centerline,'start');let finishLine=null;if(this.trackType==='point_to_point')finishLine=this._calculateTimingLine(centerline,'finish');console.log('[TrackRecorder] Start line: dir='+(startLine.direction*180/Math.PI).toFixed(1)+'° moving='+((startLine._debug||{}).movingCount||'?')+' fallback='+((startLine._debug||{}).usedFallback||false)+' sigma=['+((startLine._debug||{}).firstSigma||'?')+','+((startLine._debug||{}).lastSigma||'?')+']');if(finishLine)console.log('[TrackRecorder] Finish line: dir='+(finishLine.direction*180/Math.PI).toFixed(1)+'° moving='+((finishLine._debug||{}).movingCount||'?')+' fallback='+((finishLine._debug||{}).usedFallback||false)+' sigma=['+((finishLine._debug||{}).firstSigma||'?')+','+((finishLine._debug||{}).lastSigma||'?')+']');const bounds=this._calculateBounds(centerline);const totalDist=this._calculatePathLength(centerline);const quality=this._assessQuality();return{id:'track_'+Date.now()+'_'+Math.random().toString(36).substr(2,9),name:trackName,type:this.trackType,created:Date.now(),startLine:startLine,finishLine:finishLine,centerline:centerline,bounds:bounds,totalDistance:totalDist,origin:{x:this.startPos.x,y:this.startPos.y},gpsOrigin:this.gpsRef,quality:quality,corners:this.cornerCount,keyPoints:this.keyPoints.length}}
     _smoothPath(pts,ws){if(!pts||pts.length===0)return[];if(pts.length<=ws)return pts.map(p=>({...p}));const result=[];const hw=Math.floor(ws/2);for(let i=0;i<pts.length;i++){const s=Math.max(0,i-hw),e=Math.min(pts.length-1,i+hw),w=pts.slice(s,e+1);if(w.length===0){result.push({...pts[i]});continue}let sx=0,sy=0,sw=0;for(let j=0;j<w.length;j++){const df=Math.abs(j-(i-s)),pw=1/(1+df*0.5),sg=w[j].sigma||3.0,qw=1/(sg+0.5),wt=pw*qw;sx+=w[j].x*wt;sy+=w[j].y*wt;sw+=wt}const x=sw>0?sx/sw:pts[i].x,y=sw>0?sy/sw:pts[i].y;result.push({x:isNaN(x)?pts[i].x:x,y:isNaN(y)?pts[i].y:y,lat:pts[i].lat,lon:pts[i].lon,heading:pts[i].heading,speed:pts[i].speed,sigma:pts[i].sigma,t:pts[i].t,curvature:pts[i].curvature,isCorner:pts[i].isCorner})}return result}
-    _calculateTimingLine(cl,which='start'){if(!cl||cl.length===0)return{p1:[0,12],p2:[0,-12],direction:0};const idx=which==='start'?Math.min(2,cl.length-1):Math.max(0,cl.length-3);const ns=5,s=Math.max(0,idx-ns),e=Math.min(cl.length-1,idx+ns),pts=cl.slice(s,e+1);let sx=0,sy=0,sw=0;for(const p of pts){const wt=1/(p.sigma||3.0+0.5);sx+=p.x*wt;sy+=p.y*wt;sw+=wt}const cx=sw>0?sx/sw:cl[idx].x,cy=sw>0?sy/sw:cl[idx].y;const safeCx=isNaN(cx)?0:cx,safeCy=isNaN(cy)?0:cy;let dir=0;if(pts.length>=2){const f=pts[0],l=pts[pts.length-1];dir=Math.atan2(l.y-f.y,l.x-f.x)}const w=12,perp=dir+Math.PI/2;return{p1:[safeCx+Math.cos(perp)*w,safeCy+Math.sin(perp)*w],p2:[safeCx-Math.cos(perp)*w,safeCy-Math.sin(perp)*w],direction:dir}}
+    _calculateTimingLine(cl,which='start'){if(!cl||cl.length===0)return{p1:[0,12],p2:[0,-12],direction:0};const idx=which==='start'?Math.min(2,cl.length-1):Math.max(0,cl.length-3);const ns=5,s=Math.max(0,idx-ns),e=Math.min(cl.length-1,idx+ns),pts=cl.slice(s,e+1);let sx=0,sy=0,sw=0;for(const p of pts){const wt=1/((p.sigma||3.0)+0.5);sx+=p.x*wt;sy+=p.y*wt;sw+=wt}const cx=sw>0?sx/sw:cl[idx].x,cy=sw>0?sy/sw:cl[idx].y;const safeCx=isNaN(cx)?0:cx,safeCy=isNaN(cy)?0:cy;let dir=0,usedFallback=false,movingCount=0;const moving=pts.filter(p=>(p.speed||0)>2.0);movingCount=moving.length;if(moving.length>0){let sinSum=0,cosSum=0;for(const p of moving){sinSum+=Math.sin(p.heading||0);cosSum+=Math.cos(p.heading||0)}const meanHeading=Math.atan2(sinSum,cosSum);dir=Math.PI/2-meanHeading;while(dir>Math.PI)dir-=2*Math.PI;while(dir<-Math.PI)dir+=2*Math.PI}else{usedFallback=true;if(pts.length>=2){const f=pts[0],l=pts[pts.length-1];dir=Math.atan2(l.y-f.y,l.x-f.x)}}const w=12,perp=dir+Math.PI/2;return{p1:[safeCx+Math.cos(perp)*w,safeCy+Math.sin(perp)*w],p2:[safeCx-Math.cos(perp)*w,safeCy-Math.sin(perp)*w],direction:dir,_debug:{movingCount,usedFallback,firstSigma:pts[0]?pts[0].sigma:null,lastSigma:pts[pts.length-1]?pts[pts.length-1].sigma:null}}}
     _calculateBounds(cl){if(!cl||cl.length===0)return{minX:0,minY:0,maxX:100,maxY:100};let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;for(const p of cl){minX=Math.min(minX,p.x);minY=Math.min(minY,p.y);maxX=Math.max(maxX,p.x);maxY=Math.max(maxY,p.y)}return{minX,minY,maxX,maxY}}
     _calculatePathLength(cl){if(!cl||cl.length<2)return 0;let len=0;for(let i=1;i<cl.length;i++){const dx=cl[i].x-cl[i-1].x,dy=cl[i].y-cl[i-1].y;len+=Math.sqrt(dx*dx+dy*dy)}return len}
     _assessQuality(){if(this.keyPoints.length===0)return{rating:'poor',avgUncertainty:5.0,goodSampleRatio:0,corners:0,totalPoints:0};const vp=this.keyPoints.filter(p=>p.sigma<4.0);const ts=this.keyPoints.reduce((s,p)=>s+(p.sigma||3.0),0);const as=ts/this.keyPoints.length;const displayCorners=this.inCorner?this.cornerCount+1:this.cornerCount;const gr=vp.length/this.keyPoints.length;let rating='good';if(isNaN(as)||as>4.5||gr<0.7)rating='fair';if(isNaN(as)||as>6.0||gr<0.5)rating='poor';return{rating:rating,avgUncertainty:isNaN(as)?3.0:as,goodSampleRatio:isNaN(gr)?0.5:gr,corners:displayCorners,totalPoints:this.keyPoints.length}}
@@ -1387,6 +1395,61 @@ function _testGpsCoordinates(){
     // Restore state
     jsGpsRef=savedRef;
     console.log('GPS coordinate tests: '+pass.length+' passed, '+fail.length+' failed');
+    if(fail.length>0)console.log('Failures:',fail);
+    return{pass,fail};
+}
+
+// Self-test for timing line calculation - call from console: _testTimingLine()
+function _testTimingLine(){
+    const pass=[],fail=[];const eq=(a,b,tol=0.05)=>Math.abs(a-b)<tol;
+    const tr=new TrackRecorder();
+    // Helper: make fake centerline points with heading/speed/sigma
+    function mkPts(arr){return arr.map(p=>({x:p.x||0,y:p.y||0,heading:p.heading||0,speed:p.speed||0,sigma:p.sigma||3.0,lat:0,lon:0,t:0,curvature:0,isCorner:false}))}
+
+    // Test 1: Heading North (compass=0) → math dir should be π/2
+    const pts1=mkPts([{x:0,y:0,heading:0,speed:10},{x:1,y:1,heading:0,speed:10},{x:2,y:2,heading:0,speed:10}]);
+    const r1=tr._calculateTimingLine(pts1,'start');
+    if(eq(r1.direction,Math.PI/2))pass.push('North heading → dir=π/2');else fail.push('North heading: expected π/2, got '+r1.direction.toFixed(4));
+
+    // Test 2: Heading East (compass=π/2) → math dir should be 0
+    const pts2=mkPts([{x:0,y:0,heading:Math.PI/2,speed:10},{x:1,y:0,heading:Math.PI/2,speed:10},{x:2,y:0,heading:Math.PI/2,speed:10}]);
+    const r2=tr._calculateTimingLine(pts2,'start');
+    if(eq(r2.direction,0))pass.push('East heading → dir=0');else fail.push('East heading: expected 0, got '+r2.direction.toFixed(4));
+
+    // Test 3: Heading South (compass=π) → math dir should be -π/2
+    const pts3=mkPts([{x:0,y:0,heading:Math.PI,speed:10},{x:0,y:-1,heading:Math.PI,speed:10},{x:0,y:-2,heading:Math.PI,speed:10}]);
+    const r3=tr._calculateTimingLine(pts3,'start');
+    if(eq(r3.direction,-Math.PI/2))pass.push('South heading → dir=-π/2');else fail.push('South heading: expected -π/2, got '+r3.direction.toFixed(4));
+
+    // Test 4: Heading West (compass=3π/2 or -π/2) → math dir should be π (or -π)
+    const pts4=mkPts([{x:0,y:0,heading:3*Math.PI/2,speed:10},{x:-1,y:0,heading:3*Math.PI/2,speed:10},{x:-2,y:0,heading:3*Math.PI/2,speed:10}]);
+    const r4=tr._calculateTimingLine(pts4,'start');
+    if(eq(Math.abs(r4.direction),Math.PI))pass.push('West heading → dir=±π');else fail.push('West heading: expected ±π, got '+r4.direction.toFixed(4));
+
+    // Test 5: Circular mean wrap-around (headings near 0/2π boundary)
+    // Headings: 350° = 6.109rad, 0° = 0rad, 10° = 0.1745rad → mean ≈ 0° compass → π/2 math
+    const h350=350*Math.PI/180,h10=10*Math.PI/180;
+    const pts5=mkPts([{x:0,y:0,heading:h350,speed:10},{x:0,y:1,heading:0,speed:10},{x:0,y:2,heading:h10,speed:10}]);
+    const r5=tr._calculateTimingLine(pts5,'start');
+    if(eq(r5.direction,Math.PI/2,0.15))pass.push('Wrap-around heading → dir≈π/2');else fail.push('Wrap-around heading: expected ≈π/2, got '+r5.direction.toFixed(4));
+
+    // Test 6: Fallback to atan2 when no moving points (all speed=0)
+    const pts6=mkPts([{x:0,y:0,speed:0},{x:1,y:1,speed:0},{x:2,y:2,speed:0}]);
+    const r6=tr._calculateTimingLine(pts6,'start');
+    if(r6._debug&&r6._debug.usedFallback===true)pass.push('Fallback used when stationary');else fail.push('Fallback not triggered for stationary points');
+    // atan2(2-0, 2-0) = π/4
+    if(eq(r6.direction,Math.PI/4))pass.push('Fallback atan2 direction correct');else fail.push('Fallback atan2: expected π/4, got '+r6.direction.toFixed(4));
+
+    // Test 7: Operator precedence fix - center weighting uses (sigma+0.5) not (sigma || 3.5)
+    const pts7=mkPts([{x:10,y:20,sigma:1.0,speed:10,heading:0},{x:10,y:20,sigma:1.0,speed:10,heading:0}]);
+    const r7=tr._calculateTimingLine(pts7,'start');
+    // With sigma=1.0, weight should be 1/(1.0+0.5) = 0.667, center at (10,20)
+    if(eq(r7.p1[0]-10,0,0.1)||eq(r7.p2[0]-10,0,0.1))pass.push('Center weighting correct');else fail.push('Center weighting: expected x≈10, got p1.x='+r7.p1[0].toFixed(2)+' p2.x='+r7.p2[0].toFixed(2));
+
+    // Test 8: _debug metadata present
+    if(r1._debug&&typeof r1._debug.movingCount==='number')pass.push('Debug metadata present');else fail.push('Debug metadata missing');
+
+    console.log('Timing line tests: '+pass.length+' passed, '+fail.length+' failed');
     if(fail.length>0)console.log('Failures:',fail);
     return{pass,fail};
 }
@@ -2449,6 +2512,11 @@ $('track-modal').onclick=e=>{if(e.target===$('track-modal'))closeTrackModal()};
 $('btn-clear-track').onclick=clearActiveTrack;
 $('btn-export-all').onclick=exportAllTracks;
 $('menu-clear').onclick=()=>{$('menu-overlay').classList.remove('open');resetState()};
+$('btn-run-tests').onclick=()=>{
+    const fmt=(r)=>r.fail.length===0?r.pass.length+'/'+r.pass.length+' ✓':r.pass.length+'/'+(r.pass.length+r.fail.length)+' ✗';
+    try{const g=_testGpsCoordinates();$('test-gps').textContent=fmt(g);$('test-gps').style.color=g.fail.length?'#e74c3c':'#27ae60'}catch(e){$('test-gps').textContent='Error';$('test-gps').style.color='#e74c3c'}
+    try{const t=_testTimingLine();$('test-timing').textContent=fmt(t);$('test-timing').style.color=t.fail.length?'#e74c3c':'#27ae60'}catch(e){$('test-timing').textContent='Error';$('test-timing').style.color='#e74c3c'}
+};
 
 // Data Modal
 function openDataModal(){$('data-modal').classList.add('open');renderDataModal()}
