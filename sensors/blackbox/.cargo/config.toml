@@ -3,7 +3,7 @@ target = "riscv32imc-esp-espidf"
 
 [target.riscv32imc-esp-espidf]
 linker = "ldproxy"
-runner = "espflash flash --monitor"
+runner = "espflash flash --monitor --partition-table ../../partitions.csv"
 
 [env]
 ESP_IDF_SYS_ROOT_CRATE = "blackbox"
