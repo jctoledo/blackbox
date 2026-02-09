@@ -236,13 +236,13 @@ jobs:
           ls -lh ../../target/blackbox.bin
 
       - name: Upload merged firmware
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: firmware-esp32c3
           path: target/blackbox.bin
 
       - name: Upload individual components (debug)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: firmware-components
           path: |
