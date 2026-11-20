@@ -50,8 +50,9 @@ jobs:
           fi
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: nightly-2025-10-18
           components: rust-src
 
       - name: Install ESP-IDF prerequisites
@@ -75,7 +76,7 @@ jobs:
         run: |
           . $HOME/export-esp.sh
           cd sensors/${{ matrix.project }}
-          cargo build --release --target riscv32imc-esp-espidf
+          cargo build --release --locked --target riscv32imc-esp-espidf
 
       - name: Generate flashable binary
         run: |

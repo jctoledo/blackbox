@@ -20,8 +20,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Rust nightly
-        uses: dtolnay/rust-toolchain@nightly
+        uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: nightly-2025-10-18
           components: rust-src
 
       - name: Cache cargo (using Swatinem/rust-cache)
@@ -85,7 +86,7 @@ jobs:
         run: |
           . $HOME/export-esp.sh
           cd sensors/blackbox
-          cargo check
+          cargo check --locked
 
   fmt:
     name: Format Check
@@ -108,8 +109,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Rust nightly
-        uses: dtolnay/rust-toolchain@nightly
+        uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: nightly-2025-10-18
           components: rust-src, clippy
 
       - name: Cache cargo (using Swatinem/rust-cache)
@@ -118,10 +120,16 @@ jobs:
           workspaces: sensors/blackbox
           cache-on-failure: true
 
+      - name: Install ESP-IDF build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git wget flex bison gperf python3 python3-pip python3-venv cmake ninja-build ccache libffi-dev libssl-dev libclang-dev dfu-util libusb-1.0-0
+          cargo install ldproxy --locked
+
       - name: Run clippy
         run: |
           cd sensors/blackbox
-          cargo clippy -- -D warnings
+          cargo clippy --locked -- -D warnings
 
   build:
     name: Build Firmware
@@ -132,8 +140,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Rust nightly
-        uses: dtolnay/rust-toolchain@nightly
+        uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: nightly-2025-10-18
           components: rust-src
 
       - name: Cache cargo (using Swatinem/rust-cache)
@@ -215,7 +224,7 @@ jobs:
         run: |
           . $HOME/export-esp.sh
           cd sensors/blackbox
-          cargo build --release
+          cargo build --release --locked
           echo "Built binary size:"
           ls -lh ../../target/riscv32imc-esp-espidf/release/blackbox
           echo "Checking generated partition configuration:"
