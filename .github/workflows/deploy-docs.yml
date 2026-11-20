@@ -29,6 +29,11 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: python3 scripts/prepare_web_firmware.py
 
+      - name: Render crawlable documentation
+        run: |
+          python3 -m pip install 'Markdown==3.7'
+          python3 scripts/build_docs.py
+
       - name: Setup Pages
         uses: actions/configure-pages@v4
 

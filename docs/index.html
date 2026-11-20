@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Blackbox - Open Source Vehicle Telemetry</title>
+    <title>Blackbox — Open-Source GPS Lap Timer &amp; ESP32 Vehicle Telemetry</title>
     <meta name="description" content="Open-source GPS + IMU sensor fusion for vehicle dynamics. Track position, velocity, and g-forces in real-time. Built for track days and autocross. Build it, inspect it, make it yours.">
 
     <meta property="og:type" content="website">
@@ -12,38 +12,46 @@
     <meta property="og:url" content="https://jctoledo.github.io/blackbox/">
     <meta property="og:image" content="https://jctoledo.github.io/blackbox/dashboard-screenshot.jpg">
     <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Blackbox — GPS lap timing and open vehicle telemetry">
+    <meta name="twitter:description" content="Build an ESP32-C3 instrument for your drive. Rust firmware, GPS + IMU sensing, and a local browser dashboard.">
+    <meta name="twitter:image" content="https://jctoledo.github.io/blackbox/dashboard-screenshot.jpg">
+    <meta name="robots" content="index,follow,max-image-preview:large">
+    <meta name="theme-color" content="#172b23">
+    <link rel="sitemap" type="application/xml" href="sitemap.xml">
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <link rel="canonical" href="https://jctoledo.github.io/blackbox/">
 
     <script type="application/ld+json">
-    {
-        "@context": "https://schema.org",
-        "@type": "SoftwareApplication",
-        "name": "Blackbox Vehicle Telemetry",
-        "applicationCategory": "UtilitiesApplication",
-        "operatingSystem": "ESP32-C3",
-        "description": "Open-source GPS + IMU sensor fusion firmware for vehicle dynamics tracking with lap timer and mobile dashboard.",
-        "url": "https://jctoledo.github.io/blackbox/",
-        "downloadUrl": "https://github.com/jctoledo/blackbox/releases",
-        "softwareVersion": "0.0.3",
-        "dateModified": "2026-11-20",
-        "author": {"@type": "Person", "name": "Jose Cruz Toledo"},
-        "license": "https://opensource.org/licenses/MIT",
-        "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"},
-        "screenshot": "https://jctoledo.github.io/blackbox/dashboard-screenshot.jpg",
-        "releaseNotes": "https://github.com/jctoledo/blackbox/releases/tag/v0.0.3",
-        "softwareRequirements": "ESP32-C3, WT901 IMU, u-blox GPS module",
-        "featureList": [
-            "Real-time G-meter with lateral and longitudinal forces",
-            "GPS-based lap timer with delta-to-best display",
-            "7-state Extended Kalman Filter sensor fusion",
-            "GPS and IMU fusion with configurable sensor rates",
-            "Mobile dashboard via built-in WiFi AP",
-            "Track recording with circuit and point-to-point modes",
-            "Driving mode detection (IDLE, ACCEL, BRAKE, CORNER)",
-            "Zero-velocity updates when stationary"
-        ],
-        "keywords": "vehicle telemetry, lap timer, ESP32, sensor fusion, GPS, IMU, track day, autocross, g-meter"
-    }
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareSourceCode",
+  "name": "Blackbox",
+  "description": "Open-source ESP32-C3 vehicle telemetry with GPS and IMU sensor fusion, a browser dashboard, lap timing, and local recordings.",
+  "url": "https://jctoledo.github.io/blackbox/",
+  "codeRepository": "https://github.com/jctoledo/blackbox",
+  "programmingLanguage": {
+    "@type": "ComputerLanguage",
+    "name": "Rust"
+  },
+  "runtimePlatform": "ESP32-C3 / ESP-IDF",
+  "license": "https://github.com/jctoledo/blackbox/blob/main/LICENSE",
+  "isAccessibleForFree": true,
+  "author": {
+    "@type": "Person",
+    "name": "Jose Cruz Toledo"
+  },
+  "keywords": [
+    "GPS lap timer",
+    "ESP32-C3",
+    "vehicle telemetry",
+    "sensor fusion",
+    "open source",
+    "WT901"
+  ],
+  "sameAs": [
+    "https://github.com/jctoledo/blackbox"
+  ]
+}
     </script>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -751,7 +759,7 @@
                         <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg> Browser-local recording and CSV export</li>
                         <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg> Saved tracks with start-line guidance</li>
                     </ul>
-                    <a href="https://github.com/jctoledo/blackbox/blob/main/docs/LAP_TIMER.md" target="_blank" style="color: var(--accent); font-size: 13px; text-decoration: none;">Full lap timer guide →</a>
+                    <a href="guides/lap-timer.html" target="_blank" style="color: var(--accent); font-size: 13px; text-decoration: none;">Full lap timer guide →</a>
                 </div>
                 <div class="preview-phone">
                     <img src="dashboard-screenshot.jpg" alt="Blackbox device dashboard showing lap timing and G-meter" loading="lazy" width="390" height="844">
@@ -813,7 +821,7 @@
     <section class="section quickstart" id="start">
         <div class="section-inner"><span class="eyebrow">FROM BENCH TO DASHBOARD</span><h2>Three steps to your first session.</h2>
         <ol class="start-grid"><li><span>01</span><h3>Build &amp; flash</h3><p>Wire the ESP32-C3, WT901, GPS, and LED. Choose firmware for your GPS model and connect over USB.</p></li><li><span>02</span><h3>Connect &amp; settle</h3><p>Keep the unit still during calibration. Join its Wi-Fi, open the dashboard, and wait for a fresh GPS fix outdoors.</p></li><li><span>03</span><h3>Record &amp; return</h3><p>Record a circuit or stage, then select it to arm timing. Cross the start line in the recorded direction.</p></li></ol>
-        <p class="field-note">In active development. Timing accuracy depends on GPS reception, update rate, and line geometry. Validate your setup before relying on lap results. <a href="https://github.com/jctoledo/blackbox/blob/main/docs/LAP_TIMER.md">Setup and timing guide ↗</a></p>
+        <p class="field-note">In active development. Timing accuracy depends on GPS reception, update rate, and line geometry. Validate your setup before relying on lap results. <a href="guides/lap-timer.html">Setup and timing guide ↗</a></p>
         </div>
     </section>
     <section class="section" id="flash">
@@ -867,8 +875,10 @@
         <div class="footer-links">
             <a href="https://github.com/jctoledo/blackbox">GitHub</a>
             <a href="https://github.com/jctoledo/blackbox/blob/main/README.md">README</a>
-            <a href="https://github.com/jctoledo/blackbox/blob/main/docs/LAP_TIMER.md">Lap Timer Guide</a>
-            <a href="https://github.com/jctoledo/blackbox/blob/main/docs/SENSOR_FUSION.md">Sensor Fusion Guide</a>
+            <a href="guides/lap-timer.html">Lap Timer Guide</a>
+            <a href="guides/sensor-fusion.html">Sensor Fusion Guide</a>
+            <a href="guides/engineering-review.html">Validation &amp; limits</a>
+            <a href="llms.txt">Project index</a>
             <a href="https://github.com/jctoledo/blackbox/issues">Issues</a>
         </div>
         <p>Open source under MIT License</p>
