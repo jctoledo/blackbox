@@ -251,11 +251,11 @@ impl TimingState {
         prev: (f64, f64),
         pos: (f64, f64),
         velocity: (f32, f32),
-        timestamp_ms: u32,
-        prev_ms: u32,
+        timestamps_ms: (u32, u32),
         start: &TimingLine,
         finish: &TimingLine,
     ) {
+        let (prev_ms, timestamp_ms) = timestamps_ms;
         // Convert GPS positions to local meters for start line intersection test
         let prev_start = start.to_local(prev.0, prev.1);
         let pos_start = start.to_local(pos.0, pos.1);
@@ -439,8 +439,7 @@ impl LapTimer {
                     prev,
                     pos,
                     velocity,
-                    timestamp_ms,
-                    prev_ms,
+                    (prev_ms, timestamp_ms),
                     start,
                     finish,
                 );
