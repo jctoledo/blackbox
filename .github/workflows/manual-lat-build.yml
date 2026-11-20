@@ -1,0 +1,39 @@
+name: Manual isolated firmware build
+on:
+  workflow_dispatch:
+    inputs:
+      gps_model:
+        description: GPS receiver
+        type: choice
+        options: [m9n, 6m]
+        default: m9n
+permissions:
+  contents: read
+concurrency:
+  group: blackbox-lat
+  cancel-in-progress: false
+jobs:
+  firmware:
+    if: github.repository == 'jctoledo/blackbox'
+    runs-on: [blackbox-lat]
+    timeout-minutes: 40
+    env:
+      GPS_MODEL: ${{ inputs.gps_model }}
+      GPS_RATE: ${{ inputs.gps_model == 'm9n' && '25' || '5' }}
+      CARGO_BUILD_JOBS: '4'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Host regressions
+        run: cargo +stable test --locked -p sensor-fusion -p wt901 -p ublox-gps
+      - name: Firmware checks and release build
+        working-directory: sensors/blackbox
+        run: |
+          cargo +nightly-2025-10-18 clippy --locked --release -- -D warnings
+          cargo +nightly-2025-10-18 build --locked --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: blackbox-elf-${{ inputs.gps_model }}
+          path: target/riscv32imc-esp-espidf/release/blackbox
+          retention-days: 14
