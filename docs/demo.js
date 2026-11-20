@@ -6,11 +6,11 @@
  window.fetch=(input,options={})=>{
   const url=new URL(String(input),location.href),elapsed=performance.now()-start;
   if(options.signal?.aborted)return Promise.reject(new DOMException('Aborted','AbortError'));
+  if(paused)return Promise.reject(new Error('Simulated connection loss'));
   if(url.pathname==='/api/laptimer/configure'){
    revision++;armedCycle=url.searchParams.get('type')==='clear'?null:Math.floor(elapsed/period)+1;
    return json({ok:true,revision});
   }
-  if(paused)return Promise.reject(new Error('Simulated connection loss'));
   const t=elapsed/period*2*Math.PI,radius=90,speed=radius*2*Math.PI/(period/1000);
   const east=radius*Math.cos(t),north=radius*Math.sin(t),lat=origin.lat+north/111320,lon=origin.lon+east/(111320*Math.cos(origin.lat*Math.PI/180));
   const cycle=Math.floor(elapsed/period),timing=armedCycle!==null&&cycle>=armedCycle;
@@ -30,6 +30,7 @@
   try{
    await openTrackDB();
    const track={id:'demo-circuit',name:'Demo circuit · simulated',type:'loop',gpsOrigin:origin,startLine:{p1:[70,0],p2:[110,0],direction:Math.PI/2},centerline:Array.from({length:120},(_,i)=>({x:90*Math.cos(i*Math.PI/60),y:90*Math.sin(i*Math.PI/60)})),pathLength:2*Math.PI*90,lapCount:0,bestLapMs:null,createdAt:Date.now(),quality:'good'};
+   const existing=await getAllTracks();const previous=existing.find(item=>item.id===track.id);if(previous){track.bestLapMs=previous.bestLapMs;track.lapCount=previous.lapCount}
    await saveTrack(track);await activateTrack(track);
   }catch(error){document.getElementById('demo-note').textContent='Simulated data. Browser storage unavailable; recording and saved tracks require storage access.';console.error(error)}
  });

@@ -12,6 +12,17 @@ Use this checklist for a specific board, wiring revision, GPS receiver, mounting
 
 **Wiring gate:** the current IMU assignment is RX GPIO19 / TX GPIO18. These overlap native USB. Confirm the actual board routing before connecting the IMU and USB. Do not share these signals. Changing the pin mapping requires matching firmware and wiring changes. Check supply and signal voltages against the actual module specifications; do not assume a breakout label describes every pin's tolerance.
 
+**Target gate:** current release images target ESP32-C3. The proposed schematic in PR #39 uses ESP32-S3-WROOM-1-N16R8; it requires a separate firmware port and electrical review. Do not flash the C3 image onto that design.
+
+## Weekend NEO-M9N data collection
+
+1. Complete the bench, USB, and axis checks below before driving. Select the M9N firmware variant and record the artifact SHA-256.
+2. Outdoors, wait for a fresh fix; record the Diagnostics GPS rate and satellite count. The configured target is 25 Hz, not proof of the actual delivered rate. Photograph the antenna position and IMU orientation.
+3. While parked, select/record the track, arm timing, and press **Record session**. Check the recording indicator before switching to **Drive view**. Keep the dashboard foregrounded; screen lock or browser suspension can interrupt browser recording.
+4. Collect a short stationary segment, gentle straight acceleration/braking, turns in both directions, and repeated start-line crossings at a controlled site. A passenger/operator should note any missed or unexpected crossing and an approximate time. Do not operate the UI while driving.
+5. While parked, stop recording. Open **Saved data**, export the session CSV, and use **Tracks → Export** for the track geometry. Keep a short text note with firmware, GPS model, wiring/mounting, browser/phone, weather/obstructions, and observed problems. Export before clearing site data.
+6. An independent timer or timestamped crossing video is needed to measure timing error. Without it, the logs can establish internal consistency and investigate failures, but not absolute lap-time accuracy. Share location-containing recordings privately, not in a public GitHub issue.
+
 ## 1. USB installation and recovery — bench
 
 - [ ] Select the correct GPS variant. The installer must show the expected verified version before connection.

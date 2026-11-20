@@ -76,3 +76,17 @@ Those are open development issues, not completed features. Automatic sleep requi
 ## How should I evaluate it in a vehicle?
 
 Begin on the bench, verify the mounting/axes, and test at a controlled location with an independent timing reference. Configure the device while stopped; use a passenger/operator or recorded logs during motion. See the [step-by-step hardware checklist](HARDWARE_VALIDATION.md) and [engineering review](REVIEW.md).
+
+## What does estimated lap progress mean?
+
+After a usable reference lap, the dashboard divides accumulated distance in the current lap by the reference's recorded distance. It shows whole percentages, capped at 99%; only the firmware's line crossing completes a lap. Different driving lines, position noise, and sample gaps affect the estimate. It is not map matching, remaining-time prediction, or a measured GPS confidence interval.
+
+Progress and live delta are suppressed after detected connection/GPS gaps, late tracking starts, or large position jumps. A new lap resets tracking. Delta compares elapsed time at equal accumulated distance and does not extrapolate past the reference samples. Last/best completed times remain separate from these estimates.
+
+## Can Blackbox call out corners or tell me when to brake?
+
+No. The current reference stores distance/time samples, not a spatially matched corner model. Wrong identification would otherwise repeat each lap. Before adding coaching, we need position traces, ambiguous-section rejection, consistent corner detection across laps, and independent validation. A polished display is not evidence of those capabilities.
+
+## Which display should I use?
+
+Set up the track and recording while parked. Drive view emphasizes lap time, delta, speed, and last/best results while hiding track editing and the G-meter. Exit drive view to access setup and saved data. The standard view keeps a compact G-meter; Expand G-meter provides a larger force plot for analysis. A completed lap briefly shows its exact recorded result for five seconds. Drive view does not start recording automatically or keep a phone awake.

@@ -177,30 +177,32 @@
             <div class="preview">
                 <div class="preview-text">
                     <span class="eyebrow">BUILT FOR THE NEXT LAP</span><h3>A reference for<br>every return.</h3>
-                    <p>Record any track by driving it once. Time your laps and compare your progress against your best — updated in real-time as you drive.</p>
-                    <ul class="preview-list">
+                    <p>Record a circuit or stage, then arm timing. Drive view puts lap time, distance-based delta, and speed first. Keep the compact G-meter for setup, or expand it for analysis.</p>
+                    <ul class="preview-features">
                         <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg> Interpolated GPS line crossings</li>
                         <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg> Circuit and point-to-point tracks</li>
                         <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg> Browser-local recording and CSV export</li>
                         <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg> Saved tracks with start-line guidance</li>
+                        <li>Estimated distance progress after a reference lap</li>
+                        <li>Explicit offline and unavailable-data states</li>
                     </ul>
                     <a href="guides/lap-timer.html" target="_blank" style="color: var(--accent); font-size: 13px; text-decoration: none;">Explore the lap timer guide</a>
                 </div>
-                <div class="preview-phone" aria-label="Dashboard preview with simulated data">
+                <div class="preview-device" aria-label="Dashboard preview with simulated data">
                     <img src="dashboard-screenshot.jpg" alt="Refreshed Blackbox device dashboard with explicitly simulated speed and G-meter data" loading="lazy" width="390" height="844">
                 </div>
             </div>
 
-            <div class="delta-demo">
-                <h4>Delta bar shows ahead or behind your best</h4>
-                <div class="delta-row">
-                    <div class="delta-card">
-                        <div class="delta-val ahead">-2.3s</div>
+            <div class="demo-delta">
+                <h4>See time gained or lost against your reference</h4><p>Illustrative values below. Live delta compares elapsed time at equal accumulated distance; it is not corner-matched coaching. Estimates are suppressed after detected gaps or invalid data.</p>
+                <div class="delta-examples">
+                    <div class="delta-example">
+                        <div class="delta-value negative">-2.3s</div>
                         <div class="delta-bar"><div class="delta-bar-fill ahead"></div></div>
                         <div class="delta-label">Ahead of best lap</div>
                     </div>
-                    <div class="delta-card">
-                        <div class="delta-val behind">+1.5s</div>
+                    <div class="delta-example">
+                        <div class="delta-value positive">+1.5s</div>
                         <div class="delta-bar"><div class="delta-bar-fill behind"></div></div>
                         <div class="delta-label">Behind best lap</div>
                     </div>
@@ -255,6 +257,7 @@
       <details><summary>Can Blackbox replace a paid GPS lap timer?</summary><p>It offers lap timing, live g-forces, local recording, and open firmware. Whether it fits your use depends on measured accuracy, installation, reliability, and support needs. We have not established parity with a commercial system. Use the <a href="guides/hardware-validation.html">hardware test checklist</a> and compare results with an independent reference.</p></details>
       <details><summary>Can I try it without hardware?</summary><p>Yes. The <a href="demo.html">interactive dashboard demo</a> uses explicitly simulated telemetry. Try recording, saved data, lap feedback, and a connection interruption. Demo values do not demonstrate sensor accuracy.</p></details>
       <details><summary>Which GPS and controller should I use?</summary><p>The firmware targets ESP32-C3 with a 4 MiB flash image. Published candidates distinguish NEO-6M at 5 Hz and NEO-M9N at 25 Hz. Update rate is not timing accuracy, and board wiring matters: GPIO18/19 currently conflict with native USB. Read the <a href="guides/faq.html">compatibility FAQ</a>.</p></details>
+      <details><summary>Does it identify corners or coach my braking?</summary><p>Not yet. Progress is an estimated fraction of reference-lap distance, not a pinpoint track position. Automatic turn callouts need validated position matching and repeatable corner identification. See the <a href="guides/faq.html">measurement limits</a>.</p></details>
       <details><summary>Does it need a subscription or cloud account?</summary><p>The project requires neither. The device serves its dashboard over local Wi-Fi, and browser recordings can be exported as CSV. Hardware costs, assembly, and validation are your responsibility.</p></details>
       </div></div></section>
     <section class="section" id="flash">

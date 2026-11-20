@@ -14,6 +14,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Obsolete documentation files (RELEASE.md, IMPLEMENTATION_SUMMARY.md, release-notes.md)
 
+## [0.0.4-rc.2] - 2026-11-19
+
+Release candidate for bench and controlled-site validation, not a claim of measured timing accuracy. Select `blackbox-m9n.bin` for NEO-M9N (25 Hz configuration) or `blackbox-6m.bin` for NEO-6M (5 Hz). Verify actual sensor rates after boot. Full merged images replace device configuration.
+
+### Added
+- Driver-focused display, compact/expandable G-meter, and a five-second completed-lap result panel.
+- Estimated distance progress after a usable reference lap; no corner-location or coaching claim.
+- Explicit connection-loss, stale telemetry, and unavailable-delta states.
+- Timing evidence in CSV exports: device timestamps, lap counters/results, GPS age, and timing revision.
+- Interactive website demo using the device dashboard with isolated synthetic telemetry/storage.
+- Hardware acceptance checklist and NEO-M9N weekend data-collection instructions.
+
+### Fixed
+- Slower first laps after re-arming no longer overwrite faster saved references.
+- Delta no longer extrapolates beyond reference samples; gaps, late starts, and large position jumps invalidate distance estimates.
+- Track/reference storage now waits for commit; reference replacement is atomic and failed timing-stop acknowledgements preserve active configuration.
+- Imported track names and IDs are escaped in both track lists; clearing a reference also clears its live display.
+- Recorded-session duration uses sample timestamps instead of assuming a fixed sample rate.
+- Firmware installer and dependency actions are validated on the dedicated lat runner.
+
+### Changed
+- Consistent instrument typography, restrained signal colors, visible recording controls, and a dedicated landscape driving layout.
+- Website, FAQ, and searchable guides distinguish implemented features from unvalidated accuracy/coaching claims.
+- All build and deployment workflows use the self-hosted `blackbox-lat` runner.
+
 ## [0.0.4-rc.1] - 2026-11-20
 
 Release candidate for hardware validation. No real USB write/boot or reference-timed drive has been performed for this candidate.

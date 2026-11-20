@@ -13,7 +13,7 @@ function context(){
     LAP_FLAG_NEW_LAP:4,LAP_FLAG_NEW_BEST:8,suppressStartLineIndicator:false,
     lapTracker:{isValid:()=>true,reset(){},update(){throw Error('New lap data contaminated old reference')}},
     referenceLap:null,currentPos:{valid:true,x:0,y:0},lastDeltaMs:0,deltaTrend:0,
-    updateDeltaBar(){},updateTrackBestLap:ms=>saved.push(ms),saveNewRefLap:(id,ms)=>references.push(ms)};
+    fmtDelta:ms=>(ms/1000).toFixed(2),updateDeltaBar(){},updateTrackBestLap:async ms=>saved.push(ms),saveNewRefLap:(id,ms)=>references.push(ms)};
   vm.createContext(c);
   vm.runInContext(section('function fmtLapTime(', 'function updateReadouts'),c);
   return {c,elements,saved,references};
@@ -116,4 +116,53 @@ test('a stalled request is aborted and its timer is cleaned up',async()=>{
  const c={AbortController,setTimeout:fn=>{timeout=fn;return 9},clearTimeout:id=>{assert.equal(id,9);cleared=true},fetch:(_,options)=>new Promise((resolve,reject)=>options.signal.addEventListener('abort',()=>reject(new Error('aborted'))))};
  vm.createContext(c);vm.runInContext(section('async function requestDevice(', 'function markTelemetryUnavailable('),c);
  const p=c.requestDevice('/api/telemetry');timeout();await assert.rejects(p,/aborted/);assert.equal(cleared,true);
+});
+
+test('distance progress is explicitly estimated and never asserts a finish',()=>{
+ const c={Number,Math};vm.createContext(c);vm.runInContext(section('function estimatedLapProgress(', 'function updateLapProgress('),c);
+ assert.equal(c.estimatedLapProgress({reliable:true,dist:250},{totalDistance:1000}),25);
+ assert.equal(c.estimatedLapProgress({reliable:true,dist:1000},{totalDistance:1000}),99);
+ assert.equal(c.estimatedLapProgress({reliable:false,dist:250},{totalDistance:1000}),null);
+ assert.equal(c.estimatedLapProgress({reliable:true,dist:250},null),null);
+ assert.equal(c.estimatedLapProgress({reliable:true,dist:250},{totalDistance:NaN}),null);
+ assert.equal(c.estimatedLapProgress({reliable:true,dist:1200},{totalDistance:1000}),null);
+});
+test('reference distance is invalid for late starts, gaps and position jumps',()=>{
+ const c={Math,Number,ArrayBuffer,Float32Array};vm.createContext(c);
+ vm.runInContext(section('class LapTracker{','function calcDelta(')+'\nthis.Tracker=LapTracker;',c);
+ for(const values of [[[0,0,2000]],[[0,0,100],[2,0,1700]],[[0,0,100],[51,0,200]],[[NaN,0,100]]]){
+  const tracker=new c.Tracker();for(const v of values)tracker.update(...v);assert.equal(tracker.reliable,false);assert.equal(tracker.isValid(),false);
+  tracker.reset();assert.equal(tracker.reliable,true);
+ }
+ const tracker=new c.Tracker();for(let i=0;i<20;i++)tracker.update(i*4,0,i*100);assert.equal(tracker.isValid(),true);
+});
+test('delta never extrapolates beyond recorded reference distance',()=>{
+ const c={Float32Array,Number};vm.createContext(c);vm.runInContext(section('function calcDelta(', 'function fmtDelta('),c);
+ const ref={samples:new Float32Array([0,0,100,10000]).buffer};
+ assert.equal(c.calcDelta(50,5500,ref).deltaMs,500);
+ assert.equal(c.calcDelta(101,10000,ref).valid,false);
+ assert.equal(c.calcDelta(NaN,10000,ref).valid,false);
+});
+
+test('a slower first lap after rearming cannot replace the saved best reference',()=>{
+ const {c,references,elements}=context();c.activeTrack.bestLapMs=58000;c.referenceLap={lapTimeMs:58000};
+ c.updateLapTimer(75,1,0,{state:'timing',last_lap_ms:60023,best_lap_ms:60023,gps_valid:true});
+ assert.equal(references.length,0);assert.equal(elements.get('best-lap').textContent,'0:58.000');
+});
+test('CSV retains timing evidence and distinguishes missing values from zero',()=>{
+ const c={Number};vm.createContext(c);vm.runInContext(section('function samplesToCSV(', 'async function exportCSV('),c);
+ const lines=c.samplesToCSV([{t:123,sp:0,gpsOk:0,gpsCourse:NaN,lapTimeMs:1700,lapCnt:2,lastLapMs:61023,deviceTimeMs:4000}]).trim().split('\n');
+ const names=lines[0].split(','),values=lines[1].split(',');
+ assert.equal(names.length,values.length);const row=Object.fromEntries(names.map((key,i)=>[key,values[i]]));
+ assert.equal(row.speed,'0');assert.equal(row.gps_course,'');assert.equal(row.gps_lat,'');assert.equal(row.last_lap_ms,'61023');assert.equal(row.device_time_ms,'4000');
+});
+
+test('completed-lap feedback uses the exact persistent device time',()=>{
+ const {c,elements}=context();c.updateLapTimer(75,1,0,{state:'timing',last_lap_ms:60023,best_lap_ms:60023,gps_valid:true});
+ assert.equal(elements.get('lap-result').hidden,false);assert.match(elements.get('lap-result').textContent,/BEST LAP.*1:00.023/);
+});
+test('track text and attribute values are escaped before rendering',()=>{
+ const c={String};vm.createContext(c);vm.runInContext(html.split('\n').find(l=>l.startsWith('function escHtml(')),c);
+ assert.equal(c.escHtml('<img src=x onerror="alert(1)">'), '&lt;img src=x onerror=&quot;alert(1)&quot;&gt;');
+ assert.equal(c.escHtml('id" onclick="bad'), 'id&quot; onclick=&quot;bad');
 });

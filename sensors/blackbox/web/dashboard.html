@@ -141,7 +141,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
 .bbDeltaFill.glow-behind{box-shadow:0 0 16px rgba(255,59,48,0.7),0 0 32px rgba(255,59,48,0.3)}
 .bbLapState.finished{color:var(--ok);opacity:1;animation:finishedPulse 0.5s ease-in-out 2}
 @keyframes finishedPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
-.bbLapCard.first-run .bbLapMeta::after{content:'NEW';display:inline-block;margin-left:8px;padding:2px 6px;background:var(--amber);color:#fff;font-size:9px;font-weight:700;border-radius:4px;letter-spacing:0.05em}
+
 .bbLapHistory{display:flex;justify-content:center;gap:0;padding:12px 18px;border-top:1px solid var(--divider)}
 .bbLapHistItem{flex:1;display:flex;flex-direction:column;align-items:center}
 .bbLapHistDivider{width:1px;height:36px;background:var(--divider)}
@@ -357,6 +357,14 @@ button:focus-visible,[role=button]:focus-visible,a:focus-visible,input:focus-vis
 .bbApp .bbGCard.expanded-g .bbGPlotWrap{grid-column:1/-1;grid-row:2}.bbApp .bbGCard.expanded-g .bbGTop{grid-column:1/-1;display:flex}.bbApp .bbGCard.expanded-g .bbGPlotFrame{width:min(65vh,480px);max-width:100%;height:auto;aspect-ratio:1;margin:0 auto}
 .bbApp .bbGCard:not(.expanded-g) .bbPlotMeta{display:none}.bbApp .bbGCard:not(.expanded-g) .bbAxis{font-size:10px}
 @media(min-width:850px){.bbApp .bbGCard{grid-template-columns:1fr 1fr 1fr}.bbApp .bbGPlotWrap{grid-column:3;grid-row:1/3}.bbApp .bbGReadoutRow{grid-column:2;grid-row:1;border-top:0}.bbApp .bbGMax{grid-column:1/3;grid-row:2;grid-template-columns:repeat(4,1fr);gap:12px}.bbApp .bbGCard.expanded-g{grid-template-columns:1fr 1fr}.bbApp .bbGCard.expanded-g .bbGPlotWrap{grid-column:2;grid-row:1/4}.bbApp .bbGCard.expanded-g .bbGTop,.bbApp .bbGCard.expanded-g .bbGReadoutRow,.bbApp .bbGCard.expanded-g .bbGMax{grid-column:1;grid-row:auto}.bbApp .bbGCard.expanded-g .bbGMax{grid-template-columns:1fr 1fr}}
+/* Driving hierarchy: timing first; setup controls stay in the paddock view. */
+button,input,select{font:inherit}button:focus-visible,[role="button"]:focus-visible{outline:3px solid var(--ok);outline-offset:3px}
+.bbQuickActions{flex-wrap:wrap}.bbLapActive{cursor:default}.bbLapProgress{padding:8px 20px;color:var(--text-secondary);font-size:12px;letter-spacing:.03em}.bbLapProgress[hidden]{display:none}.bbLapProgress progress{display:block;width:100%;height:5px;margin-top:7px;accent-color:var(--ok)}
+.drive-view #quick-tracks,.drive-view #quick-data,.drive-view #quick-record,.drive-view .bbGPlotWrap,.drive-view .bbGReadoutRow,.drive-view .bbGMax,.drive-view .bbTelemetryStrip,.drive-view .bbLapStop,.drive-view .bbManeuver{display:none!important}
+.drive-view .bbQuickActions{justify-content:flex-end}.drive-view .bbGCard{display:block;min-height:0}.drive-view .bbGTop{padding:16px 24px}.drive-view .bbLapTime{font-size:clamp(52px,10vw,112px)}.drive-view .bbDeltaText{font-size:clamp(28px,5vw,48px)}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+.bbLapResult{border-top:1px solid var(--divider);padding:14px 20px;background:var(--ok);color:var(--bg);font:700 15px/1.5 var(--mono);text-align:center}.bbLapResult[hidden]{display:none}.bbDeltaBar.no-ref .bbDeltaText{opacity:1;font-size:16px;line-height:1.3}.bbDeltaText{text-shadow:none!important}.bbDeltaFill.ahead{background:var(--ok)}.bbDeltaFill.behind{background:var(--red)}.bbDeltaFill{box-shadow:none!important}
+@media(min-width:650px) and (max-height:600px){.drive-view .bbApp{display:grid;grid-template-columns:minmax(0,2fr) minmax(160px,1fr);align-content:start;align-items:start}.drive-view .bbQuickActions,.drive-view .bbConnectionNotice,.drive-view .bbRecordingNotice{grid-column:1/-1}.drive-view .bbLapCard{grid-column:1}.drive-view .bbGCard{grid-column:2}.drive-view .bbLapTime{font-size:64px}.drive-view .bbLapMain{padding:12px}.drive-view .bbLapHistory{padding:10px}.drive-view .bbSpeed{font-size:64px}}
 </style></head>
 <body>
 
@@ -380,14 +388,14 @@ button:focus-visible,[role=button]:focus-visible,a:focus-visible,input:focus-vis
 </header>
 <main class="bbApp">
     <div id="connection-notice" class="bbConnectionNotice" role="status" hidden></div>
-    <div class="bbQuickActions" aria-label="Session controls"><button id="quick-tracks">Tracks</button><button id="quick-record">Record session</button><button id="quick-data">Saved data</button></div>
+    <div class="bbQuickActions" aria-label="Session controls"><button id="quick-tracks">Tracks</button><button id="quick-record">Record session</button><button id="quick-data">Saved data</button><button id="drive-mode" aria-pressed="false">Drive view</button></div>
     <div id="recording-notice" class="bbRecordingNotice" role="status" hidden></div>
     <section class="bbCard bbLapCard inactive" id="lap-section">
         <div class="bbLapSetup" id="lap-setup">
             <span class="bbLapSetupText" id="lap-setup-text">Ready for a session?<small>Select a track to arm lap timing.</small></span>
             <button class="bbLapSetupBtn" id="btn-tracks">Select track</button>
         </div>
-        <div class="bbLapActive" id="lap-active" onclick="openTrackModal()">
+        <div class="bbLapActive" id="lap-active">
             <button class="bbLapStop" id="btn-lap-stop" onclick="event.stopPropagation();confirmStopTiming();" title="Stop timing" aria-label="Stop timing">×</button>
             <div class="bbLapMain">
                 <div class="bbLapTime bbNum" id="lap-time">0:00.000</div>
@@ -398,6 +406,8 @@ button:focus-visible,[role=button]:focus-visible,a:focus-visible,input:focus-vis
                     <span class="bbLapState" id="lap-state" role="status">Armed</span>
                 </div>
             </div>
+            <div class="bbLapProgress" id="lap-progress" hidden><span id="lap-progress-label">Estimated distance</span><progress id="lap-progress-bar" max="100" value="0" aria-label="Estimated distance through reference lap"></progress></div>
+            <div class="bbLapResult" id="lap-result" role="status" hidden></div>
             <div class="bbLapHistory">
                 <div class="bbLapHistItem">
                     <span class="bbLapHistLabel">Best</span>
@@ -410,7 +420,7 @@ button:focus-visible,[role=button]:focus-visible,a:focus-visible,input:focus-vis
                 </div>
                 <div class="bbLapHistDivider"></div>
                 <div class="bbLapHistItem">
-                    <span class="bbLapHistLabel">Delta</span>
+                    <span class="bbLapHistLabel">Last vs best</span>
                     <span class="bbLapHistValue bbNum delta" id="lap-delta">—</span>
                 </div>
             </div>
@@ -569,7 +579,7 @@ button:focus-visible,[role=button]:focus-visible,a:focus-visible,input:focus-vis
         <div class="bbModalHeader">
             <span class="bbModalTitle">Tracks</span>
             <button class="bbExportAllBtn" id="btn-export-all" title="Export all tracks">Export All</button>
-            <button class="bbModalClose" id="track-modal-close">&times;</button>
+            <button class="bbModalClose" id="track-modal-close" aria-label="Close tracks">&times;</button>
         </div>
         <div class="bbModalBody">
             <div id="active-track-section" class="bbActiveTrack" style="display:none">
@@ -620,7 +630,7 @@ button:focus-visible,[role=button]:focus-visible,a:focus-visible,input:focus-vis
     <div class="bbModalContent">
         <div class="bbModalHeader">
             <span class="bbModalTitle">Data</span>
-            <button class="bbModalClose" id="data-modal-close">&times;</button>
+            <button class="bbModalClose" id="data-modal-close" aria-label="Close saved data">&times;</button>
         </div>
         <div class="bbModalBody">
             <div class="bbStorageOverview">
@@ -629,12 +639,12 @@ button:focus-visible,[role=button]:focus-visible,a:focus-visible,input:focus-vis
             </div>
             <div class="bbModalSection">
                 <div class="bbSectionTitle">Recordings <span class="bbSectionCount" id="data-rec-count"></span></div>
-                <div class="bbSessionList" id="session-list"><div class="bbSessionEmpty"><div class="icon">📊</div>Loading...</div></div>
+                <div class="bbSessionList" id="session-list"><div class="bbSessionEmpty"><div class="icon"></div>Loading...</div></div>
                 <button class="bbClearAllBtn" id="btn-clear-all-recordings">Clear All Recordings</button>
             </div>
             <div class="bbModalSection">
                 <div class="bbSectionTitle">Tracks & Best Laps <span class="bbSectionCount" id="data-track-count"></span></div>
-                <div class="bbTrackDataList" id="track-data-list"><div class="bbSessionEmpty"><div class="icon">🏁</div>Loading...</div></div>
+                <div class="bbTrackDataList" id="track-data-list"><div class="bbSessionEmpty"><div class="icon"></div>Loading...</div></div>
                 <button class="bbClearAllBtn" id="btn-clear-all-tracks">Clear All Tracks</button>
             </div>
         </div>
@@ -813,6 +823,11 @@ function updateRecUI(){
     $('rec-duration').textContent=sessionStart?fmtTime(Date.now()-sessionStart):'--';
 }
 
+function samplesToCSV(samples){
+    const keys=['t', 'sp', 'ax', 'ay', 'wz', 'mo', 'latg', 'lng', 'lat', 'lon', 'gpsOk', 'ekfX', 'ekfY', 'ekfYaw', 'gpsCourse', 'lon_imu', 'lon_gps', 'gps_wt', 'pitch_c', 'pitch_cf', 'roll_c', 'roll_cf', 'tilt_x', 'tilt_y', 'deviceTimeMs', 'lapTimeMs', 'lapCnt', 'lapFlags', 'lastLapMs', 'bestLapMs', 'gpsAgeMs', 'timingRevision'];
+    return 'time,speed,ax,ay,wz,mode,lat_g,lon_g,gps_lat,gps_lon,gps_valid,ekf_x,ekf_y,ekf_yaw,gps_course,lon_imu,lon_gps,gps_weight,pitch_corr,pitch_conf,roll_corr,roll_conf,tilt_x,tilt_y,device_time_ms,lap_time_ms,lap_count,lap_flags,last_lap_ms,best_lap_ms,gps_age_ms,timing_revision\n'+samples.map(r=>keys.map(k=>Number.isFinite(r[k])?r[k]:'').join(',')).join('\n')+'\n';
+}
+
 async function exportCSV(){
     if(!db){alert('No data');return}
     // Flush any buffered data if recording
@@ -826,8 +841,7 @@ async function exportCSV(){
     if(!sessionChunks.length){alert('No data in recording');return}
     let allData=[];
     sessionChunks.forEach(c=>allData=allData.concat(c.data));
-    let csv='time,speed,ax,ay,wz,mode,lat_g,lon_g,gps_lat,gps_lon,gps_valid,ekf_x,ekf_y,ekf_yaw,gps_course,lon_imu,lon_gps,gps_weight,pitch_corr,pitch_conf,roll_corr,roll_conf,tilt_x,tilt_y\n';
-    allData.forEach(r=>{const gc=r.gpsCourse;const gcStr=isNaN(gc)?'':gc.toFixed(4);csv+=r.t+','+r.sp+','+r.ax+','+r.ay+','+r.wz+','+r.mo+','+r.latg+','+r.lng+','+(r.lat||0)+','+(r.lon||0)+','+(r.gpsOk||0)+','+(r.ekfX||0).toFixed(3)+','+(r.ekfY||0).toFixed(3)+','+(r.ekfYaw||0).toFixed(4)+','+gcStr+','+(r.lon_imu||0).toFixed(4)+','+(r.lon_gps||0).toFixed(4)+','+(r.gps_wt||0).toFixed(2)+','+(r.pitch_c||0).toFixed(2)+','+(r.pitch_cf||0).toFixed(1)+','+(r.roll_c||0).toFixed(2)+','+(r.roll_cf||0).toFixed(1)+','+(r.tilt_x||0).toFixed(4)+','+(r.tilt_y||0).toFixed(4)+'\n'});
+    const csv=samplesToCSV(allData);
     const b=new Blob([csv],{type:'text/csv'}),u=URL.createObjectURL(b),a=document.createElement('a');
     a.href=u;a.download='blackbox_'+new Date(latest.sessionId).toISOString().slice(0,19).replace(/[T:]/g,'-')+'.csv';a.click();
 }
@@ -842,12 +856,12 @@ async function getAllSessions(){
     const allChunks=await idbPromise(tx.objectStore('chunks').getAll());
     const chunksBySession=new Map();
     for(const c of allChunks){
-        if(!chunksBySession.has(c.sessionId))chunksBySession.set(c.sessionId,{count:0,samples:0});
-        const s=chunksBySession.get(c.sessionId);s.count++;s.samples+=(c.data&&c.data.length)||0;
+        if(!chunksBySession.has(c.sessionId))chunksBySession.set(c.sessionId,{count:0,samples:0,first:Infinity,last:-Infinity});
+        const s=chunksBySession.get(c.sessionId);s.count++;s.samples+=(c.data&&c.data.length)||0;for(const row of c.data||[]){if(Number.isFinite(row.t)){s.first=Math.min(s.first,row.t);s.last=Math.max(s.last,row.t)}}
     }
     const enriched=sessions.map(s=>{
-        const cs=chunksBySession.get(s.sessionId)||{count:0,samples:0};
-        return{sessionId:s.sessionId,startTime:s.startTime||s.sessionId,status:s.status,chunkCount:cs.count,sampleCount:cs.samples,durationMs:cs.samples*50,estimatedBytes:cs.samples*50};
+        const cs=chunksBySession.get(s.sessionId)||{count:0,samples:0,first:Infinity,last:-Infinity};
+        return{sessionId:s.sessionId,startTime:s.startTime||s.sessionId,status:s.status,chunkCount:cs.count,sampleCount:cs.samples,durationMs:Number.isFinite(cs.first)&&Number.isFinite(cs.last)?Math.max(0,cs.last-cs.first):0,estimatedBytes:cs.samples*50};
     });
     enriched.sort((a,b)=>b.sessionId-a.sessionId);
     return enriched;
@@ -884,8 +898,7 @@ async function exportSessionById(targetId){
     chunks.sort((a,b)=>a.chunkIndex-b.chunkIndex);
     if(!chunks.length)throw new Error('No data in recording');
     let allData=[];chunks.forEach(c=>allData=allData.concat(c.data||[]));
-    let csv='time,speed,ax,ay,wz,mode,lat_g,lon_g,gps_lat,gps_lon,gps_valid,ekf_x,ekf_y,ekf_yaw,gps_course,lon_imu,lon_gps,gps_weight,pitch_corr,pitch_conf,roll_corr,roll_conf,tilt_x,tilt_y\n';
-    allData.forEach(r=>{const gc=r.gpsCourse;const gcStr=isNaN(gc)?'':gc.toFixed(4);csv+=r.t+','+r.sp+','+r.ax+','+r.ay+','+r.wz+','+r.mo+','+r.latg+','+r.lng+','+(r.lat||0)+','+(r.lon||0)+','+(r.gpsOk||0)+','+(r.ekfX||0).toFixed(3)+','+(r.ekfY||0).toFixed(3)+','+(r.ekfYaw||0).toFixed(4)+','+gcStr+','+(r.lon_imu||0).toFixed(4)+','+(r.lon_gps||0).toFixed(4)+','+(r.gps_wt||0).toFixed(2)+','+(r.pitch_c||0).toFixed(2)+','+(r.pitch_cf||0).toFixed(1)+','+(r.roll_c||0).toFixed(2)+','+(r.roll_cf||0).toFixed(1)+','+(r.tilt_x||0).toFixed(4)+','+(r.tilt_y||0).toFixed(4)+'\n'});
+    const csv=samplesToCSV(allData);
     const b=new Blob([csv],{type:'text/csv'}),u=URL.createObjectURL(b),a=document.createElement('a');
     a.href=u;a.download='blackbox_'+new Date(targetId).toISOString().slice(0,19).replace(/[T:]/g,'-')+'.csv';a.click();
     return{session,sampleCount:allData.length};
@@ -918,7 +931,7 @@ async function getTrackDataStats(){
         totalBytes+=tBytes+rBytes;
         const corners=typeof t.corners==='number'?t.corners:(Array.isArray(t.corners)?t.corners.length:0);
         const points=typeof t.keyPoints==='number'?t.keyPoints:((t.centerline&&t.centerline.length)||0);
-        return{id:t.id,name:t.name,corners:corners,points:points,totalBytes:tBytes+rBytes,hasReferenceLap:!!ref,referenceLapTime:(ref&&ref.lapTimeMs)||0,referenceLapSamples:(ref&&ref.samples&&ref.samples.length)||0}
+        return{id:t.id,name:t.name,corners:corners,points:points,totalBytes:tBytes+rBytes,hasReferenceLap:!!ref,referenceLapTime:(ref&&ref.lapTimeMs)||0,referenceLapSamples:(ref&&ref.sampleCount)||0}
     });
     return{tracks:result,totalBytes}
 }
@@ -1099,7 +1112,7 @@ const trackAutoDetector=new TrackAutoDetector();
 function showTrackDetectedToast(track){
     dismissActiveToast();
     const t=document.createElement('div');t.className='bbToast';
-    t.innerHTML='<div class=\"bbToastIcon\">📍</div><div class=\"bbToastText\"><strong>Track detected</strong><span>'+escHtml(track.name)+'</span></div><div class=\"bbToastActions\"><button class=\"bbToastBtn primary\" onclick=\"activateDetectedTrack()\">Activate</button><button class=\"bbToastBtn secondary\" onclick=\"dismissActiveToast()\">Dismiss</button></div>';
+    t.innerHTML='<div class=\"bbToastIcon\"></div><div class=\"bbToastText\"><strong>Track detected</strong><span>'+escHtml(track.name)+'</span></div><div class=\"bbToastActions\"><button class=\"bbToastBtn primary\" onclick=\"activateDetectedTrack()\">Activate</button><button class=\"bbToastBtn secondary\" onclick=\"dismissActiveToast()\">Dismiss</button></div>';
     document.body.appendChild(t);trackAutoDetector.setActiveToast(t);t._detectedTrack=track;
     t._dismissTimeout=setTimeout(()=>dismissActiveToast(),10000)
 }
@@ -1158,7 +1171,11 @@ async function saveRefLap(ref){
     },ref);
 }
 async function getRefLap(trackId){if(!trackDb)await openTrackDB();return new Promise((res,rej)=>{const tx=trackDb.transaction('reference_laps','readonly');const r=tx.objectStore('reference_laps').index('trackId').get(trackId);r.onsuccess=()=>res(r.result||null);r.onerror=()=>rej(r.error)})}
-async function deleteRefLap(trackId){if(!trackDb)await openTrackDB();return new Promise((res,rej)=>{const tx=trackDb.transaction('reference_laps','readwrite');const r=tx.objectStore('reference_laps').index('trackId').openCursor(IDBKeyRange.only(trackId));r.onsuccess=()=>{const c=r.result;if(c){c.delete();c.continue()}else res()};r.onerror=()=>rej(r.error)})}
+async function deleteRefLap(trackId){
+    if(!trackDb)await openTrackDB();
+    await commitTrackWrite('reference_laps',tx=>{const r=tx.objectStore('reference_laps').index('trackId').openCursor(IDBKeyRange.only(trackId));r.onsuccess=()=>{const c=r.result;if(c){c.delete();c.continue()}}});
+    if(activeTrack&&activeTrack.id===trackId){referenceLap=null;updateLapProgress(false);updateDeltaBar({deltaMs:null,hasRef:false});$('lap-section').classList.remove('has-ref')}
+}
 
 // Session management for lap history
 function genSessionId(){return 'session_'+Date.now()+'_'+Math.random().toString(36).substr(2,9)}
@@ -1186,22 +1203,26 @@ async function clearAllLapHistory(){if(!trackDb)await openTrackDB();return new P
 // LapTracker - tracks distance and samples during lap for delta calculation
 class LapTracker{
     constructor(){this.reset()}
-    reset(){this.dist=0;this.lastPos=null;this.samples=[];this.startTime=null;this.lastSampleT=0}
+    reset(){this.dist=0;this.lastPos=null;this.samples=[];this.startTime=null;this.lastSampleT=0;this.lastTime=null;this.reliable=true}
+    invalidate(){this.reliable=false;this.lastPos=null}
     update(x,y,lapTimeMs){
-        if(this.startTime===null)this.startTime=lapTimeMs;
-        if(this.lastPos){const dx=x-this.lastPos.x,dy=y-this.lastPos.y,d=Math.sqrt(dx*dx+dy*dy);if(d<50&&d>0.01)this.dist+=d}
+        if(!Number.isFinite(x)||!Number.isFinite(y)||!Number.isFinite(lapTimeMs)){this.invalidate();return this.dist}
+        if(this.startTime===null){this.startTime=lapTimeMs;if(lapTimeMs>1000)this.invalidate()}
+        if(this.lastTime!==null&&(lapTimeMs-this.lastTime>1500||lapTimeMs<this.lastTime))this.invalidate();
+        this.lastTime=lapTimeMs;
+        if(this.lastPos){const dx=x-this.lastPos.x,dy=y-this.lastPos.y,d=Math.sqrt(dx*dx+dy*dy);if(d>=50)this.invalidate();else if(d>0.01)this.dist+=d}
         this.lastPos={x,y};
         if(lapTimeMs-this.lastSampleT>=100){this.samples.push({d:this.dist,t:lapTimeMs});this.lastSampleT=lapTimeMs}
         return this.dist
     }
     toBinary(){const buf=new ArrayBuffer(this.samples.length*8),v=new Float32Array(buf);for(let i=0;i<this.samples.length;i++){v[i*2]=this.samples[i].d;v[i*2+1]=this.samples[i].t}return buf}
-    isValid(){return this.samples.length>=10&&this.dist>50}
+    isValid(){return this.reliable&&this.samples.length>=10&&this.dist>50}
 }
 
 function calcDelta(dist,time,ref){
-    if(!ref||!ref.samples)return{deltaMs:0,valid:false};
+    if(!ref||!ref.samples||!Number.isFinite(dist)||!Number.isFinite(time))return{deltaMs:0,valid:false};
     const s=new Float32Array(ref.samples),n=s.length/2;
-    if(n<2||dist>s[(n-1)*2]*1.1||dist<s[0])return{deltaMs:0,valid:false};
+    if(n<2||dist>s[(n-1)*2]||dist<s[0])return{deltaMs:0,valid:false};
     let lo=0,hi=n-1;while(hi-lo>1){const mid=Math.floor((lo+hi)/2);if(s[mid*2]<dist)lo=mid;else hi=mid}
     const d0=s[lo*2],t0=s[lo*2+1],d1=s[hi*2],t1=s[hi*2+1];
     if(d1===d0)return{deltaMs:time-t0,valid:true};
@@ -1211,7 +1232,7 @@ function calcDelta(dist,time,ref){
 
 function fmtDelta(ms){const sign=ms>0?'+':'',sec=ms/1000;return sign+(Math.abs(sec)<10?sec.toFixed(2):sec.toFixed(1))}
 
-function updateDeltaBar(opts){const{deltaMs,trend=0,hasRef=false,isP2P=false}=opts;const bar=$('delta-bar'),fill=$('delta-fill'),txt=$('delta-text');if(!bar||!fill||!txt)return;if(!hasRef){bar.classList.add('no-ref');fill.className='bbDeltaFill';fill.style.width='0%';fill.style.left='50%';txt.textContent=isP2P?'Set best run':'Set best lap';txt.className='bbDeltaText';return}if(deltaMs===0){bar.classList.remove('no-ref');fill.className='bbDeltaFill';fill.style.width='0%';fill.style.left='50%';txt.textContent='±0.00';txt.className='bbDeltaText';return}bar.classList.remove('no-ref');const MAX=2000,abs=Math.abs(deltaMs),pct=Math.min(50,(abs/MAX)*50),ahead=deltaMs<0;if(ahead){fill.style.left=(50-pct)+'%';fill.style.width=pct+'%'}else{fill.style.left='50%';fill.style.width=pct+'%'}let fc='bbDeltaFill';if(abs>30)fc+=ahead?' ahead':' behind';if(abs>1000)fc+=ahead?' glow-ahead':' glow-behind';fill.className=fc;let ds=fmtDelta(deltaMs);if(trend<-5)ds+=' ▲';else if(trend>5)ds+=' ▼';txt.textContent=ds;txt.className='bbDeltaText'+(abs>30?(ahead?' ahead':' behind'):'')}
+function updateDeltaBar(opts){const{deltaMs,trend=0,hasRef=false,isP2P=false}=opts;const bar=$('delta-bar'),fill=$('delta-fill'),txt=$('delta-text');if(!bar||!fill||!txt)return;if(!hasRef){bar.classList.add('no-ref');fill.className='bbDeltaFill';fill.style.width='0%';fill.style.left='50%';txt.textContent=isP2P?'Complete a reference run':'Complete a reference lap';txt.className='bbDeltaText';return}if(!Number.isFinite(deltaMs)){bar.classList.add('no-ref');fill.style.width='0%';txt.textContent='Delta unavailable';txt.className='bbDeltaText';return}if(deltaMs===0){bar.classList.remove('no-ref');fill.className='bbDeltaFill';fill.style.width='0%';fill.style.left='50%';txt.textContent='±0.00';txt.className='bbDeltaText';return}bar.classList.remove('no-ref');const MAX=2000,abs=Math.abs(deltaMs),pct=Math.min(50,(abs/MAX)*50),ahead=deltaMs<0;if(ahead){fill.style.left=(50-pct)+'%';fill.style.width=pct+'%'}else{fill.style.left='50%';fill.style.width=pct+'%'}let fc='bbDeltaFill';if(abs>30)fc+=ahead?' ahead':' behind';if(abs>1000)fc+=ahead?' glow-ahead':' glow-behind';fill.className=fc;let ds=fmtDelta(deltaMs);if(trend<-5)ds+=' ▲';else if(trend>5)ds+=' ▼';txt.textContent=ds;txt.className='bbDeltaText'+(abs>30?(ahead?' ahead':' behind'):'')}
 
 async function saveNewRefLap(trackId,lapTimeMs,tracker){
     try{
@@ -1259,7 +1280,7 @@ async function deleteTrackFromDB(id){
 }
 
 function genTrackId(){return 'track_'+Date.now()+'_'+Math.random().toString(36).substr(2,9)}
-function escHtml(t){const d=document.createElement('div');d.textContent=t;return d.innerHTML}
+function escHtml(t){return String(t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function wrapAngle(a){while(a>Math.PI)a-=2*Math.PI;while(a<-Math.PI)a+=2*Math.PI;return a}
 
 // Track Manager UI
@@ -1292,7 +1313,7 @@ async function renderTrackList(){
             const isActive=activeTrack&&activeTrack.id===t.id;
             const unit=t.type==='point_to_point'?'runs':'laps';
             const lc=t.lapCount||0;
-            return '<div class=\"bbTrackItem\" data-id=\"'+t.id+'\">'+
+            return '<div class=\"bbTrackItem\" data-id=\"'+escHtml(t.id)+'\">'+
                 '<div class=\"bbTrackInfo\">'+
                     '<div class=\"bbTrackName\">'+escHtml(t.name)+(isActive?' ✓':'')+'</div>'+
                     '<div class=\"bbTrackMeta\"><span>Best: '+best+'</span><span>'+lc+' '+unit+'</span></div>'+
@@ -1471,7 +1492,7 @@ async function activateTrack(track){
         const j=await r.json();
         if(!r.ok||j.error){alert('Failed to configure lap timer: '+(j.error||r.status));return}
         expectedLapRevision=j.revision??null;
-        activeTrack={...track,startLine:line,finishLine:finLine};
+        activeTrack={...track,startLine:line,finishLine:finLine};$('lap-result').hidden=true;lapResultGeneration++;
         suppressStartLineIndicator=false;
         p2pNeedsWarmup=isP2P&&track.isNew;
         // Start new session for lap history
@@ -1511,7 +1532,7 @@ async function activateTrack(track){
 
 async function deactivateTrack(){
     try{const r=await requestDevice('/api/laptimer/configure?type=clear');if(!r.ok)throw new Error('Device rejected the request');const j=await r.json();if(j.error)throw new Error(j.error);expectedLapRevision=j.revision??null}catch(e){alert('Could not stop device timing. Reconnect and retry. '+e.message);return false}
-    activeTrack=null;referenceLap=null;clearSession();
+    activeTrack=null;referenceLap=null;clearSession();$('lap-result').hidden=true;lapResultGeneration++;
     if(lapTracker)lapTracker.reset();
     p2pNeedsWarmup=false;
     // Deactivate lap timer UI
@@ -1855,7 +1876,25 @@ function fmtTime(ms){const s=Math.floor(ms/1000),m=Math.floor(s/60),h=Math.floor
 
 function fmtLapTime(ms){if(ms===0)return'0:00.000';const mins=Math.floor(ms/60000),secs=Math.floor((ms%60000)/1000),millis=ms%1000;return mins+':'+String(secs).padStart(2,'0')+'.'+String(millis).padStart(3,'0')}
 
+function estimatedLapProgress(tracker,ref){
+    if(!tracker||tracker.reliable!==true||!ref||!Number.isFinite(ref.totalDistance)||ref.totalDistance<=50||!Number.isFinite(tracker.dist)||tracker.dist<0||tracker.dist>ref.totalDistance*1.1)return null;
+    return Math.min(99,Math.floor(100*tracker.dist/ref.totalDistance));
+}
+function updateLapProgress(active){
+    const value=active?estimatedLapProgress(lapTracker,referenceLap):null;
+    $('lap-progress').hidden=value===null;
+    if(value!==null){$('lap-progress-label').textContent='Est. distance · '+value+'%';$('lap-progress-bar').value=value}
+}
+let lapResultGeneration=0;
+function showLapResult(time,previousBest){
+    const box=$('lap-result'),generation=++lapResultGeneration;
+    const better=!previousBest||time<previousBest;
+    box.textContent=(better?'BEST LAP · ':'LAP COMPLETE · ')+fmtLapTime(time)+(previousBest?' · '+fmtDelta(time-previousBest)+'s vs best':'');
+    box.hidden=false;
+    setTimeout(()=>{if(generation===lapResultGeneration)box.hidden=true},5000);
+}
 function updateLapTimer(lapTimeMs,lapCnt,lapFlags,timing=null){
+    updateLapProgress(false);
     const sec=$('lap-section');
     // Don't deactivate if we have an active track - firmware zeros just means "armed"
     // Only deactivate via explicit deactivateTrack() call
@@ -1885,18 +1924,20 @@ function updateLapTimer(lapTimeMs,lapCnt,lapFlags,timing=null){
         if(prevLapTimeMs===0)setTimeout(resize,300);
     }else{stateEl.textContent=timing&&!timing.gps_valid?'Waiting for GPS':'Armed';stateEl.classList.remove('timing');sec.classList.remove('timing');if(prevLapTimeMs>0)setTimeout(resize,300)}
     // Handle new best flag FIRST - save as reference lap before reset
-    if(newBest){
+    if(newBest&&completedMs>0&&(!activeTrack.bestLapMs||completedMs<activeTrack.bestLapMs)){
         const bestEl=$('best-lap');bestEl.classList.add('bbLapBestFlash');setTimeout(()=>bestEl.classList.remove('bbLapBestFlash'),800);
         // Update best lap display with completed lap time
         if(completedMs>0)bestEl.textContent=fmtLapTime(completedMs);
         // Save reference lap for delta (use prevLapTimeMs which is the completed lap time)
-        if(activeTrack&&lapTracker&&lapTracker.isValid()&&completedMs>0&&lapCnt===prevLapCnt+1){saveNewRefLap(activeTrack.id,completedMs,lapTracker)}
+
     }
+    if(countIncreased&&completedMs>0&&lapCnt===prevLapCnt+1&&lapTracker&&lapTracker.isValid()&&(!referenceLap||completedMs<referenceLap.lapTimeMs))saveNewRefLap(activeTrack.id,completedMs,lapTracker);
     // Handle new lap - detect via flag OR via lapCnt increase (fallback for missed flags)
     // Firmware flag only lasts ~40ms but we poll at 60-70ms, so we often miss it
     const flagTriggered=(lapFlags&LAP_FLAG_NEW_LAP)&&!(prevLapFlags&LAP_FLAG_NEW_LAP);
     const cntTriggered=countIncreased;
     if((timing?cntTriggered:flagTriggered||cntTriggered)&&completedMs>0){
+        showLapResult(completedMs,activeTrack.bestLapMs);
         sec.classList.remove('bbLapFlash');void sec.offsetWidth;sec.classList.add('bbLapFlash');setTimeout(()=>sec.classList.remove('bbLapFlash'),850);
         // prevLapTimeMs contains the completed lap time (before reset)
         if(completedMs>0){
@@ -1913,7 +1954,8 @@ function updateLapTimer(lapTimeMs,lapCnt,lapFlags,timing=null){
                 deltaEl.textContent=sign+secs+'s';
                 deltaEl.className='bbLapHistValue bbNum delta '+(deltaMs<0?'faster':'slower');
             }
-            updateTrackBestLap(completedMs);
+            const displayBest=Math.min(activeTrack.bestLapMs||Infinity,completedMs);$('best-lap').textContent=fmtLapTime(displayBest);
+            updateTrackBestLap(completedMs).catch(e=>{$('recording-notice').hidden=false;$('recording-notice').textContent='Lap result could not be saved. Export your session before closing this tab.';console.error('Lap history storage failed:',e)});
         }
         // Reset lap tracker for next lap
         if(lapTracker){lapTracker.reset();lastDeltaMs=0;deltaTrend=0}
@@ -1926,15 +1968,17 @@ function updateLapTimer(lapTimeMs,lapCnt,lapFlags,timing=null){
         if(lapTracker&&currentPos&&currentPos.valid){
             const dist=lapTracker.update(currentPos.x,currentPos.y,lapTimeMs);
             const isP2P=activeTrack&&activeTrack.type==='point_to_point';
-            if(referenceLap){
+            if(referenceLap&&lapTracker.reliable!==false){
                 const delta=calcDelta(dist,lapTimeMs,referenceLap);
                 if(delta.valid){
                     deltaTrend=0.15*(delta.deltaMs-lastDeltaMs)+0.85*deltaTrend;lastDeltaMs=delta.deltaMs;
                     updateDeltaBar({deltaMs:delta.deltaMs,trend:deltaTrend,hasRef:true,isP2P});
-                }
-            }else{updateDeltaBar({deltaMs:null,hasRef:false,isP2P})}
+                }else updateDeltaBar({deltaMs:null,hasRef:true,isP2P});
+            }else{updateDeltaBar({deltaMs:null,hasRef:!!referenceLap,isP2P})}
+            updateLapProgress(true);
         }
     }
+    if(!currentPos.valid||(timing&&!timing.gps_valid)){if(lapTracker?.invalidate)lapTracker.invalidate();updateLapProgress(false);updateDeltaBar({deltaMs:null,hasRef:!!referenceLap,isP2P})}
     prevLapTimeMs=lapTimeMs;
     prevLapFlags=lapFlags;
     prevLapCnt=lapCnt;
@@ -2050,7 +2094,7 @@ function process(buf,timing=null){
 
     // Recording
     if(rec){
-        chunkBuffer.push({t:now,sp,ax,ay,wz,mo,latg,lng,lat,lon,gpsOk,ekfX,ekfY,ekfYaw,gpsCourse,lon_imu:fusion.lon_imu,lon_gps:fusion.lon_gps,gps_wt:fusion.gps_wt,pitch_c:fusion.pitch_c,pitch_cf:fusion.pitch_cf,roll_c:fusion.roll_c,roll_cf:fusion.roll_cf,tilt_x:fusion.tilt_x,tilt_y:fusion.tilt_y});
+        chunkBuffer.push({t:now,deviceTimeMs:d.getUint32(3,true),lapTimeMs,lapCnt,lapFlags,lastLapMs:timing?.last_lap_ms,bestLapMs:timing?.best_lap_ms,gpsAgeMs:timing?.gps_age_ms,timingRevision:timing?.revision,sp,ax,ay,wz,mo,latg,lng,lat,lon,gpsOk,ekfX,ekfY,ekfYaw,gpsCourse,lon_imu:fusion.lon_imu,lon_gps:fusion.lon_gps,gps_wt:fusion.gps_wt,pitch_c:fusion.pitch_c,pitch_cf:fusion.pitch_cf,roll_c:fusion.roll_c,roll_cf:fusion.roll_cf,tilt_x:fusion.tilt_x,tilt_y:fusion.tilt_y});
         if(now-lastSaveTime>=CHUNK_INTERVAL&&!chunkWrite)saveChunk().catch(console.error);
     }
 }
@@ -2061,6 +2105,9 @@ async function requestDevice(url){
     try{return await fetch(url,{signal:controller.signal})}finally{clearTimeout(timer)}
 }
 function markTelemetryUnavailable(label){
+    $('lap-result').hidden=true;lapResultGeneration++;
+    if(lapTimerActive){$('lap-state').textContent='Timing unconfirmed';$('lap-state').classList.remove('timing');$('lap-section').classList.remove('timing')}
+    if(lapTracker)lapTracker.invalidate();updateLapProgress(false);updateDeltaBar({deltaMs:null,hasRef:!!referenceLap});
     $('liveDot').classList.remove('on');$('gpsDot').classList.remove('on');$('stxt').textContent=label;
     $('gpsHz').textContent='GPS --';currentPos.valid=false;lastGpsState=false;
     document.body.classList.add('telemetry-stale');$('connection-notice').hidden=false;
@@ -2199,7 +2246,7 @@ async function renderSessionList(){
         const stats=await getStorageStats();
         clearBtn.disabled=stats.sessionCount===0||rec;
         if(stats.sessionCount===0){
-            listEl.innerHTML='<div class=\"bbSessionEmpty\"><div class=\"icon\">📊</div>No recordings yet.<br>Start recording to capture telemetry.</div>';
+            listEl.innerHTML='<div class=\"bbSessionEmpty\"><div class=\"icon\"></div>No recordings yet.<br>Start recording to capture telemetry.</div>';
             return;
         }
         listEl.innerHTML=stats.sessions.map(s=>{
@@ -2228,20 +2275,20 @@ async function renderTrackDataList(){
         const stats=await getTrackDataStats();
         clearBtn.disabled=stats.tracks.length===0;
         if(stats.tracks.length===0){
-            listEl.innerHTML='<div class=\"bbSessionEmpty\"><div class=\"icon\">🏁</div>No tracks saved.<br>Record a track to get started.</div>';
+            listEl.innerHTML='<div class=\"bbSessionEmpty\"><div class=\"icon\"></div>No tracks saved.<br>Record a track to get started.</div>';
             return;
         }
         listEl.innerHTML=stats.tracks.map(t=>{
             const hasRef=t.hasReferenceLap;
-            const refInfo=hasRef?'Best: '+formatLapTimeMs(t.referenceLapTime)+' ('+t.referenceLapSamples+' pts)':'No best lap';
-            return'<div class=\"bbTrackDataItem\" data-track-id=\"'+t.id+'\">'+
+            const refInfo=hasRef?'Reference: '+formatLapTimeMs(t.referenceLapTime)+' ('+t.referenceLapSamples+' pts)':'No best lap';
+            return'<div class=\"bbTrackDataItem\" data-track-id=\"'+escHtml(t.id)+'\">'+
                 '<div class=\"bbTrackDataInfo\">'+
-                    '<div class=\"bbTrackDataName\">'+t.name+'</div>'+
+                    '<div class=\"bbTrackDataName\">'+escHtml(t.name)+'</div>'+
                     '<div class=\"bbTrackDataMeta\"><span>'+t.corners+' corners</span><span>'+t.points+' points</span><span>'+formatBytes(t.totalBytes)+'</span></div>'+
                     '<div class=\"bbTrackDataRef '+(hasRef?'has-ref':'no-ref')+'\">'+refInfo+'</div>'+
                 '</div>'+
                 '<div class=\"bbTrackDataActions\">'+
-                    '<button class=\"bbSessionBtn\" data-action=\"clear-best\"'+(hasRef?'':' disabled')+'>Clear Best</button>'+
+                    '<button class=\"bbSessionBtn\" data-action=\"clear-best\"'+(hasRef?'':' disabled')+'>Clear reference</button>'+
                     '<button class=\"bbSessionBtn danger\" data-action=\"delete-track\">Delete</button>'+
                 '</div>'+
             '</div>';
@@ -2266,9 +2313,9 @@ async function handleSessionAction(btn){
 async function handleTrackDataAction(btn){
     const action=btn.dataset.action,item=btn.closest('.bbTrackDataItem'),trackId=item.dataset.trackId,trackName=item.querySelector('.bbTrackDataName').textContent;
     if(action==='clear-best'){
-        if(!confirm('Clear best lap for \"'+trackName+'\"?\\n\\nThis cannot be undone.'))return;
+        if(!confirm('Clear reference lap for \"'+trackName+'\"?\\n\\nThis cannot be undone.'))return;
         try{btn.textContent='Clearing...';btn.disabled=true;await deleteRefLap(trackId);await renderDataModal()}
-        catch(e){alert('Clear failed: '+e.message);btn.textContent='Clear Best';btn.disabled=false}
+        catch(e){alert('Clear failed: '+e.message);btn.textContent='Clear reference';btn.disabled=false}
     }else if(action==='delete-track'){
         if(!confirm('Delete track \"'+trackName+'\" and its best lap?\\n\\nThis cannot be undone.'))return;
         try{btn.textContent='Deleting...';await deleteTrackWithRef(trackId);if(activeTrack&&activeTrack.id===trackId){activeTrack=null;updateActiveTrackDisplay()}await renderDataModal()}
@@ -2295,6 +2342,7 @@ $('btn-clear-all-tracks').onclick=async()=>{
     catch(e){alert('Clear failed: '+e.message);$('btn-clear-all-tracks').textContent='Clear All Tracks';$('btn-clear-all-tracks').disabled=false}
 };
 
+$('drive-mode').onclick=()=>{const driving=document.body.classList.toggle('drive-view');$('drive-mode').setAttribute('aria-pressed',String(driving));$('drive-mode').textContent=driving?'Exit drive view':'Drive view';requestAnimationFrame(resize)};
 $('expand-g').onclick=()=>{const expanded=$('g-card').classList.toggle('expanded-g');$('expand-g').setAttribute('aria-expanded',String(expanded));$('expand-g').textContent=expanded?'Compact G-meter':'Expand G-meter';requestAnimationFrame(resize)};
 $('quick-tracks').onclick=openTrackModal;
 $('quick-record').onclick=()=>$('menu-rec').click();
