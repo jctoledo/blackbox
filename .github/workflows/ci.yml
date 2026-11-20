@@ -51,6 +51,10 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-espup-v2-
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - name: Install ESP-IDF prerequisites
         run: |
           sudo apt-get update
@@ -174,6 +178,10 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-espup-v2-
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - name: Install ESP-IDF prerequisites
         run: |
           sudo apt-get update
@@ -198,7 +206,8 @@ jobs:
 
           if ! command -v cargo-espflash &> /dev/null; then
             echo "Installing cargo-espflash and espflash..."
-            cargo install cargo-espflash espflash
+            rustup toolchain install stable --profile minimal
+            cargo +stable install cargo-espflash espflash --version 4.7.0 --locked
           else
             echo "✓ cargo-espflash found in cache"
           fi
