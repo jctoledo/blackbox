@@ -215,8 +215,8 @@ mod tests {
         packet.lap_count = 5;
         packet.lap_flags = 0x0F;
 
-        assert_eq!(packet.lap_time_ms, 65432);
-        assert_eq!(packet.lap_count, 5);
+        assert_eq!({ packet.lap_time_ms }, 65432);
+        assert_eq!({ packet.lap_count }, 5);
         assert_eq!(packet.lap_flags, 0x0F);
     }
 }

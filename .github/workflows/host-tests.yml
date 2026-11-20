@@ -16,5 +16,5 @@ jobs:
         with:
           node-version: '22'
       - uses: Swatinem/rust-cache@v2
-      - run: cargo test --locked -p sensor-fusion -p wt901 -p ublox-gps
+      - run: cargo test --locked -p sensor-fusion -p wt901 -p ublox-gps -p blackbox-host-tests
       - run: node --test tests/*.test.cjs

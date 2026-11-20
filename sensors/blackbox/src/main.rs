@@ -10,6 +10,7 @@ mod mode;
 mod mqtt;
 mod rgb_led;
 mod system;
+mod telemetry_http;
 mod udp_stream;
 mod websocket_server;
 mod wifi;

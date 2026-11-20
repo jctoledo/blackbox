@@ -66,19 +66,7 @@ impl Default for ModeSettings {
     }
 }
 
-/// Persistent timing results accompany the v4 binary packet. A browser may miss
-/// individual packets without losing the exact completed lap time.
-#[derive(Clone, Copy, Default, serde::Serialize)]
-pub struct TimingTelemetry {
-    pub state: &'static str,
-    pub revision: u32,
-    pub last_lap_ms: Option<u32>,
-    pub best_lap_ms: Option<u32>,
-    pub lat: f64,
-    pub lon: f64,
-    pub gps_valid: bool,
-    pub gps_age_ms: Option<u32>,
-}
+pub use crate::telemetry_http::TimingTelemetry;
 
 #[derive(Default)]
 struct TelemetrySnapshot {
@@ -466,37 +454,8 @@ impl TelemetryServer {
             esp_idf_svc::http::Method::Get,
             move |req| -> Result<(), esp_idf_svc::io::EspIOError> {
                 let json = if let Some((seq, data, timing)) = state_poll.telemetry_snapshot() {
-                    let timing_json = serde_json::to_string(&timing).unwrap_or_else(|_| "null".to_string());
-                    // Include fusion diagnostics inline for perfect synchronization
-                    if let Some(diag_state) = state_poll.diagnostics() {
-                        let f = diag_state.snapshot().fusion;
-                        format!(
-                            concat!(
-                                r#"{{"seq":{},"data":"{}","timing":{},"#,
-                                r#""f":{{"li":{:.4},"lg":{:.4},"gw":{:.2},"gr":{:.1},"pc":{:.1},"pf":{:.0},"rc":{:.1},"rf":{:.0},"tx":{:.4},"ty":{:.4}}}}}"#
-                            ),
-                            seq,
-                            data,
-                            timing_json,
-                            f.lon_imu_filtered,
-                            f.gps_accel,
-                            f.gps_weight,
-                            f.gps_rate,
-                            f.pitch_correction_deg,
-                            f.pitch_confidence * 100.0,
-                            f.roll_correction_deg,
-                            f.roll_confidence * 100.0,
-                            f.tilt_offset_x,
-                            f.tilt_offset_y,
-                        )
-                    } else {
-                        format!(
-                            r#"{{"seq":{},"data":"{}","timing":{}}}"#,
-                            seq,
-                            data,
-                            timing_json
-                        )
-                    }
+                    let fusion = state_poll.diagnostics().map(|diag| diag.snapshot().fusion);
+                    crate::telemetry_http::telemetry_json(seq, &data, &timing, fusion.as_ref())
                 } else {
                     r#"{"seq":0,"data":null}"#.to_string()
                 };
@@ -642,38 +601,7 @@ impl TelemetryServer {
             esp_idf_svc::http::Method::Get,
             move |req| -> Result<(), esp_idf_svc::io::EspIOError> {
                 let json = if let Some(diag_state) = state_diag_api.diagnostics() {
-                    let d = diag_state.snapshot();
-                    format!(
-                        concat!(
-                            r#"{{"sensor_rates":{{"imu_hz":{:.1},"gps_hz":{:.1},"loop_hz":{:.0},"imu_expected":{:.0},"gps_expected":{:.0},"zupt_per_min":{:.1},"ekf_per_gps":{:.1}}},"#,
-                            r#""ekf":{{"pos_sigma":{:.2},"vel_sigma":{:.2},"yaw_sigma_deg":{:.1},"bias_x":{:.4},"bias_y":{:.4}}},"#,
-                            r#""system":{{"heap_free":{},"uptime_s":{},"tx_ok":{},"tx_fail":{}}},"#,
-                            r#""gps":{{"model":"{}","rate_hz":{},"fix":{},"warmup":{},"satellites":{},"hdop":{:.1},"ref_lat":{:.8},"ref_lon":{:.8}}},"#,
-                            r#""wifi":{{"mode":"{}","ssid":"{}"}},"#,
-                            r#""config":{{"telemetry_hz":{},"gps_model":"{}","warmup_fixes":{}}},"#,
-                            r#""fusion":{{"lon_raw":{:.3},"lon_filtered":{:.3},"lon_blended":{:.3},"gps_weight":{:.2},"gps_accel":{:.3},"gps_rate":{:.1},"gps_rejected":{},"pitch_corr":{:.1},"roll_corr":{:.1},"pitch_conf":{:.0},"roll_conf":{:.0},"yaw_bias":{:.4},"yaw_calibrated":{},"tilt_x":{:.3},"tilt_y":{:.3},"tilt_valid":{}}}}}"#
-                        ),
-                        d.sensor_rates.imu_hz, d.sensor_rates.gps_hz, d.sensor_rates.loop_hz,
-                        d.sensor_rates.imu_expected_hz, d.sensor_rates.gps_expected_hz,
-                        d.sensor_rates.zupt_per_min, d.sensor_rates.ekf_predictions_per_gps,
-                        d.ekf_health.position_sigma, d.ekf_health.velocity_sigma,
-                        d.ekf_health.yaw_sigma_deg, d.ekf_health.bias_x, d.ekf_health.bias_y,
-                        d.system_health.free_heap_bytes, d.system_health.uptime_seconds,
-                        d.system_health.telemetry_sent, d.system_health.telemetry_failed,
-                        d.gps_health.model_name, d.gps_health.configured_rate_hz,
-                        d.gps_health.fix_valid, d.gps_health.warmup_complete,
-                        d.gps_health.satellites, d.gps_health.hdop,
-                        d.gps_health.ref_lat, d.gps_health.ref_lon,
-                        d.wifi_status.mode, d.wifi_status.ssid,
-                        d.config.telemetry_rate_hz, d.config.gps_model, d.config.gps_warmup_fixes,
-                        // Fusion diagnostics
-                        d.fusion.lon_imu_raw, d.fusion.lon_imu_filtered, d.fusion.lon_blended,
-                        d.fusion.gps_weight, d.fusion.gps_accel, d.fusion.gps_rate, d.fusion.gps_rejected,
-                        d.fusion.pitch_correction_deg, d.fusion.roll_correction_deg,
-                        d.fusion.pitch_confidence * 100.0, d.fusion.roll_confidence * 100.0,
-                        d.fusion.yaw_bias, d.fusion.yaw_calibrated,
-                        d.fusion.tilt_offset_x, d.fusion.tilt_offset_y, d.fusion.tilt_valid
-                    )
+                    crate::telemetry_http::diagnostics_json(&diag_state.snapshot())
                 } else {
                     r#"{"error":"diagnostics not available"}"#.to_string()
                 };
