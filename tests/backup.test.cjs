@@ -70,11 +70,11 @@ test('version 2 single and bundled track exports restore reference samples and f
  assert.throws(()=>c.normalizeBackup({version:1,track:entry.track}),/version 2/);
 });
 
-test('selective backup reads only the chosen recording and retains track data',async()=>{
+test('selective backups isolate recordings from track data',async()=>{
  const c=context(),value=fixture(c);c.db=await database();c.trackDb=await database(true);
  await c.addBackupStores(c.db,{sessions:[...value.data.sessions,{sessionId:200,startTime:200,status:'complete'}],chunks:[...value.data.chunks,{sessionId:200,chunkIndex:0,data:[{t:201,sp:30}]}]});
  await c.addBackupStores(c.trackDb,{tracks:value.data.tracks});
- const chosen=await c.createBackup('200');assert.equal(chosen.data.sessions.length,1);assert.equal(chosen.data.sessions[0].sessionId,200);assert.equal(chosen.data.chunks[0].data[0].sp,30);assert.equal(chosen.data.tracks.length,1);
+ const chosen=await c.createBackup('200');assert.equal(chosen.data.sessions.length,1);assert.equal(chosen.data.sessions[0].sessionId,200);assert.equal(chosen.data.chunks[0].data[0].sp,30);assert.equal(chosen.data.tracks.length,0);
  const tracks=await c.createBackup('tracks');assert.equal(tracks.data.sessions.length,0);assert.equal(tracks.data.chunks.length,0);assert.equal(tracks.data.tracks.length,1);
 });
 
@@ -118,4 +118,11 @@ test('backup cannot lose or duplicate the pending tail when a background save de
   };
   const value=await c.createBackup();assert.equal(value.data.chunks.length,1);assert.equal(value.data.chunks[0].data.length,1);assert.equal(value.data.chunks[0].data[0].sp,20);
  }
+});
+
+test('recordings can be backed up even when a legacy stored track is not restorable',async()=>{
+ const c=context(),value=fixture(c);c.db=await database();c.trackDb=await database(true);
+ await c.addBackupStores(c.db,{sessions:value.data.sessions,chunks:value.data.chunks});await c.addBackupStores(c.trackDb,{tracks:[{id:'legacy',name:'Incomplete old track'}]});
+ await assert.rejects(c.createBackup('all'),/Invalid backup/);
+ const recording=await c.createBackup('recordings');assert.equal(recording.data.sessions.length,1);assert.equal(recording.data.chunks[0].data.length,2);assert.equal(recording.data.tracks.length,0);
 });

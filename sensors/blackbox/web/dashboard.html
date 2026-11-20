@@ -649,7 +649,7 @@ body:not(.analysis-view) .bbGTopRight{display:block}
             <div class="bbModalSection">
                 <div class="bbSectionTitle">Backup &amp; restore</div>
                 <p class="bbCreateTrackHint">Save recordings, tracks, reference laps, and history in one file. Keep a copy outside this browser. Stop recording first; track timing may continue.</p>
-                <label for="backup-scope" style="display:block;margin-top:12px;font-size:13px">Backup contents</label><select id="backup-scope" style="width:100%;padding:10px;background:var(--bg);color:var(--text);border:1px solid var(--divider);border-radius:6px"><option value="all">All saved data</option><option value="tracks">Tracks, references &amp; history only</option></select><div style="display:flex;flex-wrap:wrap;gap:8px;margin:12px 0"><button class="bbSessionBtn" id="backup-download">Download backup</button><button class="bbSessionBtn" id="backup-choose">Choose backup</button><button class="bbSessionBtn" id="backup-restore" disabled>Restore as new copies</button></div>
+                <label for="backup-scope" style="display:block;margin-top:12px;font-size:13px">Backup contents</label><select id="backup-scope" style="width:100%;padding:10px;background:var(--bg);color:var(--text);border:1px solid var(--divider);border-radius:6px"><option value="all">All saved data</option><option value="recordings">Recordings only</option><option value="tracks">Tracks, references &amp; history only</option></select><div style="display:flex;flex-wrap:wrap;gap:8px;margin:12px 0"><button class="bbSessionBtn" id="backup-download">Download backup</button><button class="bbSessionBtn" id="backup-choose">Choose backup</button><button class="bbSessionBtn" id="backup-restore" disabled>Restore as new copies</button></div>
                 <input type="file" id="backup-file" accept=".json,application/json" hidden>
                 <p id="backup-status" role="status" style="font-size:13px;line-height:1.5;overflow-wrap:anywhere">Restore adds copies; it never replaces existing data. Backup files contain location history. Maximum file size: 100 MiB.</p>
             </div>
@@ -2364,7 +2364,7 @@ function backupIdle(){
 }
 function readRecordingBackup(scope){
     if(scope==='tracks')return Promise.resolve({sessions:[],chunks:[]});
-    if(scope==='all')return readBackupStores(db,['sessions','chunks']);
+    if(scope==='all'||scope==='recordings')return readBackupStores(db,['sessions','chunks']);
     const id=Number(scope);if(!Number.isSafeInteger(id)||id<0)throw new Error('Choose valid backup contents.');
     return new Promise((resolve,reject)=>{
         const tx=db.transaction(['sessions','chunks'],'readonly'),result={sessions:[],chunks:[]};
@@ -2379,9 +2379,9 @@ async function createBackup(scope='all'){
     // Snapshot the tail first, then deduplicate it against committed chunk keys.
     const tail={sessionId,sessionStart,chunkIndex,data:chunkBuffer.slice()};
     if(!db)await openDB();if(!trackDb)await openTrackDB();
-    const [recording,track]=await Promise.all([readRecordingBackup(scope),readBackupStores(trackDb,['tracks','reference_laps','lap_history'])]);
+    const [recording,track]=await Promise.all([readRecordingBackup(scope),(scope==='all'||scope==='tracks')?readBackupStores(trackDb,['tracks','reference_laps','lap_history']):Promise.resolve({tracks:[],reference_laps:[],lap_history:[]})]);
     // Include the unsaved tail even when storage is full; export must not require a write.
-    if(tail.data.length&&(scope==='all'||Number(scope)===tail.sessionId)&&!recording.chunks.some(c=>c.sessionId===tail.sessionId&&c.chunkIndex===tail.chunkIndex)){
+    if(tail.data.length&&(scope==='all'||scope==='recordings'||Number(scope)===tail.sessionId)&&!recording.chunks.some(c=>c.sessionId===tail.sessionId&&c.chunkIndex===tail.chunkIndex)){
         if(!recording.sessions.some(s=>s.sessionId===tail.sessionId))recording.sessions.push({sessionId:tail.sessionId,startTime:tail.sessionStart,status:'active'});
         recording.chunks.push({sessionId:tail.sessionId,chunkIndex:tail.chunkIndex,data:tail.data,timestamp:Date.now()});
     }
@@ -2463,7 +2463,7 @@ async function renderDataModal(){
     $('data-track-size').textContent=formatBytes(combined.tracksBytes);
     $('data-rec-count').textContent='('+combined.sessionCount+')';
     const scope=$('backup-scope'),selected=scope.value,sessions=await getAllSessions();
-    scope.innerHTML='<option value="all">All saved data</option><option value="tracks">Tracks, references &amp; history only</option>'+sessions.map(s=>'<option value="'+s.sessionId+'">Recording '+escHtml(formatSessionDate(s.startTime))+' · '+s.sampleCount+' samples + all tracks</option>').join('');
+    scope.innerHTML='<option value="all">All saved data</option><option value="recordings">Recordings only</option><option value="tracks">Tracks, references &amp; history only</option>'+sessions.map(s=>'<option value="'+s.sessionId+'">Recording '+escHtml(formatSessionDate(s.startTime))+' · '+s.sampleCount+' samples</option>').join('');
     if(Array.from(scope.options).some(option=>option.value===selected))scope.value=selected;
     $('data-track-count').textContent='('+combined.trackCount+')';
     await renderSessionList();
