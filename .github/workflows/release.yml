@@ -4,7 +4,6 @@ on:
   push:
     tags:
       - "v*.*.*"
-  workflow_dispatch:  # Allow manual trigger
 
 permissions:
   contents: write
@@ -155,6 +154,9 @@ jobs:
 
   update-flasher:
     name: Update Web Flasher
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     needs: [build-firmware, create-release]
     runs-on: ubuntu-24.04
     steps:
