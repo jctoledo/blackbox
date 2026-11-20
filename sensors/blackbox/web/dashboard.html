@@ -2318,12 +2318,13 @@ function validateBackup(value){
         for(const row of c.data){backupCheck(row&&typeof row==='object'&&!Array.isArray(row)&&finite(row.t),'invalid sample timestamp');for(const [key,n] of Object.entries(row))backupCheck(!['__proto__','constructor','prototype'].includes(key)&&(n===null||finite(n)),'invalid sample value')}
         sampleCount+=c.data.length;
     }
-    const line=l=>l&&Array.isArray(l.p1)&&Array.isArray(l.p2)&&l.p1.length===2&&l.p2.length===2&&[...l.p1,...l.p2,l.direction].every(finite)&&Math.hypot(l.p1[0]-l.p2[0],l.p1[1]-l.p2[1])>0;
+    const coordinate=n=>finite(n)&&Math.abs(n)<=20000000;
+    const line=l=>l&&Array.isArray(l.p1)&&Array.isArray(l.p2)&&l.p1.length===2&&l.p2.length===2&&[...l.p1,...l.p2].every(coordinate)&&finite(l.direction)&&Math.abs(l.direction)<=2*Math.PI&&Math.hypot(l.p1[0]-l.p2[0],l.p1[1]-l.p2[1])>0;
     for(const t of data.tracks){
         backupCheck(typeof t.id==='string'&&typeof t.name==='string'&&t.name.length<=1000&&['loop','point_to_point'].includes(t.type),'invalid track');
         backupCheck(line(t.startLine)&&(t.type!=='point_to_point'||line(t.finishLine)),'invalid timing line');
         backupCheck(t.gpsOrigin&&finite(t.gpsOrigin.lat)&&Math.abs(t.gpsOrigin.lat)<90&&finite(t.gpsOrigin.lon)&&Math.abs(t.gpsOrigin.lon)<=180,'invalid track origin');
-        backupCheck(Array.isArray(t.centerline)&&t.centerline.every(p=>p&&finite(p.x)&&finite(p.y)),'invalid track path');
+        backupCheck(Array.isArray(t.centerline)&&t.centerline.every(p=>p&&coordinate(p.x)&&coordinate(p.y)),'invalid track path');
         backupCheck((t.pathLength==null||(finite(t.pathLength)&&t.pathLength>=0))&&(t.corners==null||integer(t.corners)),'invalid track statistics');
         backupCheck((t.bestLapMs==null||(finite(t.bestLapMs)&&t.bestLapMs>0))&&(t.lapCount==null||integer(t.lapCount)),'invalid track results');
     }

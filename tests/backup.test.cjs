@@ -34,7 +34,7 @@ test('full backup round trip preserves all sample values and reference/history l
 test('validation rejects damaged files, unsupported versions, orphan chunks, bad geometry and invalid references before writing',()=>{
  const c=context();const damaged=fixture(c);damaged.data.chunks[0].data[0].sp=999;assert.throws(()=>c.validateBackup(damaged),/checksum/);
  const version=fixture(c);version.version=99;assert.throws(()=>c.validateBackup(version),/version/);
- for(const mutate of [v=>v.data.chunks[0].sessionId=999,v=>v.data.tracks[0].gpsOrigin.lat=NaN,v=>v.data.references[0].samples=[0,0,50,100,25,200],v=>v.data.references[0].sampleCount=5,v=>v.data.history[0].trackId='missing',v=>v.data.sessions.push({...v.data.sessions[0]})]){const v=fixture(c);mutate(v);v.checksum=c.backupChecksum(v.data);assert.throws(()=>c.validateBackup(v),/Invalid backup/)}
+ for(const mutate of [v=>v.data.chunks[0].sessionId=999,v=>v.data.tracks[0].gpsOrigin.lat=NaN,v=>v.data.tracks[0].startLine.direction=1e100,v=>v.data.tracks[0].startLine.p1[0]=1e100,v=>v.data.references[0].samples=[0,0,50,100,25,200],v=>v.data.references[0].sampleCount=5,v=>v.data.history[0].trackId='missing',v=>v.data.sessions.push({...v.data.sessions[0]})]){const v=fixture(c);mutate(v);v.checksum=c.backupChecksum(v.data);assert.throws(()=>c.validateBackup(v),/Invalid backup/)}
 });
 test('aborted recording transaction leaves no partial imported chunks or sessions',async()=>{
  const c=context(),d=await database(),t=await database(true),plan=c.makeRestorePlan(fixture(c),[],'abort',1000);
