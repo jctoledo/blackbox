@@ -92,7 +92,6 @@ checksum = "2261d10cca569e4643e526d8dc2e62e433cc8aba21ab764233731f8d369bf394"
 name = "blackbox"
 version = "0.1.0"
 dependencies = [
- "embedded-svc",
  "embuild 0.33.1",
  "esp-idf-hal",
  "esp-idf-svc",
