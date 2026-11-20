@@ -4,7 +4,7 @@
 
 Blackbox is an open-source ESP32-C3 telemetry project: GPS and inertial sensing, a live G-meter, circuit and stage timing, and a phone-friendly dashboard served directly over local Wi-Fi. Rust firmware, inspectable maths, and browser-local recordings—no cloud account required.
 
-[Project website & USB installer](https://jctoledo.github.io/blackbox/) · [Lap timer guide](docs/LAP_TIMER.md) · [Sensor fusion](docs/SENSOR_FUSION.md) · [Review & validation](docs/REVIEW.md)
+[Project website & USB installer](https://jctoledo.github.io/blackbox/) · [Lap timer guide](docs/LAP_TIMER.md) · [Sensor fusion](docs/SENSOR_FUSION.md) · [Review & validation](docs/REVIEW.md) · [Hardware checklist](docs/HARDWARE_VALIDATION.md) · [Try the demo](https://jctoledo.github.io/blackbox/demo.html)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-3b6b3b.svg)](LICENSE)
 [![Host regressions](https://github.com/jctoledo/blackbox/actions/workflows/host-tests.yml/badge.svg)](https://github.com/jctoledo/blackbox/actions/workflows/host-tests.yml)

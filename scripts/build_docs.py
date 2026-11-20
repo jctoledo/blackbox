@@ -8,10 +8,12 @@ from build_demo import main as build_demo
 
 ROOT = Path(__file__).resolve().parents[1]
 BASE = 'https://jctoledo.github.io/blackbox/'
-PAGES = {'LAP_TIMER.md': ('lap-timer', 'GPS lap timer setup and troubleshooting'),
+PAGES = {'FAQ.md': ('faq', 'GPS lap timer compatibility, accuracy, and ownership FAQ'),
+         'HARDWARE_VALIDATION.md': ('hardware-validation', 'Blackbox hardware and lap timing acceptance checklist'),
+         'LAP_TIMER.md': ('lap-timer', 'GPS lap timer setup and troubleshooting'),
          'SENSOR_FUSION.md': ('sensor-fusion', 'GPS and IMU sensor fusion in Rust'),
          'REVIEW.md': ('engineering-review', 'Engineering review, accuracy claims, and validation')}
-STYLE = '''body{margin:0;background:#f5f5ec;color:#172b23;font:17px/1.8 system-ui,sans-serif}header,main,footer{max-width:880px;margin:auto;padding:28px}header{border-bottom:1px solid #ced6c7;display:flex;gap:24px;flex-wrap:wrap}a{color:#356d31}header a{font-size:14px}h1,h2,h3{line-height:1.2;letter-spacing:-.025em}h1{font-size:clamp(32px,5vw,48px)}h2{margin-top:2em}pre{background:#172b23;color:#e5eddd;overflow:auto;padding:20px;border-radius:8px;font-size:13px}code{font-size:.85em}table{display:block;overflow:auto;border-collapse:collapse;font-size:14px}th,td{padding:12px;border:1px solid #ced6c7;text-align:left;min-width:100px}blockquote{border-left:3px solid #7b9c60;padding-left:20px;color:#526458}img{max-width:100%;height:auto}footer{font-size:13px;color:#526458}:focus-visible{outline:3px solid #c78029;outline-offset:3px}h2,h3{scroll-margin-top:20px}'''
+STYLE = '''body{margin:0;background:#090d12;color:#edf3f8;font:17px/1.8 system-ui,sans-serif}header,main,footer{max-width:880px;margin:auto;padding:28px}header{border-bottom:1px solid #344554;display:flex;gap:24px;flex-wrap:wrap}a{color:#d7ff45}header a{font-size:14px}h1,h2,h3{line-height:1.2;letter-spacing:-.025em}h1{font-size:clamp(32px,5vw,48px)}h2{margin-top:2em}pre{background:#151f29;color:#e5eddd;overflow:auto;padding:20px;border-radius:8px;font-size:13px}code{font-size:.85em}table{display:block;overflow:auto;border-collapse:collapse;font-size:14px}th,td{padding:12px;border:1px solid #344554;text-align:left;min-width:100px}blockquote{border-left:3px solid #7b9c60;padding-left:20px;color:#b1c0cc}img{max-width:100%;height:auto}footer{font-size:13px;color:#b1c0cc}:focus-visible{outline:3px solid #c78029;outline-offset:3px}h2,h3{scroll-margin-top:20px}'''
 
 
 def link(match):

@@ -16,3 +16,7 @@
 Blackbox is in active development. Millisecond timestamps and interpolated crossings are not millisecond physical-accuracy claims. The estimator uses diagonal covariance, not a full covariance EKF. Synthetic tests and cross-compilation do not substitute for reference-timed driving or a real USB flash/boot test. Rates depend on configured hardware and measured processing cadence.
 
 This file is a convenient reading index, not a crawler directive or a guarantee of search or AI inclusion.
+
+- [Hardware acceptance checklist](https://jctoledo.github.io/blackbox/guides/hardware-validation.html): bench, USB, sensors, crossings, accuracy, and recording tests.
+- [Compatibility and accuracy FAQ](https://jctoledo.github.io/blackbox/guides/faq.html): supported configurations and explicit limits.
+- [Interactive dashboard demo](https://jctoledo.github.io/blackbox/demo.html): synthetic telemetry, not a measurement or accuracy demonstration.
