@@ -228,7 +228,7 @@ Crossing times are interpolated between two fresh GPS fixes and stored in intege
 | Lap history | 100 bytes/lap | 100 KB (1000 laps) |
 | **Total** | | ~1 MB |
 
-Well within IndexedDB limits (50+ MB).
+Browser quota varies; storage can fill or be evicted. Export important data and use the visible save/error status. Do not assume a fixed IndexedDB capacity.
 
 ### Corner Detection
 State machine with hysteresis:

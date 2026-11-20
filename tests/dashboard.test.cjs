@@ -166,3 +166,37 @@ test('track text and attribute values are escaped before rendering',()=>{
  assert.equal(c.escHtml('<img src=x onerror="alert(1)">'), '&lt;img src=x onerror=&quot;alert(1)&quot;&gt;');
  assert.equal(c.escHtml('id" onclick="bad'), 'id&quot; onclick=&quot;bad');
 });
+
+test('recording health counts observed GPS validity and gaps across chunks',()=>{
+ const c={Number,Math};vm.createContext(c);vm.runInContext(section('function recordingHealth(', 'async function getAllSessions('),c);
+ const h=c.recordingHealth([{chunkIndex:1,data:[{t:3000,gpsOk:0},{t:2900,gpsOk:1}]},{chunkIndex:0,data:[{t:0,gpsOk:1},{t:100,gpsOk:1}]}]);
+ assert.equal(h.samples,4);assert.equal(h.gpsPercent,75);assert.equal(h.gaps,1);assert.equal(h.maxGapMs,2900);assert.equal(h.clockReversals,1);assert.equal(h.durationMs,3000);
+ assert.equal(c.recordingHealth([]).gpsPercent,null);
+ const stats=c.lapConsistency([{lapTimeMs:61000},{lapTimeMs:60000},{lapTimeMs:90000},{lapTimeMs:NaN}]);
+ assert.equal(stats.median,61000);assert.equal(stats.spread,30000);assert.equal(stats.count,3);assert.equal(stats.best,60000);
+ assert.equal(c.lapConsistency([{lapTimeMs:60000},{lapTimeMs:61001}]).median,60500.5);
+});
+
+test('nonfinite motion is rejected before telemetry can update the UI',()=>{
+ const c={DataView,Uint8Array,Number};vm.createContext(c);vm.runInContext(section('function process(buf','async function poll()'),c);
+ const b=new ArrayBuffer(82),v=new DataView(b),bytes=new Uint8Array(b);v.setUint8(0,4);v.setUint16(1,0xAA55,true);v.setFloat32(7,NaN,true);v.setUint16(80,bytes.slice(0,80).reduce((a,b)=>a+b,0)&65535,true);
+ assert.throws(()=>c.process(b),/Invalid numeric telemetry/);
+});
+test('storage failure stops collection and preserves unsaved rows for export',async()=>{
+ let tx;const c={console,Date,Math,db:{transaction(){tx={objectStore:()=>({put(){}})};return tx}}};vm.createContext(c);
+ vm.runInContext(section('// Recording state.', 'function updateRecUI()')+'function updateRecUI(){};rec=true;sessionId=10;chunkBuffer=[{t:1}];',c);
+ const p=c.saveChunk();tx.onabort();await assert.rejects(p);assert.equal(vm.runInContext('rec',c),false);assert.equal(vm.runInContext('chunkBuffer.length',c),1);assert.match(vm.runInContext('recordingError',c),/Keep this tab open/);
+});
+
+test('stage completion preserves its exact result while the device re-arms',()=>{
+ const {c,elements,saved}=context();c.activeTrack.type='point_to_point';
+ c.updateLapTimer(0,1,0,{state:'armed',last_lap_ms:1287475,best_lap_ms:1287475,gps_valid:true});
+ assert.equal(saved[0],1287475);assert.match(elements.get('lap-result').textContent,/RUN.*21:27.475/);assert.equal(elements.get('lap-state').textContent,'Finished · ready for next start');
+ c.lapTracker=null;c.updateLapTimer(0,1,0,{state:'armed',last_lap_ms:1287475,best_lap_ms:1287475,gps_valid:true});assert.equal(saved.length,1);
+});
+
+test('emergency export includes committed and unsaved rows without another write',async()=>{
+ let csv='',clicked=false;const c={console,Number,Date,setTimeout:()=>{},db:{transaction:()=>({objectStore:name=>name==='sessions'?{get:()=>({result:{sessionId:10}})}:{index:()=>({getAll:()=>({result:[{chunkIndex:0,data:[{t:1,sp:10}]}]})})}})},idbPromise:async r=>r.result,chunkWrite:null,chunkBuffer:[{t:2,sp:11}],sessionId:10,Blob:class{constructor(parts){csv=parts.join('')}},URL:{createObjectURL:()=>'/synthetic.csv'},document:{createElement:()=>({click(){clicked=true}})}};
+ vm.createContext(c);vm.runInContext(section('function samplesToCSV(', 'async function exportCSV(')+section('async function exportSessionById(', 'function formatBytes('),c);
+ const result=await c.exportSessionById(10);assert.equal(result.sampleCount,2);assert.equal(clicked,true);assert.equal(csv.trim().split('\n').length,3);assert.equal(c.chunkBuffer.length,1);
+});

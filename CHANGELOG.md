@@ -22,11 +22,15 @@ Release candidate for bench and controlled-site validation, not a claim of measu
 - Driver-focused display, compact/expandable G-meter, and a five-second completed-lap result panel.
 - Estimated distance progress after a usable reference lap; no corner-location or coaching claim.
 - Explicit connection-loss, stale telemetry, and unavailable-delta states.
+- Five-second recording saves, visible interrupted-session recovery, and emergency export of unsaved rows after storage failure.
+- Session median/spread summaries and recording-health indicators for observed GPS validity and sample gaps.
 - Timing evidence in CSV exports: device timestamps, lap counters/results, GPS age, and timing revision.
 - Interactive website demo using the device dashboard with isolated synthetic telemetry/storage.
 - Hardware acceptance checklist and NEO-M9N weekend data-collection instructions.
 
 ### Fixed
+- Non-finite motion and invalid GPS coordinates are rejected before display/recording.
+- Long-stage and finish-outage replay coverage, with clearer stage setup and completion feedback.
 - Slower first laps after re-arming no longer overwrite faster saved references.
 - Delta no longer extrapolates beyond reference samples; gaps, late starts, and large position jumps invalidate distance estimates.
 - Track/reference storage now waits for commit; reference replacement is atomic and failed timing-stop acknowledgements preserve active configuration.

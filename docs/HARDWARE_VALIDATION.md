@@ -19,7 +19,7 @@ Use this checklist for a specific board, wiring revision, GPS receiver, mounting
 1. Complete the bench, USB, and axis checks below before driving. Select the M9N firmware variant and record the artifact SHA-256.
 2. Outdoors, wait for a fresh fix; record the Diagnostics GPS rate and satellite count. The configured target is 25 Hz, not proof of the actual delivered rate. Photograph the antenna position and IMU orientation.
 3. While parked, select/record the track, arm timing, and press **Record session**. Check the recording indicator before switching to **Drive view**. Keep the dashboard foregrounded; screen lock or browser suspension can interrupt browser recording.
-4. Collect a short stationary segment, gentle straight acceleration/braking, turns in both directions, and repeated start-line crossings at a controlled site. A passenger/operator should note any missed or unexpected crossing and an approximate time. Do not operate the UI while driving.
+4. For a normal neighborhood/highway drive, collect a couple of minutes parked outdoors, the ordinary drive, and a short parked segment at the end. No hard braking, weaving, or special maneuvers are needed. Repeated line-crossing validation belongs at a controlled site with an operator/reference. A passenger/operator should note any missed or unexpected crossing and an approximate time. Do not operate the UI while driving.
 5. While parked, stop recording. Open **Saved data**, export the session CSV, and use **Tracks → Export** for the track geometry. Keep a short text note with firmware, GPS model, wiring/mounting, browser/phone, weather/obstructions, and observed problems. Export before clearing site data.
 6. An independent timer or timestamped crossing video is needed to measure timing error. Without it, the logs can establish internal consistency and investigate failures, but not absolute lap-time accuracy. Share location-containing recordings privately, not in a public GitHub issue.
 
@@ -111,3 +111,19 @@ Use an operator/passenger or inspect logs after each run; do not manipulate the 
 | Endurance / power interruption | | | | | |
 
 Keep failures and untested cases visible. Promote a candidate to stable only when its intended hardware configuration meets the agreed acceptance criteria; a different board, mounting change, or GPS configuration needs renewed checks.
+
+## Point-to-point stage acceptance
+
+- [ ] First record and save the route with separate start/finish lines. Stop safely before marking the finish. The initial route recording is not a timed stage.
+- [ ] On a later pass, arm before the start and cross each line in its recorded direction. Verify the completed result survives reconnect/reload of the browser's saved history.
+- [ ] A second start crossing during an active run must not restart the clock; crossing the finish before starting must not create a run.
+- [ ] GPS loss spanning the finish must not fabricate completion. Document a missed finish and stop/re-arm while parked.
+- [ ] Test a short stage before a long run. The software includes a deterministic 20-mile replay, but this does not replace physical testing.
+- [ ] Export both session CSV and stage geometry. An ordinary highway run without an independent reference cannot establish timing accuracy.
+
+## Phone storage and bad-data acceptance
+
+- [ ] Record for at least 15 seconds, wait for the saved status, reload, and export the interrupted session from Saved data. Confirm no automatic resumption or overwritten chunks.
+- [ ] In a disposable browser profile, simulate quota failure. Recording must stop visibly, pending samples must remain exportable, and no success should be shown before transaction completion.
+- [ ] Suspend/lock the phone and restore it; inspect recorded gaps and do not assume background capture. Confirm the same browser/origin is used when recovering.
+- [ ] Compare exported row counts/timestamps and GPS-valid fractions to the saved-session health summary. Bad/missing data is not a zero measurement.

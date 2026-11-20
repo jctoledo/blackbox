@@ -90,3 +90,17 @@ No. The current reference stores distance/time samples, not a spatially matched 
 ## Which display should I use?
 
 Set up the track and recording while parked. Drive view emphasizes lap time, delta, speed, and last/best results while hiding track editing and the G-meter. Exit drive view to access setup and saved data. The standard view keeps a compact G-meter; Expand G-meter provides a larger force plot for analysis. A completed lap briefly shows its exact recorded result for five seconds. Drive view does not start recording automatically or keep a phone awake.
+
+## Can I see whether my pace is becoming more consistent?
+
+Open Tracks → Laps for a saved track. Sessions with at least two displayed laps include median time and spread (slowest minus fastest), alongside best time. Slow/in/out laps are included: this is a description of the displayed laps, not a clean-lap classifier, coaching score, or timing-accuracy measurement. History displays recent sessions from the latest 200 recorded laps.
+
+Saved data shows sample count, GPS-valid percentage among received samples, the largest interval between browser sample timestamps, and gaps over 1.5 seconds. It does not count samples that were never received, prove good satellite geometry, or establish timing accuracy. Clock changes are flagged separately. Use these summaries to decide which recordings need closer inspection.
+
+## What runs on my phone, and how does recovery work?
+
+The dashboard is plain JavaScript served by the ESP32. IndexedDB stores recordings/tracks in the phone browser; there is no cloud backend. While receiving telemetry, recording requests a chunk save about every five seconds and waits for transaction completion before calling it saved. A hidden-page/page-exit save is best effort, not a guarantee against OS termination.
+
+On reload, unfinished sessions remain accessible in Saved data, with a visible recovery notice. Collection does not silently resume or invent missing samples. If a storage write fails, recording stops, the failed batch remains in memory, and export includes committed plus pending rows without requiring another successful write. Keep the tab open until you export: memory cannot survive a reload/crash. A pending-buffer cap also stops collection if storage stalls.
+
+This improves recovery but does not make browser storage permanent. Clearing site data, eviction, private browsing, switching origin/phone/browser, or OS termination can still lose data. Persistent-storage APIs are browser/security-context dependent and are not assumed available on the device's HTTP origin. See [browser storage behavior](https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria). Device-side logging or a native application is a future option for unattended/background capture.

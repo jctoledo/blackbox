@@ -364,7 +364,10 @@ button,input,select{font:inherit}button:focus-visible,[role="button"]:focus-visi
 .drive-view .bbQuickActions{justify-content:flex-end}.drive-view .bbGCard{display:block;min-height:0}.drive-view .bbGTop{padding:16px 24px}.drive-view .bbLapTime{font-size:clamp(52px,10vw,112px)}.drive-view .bbDeltaText{font-size:clamp(28px,5vw,48px)}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 .bbLapResult{border-top:1px solid var(--divider);padding:14px 20px;background:var(--ok);color:var(--bg);font:700 15px/1.5 var(--mono);text-align:center}.bbLapResult[hidden]{display:none}.bbDeltaBar.no-ref .bbDeltaText{opacity:1;font-size:16px;line-height:1.3}.bbDeltaText{text-shadow:none!important}.bbDeltaFill.ahead{background:var(--ok)}.bbDeltaFill.behind{background:var(--red)}.bbDeltaFill{box-shadow:none!important}
-@media(min-width:650px) and (max-height:600px){.drive-view .bbApp{display:grid;grid-template-columns:minmax(0,2fr) minmax(160px,1fr);align-content:start;align-items:start}.drive-view .bbQuickActions,.drive-view .bbConnectionNotice,.drive-view .bbRecordingNotice{grid-column:1/-1}.drive-view .bbLapCard{grid-column:1}.drive-view .bbGCard{grid-column:2}.drive-view .bbLapTime{font-size:64px}.drive-view .bbLapMain{padding:12px}.drive-view .bbLapHistory{padding:10px}.drive-view .bbSpeed{font-size:64px}}
+@media(min-width:650px) and (max-height:600px){.drive-view .bbApp{display:grid;grid-template-columns:minmax(0,2fr) minmax(160px,1fr);align-content:start;align-items:start}.drive-view .bbQuickActions,.drive-view .bbConnectionNotice,.drive-view .bbRecordingNotice{grid-column:1/-1}.drive-view .bbLapCard{grid-column:1}.drive-view .bbGCard{grid-column:2}.drive-view .bbTopbar{padding:4px 12px}.drive-view .bbKebab{width:32px;height:32px}.drive-view .bbApp{padding:8px 12px;gap:6px}.drive-view .bbQuickActions button{min-height:32px;padding:6px 12px}.drive-view .bbLapTime{font-size:52px}.drive-view .bbDeltaText{font-size:28px}.drive-view .bbLapMain{padding:8px}.drive-view .bbLapTrackName{display:none}.drive-view .bbLapProgress{padding:4px 14px;font-size:11px}.drive-view .bbLapHistory{padding:8px}.drive-view .bbLapHistValue{font-size:20px}.drive-view .bbSpeed{font-size:64px}.drive-view .bbLapResult{padding:6px;font-size:12px}}
+.bbSessionHealth{font-size:12px;line-height:1.6;color:var(--text-secondary);margin:8px 0}.bbConsistency{width:100%;font-size:13px;line-height:1.6;color:var(--text)}.bbConsistency small{display:block;color:var(--text-secondary);font:11px/1.5 system-ui}
+.bbSaveStatus{color:var(--text-secondary);font-size:12px;padding:0 4px}.bbSaveStatus[hidden]{display:none}@media(min-width:650px) and (max-height:600px){.drive-view .bbSaveStatus{grid-column:1/-1}}
+.bbRecordOverlay{visibility:hidden}.bbRecordOverlay.active{visibility:visible}
 </style></head>
 <body>
 
@@ -389,6 +392,7 @@ button,input,select{font:inherit}button:focus-visible,[role="button"]:focus-visi
 <main class="bbApp">
     <div id="connection-notice" class="bbConnectionNotice" role="status" hidden></div>
     <div class="bbQuickActions" aria-label="Session controls"><button id="quick-tracks">Tracks</button><button id="quick-record">Record session</button><button id="quick-data">Saved data</button><button id="drive-mode" aria-pressed="false">Drive view</button></div>
+    <div id="save-status" class="bbSaveStatus" role="status" hidden></div>
     <div id="recording-notice" class="bbRecordingNotice" role="status" hidden></div>
     <section class="bbCard bbLapCard inactive" id="lap-section">
         <div class="bbLapSetup" id="lap-setup">
@@ -574,7 +578,7 @@ button,input,select{font:inherit}button:focus-visible,[role="button"]:focus-visi
     </div>
 </div>
 
-<div class="bbModal" id="track-modal">
+<div class="bbModal" id="track-modal" role="dialog" aria-modal="true" aria-label="Tracks">
     <div class="bbModalContent">
         <div class="bbModalHeader">
             <span class="bbModalTitle">Tracks</span>
@@ -626,7 +630,7 @@ button,input,select{font:inherit}button:focus-visible,[role="button"]:focus-visi
     </div>
 </div>
 
-<div class="bbModal" id="data-modal">
+<div class="bbModal" id="data-modal" role="dialog" aria-modal="true" aria-label="Saved data">
     <div class="bbModalContent">
         <div class="bbModalHeader">
             <span class="bbModalTitle">Data</span>
@@ -707,7 +711,7 @@ const $=id=>document.getElementById(id);
 const MODES={0:'IDLE',1:'ACCEL',2:'BRAKE',4:'CORNER',5:'EXIT',6:'TRAIL'};
 const MODE_COLORS={0:'var(--mode-idle)',1:'var(--mode-accel)',2:'var(--mode-brake)',4:'var(--mode-idle)',5:'var(--mode-accel)',6:'var(--mode-brake)'};
 const LAP_FLAG_CROSSED_START=1,LAP_FLAG_CROSSED_FINISH=2,LAP_FLAG_NEW_LAP=4,LAP_FLAG_NEW_BEST=8,LAP_FLAG_INVALID=16;
-const DB_NAME='blackbox-rec',DB_VERSION=2,CHUNK_INTERVAL=60000;
+const DB_NAME='blackbox-rec',DB_VERSION=2,CHUNK_INTERVAL=5000,MAX_PENDING_SAMPLES=6000;
 
 let isDark=window.matchMedia('(prefers-color-scheme:dark)').matches;
 function applyTheme(){
@@ -758,6 +762,7 @@ function openDB(){
 
 // Recording state. Detach each batch before awaiting IndexedDB; only one writer runs.
 let rec=false,sessionId=null,chunkBuffer=[],chunkIndex=0,lastSaveTime=0,sessionStart=0;
+let recoveredSessionCount=0;
 let chunkWrite=null,recordingBusy=false,recordingError='';
 function commitStore(store,value){
     return new Promise((resolve,reject)=>{
@@ -775,7 +780,7 @@ async function startRecording(){
         await saveChunk();
         const id=Math.max(Date.now(),(sessionId||0)+1);
         await commitStore('sessions',{sessionId:id,startTime:id,status:'active'});
-        sessionId=id;sessionStart=id;chunkIndex=0;lastSaveTime=Date.now();rec=true;recordingError='';
+        sessionId=id;sessionStart=id;chunkIndex=0;lastSaveTime=Date.now();rec=true;recordingError='';lastSaveTime=0;
     }catch(e){recordingError='Storage error — recording not started';console.error(e)}
     finally{recordingBusy=false;updateRecUI()}
 }
@@ -790,7 +795,7 @@ async function saveChunk(){
             chunkIndex++;lastSaveTime=Date.now();recordingError='';
         }catch(e){
             chunkBuffer=data.concat(chunkBuffer);
-            recordingError='Storage full or unavailable — export your recording';
+            rec=false;recordingError='Recording stopped: storage unavailable. Keep this tab open and export the unsaved data.';
             throw e;
         }finally{updateRecUI()}
     })();
@@ -802,7 +807,7 @@ async function stopRecording(){
     try{
         await saveChunk();
         if(db&&sessionId)await commitStore('sessions',{sessionId,startTime:sessionStart,status:'complete',chunks:chunkIndex});
-    }catch(e){console.error('Recording remains recoverable in this tab:',e)}
+    }catch(e){recordingError='Recording could not be finalized. Keep this tab open and export from Saved data.';console.error('Recording remains recoverable in this tab:',e)}
     finally{recordingBusy=false;updateRecUI()}
 }
 
@@ -817,7 +822,9 @@ function updateRecUI(){
     }
     if(recordingError){stat.textContent=recordingError;stat.className='bbVal err'}
     const quick=$('quick-record');quick.textContent=rec?'Stop recording':'Record session';quick.disabled=recordingBusy;quick.classList.toggle('recording',rec);
-    $('recording-notice').hidden=!recordingError;$('recording-notice').textContent=recordingError;
+    const notice=recordingError||(recoveredSessionCount?recoveredSessionCount+' unfinished recording(s) found in Saved data. Saved chunks are available; recording has not resumed.':'');
+    $('recording-notice').hidden=!notice;$('recording-notice').textContent=notice;
+    const saveStatus=$('save-status');saveStatus.hidden=!sessionId;saveStatus.textContent=chunkWrite?'Saving recording…':chunkBuffer.length?chunkBuffer.length+' samples pending save':lastSaveTime?'Recording saved in this browser':'No samples saved yet';
     $('rec-chunks').textContent=chunkIndex;
     $('rec-lastsave').textContent=lastSaveTime?(Math.floor((Date.now()-lastSaveTime)/1000)+'s ago'):'--';
     $('rec-duration').textContent=sessionStart?fmtTime(Date.now()-sessionStart):'--';
@@ -829,39 +836,42 @@ function samplesToCSV(samples){
 }
 
 async function exportCSV(){
-    if(!db){alert('No data');return}
-    // Flush any buffered data if recording
-    if(rec&&chunkBuffer.length>0)await saveChunk();
-    const tx=db.transaction(['sessions','chunks'],'readonly');
-    const sessions=await new Promise(r=>{const req=tx.objectStore('sessions').getAll();req.onsuccess=()=>r(req.result)});
-    if(!sessions.length){alert('No recordings found');return}
-    const latest=sessions.sort((a,b)=>b.sessionId-a.sessionId)[0];
-    const chunks=await new Promise(r=>{const req=tx.objectStore('chunks').getAll();req.onsuccess=()=>r(req.result)});
-    const sessionChunks=chunks.filter(c=>c.sessionId===latest.sessionId).sort((a,b)=>a.chunkIndex-b.chunkIndex);
-    if(!sessionChunks.length){alert('No data in recording');return}
-    let allData=[];
-    sessionChunks.forEach(c=>allData=allData.concat(c.data));
-    const csv=samplesToCSV(allData);
-    const b=new Blob([csv],{type:'text/csv'}),u=URL.createObjectURL(b),a=document.createElement('a');
-    a.href=u;a.download='blackbox_'+new Date(latest.sessionId).toISOString().slice(0,19).replace(/[T:]/g,'-')+'.csv';a.click();
+    try{if(!db)await openDB();const sessions=await idbPromise(db.transaction('sessions','readonly').objectStore('sessions').getAll());
+        if(!sessions.length){alert('No recordings found');return}
+        const latest=sessions.sort((a,b)=>b.sessionId-a.sessionId)[0];await exportSessionById(latest.sessionId);
+    }catch(e){alert('Export failed: '+e.message)}
 }
 
 // Data Management Functions
 function idbPromise(r){return new Promise((res,rej)=>{r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
 
+function recordingHealth(chunks){
+    let samples=0,gpsValid=0,first=Infinity,last=-Infinity,previous=null,maxGapMs=0,gaps=0,clockReversals=0;
+    for(const chunk of [...chunks].sort((a,b)=>a.chunkIndex-b.chunkIndex))for(const row of chunk.data||[]){
+        samples++;if(row.gpsOk===1)gpsValid++;
+        if(Number.isFinite(row.t)){
+            first=Math.min(first,row.t);last=Math.max(last,row.t);
+            if(previous!==null){const gap=row.t-previous;if(gap<0)clockReversals++;else{maxGapMs=Math.max(maxGapMs,gap);if(gap>1500)gaps++}}
+            previous=row.t;
+        }
+    }
+    return{samples,gpsPercent:samples?Math.round(100*gpsValid/samples):null,durationMs:Number.isFinite(first)&&Number.isFinite(last)?Math.max(0,last-first):0,maxGapMs,gaps,clockReversals};
+}
+function lapConsistency(laps){
+    const times=laps.map(l=>l.lapTimeMs).filter(t=>Number.isFinite(t)&&t>0).sort((a,b)=>a-b),n=times.length;
+    if(!n)return null;
+    return{count:n,best:times[0],median:n%2?times[(n-1)/2]:(times[n/2-1]+times[n/2])/2,spread:times[n-1]-times[0]};
+}
 async function getAllSessions(){
     if(!db)await openDB();
     const tx=db.transaction(['sessions','chunks'],'readonly');
     const sessions=await idbPromise(tx.objectStore('sessions').getAll());
     const allChunks=await idbPromise(tx.objectStore('chunks').getAll());
     const chunksBySession=new Map();
-    for(const c of allChunks){
-        if(!chunksBySession.has(c.sessionId))chunksBySession.set(c.sessionId,{count:0,samples:0,first:Infinity,last:-Infinity});
-        const s=chunksBySession.get(c.sessionId);s.count++;s.samples+=(c.data&&c.data.length)||0;for(const row of c.data||[]){if(Number.isFinite(row.t)){s.first=Math.min(s.first,row.t);s.last=Math.max(s.last,row.t)}}
-    }
+    for(const c of allChunks){if(!chunksBySession.has(c.sessionId))chunksBySession.set(c.sessionId,[]);chunksBySession.get(c.sessionId).push(c)}
     const enriched=sessions.map(s=>{
-        const cs=chunksBySession.get(s.sessionId)||{count:0,samples:0,first:Infinity,last:-Infinity};
-        return{sessionId:s.sessionId,startTime:s.startTime||s.sessionId,status:s.status,chunkCount:cs.count,sampleCount:cs.samples,durationMs:Number.isFinite(cs.first)&&Number.isFinite(cs.last)?Math.max(0,cs.last-cs.first):0,estimatedBytes:cs.samples*50};
+        const chunks=chunksBySession.get(s.sessionId)||[],health=recordingHealth(chunks);
+        return{sessionId:s.sessionId,startTime:s.startTime||s.sessionId,status:s.status,chunkCount:chunks.length,sampleCount:health.samples,durationMs:health.durationMs,estimatedBytes:health.samples*50,health};
     });
     enriched.sort((a,b)=>b.sessionId-a.sessionId);
     return enriched;
@@ -875,46 +885,45 @@ async function getStorageStats(){
 
 async function deleteSession(targetId){
     if(!db)await openDB();
-    if(rec&&targetId===sessionId)throw new Error('Cannot delete active recording');
-    const tx=db.transaction(['sessions','chunks'],'readwrite');
-    const cs=tx.objectStore('chunks'),idx=cs.index('sessionId'),range=IDBKeyRange.only(targetId);
-    await new Promise((res,rej)=>{
-        const cur=idx.openCursor(range);
-        cur.onerror=()=>rej(cur.error);
-        cur.onsuccess=e=>{const c=e.target.result;if(c){c.delete();c.continue()}else res()};
+    if((rec||chunkWrite||chunkBuffer.length)&&targetId===sessionId)throw new Error('Save or export pending recording data before deleting');
+    await new Promise((resolve,reject)=>{
+        const tx=db.transaction(['sessions','chunks'],'readwrite');tx.oncomplete=resolve;tx.onerror=tx.onabort=()=>reject(tx.error||new Error('Recording deletion failed'));
+        const cursor=tx.objectStore('chunks').index('sessionId').openCursor(IDBKeyRange.only(targetId));
+        cursor.onsuccess=()=>{const c=cursor.result;if(c){c.delete();c.continue()}};
+        tx.objectStore('sessions').delete(targetId);
     });
-    await idbPromise(tx.objectStore('sessions').delete(targetId));
-    await new Promise((res,rej)=>{tx.oncomplete=res;tx.onerror=()=>rej(tx.error)});
 }
 
 async function exportSessionById(targetId){
     if(!db)await openDB();
-    if(rec&&targetId===sessionId&&chunkBuffer.length>0)await saveChunk();
+    if(chunkWrite){try{await chunkWrite}catch(e){console.warn('Exporting pending samples after storage failure',e)}}
+    const pending=targetId===sessionId?chunkBuffer.slice():[];
     const tx=db.transaction(['sessions','chunks'],'readonly');
     const session=await idbPromise(tx.objectStore('sessions').get(targetId));
     if(!session)throw new Error('Session not found');
     const idx=tx.objectStore('chunks').index('sessionId');
     const chunks=await idbPromise(idx.getAll(targetId));
     chunks.sort((a,b)=>a.chunkIndex-b.chunkIndex);
-    if(!chunks.length)throw new Error('No data in recording');
-    let allData=[];chunks.forEach(c=>allData=allData.concat(c.data||[]));
+    if(!chunks.length&&!pending.length)throw new Error('No data in recording');
+    let allData=[];chunks.forEach(c=>allData=allData.concat(c.data||[]));allData=allData.concat(pending);
     const csv=samplesToCSV(allData);
     const b=new Blob([csv],{type:'text/csv'}),u=URL.createObjectURL(b),a=document.createElement('a');
-    a.href=u;a.download='blackbox_'+new Date(targetId).toISOString().slice(0,19).replace(/[T:]/g,'-')+'.csv';a.click();
+    a.href=u;a.download='blackbox_'+new Date(targetId).toISOString().slice(0,19).replace(/[T:]/g,'-')+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(u),30000);
     return{session,sampleCount:allData.length};
 }
 
 async function clearAllRecordings(){
-    if(rec)throw new Error('Cannot clear while recording');
+    if(rec||chunkWrite||chunkBuffer.length)throw new Error('Save or export pending recording data before clearing');
     if(!db)await openDB();
-    const tx=db.transaction(['sessions','chunks'],'readwrite');
-    await idbPromise(tx.objectStore('sessions').clear());
-    await idbPromise(tx.objectStore('chunks').clear());
-    await new Promise((res,rej)=>{tx.oncomplete=res;tx.onerror=()=>rej(tx.error)});
+    await new Promise((resolve,reject)=>{
+        const tx=db.transaction(['sessions','chunks'],'readwrite');tx.oncomplete=resolve;tx.onerror=tx.onabort=()=>reject(tx.error||new Error('Recording deletion failed'));
+        tx.objectStore('sessions').clear();tx.objectStore('chunks').clear();
+    });
+    recoveredSessionCount=0;updateRecUI();
 }
 
 function formatLapTimeMs(ms){if(!ms||ms<=0)return'--:--.---';const m=Math.floor(ms/60000);const s=Math.floor((ms%60000)/1000);const msc=ms%1000;return m+':'+(s<10?'0':'')+s+'.'+(msc<100?'0':'')+(msc<10?'0':'')+msc}
-function formatSessionDuration(ms){const totalSec=Math.floor(ms/1000),h=Math.floor(totalSec/3600),m=Math.floor((totalSec%3600)/60);if(h>0)return h+'h '+m+'m';return m+'m'}
+function formatSessionDuration(ms){const totalSec=Math.floor(ms/1000),h=Math.floor(totalSec/3600),m=Math.floor((totalSec%3600)/60);if(h>0)return h+'h '+m+'m';return m>0?m+'m '+(totalSec%60)+'s':totalSec+'s'}
 function estimateObjectSize(obj){if(obj===null||obj===undefined)return 0;if(typeof obj==='string')return obj.length*2;if(typeof obj==='number')return 8;if(typeof obj==='boolean')return 4;if(obj instanceof ArrayBuffer)return obj.byteLength;if(Array.isArray(obj))return obj.reduce((s,i)=>s+estimateObjectSize(i),0);if(typeof obj==='object')return Object.keys(obj).reduce((s,k)=>s+k.length*2+estimateObjectSize(obj[k]),0);return 8}
 
 async function getTrackDataStats(){
@@ -1284,12 +1293,24 @@ function escHtml(t){return String(t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&l
 function wrapAngle(a){while(a>Math.PI)a-=2*Math.PI;while(a<-Math.PI)a+=2*Math.PI;return a}
 
 // Track Manager UI
+const modalReturnFocus=new Map();
+function revealModal(id,closeId){modalReturnFocus.set(id,document.activeElement);$(id).classList.add('open');$(closeId).focus()}
+function hideModal(id){$(id).classList.remove('open');modalReturnFocus.get(id)?.focus();modalReturnFocus.delete(id)}
+document.addEventListener('keydown',event=>{
+    const modal=document.querySelector('.bbModal.open');if(!modal)return;
+    if(event.key==='Escape'){event.preventDefault();hideModal(modal.id);return}
+    if(event.key!=='Tab')return;
+    const controls=Array.from(modal.querySelectorAll('button,input,select,a[href],[tabindex="0"]')).filter(el=>!el.disabled&&el.offsetParent!==null);
+    if(!controls.length)return;const first=controls[0],last=controls[controls.length-1];
+    if(event.shiftKey&&(document.activeElement===first||!modal.contains(document.activeElement))){event.preventDefault();last.focus()}
+    else if(!event.shiftKey&&(document.activeElement===last||!modal.contains(document.activeElement))){event.preventDefault();first.focus()}
+});
 function openTrackModal(){
-    $('track-modal').classList.add('open');
+    revealModal('track-modal','track-modal-close');
     renderTrackList();
     updateActiveTrackDisplay();
 }
-function closeTrackModal(){$('track-modal').classList.remove('open')}
+function closeTrackModal(){hideModal('track-modal')}
 
 function updateActiveTrackDisplay(){
     const sec=$('active-track-section');
@@ -1425,7 +1446,7 @@ async function showTrackHistory(id){
     const hist=await getLapHistory(id);
     const isP2P=t.type==='point_to_point';
     const unit=isP2P?'run':'lap',units=isP2P?'runs':'laps';
-    const item=document.querySelector('.bbTrackItem[data-id=\"'+id+'\"]');if(!item)return;
+    const item=Array.from(document.querySelectorAll('.bbTrackItem')).find(el=>el.dataset.id===id);if(!item)return;
     const ex=item.querySelector('.bbTrackHistory');if(ex){ex.remove();return}
     const sec=document.createElement('div');sec.className='bbTrackHistory';
     if(hist.sessions.length===0){sec.innerHTML='<div class=\"bbHistoryEmpty\"><span>No '+unit+' history</span><span class=\"bbHistoryHint\">Complete some '+units+' to start tracking</span></div>'}
@@ -1433,15 +1454,17 @@ async function showTrackHistory(id){
         let html='<div class=\"bbHistorySummary\"><span class=\"bbHistoryTotal\">'+hist.totalLaps+' '+(hist.totalLaps===1?unit:units)+' total</span><span>'+hist.sessions.length+' session'+(hist.sessions.length===1?'':'s')+'</span></div><div class=\"bbHistorySessions\">';
         const recent=hist.sessions.slice(0,5);
         for(const s of recent){
+            const consistency=lapConsistency(s.laps);
             html+='<div class=\"bbHistorySession\"><div class=\"bbHistorySessionHeader\"><span class=\"bbHistoryDate\">'+fmtSessionDate(s.sessionStart)+' '+fmtSessionTime(s.sessionStart)+'</span><span class=\"bbHistorySessionStats\">Best: '+fmtLapTime(s.bestMs)+' · '+s.laps.length+' '+(s.laps.length===1?unit:units)+'</span></div><div class=\"bbHistoryLaps\">';
+            if(consistency&&consistency.count>=2)html+='<div class=\"bbConsistency\">Median '+fmtLapTime(Math.round(consistency.median))+' · spread '+(consistency.spread/1000).toFixed(3)+'s <small>Shown laps, including slow laps; not a measure of timing accuracy.</small></div>';
             for(const l of s.laps){const isBest=l.lapTimeMs===s.bestMs;html+='<span class=\"bbHistoryLap'+(isBest?' best':'')+'\">'+fmtLapTime(l.lapTimeMs)+'</span>'}
             html+='</div></div>';
         }
         if(hist.sessions.length>5){const more=hist.sessions.length-5;html+='<div class=\"bbHistoryMore\">+'+more+' more session'+(more===1?'':'s')+'</div>'}
-        html+='</div><div class=\"bbHistoryActions\"><button class=\"bbHistoryClearBtn\" onclick=\"clearTrackHistoryConfirm(\''+id+'\');\">Clear History</button></div>';
+        html+='</div><div class=\"bbHistoryActions\"><button class=\"bbHistoryClearBtn\">Clear History</button></div>';
         sec.innerHTML=html;
     }
-    item.appendChild(sec);
+    item.appendChild(sec);const clear=sec.querySelector('.bbHistoryClearBtn');if(clear)clear.onclick=()=>clearTrackHistoryConfirm(id);
 }
 async function clearTrackHistoryConfirm(id){
     if(confirm('Clear all lap history for this track?')){
@@ -1464,6 +1487,7 @@ async function activateTrack(track){
     // Helper to convert local (x,y) back to GPS using track's origin
     function toGps(x,y){return{lat:origin.lat+y/111320,lon:origin.lon+x/(111320*cosLat)}}
     const line=track.startLine,finLine=track.finishLine;
+    if(isP2P&&!finLine){alert('This stage has no finish line. Record or import a complete stage before arming.');return}
     const p1=toGps(line.p1[0],line.p1[1]);
     const p2=toGps(line.p2[0],line.p2[1]);
     // Direction is already in math convention (from atan2 in _calculateTimingLine)
@@ -1561,7 +1585,7 @@ function startTrackRecording(trackType='loop'){
     const overlay=$('record-overlay');overlay.classList.add('active');
     $('rec-title').textContent=trackType==='loop'?'Recording Circuit':'Recording Stage';
     $('rec-distance').textContent='0';$('rec-corners').textContent='0';$('rec-points').textContent='0';$('rec-elapsed').textContent='0:00';
-    $('rec-hint').textContent=trackType==='loop'?"Complete one lap. We'll detect when you return.":'Drive the stage, then tap Mark Finish at the end.';
+    $('rec-hint').textContent=trackType==='loop'?"Complete one lap. We'll detect when you return.":'Record the route first. Stop safely at the end, then mark the finish. Timing is available on a later run.';
     $('rec-state-recording').style.display='block';$('rec-state-complete').style.display='none';
     const markFinishBtn=$('btn-mark-finish');if(markFinishBtn)markFinishBtn.style.display=trackType==='point_to_point'?'flex':'none';
     closeTrackModal();return true;
@@ -1889,7 +1913,8 @@ let lapResultGeneration=0;
 function showLapResult(time,previousBest){
     const box=$('lap-result'),generation=++lapResultGeneration;
     const better=!previousBest||time<previousBest;
-    box.textContent=(better?'BEST LAP · ':'LAP COMPLETE · ')+fmtLapTime(time)+(previousBest?' · '+fmtDelta(time-previousBest)+'s vs best':'');
+    const unit=activeTrack?.type==='point_to_point'?'RUN':'LAP';
+    box.textContent=(better?'BEST '+unit+' · ':unit+' COMPLETE · ')+fmtLapTime(time)+(previousBest?' · '+fmtDelta(time-previousBest)+'s vs best':'');
     box.hidden=false;
     setTimeout(()=>{if(generation===lapResultGeneration)box.hidden=true},5000);
 }
@@ -1952,7 +1977,7 @@ function updateLapTimer(lapTimeMs,lapCnt,lapFlags,timing=null){
                 const absDelta=Math.abs(deltaMs);
                 const secs=(absDelta/1000).toFixed(3);
                 deltaEl.textContent=sign+secs+'s';
-                deltaEl.className='bbLapHistValue bbNum delta '+(deltaMs<0?'faster':'slower');
+                deltaEl.className='bbLapHistValue bbNum delta '+(deltaMs<0?'faster':deltaMs>0?'slower':'');
             }
             const displayBest=Math.min(activeTrack.bestLapMs||Infinity,completedMs);$('best-lap').textContent=fmtLapTime(displayBest);
             updateTrackBestLap(completedMs).catch(e=>{$('recording-notice').hidden=false;$('recording-notice').textContent='Lap result could not be saved. Export your session before closing this tab.';console.error('Lap history storage failed:',e)});
@@ -1961,7 +1986,7 @@ function updateLapTimer(lapTimeMs,lapCnt,lapFlags,timing=null){
         if(lapTracker){lapTracker.reset();lastDeltaMs=0;deltaTrend=0}
         updateDeltaBar({deltaMs:0,trend:0,hasRef:!!referenceLap,isP2P:activeTrack&&activeTrack.type==='point_to_point'})
         // P2P: Show "Finished!" briefly then return to "Armed"
-        if(isP2P){stateEl.textContent='Finished!';stateEl.classList.add('finished');setTimeout(()=>{stateEl.textContent='Armed';stateEl.classList.remove('finished','timing');sec.classList.remove('timing')},1500)}
+        if(isP2P){stateEl.textContent='Finished · ready for next start';stateEl.classList.remove('timing');sec.classList.remove('timing')}
     }
     if((timing?timing.state==='timing':lapTimeMs>0)&&!countIncreased){
         // Track distance and calculate delta
@@ -2016,6 +2041,8 @@ function process(buf,timing=null){
     const gpsCourse=d.getFloat32(69,1);
     // EKF state for track manager
     const ekfYaw=d.getFloat32(31,1),ekfX=d.getFloat32(35,1),ekfY=d.getFloat32(39,1);
+    if(![ax,ay,wz,sp,posSigma,ekfYaw,ekfX,ekfY].every(Number.isFinite)||sp<0||posSigma<0)throw new Error('Invalid numeric telemetry');
+    if(gpsOk===1&&(!Number.isFinite(lat)||!Number.isFinite(lon)||Math.abs(lat)>90||Math.abs(lon)>180))throw new Error('Invalid GPS coordinates');
     // Lap timer fields (82-byte protocol v4)
     const lapTimeMs=buf.byteLength>=80?d.getUint32(73,1):0;
     const lapCnt=buf.byteLength>=80?d.getUint16(77,1):0;
@@ -2095,7 +2122,8 @@ function process(buf,timing=null){
     // Recording
     if(rec){
         chunkBuffer.push({t:now,deviceTimeMs:d.getUint32(3,true),lapTimeMs,lapCnt,lapFlags,lastLapMs:timing?.last_lap_ms,bestLapMs:timing?.best_lap_ms,gpsAgeMs:timing?.gps_age_ms,timingRevision:timing?.revision,sp,ax,ay,wz,mo,latg,lng,lat,lon,gpsOk,ekfX,ekfY,ekfYaw,gpsCourse,lon_imu:fusion.lon_imu,lon_gps:fusion.lon_gps,gps_wt:fusion.gps_wt,pitch_c:fusion.pitch_c,pitch_cf:fusion.pitch_cf,roll_c:fusion.roll_c,roll_cf:fusion.roll_cf,tilt_x:fusion.tilt_x,tilt_y:fusion.tilt_y});
-        if(now-lastSaveTime>=CHUNK_INTERVAL&&!chunkWrite)saveChunk().catch(console.error);
+        if(chunkBuffer.length>=MAX_PENDING_SAMPLES){rec=false;recordingError='Recording stopped: too many unsaved samples. Keep this tab open and export.';updateRecUI()}
+        else if(now-lastSaveTime>=CHUNK_INTERVAL&&!chunkWrite)saveChunk().catch(console.error);
     }
 }
 
@@ -2111,7 +2139,7 @@ function markTelemetryUnavailable(label){
     $('liveDot').classList.remove('on');$('gpsDot').classList.remove('on');$('stxt').textContent=label;
     $('gpsHz').textContent='GPS --';currentPos.valid=false;lastGpsState=false;
     document.body.classList.add('telemetry-stale');$('connection-notice').hidden=false;
-    $('connection-notice').textContent=label==='Offline'?'Connection lost. Showing last received values; reconnect to Blackbox Wi-Fi.':'Telemetry paused. Values below are not live.';
+    $('connection-notice').textContent=label==='Invalid data'?'Invalid telemetry rejected. Values below are from the last accepted sample.':label==='Offline'?'Connection lost. Showing last received values; reconnect to Blackbox Wi-Fi.':'Telemetry paused. Values below are not live.';
 }
 async function poll(){
     try{
@@ -2125,7 +2153,8 @@ async function poll(){
             }
             const b=atob(j.data),a=new Uint8Array(b.length);
             for(let i=0;i<b.length;i++)a[i]=b.charCodeAt(i);
-            process(a.buffer,j.timing||null);lastSeq=j.seq;lastTelemetryAt=Date.now();
+            try{process(a.buffer,j.timing||null)}catch(error){markTelemetryUnavailable('Invalid data');console.error(error);setTimeout(poll,500);return}
+            lastSeq=j.seq;lastTelemetryAt=Date.now();
             document.body.classList.remove('telemetry-stale');$('connection-notice').hidden=true;
             $('liveDot').classList.add('on');$('stxt').textContent='LIVE';
         }
@@ -2226,8 +2255,8 @@ $('btn-export-all').onclick=exportAllTracks;
 $('menu-clear').onclick=()=>{$('menu-overlay').classList.remove('open');resetState()};
 
 // Data Modal
-function openDataModal(){$('data-modal').classList.add('open');renderDataModal()}
-function closeDataModal(){$('data-modal').classList.remove('open')}
+function openDataModal(){revealModal('data-modal','data-modal-close');renderDataModal()}
+function closeDataModal(){hideModal('data-modal')}
 
 async function renderDataModal(){
     const combined=await getCombinedStorageStats();
@@ -2244,7 +2273,8 @@ async function renderSessionList(){
     const listEl=$('session-list'),clearBtn=$('btn-clear-all-recordings');
     try{
         const stats=await getStorageStats();
-        clearBtn.disabled=stats.sessionCount===0||rec;
+        clearBtn.disabled=stats.sessionCount===0||rec||!!chunkWrite||chunkBuffer.length>0;
+        recoveredSessionCount=stats.sessions.filter(s=>s.status==='active'&&s.sessionId!==sessionId).length;updateRecUI();
         if(stats.sessionCount===0){
             listEl.innerHTML='<div class=\"bbSessionEmpty\"><div class=\"icon\"></div>No recordings yet.<br>Start recording to capture telemetry.</div>';
             return;
@@ -2257,11 +2287,12 @@ async function renderSessionList(){
                 '<div class=\"bbSessionInfo\">'+
                     '<div class=\"bbSessionDate\">'+formatSessionDate(s.startTime)+'</div>'+
                     '<div class=\"bbSessionMeta\"><span>'+s.chunkCount+' chunk'+(s.chunkCount!==1?'s':'')+'</span><span>'+formatBytes(s.estimatedBytes)+'</span><span>'+formatSessionDuration(s.durationMs)+'</span></div>'+
+                    '<div class=\"bbSessionHealth\">'+s.sampleCount+' samples · GPS valid '+(s.health.gpsPercent===null?'—':s.health.gpsPercent+'%')+'<br>Largest sample gap: '+(s.health.maxGapMs/1000).toFixed(2)+'s · '+s.health.gaps+' over 1.5s'+(s.health.clockReversals?' · Clock changed':'')+'</div>'+
                     '<div class=\"bbSessionStatus '+statusCls+'\">'+statusLbl+'</div>'+
                 '</div>'+
                 '<div class=\"bbSessionActions\">'+
                     '<button class=\"bbSessionBtn\" data-action=\"export\">Export</button>'+
-                    '<button class=\"bbSessionBtn danger\" data-action=\"delete\"'+(isCur?' disabled':'')+'>Delete</button>'+
+                    '<button class=\"bbSessionBtn danger\" data-action=\"delete\"'+((s.sessionId===sessionId&&(rec||chunkWrite||chunkBuffer.length))?' disabled':'')+'>Delete</button>'+
                 '</div>'+
             '</div>';
         }).join('');
@@ -2360,24 +2391,13 @@ setInterval(()=>{
 
 setInterval(updateDiag,1000);
 
-openDB().then(()=>{
-    // Check for incomplete sessions on load
-    const tx=db.transaction('sessions','readonly');
-    tx.objectStore('sessions').getAll().onsuccess=(e)=>{
-        const active=e.target.result.filter(s=>s.status==='active');
-        if(active.length>0){
-            const latest=active.sort((a,b)=>b.sessionId-a.sessionId)[0];
-            sessionId=latest.sessionId;sessionStart=latest.startTime;
-            // Count existing chunks
-            const ctx=db.transaction('chunks','readonly');
-            ctx.objectStore('chunks').getAll().onsuccess=(e2)=>{
-                chunkIndex=e2.target.result.filter(c=>c.sessionId===sessionId).length;
-                $('rec-status').textContent='⚠ Recovered';$('rec-status').className='bbVal warn';
-                updateRecUI();
-            };
-        }
-    };
-}).catch(e=>console.log('IndexedDB error:',e));
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&chunkBuffer.length)saveChunk().catch(console.error)});
+window.addEventListener('pagehide',()=>{if(chunkBuffer.length)saveChunk().catch(console.error)});
+openDB().then(async()=>{
+    const sessions=await idbPromise(db.transaction('sessions','readonly').objectStore('sessions').getAll());
+    recoveredSessionCount=sessions.filter(s=>s.status==='active'&&s.sessionId!==sessionId).length;
+    updateRecUI();
+}).catch(e=>{recordingError='Browser storage unavailable. Recording and recovery cannot be guaranteed.';updateRecUI();console.error(e)});
 
 openTrackDB().catch(e=>console.log('Track DB error:',e));
 
