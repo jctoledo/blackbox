@@ -5,6 +5,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  pages: read
 concurrency:
   group: blackbox-ci-${{ github.ref }}
   cancel-in-progress: true
@@ -43,3 +44,23 @@ jobs:
             cargo +nightly-2025-10-18 clippy --locked --release -- -D warnings
             cargo +nightly-2025-10-18 build --locked --release
           done
+      - name: Upload protocol artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: protocol-fixture
+          path: tests/fixtures/telemetry-v4.hex
+          retention-days: 1
+      - name: Download protocol artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: protocol-fixture
+          path: artifact-check
+      - name: Verify artifact round trip
+        run: diff tests/fixtures/telemetry-v4.hex artifact-check/telemetry-v4.hex
+      - name: Validate Pages configuration
+        uses: actions/configure-pages@v5
+      - name: Validate Pages packaging
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: docs
+          retention-days: 1
