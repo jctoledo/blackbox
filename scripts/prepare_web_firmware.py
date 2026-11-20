@@ -1,38 +1,79 @@
 #!/usr/bin/env python3
-"""Stage a checksum-verified release on the same origin as the web flasher."""
+"""Stage verified stable/preview releases on the web flasher's own origin."""
 import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import tempfile
+
+ROOT = Path(__file__).resolve().parents[1]
+VARIANTS = {'blackbox.bin': 'legacy published build',
+            'blackbox-6m.bin': 'NEO-6M / 5 Hz', 'blackbox-m9n.bin': 'NEO-M9N / 25 Hz'}
+
+
+def api(repo, endpoint):
+    return json.loads(subprocess.check_output(['gh', 'api', f'repos/{repo}/{endpoint}']))
+
+
+def validate_image(data, asset):
+    digest = asset.get('digest', '')
+    if not re.fullmatch(r'sha256:[a-f0-9]{64}', digest):
+        raise RuntimeError('Release asset has no valid SHA-256 digest')
+    if hashlib.sha256(data).hexdigest() != digest[7:]:
+        raise RuntimeError('Firmware digest mismatch')
+    if len(data) != asset['size'] or not 32 <= len(data) <= 4*1024*1024:
+        raise RuntimeError('Unexpected merged image size')
+    if data[0] != 0xe9 or data[12:14] != b'\x05\x00':
+        raise RuntimeError('Expected a merged ESP32-C3 image')
+    return digest[7:]
 
 
 def main():
     repo = os.environ.get('GITHUB_REPOSITORY', 'jctoledo/blackbox')
-    version = os.environ.get('VERSION', 'latest')
-    endpoint = 'latest' if version == 'latest' else f'tags/{version}'
-    release = json.loads(subprocess.check_output(['gh', 'api', f'repos/{repo}/releases/{endpoint}']))
-    asset = next(a for a in release['assets'] if a['name'] == 'blackbox.bin')
-    digest = asset.get('digest', '')
-    if not digest.startswith('sha256:'):
-        raise RuntimeError('Release asset has no SHA-256 digest; refusing to stage unverified firmware')
-    destination = Path(__file__).resolve().parents[1] / 'docs/firmware'
-    destination.mkdir(exist_ok=True)
-    with tempfile.TemporaryDirectory() as folder:
-        subprocess.run(['gh', 'release', 'download', release['tag_name'], '--repo', repo,
-                        '--pattern', 'blackbox.bin', '--dir', folder], check=True)
-        data = (Path(folder) / 'blackbox.bin').read_bytes()
-        if hashlib.sha256(data).hexdigest() != digest.removeprefix('sha256:'):
-            raise RuntimeError('Firmware digest mismatch')
-        if len(data) != asset['size'] or len(data) > 4 * 1024 * 1024 or data[:1] != b'\xe9':
-            raise RuntimeError('Unexpected merged ESP32 image')
-        (destination / 'blackbox.bin').write_bytes(data)
-    manifest = dict(version=release['tag_name'], chip='esp32c3', offset=0,
-                    size=len(data), sha256=digest.removeprefix('sha256:'),
-                    source=asset['browser_download_url'], release=release['html_url'])
-    (destination / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
-    print(f"Staged verified {manifest['version']} firmware ({len(data)} bytes)")
+    configured = json.loads((ROOT/'docs/firmware-releases.json').read_text())
+    stable = configured['stable']
+    endpoint = 'latest' if stable == 'latest' else f'tags/{stable}'
+    releases = [api(repo, f'releases/{endpoint}')]
+    # The selected preview is optional until published; do not expose arbitrary prereleases.
+    preview = configured.get('preview')
+    if preview:
+        candidates = api(repo, 'releases?per_page=100')
+        releases += [r for r in candidates if r['tag_name'] == preview and not r['draft']
+                     and r['tag_name'] != releases[0]['tag_name']]
+    projects = {}
+    for release in releases:
+        version = release['tag_name']
+        if not re.fullmatch(r'v[0-9A-Za-z._-]+', version):
+            raise RuntimeError('Unexpected release tag')
+        assets = [a for a in release['assets'] if a['name'] in VARIANTS]
+        if not assets:
+            raise RuntimeError(f'No supported firmware in {version}')
+        destination = ROOT / 'docs/firmware' / version
+        destination.mkdir(parents=True, exist_ok=True)
+        for asset in assets:
+            name = asset['name']
+            with tempfile.TemporaryDirectory() as folder:
+                subprocess.run(['gh', 'release', 'download', version, '--repo', repo,
+                                '--pattern', name, '--dir', folder], check=True)
+                data = (Path(folder)/name).read_bytes()
+                sha = validate_image(data, asset)
+            (destination/name).write_bytes(data)
+            manifest = dict(version=version, chip='esp32c3', offset=0, size=len(data), sha256=sha,
+                            source=asset['browser_download_url'], release=release['html_url'],
+                            gps=VARIANTS[name], preview=release['prerelease'])
+            manifest_name = name.removesuffix('.bin') + '.json'
+            (destination/manifest_name).write_text(json.dumps(manifest, indent=2)+'\n')
+            projects[f'{version}-{name}'] = dict(
+                name=f"Blackbox {version} — {VARIANTS[name]}" + (' (release candidate)' if release['prerelease'] else ''),
+                chip='esp32c3', firmwareUrl=f'firmware/{version}/{name}',
+                manifestUrl=f'firmware/{version}/{manifest_name}')
+            print(f'Staged verified {version}/{name} ({len(data)} bytes)')
+    (ROOT/'docs/projects-config.js').write_text(
+        '// Generated by scripts/prepare_web_firmware.py from verified release assets.\n'
+        + 'const PROJECTS = '+json.dumps(projects, indent=2)+';\n'
+        + "if (typeof module !== 'undefined') module.exports = PROJECTS;\n")
 
 
 if __name__ == '__main__':

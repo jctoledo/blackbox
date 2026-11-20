@@ -59,7 +59,7 @@ class Handler(BaseHTTPRequestHandler):
                       'config': {'telemetry_hz': 30, 'gps_model': 'demo', 'warmup_fixes': 5},
                       'fusion': {'lon_raw': 0, 'lon_filtered': 0, 'lon_blended': 0,
                                  'gps_weight': .3, 'gps_accel': 0, 'gps_rate': 25, 'gps_rejected': False,
-                                 'pitch_corr': 0, 'roll_corr': 0, 'pitch_conf': .95, 'roll_conf': .95,
+                                 'pitch_corr': 0, 'roll_corr': 0, 'pitch_conf': 95, 'roll_conf': 95,
                                  'yaw_bias': 0, 'yaw_calibrated': True, 'tilt_x': 0, 'tilt_y': 0, 'tilt_valid': True}}
         else:
             self.send_error(404)

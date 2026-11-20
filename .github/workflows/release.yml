@@ -35,6 +35,10 @@ jobs:
     strategy:
       matrix:
         project: ${{ fromJson(needs.discover-projects.outputs.projects) }}
+        gps_model: [6m, m9n]
+    env:
+      GPS_MODEL: ${{ matrix.gps_model }}
+      GPS_RATE: ${{ matrix.gps_model == 'm9n' && '25' || '5' }}
     outputs:
       version: ${{ steps.get_version.outputs.VERSION }}
     steps:
@@ -66,47 +70,39 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y git wget flex bison gperf python3 python3-pip python3-venv cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0
 
-      - name: Install espup, cargo-espflash, espflash, and ldproxy
+      - name: Install pinned image packager and linker
         run: |
           rustup toolchain install stable --profile minimal
-          cargo +stable install espup ldproxy --locked
-          cargo +stable install cargo-espflash espflash --version 4.7.0 --locked
-
-      - name: Install ESP Rust toolchain
-        run: |
-          espup install
-          . $HOME/export-esp.sh
-          rustup component add rust-src --toolchain stable
+          cargo +stable install ldproxy --locked
+          cargo +stable install espflash --version 4.7.0 --locked
 
       - name: Build firmware
         run: |
-          . $HOME/export-esp.sh
           cd sensors/${{ matrix.project }}
           cargo build --release --locked --target riscv32imc-esp-espidf
 
       - name: Generate flashable binary
         run: |
-          . $HOME/export-esp.sh
           cd sensors/${{ matrix.project }}
 
           # Create output directory
           mkdir -p ../../firmware-output
 
-          # Generate merged binary that can be flashed directly
-          # Note: cargo espflash save-image builds from the project, no input binary needed
-          # --partition-table is required for custom 2.5MB app partition
-          cargo espflash save-image \
-            --chip esp32c3 \
-            --merge \
+          # Full image: ESP32-C3 bootloader begins at address zero.
+          espflash save-image \
+            --chip esp32c3 --merge --flash-size 4mb \
+            --bootloader ../../target/riscv32imc-esp-espidf/release/bootloader.bin \
             --partition-table ../../partitions.csv \
-            --release \
-            ../../firmware-output/${{ matrix.project }}.bin
+            ../../target/riscv32imc-esp-espidf/release/blackbox \
+            ../../firmware-output/${{ matrix.project }}-${{ matrix.gps_model }}.bin
+          cd ../../firmware-output
+          sha256sum *.bin > SHA256SUMS-${{ matrix.gps_model }}.txt
 
       - name: Upload firmware artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: firmware-${{ matrix.project }}
-          path: firmware-output/${{ matrix.project }}.bin
+          name: firmware-${{ matrix.project }}-${{ matrix.gps_model }}
+          path: firmware-output/*
 
   create-release:
     name: Create GitHub Release
@@ -151,6 +147,7 @@ jobs:
           body_path: release-notes.md
           files: |
             firmware-artifacts/firmware-*/*.bin
+            firmware-artifacts/firmware-*/SHA256SUMS-*.txt
           draft: false
           prerelease: ${{ contains(needs.build-firmware.outputs.version, 'alpha') || contains(needs.build-firmware.outputs.version, 'beta') || contains(needs.build-firmware.outputs.version, 'rc') }}
         env:
@@ -170,7 +167,7 @@ jobs:
 
       - name: Generate flasher configuration
         env:
-          VERSION: ${{ needs.build-firmware.outputs.version }}
+          VERSION: latest
           GITHUB_REPOSITORY: ${{ github.repository }}
           CI: true
         run: |
@@ -182,7 +179,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          VERSION: ${{ needs.build-firmware.outputs.version }}
         run: python3 scripts/prepare_web_firmware.py
 
       - name: Render crawlable documentation

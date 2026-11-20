@@ -14,6 +14,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Obsolete documentation files (RELEASE.md, IMPLEMENTATION_SUMMARY.md, release-notes.md)
 
+## [0.0.4-rc.1] - 2026-11-20
+
+Release candidate for hardware validation. No real USB write/boot or reference-timed drive has been performed for this candidate.
+
+### Fixed
+- Fresh-fix lap detection, crossing-time interpolation, GPS-outage continuity, stage re-crossings, and timestamp rollover.
+- Persistent exact lap results and valid JSON during unavailable GPS acceleration.
+- Earth-frame motion integration, orientation feedback, stationary speed units, and duplicate GPS assimilation.
+- Sensor-loop LED stalls, malformed GPS fields, and missing-IMU calibration timeout.
+- Browser recording races and v4 desktop telemetry decoding.
+- USB installer merged-image offset (0x0), release download links, same-origin staging, and firmware verification.
+
+### Changed
+- Refreshed device dashboard, project website, setup documentation, and accuracy claims.
+- Added deterministic replay/physics/protocol regressions, reproducible CI, and an isolated manually dispatched runner.
+- Added crawlable technical guides, sitemap, and project metadata.
+
+### Firmware variants
+- `blackbox-6m.bin`: NEO-6M, 5 Hz GPS.
+- `blackbox-m9n.bin`: NEO-M9N, 25 Hz GPS.
+- Both are complete 4 MiB ESP32-C3 images for offset `0x0`; full-image flashing replaces device configuration. Verify the matching `SHA256SUMS-*.txt` before CLI flashing.
+- Keep the unit still during calibration, verify sensor rates, then follow `docs/REVIEW.md` before relying on lap results. Synthetic replay accuracy is not a physical timing-accuracy guarantee.
+
 ## [0.0.2] - 2025-01-10
 
 ### Added
