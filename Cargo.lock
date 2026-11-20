@@ -480,11 +480,9 @@ dependencies = [
  "embedded-io-async",
  "enumset",
  "heapless",
- "log",
  "num_enum",
  "serde",
  "strum 0.25.0",
- "strum_macros 0.25.3",
 ]
 
 [[package]]
@@ -533,7 +531,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "25b07a8dfbbbfc0064c0a6bdf9edcf966de6b1c33ce344bdeca3b41615452634"
 dependencies = [
  "enumset_derive",
- "serde",
 ]
 
 [[package]]
@@ -780,7 +777,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0bfb9eb618601c89945a70e254898da93b13be0388091d42117462b265bb3fad"
 dependencies = [
  "hash32",
- "serde",
  "stable_deref_trait",
 ]
 
