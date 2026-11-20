@@ -22,7 +22,7 @@ jobs:
       GPS_RATE: ${{ inputs.gps_model == 'm9n' && '25' || '5' }}
       CARGO_BUILD_JOBS: '4'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
       - name: Host regressions
@@ -32,7 +32,7 @@ jobs:
         run: |
           cargo +nightly-2025-10-18 clippy --locked --release -- -D warnings
           cargo +nightly-2025-10-18 build --locked --release
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: blackbox-elf-${{ inputs.gps_model }}
           path: target/riscv32imc-esp-espidf/release/blackbox
