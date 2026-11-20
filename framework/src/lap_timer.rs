@@ -5,7 +5,7 @@
 //!
 //! ## Features
 //!
-//! - Millisecond-precision lap timing
+//! - Interpolated crossing times stored in milliseconds (not a physical accuracy claim)
 //! - Support for loop tracks (single start/finish line) and point-to-point
 //! - Direction validation to prevent backwards crossings
 //! - Configurable debounce and minimum lap time
@@ -20,14 +20,10 @@
 //! let mut timer = LapTimer::new();
 //!
 //! // Configure a timing line crossing northward
-//! timer.configure_loop(TimingLine {
-//!     p1: (-10.0, 0.0),
-//!     p2: (10.0, 0.0),
-//!     direction: FRAC_PI_2,  // Crossing direction: north (+Y)
-//! });
+//! timer.configure_loop(TimingLine::new(37.0, -122.0001, 37.0, -121.9999, FRAC_PI_2));
 //!
-//! // In main loop at 200Hz:
-//! let flags = timer.update((x, y), (vx, vy), timestamp_ms, speed_mps);
+//! // For each fresh valid GPS fix (velocity is east/north in m/s):
+//! let flags = timer.update(lat, lon, (vx, vy), timestamp_ms, speed_mps);
 //! if flags & CROSSED_START != 0 {
 //!     // Crossed start line this frame
 //! }

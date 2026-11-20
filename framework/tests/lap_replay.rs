@@ -70,3 +70,52 @@ fn invalid_fix_breaks_the_crossing_segment() {
     assert_eq!(timer.current_lap_ms(), 0);
     assert_eq!(timer.lap_count(), 0);
 }
+
+#[test]
+fn twenty_mile_stage_replay_finishes_once_at_the_interpolated_crossing() {
+    let latitude = 37.0;
+    let longitude = -122.0;
+    let distance = 32_186.88;
+    let speed = 25.0;
+    let line = |north: f64| {
+        TimingLine::new(
+            latitude + north / 111320.0,
+            longitude - 0.0001,
+            latitude + north / 111320.0,
+            longitude + 0.0001,
+            (PI / 2.0) as f32,
+        )
+    };
+    let mut timer = LapTimer::new();
+    timer.configure_point_to_point(line(0.0), line(distance));
+    let mut timestamp = 0_u32;
+    while timestamp < 1_300_000 {
+        let north = -5.0 + speed * timestamp as f64 / 1000.0;
+        timer.update(
+            latitude + north / 111320.0,
+            longitude,
+            (0.0, speed as f32),
+            timestamp,
+            speed as f32,
+        );
+        timestamp += 200;
+    }
+    assert_eq!(timer.lap_count(), 1);
+    let expected = (distance / speed * 1000.0_f64).round() as u32;
+    assert!(timer.last_lap_ms().unwrap().abs_diff(expected) <= 2);
+    assert_eq!(timer.current_lap_ms(), 0);
+}
+
+#[test]
+fn stage_never_fabricates_a_finish_across_a_gps_outage() {
+    let line = |latitude| TimingLine::new(latitude, -0.0001, latitude, 0.0001, (PI / 2.0) as f32);
+    let mut timer = LapTimer::new();
+    timer.configure_point_to_point(line(0.0), line(0.001));
+    timer.update(-0.00001, 0.0, (0.0, 10.0), 1000, 10.0);
+    timer.update(0.00001, 0.0, (0.0, 10.0), 1200, 10.0);
+    timer.update(0.0009, 0.0, (0.0, 10.0), 10_000, 10.0);
+    timer.invalidate_fix();
+    timer.update(0.0011, 0.0, (0.0, 10.0), 15_000, 10.0);
+    assert_eq!(timer.lap_count(), 0);
+    assert_eq!(timer.last_lap_ms(), None);
+}

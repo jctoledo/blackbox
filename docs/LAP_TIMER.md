@@ -52,12 +52,12 @@ Closed loop where start and finish are the same. Auto-detection triggers when:
 - Within 25m of starting point
 - Heading within 30° of start
 
-*Use cases: race tracks, autocross, karting, neighborhood circuits*
+*Use cases: controlled circuits and repeatable closed-course routes*
 
 ### Stage (Point-to-Point)
-Separate start and finish. Tap "Stop Recording" at finish.
+Separate start and finish. First record the route; stop safely at the end and tap "Mark Finish" to save its finish line. Arm the saved stage on a later pass to time it.
 
-*Use cases: hill climbs, rally stages, touge, drag strips*
+*Use cases: point-to-point routes, hill climbs, and rally stages. Normal road recordings are useful for diagnostics; performance testing belongs at a controlled site.*
 
 UI shows "Run" instead of "Lap" and "Running" instead of "Timing."
 
@@ -66,14 +66,14 @@ UI shows "Run" instead of "Lap" and "Running" instead of "Timing."
 ## How Timing Works
 
 ### Line Detection
-1. **Position proximity** — within meters of line
-2. **Direction validation** — traveling correct direction (±90°)
-3. **Debounce** — 500ms minimum between crossings
+1. **Finite segment intersection** — the segment between consecutive fresh fixes intersects the saved timing line. Proximity alone does not start timing.
+2. **Direction validation** — receiver velocity agrees with the recorded direction (±90°). Positions below 0.5 m/s do not trigger crossings.
+3. **Guards** — loops use a 500 ms debounce; completed laps/runs must last at least 10 seconds. A second start crossing does not restart an active stage. Gaps over two seconds break crossing continuity.
 
 ### Precision
 - Crossing detection on new GPS fixes, independent of browser refresh rate
-- At 100 km/h: ~1 meter position uncertainty per update
-- Sufficient for amateur and club-level timing
+- At 100 km/h, the vehicle travels about 1.11 m between 25 Hz fixes; that is sample spacing, not a position-error bound.
+- Suitability for a particular timing requirement must be established against an independent reference.
 
 ### Delta Calculation
 Uses **arc-length comparison**:
@@ -81,19 +81,17 @@ Uses **arc-length comparison**:
 2. Find time at that distance on reference lap
 3. Difference = delta
 
-*Why arc-length?* Position matching fails with different racing lines. Arc-length works regardless of path — 500m into the lap compares to best at 500m.
+Arc-length comparison is inexpensive, but equal distance need not mean the same track location when lines differ. Position noise can accumulate extra distance. Treat the delta and progress bar as estimates; detected gaps, late starts, and large jumps invalidate them until a new lap. This is not corner-matched coaching.
 
 ---
 
 ## Timer States
 
-```
-┌─────────┐    Use Track    ┌─────────┐   Cross Start   ┌─────────┐
-│  IDLE   │ ───────────────► │  ARMED  │ ───────────────► │ TIMING  │
-└─────────┘                  └─────────┘                  └─────────┘
-     ▲                            │                            │
-     └────────────────────────────┴────────────────────────────┘
-                          Deactivate / Lap Complete
+```text
+Idle -- select track --> Armed -- valid start crossing --> Timing
+Timing -- circuit crossing --> Timing (next lap)
+Timing -- stage finish --> Armed (ready for another run)
+Armed or Timing -- deactivate --> Idle
 ```
 
 | State | Display | Notes |
@@ -228,7 +226,7 @@ Crossing times are interpolated between two fresh GPS fixes and stored in intege
 | Lap history | 100 bytes/lap | 100 KB (1000 laps) |
 | **Total** | | ~1 MB |
 
-Well within IndexedDB limits (50+ MB).
+Browser quota varies; storage can fill or be evicted. Export important data and use the visible save/error status. Do not assume a fixed IndexedDB capacity.
 
 ### Corner Detection
 State machine with hysteresis:

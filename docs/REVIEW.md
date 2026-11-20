@@ -44,7 +44,7 @@ Primary reference: [u-blox NEO-M9N product summary](https://content.u-blox.com/s
 
 ## Remaining engineering risks
 
-**Board pin compatibility:** the current IMU UART uses GPIO18/19, which are also native USB D−/D+ on ESP32-C3. Review the actual board/USB bridge and schematic before wiring or flashing; these signals cannot be shared concurrently with the IMU. The hardware PR #39 adds battery/wake circuitry but has not been electrically validated by this software review. The WIP mounting-calibration PR #13 changes several of the same fusion paths and needs rebasing plus controlled calibration tests before merge.
+**Board pin compatibility:** the current IMU UART uses GPIO18/19, which are also native USB D−/D+ on ESP32-C3. Review the actual board/USB bridge and schematic before wiring or flashing; these signals cannot be shared concurrently with the IMU. The schematic in PR #39 identifies an ESP32-S3-WROOM-1-N16R8, not the ESP32-C3 firmware target; it needs a board-specific port and electrical validation. Do not flash the C3 release to that board. The WIP mounting-calibration PR #13 also has a reproduced software blocker: magnitude-only acceleration detection accepts increasing-speed forward acceleration as braking, producing a 180-degree mounting correction. Its existing unit tests first fail compilation because two atan2 operands have ambiguous float types; correcting only those literals in a temporary lat probe exposes the false calibration. It must not be merged as a validated mounting solution.
 
 1. **Timestamp and sample integrity.** GPS crossings use host arrival times, not synchronized receiver epochs/PPS. UART batches can coalesce fixes and IMU samples; IMU diagnostics count packets while prediction consumes the latest sample. Capture arrival timestamps and receiver epochs before claiming higher-rate accuracy. Do not add EKF-based timing solely to increase the displayed decimal precision.
 2. **Estimator covariance and heading.** The diagonal approximation omits position/velocity/bias correlations. Absolute WT901 yaw, mounting orientation, GPS compass course, and ENU mathematical yaw need a controlled heading/turn test. Do not interpret position sigma as a calibrated error bound.
@@ -62,7 +62,19 @@ Primary reference: [u-blox NEO-M9N product summary](https://content.u-blox.com/s
 
 Existing hardware and dependency PRs are outside the implemented fix stack and must be reviewed on their own merits. They are not evidence that these issues are complete.
 
+## Follow-up software and PR review
+
+- PRs #30–#35 were integrated through #53 and validated on lat: both GPS firmware variants, host regressions, Clippy, artifact upload/download equality, and Pages packaging. All workflows remain lat-only.
+- PR #40 upgrades a direct embedded-svc dependency to 0.29 while esp-idf-svc 0.51 still uses 0.28. The current application has no direct embedded_svc imports. This is not evidence that all 0.29 builds fail, but the standalone bump adds a redundant API generation with no demonstrated application benefit; dependency cleanup or a coordinated ESP-IDF wrapper migration is preferable.
+- The dashboard follow-up addresses stalled requests falsely remaining LIVE, unacknowledged timing-stop requests, premature track-save success, nonatomic reference replacement, and reference/history deletion consistency. New regressions exercise commit/abort and request timeout behavior.
+- The public demo uses the actual dashboard with isolated browser databases and an explicitly synthetic backend. It is a product demonstration, not a firmware-in-the-loop or accuracy test.
+- The old FAQ's price/performance ratio, blanket board/GPS compatibility, “always reliable”, multi-band M9N description, and 30-second dead-reckoning guarantee were unsupported and replaced with explicit configuration/validation limits.
+- Issue #36 also overstates its illustrative drift calculation: from rest with constant 0.01 m/s² acceleration error for 0.04 s, displacement error is 0.5 × 0.01 × 0.04² = 0.000008 m, not 0.008 m. This idealized calculation excludes initial velocity error, timestamp misalignment, vibration, and receiver errors; it cannot justify a physical timing guarantee.
+
 ## Hardware acceptance plan
+
+Use the expanded [hardware checklist and results record](HARDWARE_VALIDATION.md) for bench, USB, sensor, mounting, crossing, reference-timing, recording, and endurance gates.
+
 
 1. Save the current firmware/configuration and export browser recordings. Record board, GPS module, antenna, IMU orientation/rate, and firmware commit.
 2. Verify the installer on desktop Chrome/Edge: download/hash, correct-chip connection, wrong-chip rejection, write, disconnect/reset, and boot. Repeat a cancelled port selection and a connection timeout.
@@ -86,3 +98,32 @@ GPS_MODEL=m9n GPS_RATE=25 cargo +nightly-2025-10-18 build --release --locked
 ```
 
 The `blackbox-lat` runner is dedicated to this repository, limited to four CPUs and 8 GiB RAM, without host-directory or Docker-socket mounts. All workflows now target its custom label to avoid consuming GitHub-hosted minutes. CI runs on trusted main-branch pushes or explicit dispatch; pull-request code is validated by maintainer dispatch, never automatically on this persistent runner. Release tags and Pages deployments also use lat. One runner serializes jobs within the resource limit.
+
+
+## Driver UX and recording follow-up
+
+The UI separates parked setup, Drive view, and force analysis. Drive view hides editing controls and the G-meter, keeps lap time/delta/speed visible, and briefly shows the exact completed lap result. Portrait and landscape need physical mounting/glare/glance testing even after browser QA. No phone wake-lock or background recording guarantee is made.
+
+Distance-based delta is an estimate, not spatial matching. A different line can have the same accumulated distance at a different track location. GPS noise also accumulates positive path length. We now reject detected gaps, late starts, large jumps, and extrapolation, but these gates do not create an accuracy bound. Progress is integer percent of reference distance capped at 99%; only a firmware crossing completes the lap. Corner callouts, adaptive coaching, sectors, and racing-line comparisons remain future work requiring recorded geometry and confidence/repeatability checks.
+
+A session-best firmware flag resets on arming. It must not overwrite a faster browser reference from a prior session: regression coverage now preserves the saved reference and separately chooses the fastest usable distance trace. Track names/IDs are escaped in list markup, and reference deletion waits for commit before clearing the displayed reference.
+
+CSV recordings now retain browser epoch milliseconds (`time`), device uptime milliseconds (`device_time_ms`), current and completed lap times/count/flags, GPS age, and configuration revision. These are sampled browser observations, not a complete receiver/raw-IMU log. Offline periods leave gaps, and intervening lap events can be absent. Missing numeric fields export as empty cells instead of invented zeros. CSV row timestamps determine session duration; data gaps are included in that elapsed span.
+
+### Product usefulness assessment
+
+- **Useful now, subject to physical validation:** open, inspectable GPS line-crossing lap timing; live speed/G feedback; circuit and stage setup; browser-local recording/export; reproducible firmware and regressions; a clear DIY path with no project subscription requirement.
+- **Potentially useful but approximate:** distance-based live delta and progress. Good for exploration and coarse pace feedback once tested; unsuitable as evidence of braking-point or apex precision.
+- **Not established:** commercial-product timing parity, centimeter positioning, millisecond physical accuracy, sustained GNSS-denied accuracy, environmental durability, automatic mounting calibration, and adaptive corner coaching.
+- **Highest-value next evidence:** reference-timed M9N crossings plus antenna/mount/actual-rate metadata, followed by timestamp alignment, raw sample logging, and reference-path matching with ambiguous-section rejection. Higher display rates alone cannot solve measurement uncertainty.
+
+The project can be compelling as an enthusiast instrument and a transparent engineering platform. Its competitive argument is ownership, repairability, customization, and inspectable evidence. A better-looking dashboard must not be presented as equivalent to a validated commercial timing/coaching system.
+
+
+### Follow-up evidence and research tickets
+
+The phone uses JavaScript/IndexedDB, not a cloud backend. Saving was shortened from a minute to approximately five seconds while receiving data. Aborted writes restore the unsaved batch and stop collection; export snapshots saved plus pending rows without another write. Reload exposes unfinished sessions without silently resuming. Browser suspension, quota/eviction, and unsaved tails remain limitations; no background/durable-storage guarantee is made.
+
+The normal-drive collection plan and future acceptance criteria are tracked in [#54 corner matching](https://github.com/jctoledo/blackbox/issues/54), [#55 timestamp/crossing evidence](https://github.com/jctoledo/blackbox/issues/55), and [#56 braking/cornering comparisons](https://github.com/jctoledo/blackbox/issues/56). These are research plans, not implemented coaching features. Neighborhood/highway driving is useful for continuity and frame checks; independent crossing observations are needed for accuracy.
+
+Stage validation now includes a deterministic 20-mile replay and a missing-GPS finish rejection case. UI tests cover exact completed-stage results, preservation of faster references across arming, nonfinite data rejection, persistence failures, CSV evidence, and emergency export. All compilation and automated test execution remain on lat.

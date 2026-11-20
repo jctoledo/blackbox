@@ -108,7 +108,7 @@ This mismatch has caused bugs. Always be aware of which convention you're in.
 
 **Conversion**: `math_angle = π/2 - compass_angle`
 
-The dashboard stores track directions in compass convention (from recorded headings). The firmware `lap_timer.rs` expects math convention (for `atan2` comparison). **Always convert when crossing this boundary.**
+Recorded timing-line directions come from `_calculateTimingLine` using `atan2`, so they are already in math convention and are sent to `lap_timer.rs` unchanged. GPS course and EKF heading use compass convention; convert only where those values meet mathematical bearings. **Check the producer's convention rather than applying a blanket conversion.**
 
 ### Sensor Fusion Pipeline
 
