@@ -13,24 +13,26 @@ permissions:
 jobs:
   discover-projects:
     name: Discover Sensor Projects
-    runs-on: ubuntu-24.04
+    runs-on: [blackbox-lat]
     outputs:
       projects: ${{ steps.find-projects.outputs.projects }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Find all sensor projects
         id: find-projects
         run: |
           # Find all directories in sensors/ that have a project.json file
-          projects=$(find sensors -maxdepth 2 -name "project.json" -exec dirname {} \; | xargs -I {} basename {} | jq -R -s -c 'split("\n")[:-1]')
+          projects=$(python3 -c 'import json,pathlib; print(json.dumps(sorted(p.parent.name for p in pathlib.Path("sensors").glob("*/project.json"))))')
           echo "projects=$projects" >> $GITHUB_OUTPUT
           echo "Found projects: $projects"
 
   build-firmware:
     name: Build Firmware
     needs: discover-projects
-    runs-on: ubuntu-24.04
+    runs-on: [blackbox-lat]
     strategy:
       matrix:
         project: ${{ fromJson(needs.discover-projects.outputs.projects) }}
@@ -42,6 +44,8 @@ jobs:
       version: ${{ steps.get_version.outputs.VERSION }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Get version
         id: get_version
@@ -58,16 +62,6 @@ jobs:
           toolchain: nightly-2025-10-18
           components: rust-src
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install ESP-IDF prerequisites
-        run: |
-          # Remove problematic Microsoft repos that sometimes return 403
-          sudo rm -f /etc/apt/sources.list.d/microsoft-prod.list /etc/apt/sources.list.d/azure-cli.list 2>/dev/null || true
-          sudo apt-get update
-          sudo apt-get install -y git wget flex bison gperf python3 python3-pip python3-venv cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0
 
       - name: Install pinned image packager and linker
         run: |
@@ -106,12 +100,14 @@ jobs:
   create-release:
     name: Create GitHub Release
     needs: build-firmware
-    runs-on: ubuntu-24.04
+    runs-on: [blackbox-lat]
     outputs:
       upload_url: ${{ steps.create_release.outputs.upload_url }}
       version: ${{ needs.build-firmware.outputs.version }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Download all firmware artifacts
         uses: actions/download-artifact@v4
@@ -158,14 +154,12 @@ jobs:
       group: pages
       cancel-in-progress: false
     needs: [build-firmware, create-release]
-    runs-on: ubuntu-24.04
+    runs-on: [blackbox-lat]
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
         with:
-          python-version: "3.11"
+          persist-credentials: false
+
 
       - name: Generate flasher configuration
         env:
@@ -185,8 +179,9 @@ jobs:
 
       - name: Render crawlable documentation
         run: |
-          python3 -m pip install 'Markdown==3.7'
-          python3 scripts/build_docs.py
+          python3 -m venv "$RUNNER_TEMP/docs-python"
+          "$RUNNER_TEMP/docs-python/bin/pip" install 'Markdown==3.7'
+          "$RUNNER_TEMP/docs-python/bin/python" scripts/build_docs.py
 
       - name: Setup Pages
         uses: actions/configure-pages@v4

@@ -1,20 +1,14 @@
 name: Host regression tests
 on:
-  push:
-    branches: [main, 'codex/**']
-  pull_request:
-    branches: [main]
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
   tests:
-    runs-on: ubuntu-latest
+    runs-on: [blackbox-lat]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --locked -p sensor-fusion -p wt901 -p ublox-gps -p blackbox-host-tests
       - run: node --test tests/*.test.cjs
@@ -24,5 +18,6 @@ jobs:
           python3 -m unittest discover -s tests -p 'test_*.py'
       - name: Check static documentation generation
         run: |
-          python3 -m pip install 'Markdown==3.7'
-          python3 scripts/build_docs.py
+          python3 -m venv "$RUNNER_TEMP/docs-python"
+          "$RUNNER_TEMP/docs-python/bin/pip" install 'Markdown==3.7'
+          "$RUNNER_TEMP/docs-python/bin/python" scripts/build_docs.py

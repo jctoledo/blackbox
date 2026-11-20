@@ -5,8 +5,7 @@ import json
 import os
 from pathlib import Path
 import re
-import subprocess
-import tempfile
+from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
 VARIANTS = {'blackbox.bin': 'legacy published build',
@@ -14,7 +13,13 @@ VARIANTS = {'blackbox.bin': 'legacy published build',
 
 
 def api(repo, endpoint):
-    return json.loads(subprocess.check_output(['gh', 'api', f'repos/{repo}/{endpoint}']))
+    headers = {'Accept': 'application/vnd.github+json', 'User-Agent': 'blackbox-release-stager'}
+    token = os.environ.get('GH_TOKEN')
+    if token:
+        headers['Authorization'] = f'Bearer {token}'
+    request = Request(f'https://api.github.com/repos/{repo}/{endpoint}', headers=headers)
+    with urlopen(request, timeout=60) as response:
+        return json.load(response)
 
 
 def validate_image(data, asset):
@@ -54,11 +59,10 @@ def main():
         destination.mkdir(parents=True, exist_ok=True)
         for asset in assets:
             name = asset['name']
-            with tempfile.TemporaryDirectory() as folder:
-                subprocess.run(['gh', 'release', 'download', version, '--repo', repo,
-                                '--pattern', name, '--dir', folder], check=True)
-                data = (Path(folder)/name).read_bytes()
-                sha = validate_image(data, asset)
+            # Public release download: never forward the API token to asset hosts.
+            with urlopen(asset['browser_download_url'], timeout=60) as response:
+                data = response.read(4*1024*1024 + 1)
+            sha = validate_image(data, asset)
             (destination/name).write_bytes(data)
             manifest = dict(version=version, chip='esp32c3', offset=0, size=len(data), sha256=sha,
                             source=asset['browser_download_url'], release=release['html_url'],
