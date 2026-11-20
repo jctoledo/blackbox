@@ -82,9 +82,9 @@ def load_csv(filepath: str) -> List[Sample]:
 
 def analyze_file(filepath: str):
     """Comprehensive analysis of a CSV file."""
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print(f"ANALYZING: {filepath}")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
 
     samples, has_ekf = load_csv(filepath)
     if not samples:
@@ -97,7 +97,7 @@ def analyze_file(filepath: str):
     print(f"\n[1] BASIC STATS")
     print(f"    Total samples: {len(samples)}")
     valid_samples = [s for s in samples if s.gps_valid]
-    print(f"    GPS valid samples: {len(valid_samples)} ({100*len(valid_samples)/len(samples):.1f}%)")
+    print(f"    GPS valid samples: {len(valid_samples)} ({100 * len(valid_samples) / len(samples):.1f}%)")
 
     if not valid_samples:
         print("  No valid GPS samples!")
@@ -107,7 +107,7 @@ def analyze_file(filepath: str):
     duration_ms = samples[-1].timestamp_ms - samples[0].timestamp_ms
     duration_s = duration_ms / 1000.0
     print(f"    Duration: {duration_s:.1f}s")
-    print(f"    Sample rate: {len(samples)/duration_s:.1f} Hz")
+    print(f"    Sample rate: {len(samples) / duration_s:.1f} Hz")
 
     # Find reference point (first valid GPS)
     ref_lat = valid_samples[0].gps_lat
@@ -264,14 +264,14 @@ def analyze_file(filepath: str):
 
     xs = [s.gps_local_x for s in valid_samples]
     ys = [s.gps_local_y for s in valid_samples]
-    print(f"    GPS X range: {min(xs):.1f} to {max(xs):.1f}m (span: {max(xs)-min(xs):.1f}m)")
-    print(f"    GPS Y range: {min(ys):.1f} to {max(ys):.1f}m (span: {max(ys)-min(ys):.1f}m)")
+    print(f"    GPS X range: {min(xs):.1f} to {max(xs):.1f}m (span: {max(xs) - min(xs):.1f}m)")
+    print(f"    GPS Y range: {min(ys):.1f} to {max(ys):.1f}m (span: {max(ys) - min(ys):.1f}m)")
 
     if has_ekf:
         ekf_xs = [s.ekf_x for s in valid_samples]
         ekf_ys = [s.ekf_y for s in valid_samples]
-        print(f"    EKF X range: {min(ekf_xs):.1f} to {max(ekf_xs):.1f}m (span: {max(ekf_xs)-min(ekf_xs):.1f}m)")
-        print(f"    EKF Y range: {min(ekf_ys):.1f} to {max(ekf_ys):.1f}m (span: {max(ekf_ys)-min(ekf_ys):.1f}m)")
+        print(f"    EKF X range: {min(ekf_xs):.1f} to {max(ekf_xs):.1f}m (span: {max(ekf_xs) - min(ekf_xs):.1f}m)")
+        print(f"    EKF Y range: {min(ekf_ys):.1f} to {max(ekf_ys):.1f}m (span: {max(ekf_ys) - min(ekf_ys):.1f}m)")
 
     # EKF vs GPS comparison
     if has_ekf:
@@ -284,7 +284,7 @@ def analyze_file(filepath: str):
             diffs.append((s, diff))
 
         diff_values = [d[1] for d in diffs]
-        print(f"    Mean EKF-GPS offset: {sum(diff_values)/len(diff_values):.2f}m")
+        print(f"    Mean EKF-GPS offset: {sum(diff_values) / len(diff_values):.2f}m")
         print(f"    Max EKF-GPS offset: {max(diff_values):.2f}m")
         print(f"    Min EKF-GPS offset: {min(diff_values):.2f}m")
 

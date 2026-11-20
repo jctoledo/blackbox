@@ -119,15 +119,15 @@ class TelemetryDisplay:
         print(f"  Vel:    vx={data['vx']:+6.2f} vy={data['vy']:+6.2f} m/s")
 
         print(f"\n📐 Orientation:")
-        print(f"  Roll:   {data['roll']*57.3:+6.1f}°")
-        print(f"  Pitch:  {data['pitch']*57.3:+6.1f}°")
-        print(f"  Yaw:    {data['yaw']*57.3:+6.1f}°")
+        print(f"  Roll:   {data['roll'] * 57.3:+6.1f}°")
+        print(f"  Pitch:  {data['pitch'] * 57.3:+6.1f}°")
+        print(f"  Yaw:    {data['yaw'] * 57.3:+6.1f}°")
 
         print(f"\n⚡ Acceleration:")
         print(
             f"  ax: {data['ax']:+6.2f}  ay: {data['ay']:+6.2f}  az: {data['az']:+6.2f} m/s²"
         )
-        print(f"  wz: {data['wz']*57.3:+6.1f} °/s")
+        print(f"  wz: {data['wz'] * 57.3:+6.1f} °/s")
 
         print(f"\n📍 Position:")
         print(f"  x: {data['x']:8.2f}  y: {data['y']:8.2f} m")
@@ -152,7 +152,7 @@ class TelemetryDisplay:
             f"Speed:{data['speed_kmh']:5.1f}km/h "
             f"Mode:{data['mode']:6s} "
             f"Pos:({data['x']:6.1f},{data['y']:6.1f}) "
-            f"Yaw:{data['yaw']*57.3:+5.0f}° "
+            f"Yaw:{data['yaw'] * 57.3:+5.0f}° "
             f"GPS:{gps_str}"
         )
 

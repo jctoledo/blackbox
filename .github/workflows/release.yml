@@ -66,8 +66,10 @@ jobs:
       - name: Install pinned image packager and linker
         run: |
           rustup toolchain install stable --profile minimal
-          cargo +stable install ldproxy --locked
-          cargo +stable install espflash --version 4.7.0 --locked
+          command -v ldproxy >/dev/null || cargo +stable install ldproxy --locked
+          if ! espflash --version 2>/dev/null | grep -qx 'espflash 4.7.0'; then
+            cargo +stable install espflash --version 4.7.0 --locked
+          fi
 
       - name: Build firmware
         run: |

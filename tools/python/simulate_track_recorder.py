@@ -336,7 +336,7 @@ def simulate_track_recording(filepath: str):
     if dt_samples:
         avg_dt = sum(dt_samples) / len(dt_samples)
         avg_rate = 1.0 / avg_dt if avg_dt > 0 else 0
-        print(f"Average sample rate: {avg_rate:.1f} Hz (dt={avg_dt*1000:.1f}ms)")
+        print(f"Average sample rate: {avg_rate:.1f} Hz (dt={avg_dt * 1000:.1f}ms)")
 
     # Speed analysis
     speeds = [p.speed for p in positions]
