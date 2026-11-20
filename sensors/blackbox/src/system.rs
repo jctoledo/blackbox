@@ -39,6 +39,7 @@ pub struct SensorManager {
     gps_uart: UartDriver<'static>,
     last_imu_us: u64,
     stationary_count: u32,
+    last_gps_fix_ms: Option<u32>,
 }
 
 impl SensorManager {
@@ -50,7 +51,20 @@ impl SensorManager {
             gps_uart,
             last_imu_us: unsafe { esp_idf_svc::sys::esp_timer_get_time() as u64 },
             stationary_count: 0,
+            last_gps_fix_ms: None,
         }
+    }
+
+    pub fn record_gps_fix(&mut self, now_ms: u32) {
+        self.last_gps_fix_ms = Some(now_ms);
+    }
+
+    pub fn gps_age_ms(&self, now_ms: u32) -> Option<u32> {
+        self.last_gps_fix_ms.map(|t| now_ms.wrapping_sub(t))
+    }
+
+    pub fn gps_is_fresh(&self, now_ms: u32) -> bool {
+        self.gps_parser.last_fix().valid && self.gps_age_ms(now_ms).is_some_and(|age| age <= 1500)
     }
 
     /// Get IMU data (convenience method)
@@ -342,7 +356,7 @@ impl TelemetryPublisher {
         estimator: &StateEstimator,
         sensor_fusion: &crate::fusion::SensorFusion,
         now_ms: u32,
-        lap_timer_data: Option<(u32, u16, u8)>,
+        lap_timer_data: Option<(&sensor_fusion::LapTimer, u8, u32)>,
     ) -> Result<(), SystemError> {
         // Get accelerations for display
         // lon: GPS-derived when fresh (no vibration), otherwise blended with heavy
@@ -398,7 +412,7 @@ impl TelemetryPublisher {
         packet.pos_sigma = estimator.ekf.get_effective_pos_sigma();
         packet.mode = estimator.mode_classifier.get_mode_u8();
 
-        if sensors.gps_parser.last_fix().valid {
+        if sensors.gps_is_fresh(now_ms) {
             packet.lat = sensors.gps_parser.last_fix().lat as f32;
             packet.lon = sensors.gps_parser.last_fix().lon as f32;
             packet.gps_valid = 1;
@@ -415,9 +429,9 @@ impl TelemetryPublisher {
         }
 
         // Add lap timer data if available
-        if let Some((lap_time_ms, lap_count, lap_flags)) = lap_timer_data {
-            packet.lap_time_ms = lap_time_ms;
-            packet.lap_count = lap_count;
+        if let Some((timer, lap_flags, _)) = lap_timer_data {
+            packet.lap_time_ms = timer.current_lap_ms();
+            packet.lap_count = timer.lap_count();
             packet.lap_flags = lap_flags;
         }
 
@@ -436,7 +450,22 @@ impl TelemetryPublisher {
 
         // Update HTTP server state if available (AP mode)
         if let Some(ref http_state) = self.http_state {
-            http_state.update_telemetry(bytes);
+            let fix = sensors.gps_parser.last_fix();
+            let status = crate::websocket_server::TimingTelemetry {
+                revision: lap_timer_data.map_or(0, |(_, _, revision)| revision),
+                state: lap_timer_data.map_or("idle", |(timer, _, _)| match timer.state() {
+                    sensor_fusion::LapTimerState::Idle => "idle",
+                    sensor_fusion::LapTimerState::Armed => "armed",
+                    sensor_fusion::LapTimerState::Timing => "timing",
+                }),
+                last_lap_ms: lap_timer_data.and_then(|(timer, _, _)| timer.last_lap_ms()),
+                best_lap_ms: lap_timer_data.and_then(|(timer, _, _)| timer.best_lap_ms()),
+                lat: fix.lat,
+                lon: fix.lon,
+                gps_valid: sensors.gps_is_fresh(now_ms),
+                gps_age_ms: sensors.gps_age_ms(now_ms),
+            };
+            http_state.update_telemetry(bytes, status);
             sent = true;
         }
 

@@ -1,7 +1,7 @@
 //! Lap timer with line crossing detection
 //!
 //! Detects when vehicle crosses timing lines and tracks lap times.
-//! Designed to run at 200Hz for sub-sample precision crossing detection.
+//! Processes consecutive valid GPS fixes, interpolating the crossing time.
 //!
 //! ## Features
 //!
@@ -136,6 +136,7 @@ struct TimingState {
     current_lap_ms: u32,
     lap_count: u16,
     best_lap_ms: Option<u32>,
+    last_lap_ms: Option<u32>,
     frame_flags: u8,
     last_crossing_ms: u32,
     crossed_start_this_run: bool,
@@ -152,6 +153,7 @@ impl TimingState {
             current_lap_ms: 0,
             lap_count: 0,
             best_lap_ms: None,
+            last_lap_ms: None,
             frame_flags: FLAG_NONE,
             last_crossing_ms: 0,
             crossed_start_this_run: false,
@@ -166,6 +168,7 @@ impl TimingState {
         self.current_lap_ms = 0;
         self.lap_count = 0;
         self.best_lap_ms = None;
+        self.last_lap_ms = None;
         self.frame_flags = FLAG_NONE;
         self.last_crossing_ms = 0;
         self.crossed_start_this_run = false;
@@ -178,6 +181,7 @@ impl TimingState {
         pos: (f64, f64),
         velocity: (f32, f32),
         timestamp_ms: u32,
+        prev_ms: u32,
         line: &TimingLine,
     ) {
         // Convert GPS positions to local meters for intersection test
@@ -186,7 +190,8 @@ impl TimingState {
         let (line_p1, line_p2) = line.endpoints_local();
 
         // Check if movement segment crosses timing line
-        if line_segment_intersection_f64(prev_local, pos_local, line_p1, line_p2).is_some() {
+        if let Some(t) = line_segment_intersection_f64(prev_local, pos_local, line_p1, line_p2) {
+            let timestamp_ms = crossing_time(prev_ms, timestamp_ms, t);
             // Validate direction
             if !direction_valid(velocity, line.direction, self.direction_tolerance) {
                 self.frame_flags |= INVALID_LAP;
@@ -195,7 +200,7 @@ impl TimingState {
 
             // Check debounce (only applies after first crossing, when timing is active)
             if self.state == LapTimerState::Timing
-                && timestamp_ms.saturating_sub(self.last_crossing_ms) < self.crossing_debounce_ms
+                && timestamp_ms.wrapping_sub(self.last_crossing_ms) < self.crossing_debounce_ms
             {
                 return;
             }
@@ -213,7 +218,7 @@ impl TimingState {
                 }
                 LapTimerState::Timing => {
                     // Subsequent crossing completes lap
-                    let lap_time = timestamp_ms.saturating_sub(self.lap_start_ms);
+                    let lap_time = timestamp_ms.wrapping_sub(self.lap_start_ms);
 
                     // Validate lap time
                     if lap_time < self.min_lap_time_ms {
@@ -221,6 +226,7 @@ impl TimingState {
                         return;
                     }
 
+                    self.last_lap_ms = Some(lap_time);
                     // Record lap
                     self.frame_flags |= CROSSED_START | NEW_LAP;
                     self.lap_count = self.lap_count.saturating_add(1);
@@ -246,6 +252,7 @@ impl TimingState {
         pos: (f64, f64),
         velocity: (f32, f32),
         timestamp_ms: u32,
+        prev_ms: u32,
         start: &TimingLine,
         finish: &TimingLine,
     ) {
@@ -254,57 +261,54 @@ impl TimingState {
         let pos_start = start.to_local(pos.0, pos.1);
         let (start_p1, start_p2) = start.endpoints_local();
 
-        // Check start line crossing
-        if line_segment_intersection_f64(prev_start, pos_start, start_p1, start_p2).is_some()
-            && direction_valid(velocity, start.direction, self.direction_tolerance)
-        {
-            // Debounce only applies if we're already timing (re-crossing start)
-            if self.state == LapTimerState::Timing {
-                let since_last = timestamp_ms.saturating_sub(self.last_crossing_ms);
-                if since_last < self.crossing_debounce_ms {
+        // Crossing the start again must not restart an in-progress stage.
+        if self.state == LapTimerState::Armed {
+            if let Some(t) =
+                line_segment_intersection_f64(prev_start, pos_start, start_p1, start_p2)
+            {
+                if !direction_valid(velocity, start.direction, self.direction_tolerance) {
+                    self.frame_flags |= INVALID_LAP;
                     return;
                 }
+                let crossing_ms = crossing_time(prev_ms, timestamp_ms, t);
+                self.last_crossing_ms = crossing_ms;
+                self.frame_flags |= CROSSED_START;
+                self.crossed_start_this_run = true;
+                self.lap_start_ms = crossing_ms;
+                self.state = LapTimerState::Timing;
+                // A finish requires a subsequent fix, never the segment that started the run.
+                return;
             }
-            self.last_crossing_ms = timestamp_ms;
-            self.frame_flags |= CROSSED_START;
-            self.crossed_start_this_run = true;
-            self.lap_start_ms = timestamp_ms;
-            self.current_lap_ms = 0;
-            self.state = LapTimerState::Timing;
         }
 
-        // Check finish line crossing (only if we crossed start)
-        // Convert GPS positions to local meters for finish line intersection test
         let prev_finish = finish.to_local(prev.0, prev.1);
         let pos_finish = finish.to_local(pos.0, pos.1);
         let (finish_p1, finish_p2) = finish.endpoints_local();
-
-        if self.crossed_start_this_run
-            && line_segment_intersection_f64(prev_finish, pos_finish, finish_p1, finish_p2)
-                .is_some()
-            && direction_valid(velocity, finish.direction, self.direction_tolerance)
-        {
-            let lap_time = timestamp_ms.saturating_sub(self.lap_start_ms);
-
-            // Validate lap time
-            if lap_time < self.min_lap_time_ms {
-                self.frame_flags |= INVALID_LAP;
-                return;
+        if self.crossed_start_this_run {
+            if let Some(t) =
+                line_segment_intersection_f64(prev_finish, pos_finish, finish_p1, finish_p2)
+            {
+                if !direction_valid(velocity, finish.direction, self.direction_tolerance) {
+                    self.frame_flags |= INVALID_LAP;
+                    return;
+                }
+                let crossing_ms = crossing_time(prev_ms, timestamp_ms, t);
+                let lap_time = crossing_ms.wrapping_sub(self.lap_start_ms);
+                if lap_time < self.min_lap_time_ms {
+                    self.frame_flags |= INVALID_LAP;
+                    return;
+                }
+                self.frame_flags |= CROSSED_FINISH | NEW_LAP;
+                self.lap_count = self.lap_count.saturating_add(1);
+                self.last_lap_ms = Some(lap_time);
+                if self.best_lap_ms.is_none_or(|best| lap_time < best) {
+                    self.best_lap_ms = Some(lap_time);
+                    self.frame_flags |= NEW_BEST;
+                }
+                self.crossed_start_this_run = false;
+                self.state = LapTimerState::Armed;
+                self.current_lap_ms = 0;
             }
-
-            self.frame_flags |= CROSSED_FINISH | NEW_LAP;
-            self.lap_count = self.lap_count.saturating_add(1);
-
-            // Check for new best
-            if self.best_lap_ms.is_none_or(|best| lap_time < best) {
-                self.best_lap_ms = Some(lap_time);
-                self.frame_flags |= NEW_BEST;
-            }
-
-            // Reset for next run
-            self.crossed_start_this_run = false;
-            self.state = LapTimerState::Armed;
-            self.current_lap_ms = 0;
         }
     }
 }
@@ -315,6 +319,7 @@ pub struct LapTimer {
     timing: TimingState,
     /// Previous GPS position (lat, lon) for crossing detection
     prev_pos: Option<(f64, f64)>,
+    prev_ms: u32,
 }
 
 impl LapTimer {
@@ -324,6 +329,7 @@ impl LapTimer {
             track: None,
             timing: TimingState::new(),
             prev_pos: None,
+            prev_ms: 0,
         }
     }
 
@@ -372,22 +378,41 @@ impl LapTimer {
         speed_mps: f32,
     ) -> u8 {
         let pos = (lat, lon);
+        if !lat.is_finite()
+            || !lon.is_finite()
+            || lat.abs() > 90.0
+            || lon.abs() > 180.0
+            || !speed_mps.is_finite()
+            || !velocity.0.is_finite()
+            || !velocity.1.is_finite()
+        {
+            self.invalidate_fix();
+            return FLAG_NONE;
+        }
         // Clear per-frame flags
         self.timing.frame_flags = FLAG_NONE;
 
         // Update current lap time if timing
         if self.timing.state == LapTimerState::Timing {
-            self.timing.current_lap_ms = timestamp_ms.saturating_sub(self.timing.lap_start_ms);
+            self.timing.current_lap_ms = timestamp_ms.wrapping_sub(self.timing.lap_start_ms);
         }
 
         // Need previous position for crossing detection
         let Some(prev) = self.prev_pos else {
             self.prev_pos = Some(pos);
+            self.prev_ms = timestamp_ms;
             return self.timing.frame_flags;
         };
 
         // Update previous position for next frame
         self.prev_pos = Some(pos);
+        let prev_ms = self.prev_ms;
+        self.prev_ms = timestamp_ms;
+        // Never bridge a GPS outage, duplicate timestamp, or backwards clock.
+        let elapsed = timestamp_ms.wrapping_sub(prev_ms);
+        if elapsed == 0 || elapsed > 2000 {
+            return FLAG_NONE;
+        }
 
         // Skip if no track configured
         let Some(track) = &self.track else {
@@ -404,7 +429,7 @@ impl LapTimer {
         match *track {
             TrackType::Loop { ref line } => {
                 self.timing
-                    .check_loop_crossing(prev, pos, velocity, timestamp_ms, line);
+                    .check_loop_crossing(prev, pos, velocity, timestamp_ms, prev_ms, line);
             }
             TrackType::PointToPoint {
                 ref start,
@@ -415,13 +440,40 @@ impl LapTimer {
                     pos,
                     velocity,
                     timestamp_ms,
+                    prev_ms,
                     start,
                     finish,
                 );
             }
         }
 
+        self.tick(timestamp_ms);
         self.timing.frame_flags
+    }
+
+    /// Drop the previous fix when GPS is invalid; do not bridge the outage.
+    pub fn invalidate_fix(&mut self) {
+        self.prev_pos = None;
+        self.timing.frame_flags = FLAG_NONE;
+    }
+
+    /// Advance the displayed clock independently of GPS and transport rates.
+    pub fn tick(&mut self, timestamp_ms: u32) {
+        self.timing.current_lap_ms = if self.timing.state == LapTimerState::Timing {
+            timestamp_ms.wrapping_sub(self.timing.lap_start_ms)
+        } else {
+            0
+        };
+    }
+
+    pub fn state(&self) -> LapTimerState {
+        self.timing.state
+    }
+    pub fn last_lap_ms(&self) -> Option<u32> {
+        self.timing.last_lap_ms
+    }
+    pub fn best_lap_ms(&self) -> Option<u32> {
+        self.timing.best_lap_ms
     }
 
     /// Get current lap time in milliseconds (0 if not timing)
@@ -444,6 +496,11 @@ impl Default for LapTimer {
 // ============================================================================
 // Geometry helpers (pure functions, easy to test)
 // ============================================================================
+
+fn crossing_time(previous_ms: u32, current_ms: u32, fraction: f64) -> u32 {
+    previous_ms
+        .wrapping_add((current_ms.wrapping_sub(previous_ms) as f64 * fraction).round() as u32)
+}
 
 /// Line segment intersection test using parametric form
 ///
@@ -565,6 +622,9 @@ pub fn direction_valid(velocity: (f32, f32), expected_dir: f32, tolerance: f32) 
         return false;
     }
 
+    if !expected_dir.is_finite() || !tolerance.is_finite() || !speed_sq.is_finite() {
+        return false;
+    }
     let vel_dir = velocity.1.atan2(velocity.0);
     let diff = wrap_angle(vel_dir - expected_dir);
 
@@ -974,5 +1034,46 @@ mod tests {
 
         assert_eq!(flags, FLAG_NONE, "Should ignore crossing when stationary");
         assert_eq!(timer.timing.state, LapTimerState::Armed);
+    }
+    #[test]
+    fn crossing_time_is_interpolated_between_fixes() {
+        let mut timer = LapTimer::new();
+        timer.configure_loop(test_line());
+        timer.update(-0.00001, 0.0, (0.0, 10.0), 1000, 10.0);
+        timer.update(0.00003, 0.0, (0.0, 10.0), 1200, 10.0);
+        assert_eq!(timer.timing.lap_start_ms, 1050);
+        assert_eq!(timer.current_lap_ms(), 150);
+    }
+
+    #[test]
+    fn stale_position_does_not_create_a_crossing_after_reacquisition() {
+        let mut timer = LapTimer::new();
+        timer.configure_loop(test_line());
+        timer.update(-0.00001, 0.0, (0.0, 10.0), 1000, 10.0);
+        let flags = timer.update(0.00001, 0.0, (0.0, 10.0), 6000, 10.0);
+        assert_eq!(flags, FLAG_NONE);
+        assert_eq!(timer.timing.state, LapTimerState::Armed);
+    }
+
+    #[test]
+    fn stage_start_recrossing_does_not_restart_the_run() {
+        let mut timer = LapTimer::new();
+        timer.configure_point_to_point(test_line(), test_line_at_lat(0.001));
+        timer.update(-0.00001, 0.0, (0.0, 10.0), 1000, 10.0);
+        timer.update(0.00001, 0.0, (0.0, 10.0), 1100, 10.0);
+        let start = timer.timing.lap_start_ms;
+        timer.update(-0.00001, 0.0, (0.0, -10.0), 2100, 10.0);
+        timer.update(0.00001, 0.0, (0.0, 10.0), 2200, 10.0);
+        assert_eq!(timer.timing.lap_start_ms, start);
+    }
+
+    #[test]
+    fn lap_clock_survives_device_millisecond_wrap() {
+        let mut timer = LapTimer::new();
+        timer.configure_loop(test_line());
+        timer.update(-0.00001, 0.0, (0.0, 10.0), u32::MAX - 150, 10.0);
+        timer.update(0.00001, 0.0, (0.0, 10.0), u32::MAX - 50, 10.0);
+        timer.update(0.00002, 0.0, (0.0, 10.0), 99, 10.0);
+        assert_eq!(timer.current_lap_ms(), 200);
     }
 }

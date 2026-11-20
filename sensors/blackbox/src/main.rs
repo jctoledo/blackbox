@@ -449,6 +449,8 @@ fn main() {
 
     // Create lap timer (configured via HTTP API)
     let mut lap_timer = LapTimer::new();
+    let mut pending_lap_flags = 0u8;
+    let mut lap_revision = 0u32;
 
     // Create sensor fusion for mode detection
     //
@@ -547,7 +549,9 @@ fn main() {
             }
 
             // Check for lap timer config changes from web UI
-            if let Some(config) = state.take_lap_timer_config() {
+            if let Some((revision, config)) = state.take_lap_timer_config() {
+                lap_revision = revision;
+                pending_lap_flags = 0;
                 match config {
                     LapTimerConfig::None => {
                         lap_timer.clear();
@@ -767,7 +771,20 @@ fn main() {
             // (not on every GGA/GSA sentence while last_fix.valid is still true)
             let is_new_fix = sensors.gps_parser.take_new_fix();
             if is_new_fix {
+                sensors.record_gps_fix(now_ms);
                 diagnostics.record_gps_fix();
+            }
+
+            // Use each fresh GPS fix, with velocity from the same receiver/frame.
+            // EKF heading lag must not reject a real GPS timing-line crossing.
+            if is_new_fix && sensors.gps_parser.is_warmed_up() {
+                let fix = sensors.gps_parser.last_fix();
+                if let Some(velocity) = sensors.gps_parser.get_velocity_enu() {
+                    pending_lap_flags |=
+                        lap_timer.update(fix.lat, fix.lon, velocity, now_ms, fix.speed);
+                }
+            } else if !sensors.gps_parser.last_fix().valid {
+                lap_timer.invalidate_fix();
             }
 
             // ALWAYS feed GPS speed to sensor fusion when we have a new fix
@@ -915,20 +932,20 @@ fn main() {
                 speed,
             );
 
-            // Update lap timer with GPS lat/lon and EKF velocity
-            // GPS lat/lon is session-independent, enabling timing lines to work across
-            // restarts
-            let gps_fix = sensors.gps_parser.last_fix();
-            let (ekf_vx, ekf_vy) = estimator.ekf.velocity();
-            let lap_flags =
-                lap_timer.update(gps_fix.lat, gps_fix.lon, (ekf_vx, ekf_vy), now_ms, speed);
-            let lap_timer_data =
-                Some((lap_timer.current_lap_ms(), lap_timer.lap_count(), lap_flags));
-
-            // Publish telemetry with tilt-corrected accelerations and lap timer data
+            if !sensors.gps_is_fresh(now_ms) {
+                lap_timer.invalidate_fix();
+            }
+            lap_timer.tick(now_ms);
             publisher
-                .publish_telemetry(&sensors, &estimator, &sensor_fusion, now_ms, lap_timer_data)
+                .publish_telemetry(
+                    &sensors,
+                    &estimator,
+                    &sensor_fusion,
+                    now_ms,
+                    Some((&lap_timer, pending_lap_flags, lap_revision)),
+                )
                 .ok();
+            pending_lap_flags = 0;
 
             // Update fusion diagnostics at telemetry rate for synchronized CSV export
             // This ensures fusion data (lon_imu, lon_gps, etc.) matches the telemetry
