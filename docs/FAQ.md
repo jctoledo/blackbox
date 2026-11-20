@@ -18,7 +18,7 @@ The project requires neither. Firmware is MIT licensed. The device serves its da
 
 ## Can I try it without hardware?
 
-Use the [interactive demo](https://jctoledo.github.io/blackbox/demo.html). It renders the actual dashboard with explicitly synthetic data and separate demo storage. You can record/export the simulated session and exercise connection loss. It does not run physical sensors or prove firmware timing accuracy.
+Use the [interactive demo](https://jctoledo.github.io/blackbox/demo.html). It renders the actual dashboard with explicitly synthetic data and separate demo storage. A varied synthetic circuit includes changing speed, braking, acceleration, repeat-lap pace differences, and a preloaded synthetic reference. You can record/export it and exercise connection loss. The demo supports circuit timing only; it does not simulate arbitrary user-created course geometry or stage detection. It does not run physical sensors or prove firmware timing accuracy.
 
 ## Which board is compatible?
 
@@ -89,7 +89,7 @@ No. The current reference stores distance/time samples, not a spatially matched 
 
 ## Which display should I use?
 
-Set up the track and recording while parked. Drive view emphasizes lap time, delta, speed, and last/best results while hiding track editing and the G-meter. Exit drive view to access setup and saved data. The standard view keeps a compact G-meter; Expand G-meter provides a larger force plot for analysis. A completed lap briefly shows its exact recorded result for five seconds. Drive view does not start recording automatically or keep a phone awake.
+Set up the track and recording while parked. Drive view emphasizes lap time, delta, speed, and last/best results while hiding track editing and the G-meter. Exit drive view to access setup and saved data. The standard dashboard also keeps the G-meter out of the way. Open Analysis while parked to inspect forces, and use Expand G-meter for a larger plot. A completed lap briefly shows its exact recorded result for five seconds. Drive view does not start recording automatically or keep a phone awake.
 
 ## Can I see whether my pace is becoming more consistent?
 

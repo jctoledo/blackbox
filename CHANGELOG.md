@@ -14,6 +14,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Obsolete documentation files (RELEASE.md, IMPLEMENTATION_SUMMARY.md, release-notes.md)
 
+## [0.0.4-rc.3] - 2026-11-19
+
+Follow-up release candidate; hardware acceptance is still required. Includes all rc.2 changes.
+
+### Changed
+- Removed the G-meter from the default dashboard; optional Analysis retains the force plot for parked inspection.
+- Clarified route capture versus saving, timing readiness, estimated turn counts, recording recovery, and estimator quality labels.
+- Corrected the turn-rate readout unit to degrees per second.
+- Upgraded the public demo to a varied synthetic circuit with consistent position/velocity, braking, acceleration, lap-to-lap pace differences, and a seeded reference.
+- Added restrained website motion with pause, reduced-motion, and offscreen controls; refreshed screenshots and product descriptions.
+
 ## [0.0.4-rc.2] - 2026-11-19
 
 Release candidate for bench and controlled-site validation, not a claim of measured timing accuracy. Select `blackbox-m9n.bin` for NEO-M9N (25 Hz configuration) or `blackbox-6m.bin` for NEO-6M (5 Hz). Verify actual sensor rates after boot. Full merged images replace device configuration.
