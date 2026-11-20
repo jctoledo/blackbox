@@ -94,7 +94,7 @@ jobs:
           sha256sum *.bin > SHA256SUMS-${{ matrix.gps_model }}.txt
 
       - name: Upload firmware artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: firmware-${{ matrix.project }}-${{ matrix.gps_model }}
           path: firmware-output/*
