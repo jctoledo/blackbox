@@ -807,8 +807,11 @@ fn main() {
 
             // Check if warmup complete (has reference point) AND fix is valid for EKF
             // updates
-            if sensors.gps_parser.is_warmed_up() && sensors.gps_parser.last_fix().valid {
-                let (ax_corr, ay_corr, _) = sensors.imu_parser.get_accel_corrected();
+            if is_new_fix
+                && sensors.gps_parser.is_warmed_up()
+                && sensors.gps_parser.last_fix().valid
+            {
+                let (ax_corr, ay_corr, az_corr) = sensors.imu_parser.get_accel_corrected();
 
                 // Always update position from GPS first (even when stationary)
                 // This prevents EKF from diverging during extended stops
@@ -821,7 +824,13 @@ fn main() {
                 }
 
                 // Check stationary FIRST - if stopped, lock position to prevent GPS noise
-                if sensors.is_stationary(ax_corr, ay_corr, sensors.imu_parser.data().wz) {
+                let stationary = sensors.update_stationary(
+                    ax_corr,
+                    ay_corr,
+                    sensors.imu_parser.data().wz,
+                    now_ms,
+                );
+                if stationary {
                     // Vehicle stopped - perform ZUPT and bias estimation
                     estimator.zupt();
                     estimator.ekf.lock_position(); // Reduce position covariance
@@ -830,17 +839,17 @@ fn main() {
                     estimator.ekf.lock_yaw();
                     diagnostics.record_zupt();
 
-                    let (ax_b, ay_b, _) = remove_gravity(
+                    let (ax_b, ay_b, az_b) = remove_gravity(
                         ax_corr,
                         ay_corr,
-                        sensors.imu_parser.data().az,
+                        az_corr,
                         sensors.imu_parser.data().roll,
                         sensors.imu_parser.data().pitch,
                     );
                     let (ax_e, ay_e) = body_to_earth(
                         ax_b,
                         ay_b,
-                        0.0,
+                        az_b,
                         sensors.imu_parser.data().roll,
                         sensors.imu_parser.data().pitch,
                         estimator.ekf.yaw(),
@@ -853,33 +862,19 @@ fn main() {
                     estimator
                         .ekf
                         .store_moving_yaw(sensor_fusion.get_aligned_heading());
-                    // Moving - update position from GPS (only when fix is valid)
-                    if let Some((x, y)) = sensors.gps_parser.to_local_coords() {
-                        // Sanity check: reject extreme position jumps (> 1000m)
-                        // This catches corrupt GPS data that passes checksum (rare but possible)
-                        // Normal driving: max 42 m/s (150 km/h) × 0.04s = 1.7m between 25Hz fixes
-                        let (ekf_x, ekf_y) = estimator.ekf.position();
-                        let jump_dist = ((x - ekf_x).powi(2) + (y - ekf_y).powi(2)).sqrt();
-
-                        if jump_dist < 1000.0 {
-                            estimator.update_position(x, y);
-                        } else {
-                            // Log rejected update (uncomment for debugging)
-                            // info!("GPS rejected: jump={:.0}m,
-                            // gps=({:.1},{:.1}), ekf=({:.1},{:.1})",
-                            //       jump_dist, x, y, ekf_x, ekf_y);
-                        }
-                    }
                 }
 
                 // Update EKF with velocity components (requires full validity)
-                if let Some((vx, vy)) = sensors.gps_parser.get_velocity_enu() {
+                if let Some((vx, vy)) = sensors
+                    .gps_parser
+                    .get_velocity_enu()
+                    .filter(|_| !stationary)
+                {
                     let speed = (vx * vx + vy * vy).sqrt();
                     // Sanity check: reject extreme velocities (> 100 m/s = 360 km/h)
                     // This catches NaN and corrupt GPS data
                     if speed < 100.0 && speed.is_finite() {
                         estimator.update_velocity(vx, vy);
-                        estimator.update_speed(speed);
                     }
                 }
             }
@@ -905,13 +900,17 @@ fn main() {
             // Get current speed and check if stationary
             let speed = sensors.get_speed(Some(&estimator.ekf));
             let (ax_corr, ay_corr, az_corr) = sensors.imu_parser.get_accel_corrected();
-            let is_stationary =
-                sensors.is_stationary(ax_corr, ay_corr, sensors.imu_parser.data().wz);
+            let is_stationary = sensors.is_stationary(now_ms);
 
             // Process through sensor fusion (GPS-corrected orientation + blending)
             // Pass raw body-frame IMU data - fusion handles transforms with corrected
             // orientation
-            let dt = config.telemetry.interval_ms as f32 / 1000.0;
+            let dt = if last_telemetry_ms == 0 {
+                config.telemetry.interval_ms
+            } else {
+                now_ms.wrapping_sub(last_telemetry_ms)
+            } as f32
+                / 1000.0;
             let (lon_blended, lat_filtered) = sensor_fusion.process_imu(
                 ax_corr,                         // Raw body-frame X accel (bias-corrected)
                 ay_corr,                         // Raw body-frame Y accel (bias-corrected)

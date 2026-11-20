@@ -2,8 +2,7 @@
 /// 7-state: [x, y, ψ, vx, vy, bax, bay]
 ///
 /// Features:
-/// - CTRA (Constant Turn Rate and Acceleration) motion model at speed
-/// - CA (Constant Acceleration) model when slow/straight
+/// - Earth-frame acceleration integration (including measured centripetal acceleration)
 /// - Innovation gating to reject outlier measurements (prevents position explosion)
 /// - Diagonal covariance approximation for embedded efficiency
 use core::f32::consts::PI;
@@ -35,9 +34,6 @@ pub struct EkfConfig {
     pub r_pos: f32, // (m)² - GPS position measurement noise
     pub r_vel: f32, // (m/s)² - GPS velocity measurement noise
     pub r_yaw: f32, // (rad)² - Magnetometer yaw measurement noise
-
-    // Model parameters
-    pub min_speed: f32, // m/s - Minimum speed for CTRA model
 }
 
 impl Default for EkfConfig {
@@ -49,7 +45,6 @@ impl Default for EkfConfig {
             r_pos: 20.0,
             r_vel: 0.2,
             r_yaw: 0.10,
-            min_speed: 2.0,
         }
     }
 }
@@ -329,10 +324,16 @@ impl Ekf {
         (self.x[5], self.x[6])
     }
 
-    /// Prediction step using CTRA or constant acceleration model
+    /// Integrate earth-frame velocity and acceleration without applying yaw twice.
     pub fn predict(&mut self, ax_earth: f32, ay_earth: f32, wz: f32, dt: f32) {
-        let speed = self.speed();
-        let use_ctra = speed > self.config.min_speed;
+        if !dt.is_finite()
+            || dt <= 0.0
+            || !ax_earth.is_finite()
+            || !ay_earth.is_finite()
+            || !wz.is_finite()
+        {
+            return;
+        }
 
         // Copy values to avoid borrowing issues
         let mut x = self.x[0];
@@ -343,18 +344,11 @@ impl Ekf {
         let bax = self.x[5];
         let bay = self.x[6];
 
-        // Predict position
-        if use_ctra && wz.abs() > 1e-4 {
-            // CTRA model (Constant Turn Rate and Acceleration)
-            let sin_d = (psi + wz * dt).sin() - psi.sin();
-            let cos_d = (psi + wz * dt).cos() - psi.cos();
-            x += sin_d / wz * vx + cos_d / wz * vy;
-            y += -cos_d / wz * vx + sin_d / wz * vy;
-        } else {
-            // Constant acceleration model
-            x += vx * dt + 0.5 * (ax_earth - bax) * dt * dt;
-            y += vy * dt + 0.5 * (ay_earth - bay) * dt * dt;
-        }
+        // vx/vy and ax/ay already share the earth ENU frame. Rotating the
+        // displacement by absolute yaw again produces sideways/backwards motion.
+        // Turning acceleration is already present in the transformed IMU input.
+        x += vx * dt + 0.5 * (ax_earth - bax) * dt * dt;
+        y += vy * dt + 0.5 * (ay_earth - bay) * dt * dt;
 
         // Predict yaw
         psi += wz * dt;
@@ -1064,8 +1058,8 @@ mod tests {
     }
 
     #[test]
-    fn test_predict_ctra_model_circular_motion() {
-        // Test CTRA model: vehicle in circular turn
+    fn test_predict_turn_uses_earth_frame_centripetal_acceleration() {
+        // Vehicle in a circular turn with measured centripetal acceleration
         // Moving at 10 m/s with 0.5 rad/s turn rate (constant speed turn)
         let mut ekf = Ekf::new();
         ekf.x[0] = 0.0;
@@ -1077,8 +1071,8 @@ mod tests {
         let wz = 0.5; // 0.5 rad/s turn rate (~28.6 deg/s)
         let dt = 0.1;
 
-        // With CTRA: position follows circular arc, not straight line
-        ekf.predict(0.0, 0.0, wz, dt);
+        // At the start of this left turn, centripetal acceleration is +Y.
+        ekf.predict(0.0, 10.0 * wz, wz, dt);
 
         // Yaw should increase by wz * dt = 0.05 rad
         assert!(
@@ -1096,7 +1090,7 @@ mod tests {
         );
         // Y should be small but non-zero (turning)
         assert!(
-            ekf.x[1].abs() < 0.1,
+            (ekf.x[1] - 0.025).abs() < 0.001,
             "y should be small during turn start, got {}",
             ekf.x[1]
         );

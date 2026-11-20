@@ -126,7 +126,12 @@ impl SensorManager {
         // Keep LED on during calibration (solid yellow)
         led.yellow().ok();
 
+        let started_us = unsafe { esp_idf_svc::sys::esp_timer_get_time() };
         while !calibrator.is_complete() {
+            if unsafe { esp_idf_svc::sys::esp_timer_get_time() } - started_us > 30_000_000 {
+                led.set_low().ok();
+                return Err(SystemError::CalibrationFailed);
+            }
             if self.imu_uart.read(&mut buf, 0).unwrap_or(0) > 0 {
                 let timestamp_us = unsafe { esp_idf_svc::sys::esp_timer_get_time() as u64 };
                 if let Some(packet_type) = self.imu_parser.feed_byte(buf[0], timestamp_us) {
@@ -150,6 +155,8 @@ impl SensorManager {
                         }
                     }
                 }
+            } else {
+                FreeRtos::delay_ms(1);
             }
         }
 
@@ -233,26 +240,25 @@ impl SensorManager {
         new_fix
     }
 
-    /// Check if vehicle is stationary
-    pub fn is_stationary(&mut self, ax: f32, ay: f32, wz: f32) -> bool {
-        const ACC_THR: f32 = 0.18 * 9.80665;
-        const WZ_THR: f32 = 12.0 * 0.017453293;
-        const GPS_SPEED_THR: f32 = 3.5;
-        const POS_SPEED_THR: f32 = 5.0;
-
-        let low_inertial = ax.abs() < ACC_THR && ay.abs() < ACC_THR && wz.abs() < WZ_THR;
-        let low_speed = self.gps_parser.last_fix().speed < GPS_SPEED_THR
-            && self.gps_parser.position_based_speed() < POS_SPEED_THR;
-
-        let stationary = low_inertial && low_speed;
-
-        if stationary {
-            self.stationary_count += 1;
+    /// Update once per new GPS fix; repeated telemetry polls are not new evidence.
+    pub fn update_stationary(&mut self, ax: f32, ay: f32, wz: f32, now_ms: u32) -> bool {
+        let stationary = self.gps_is_fresh(now_ms)
+            && sensor_fusion::stationary::stationary_candidate(
+                ax,
+                ay,
+                wz,
+                self.gps_parser.last_fix().speed,
+            );
+        self.stationary_count = if stationary {
+            self.stationary_count.saturating_add(1)
         } else {
-            self.stationary_count = 0;
-        }
+            0
+        };
+        self.is_stationary(now_ms)
+    }
 
-        stationary && self.stationary_count >= 5
+    pub fn is_stationary(&self, now_ms: u32) -> bool {
+        self.gps_is_fresh(now_ms) && self.stationary_count >= 5
     }
 }
 

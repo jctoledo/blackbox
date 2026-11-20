@@ -299,7 +299,11 @@ impl NmeaParser {
     /// ENU coordinates: x = East, y = North
     /// Therefore: vx (east) = speed × sin(course), vy (north) = speed × cos(course)
     pub fn get_velocity_enu(&self) -> Option<(f32, f32)> {
-        if !self.reference.set {
+        if !self.reference.set
+            || !self.last_fix.valid
+            || !self.last_fix.speed.is_finite()
+            || !self.last_fix.course.is_finite()
+        {
             return None;
         }
 
@@ -941,6 +945,7 @@ mod tests {
 
         let mut parser = NmeaParser::new();
         parser.reference.set = true;
+        parser.last_fix.valid = true;
         parser.last_fix.speed = 10.0;
 
         // Course 0 (North): velocity should be (east=0, north=speed)
