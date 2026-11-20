@@ -13,15 +13,16 @@ env:
 jobs:
   check:
     name: Check Compilation
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Rust nightly
-        uses: dtolnay/rust-toolchain@nightly
+        uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: nightly-2025-10-18
           components: rust-src
 
       - name: Cache cargo (using Swatinem/rust-cache)
@@ -49,6 +50,10 @@ jobs:
           key: ${{ runner.os }}-espup-v2-partition-fix
           restore-keys: |
             ${{ runner.os }}-espup-v2-
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
       - name: Install ESP-IDF prerequisites
         run: |
@@ -85,11 +90,11 @@ jobs:
         run: |
           . $HOME/export-esp.sh
           cd sensors/blackbox
-          cargo check
+          cargo check --locked
 
   fmt:
     name: Format Check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -103,13 +108,14 @@ jobs:
 
   clippy:
     name: Clippy
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Rust nightly
-        uses: dtolnay/rust-toolchain@nightly
+        uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: nightly-2025-10-18
           components: rust-src, clippy
 
       - name: Cache cargo (using Swatinem/rust-cache)
@@ -118,22 +124,29 @@ jobs:
           workspaces: sensors/blackbox
           cache-on-failure: true
 
+      - name: Install ESP-IDF build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git wget flex bison gperf python3 python3-pip python3-venv cmake ninja-build ccache libffi-dev libssl-dev libclang-dev dfu-util libusb-1.0-0
+          cargo install ldproxy --locked
+
       - name: Run clippy
         run: |
           cd sensors/blackbox
-          cargo clippy -- -D warnings
+          cargo clippy --locked -- -D warnings
 
   build:
     name: Build Firmware
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Rust nightly
-        uses: dtolnay/rust-toolchain@nightly
+        uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: nightly-2025-10-18
           components: rust-src
 
       - name: Cache cargo (using Swatinem/rust-cache)
@@ -165,6 +178,10 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-espup-v2-
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - name: Install ESP-IDF prerequisites
         run: |
           sudo apt-get update
@@ -189,7 +206,8 @@ jobs:
 
           if ! command -v cargo-espflash &> /dev/null; then
             echo "Installing cargo-espflash and espflash..."
-            cargo install cargo-espflash espflash
+            rustup toolchain install stable --profile minimal
+            cargo +stable install cargo-espflash espflash --version 4.7.0 --locked
           else
             echo "✓ cargo-espflash found in cache"
           fi
@@ -215,7 +233,7 @@ jobs:
         run: |
           . $HOME/export-esp.sh
           cd sensors/blackbox
-          cargo build --release
+          cargo build --release --locked
           echo "Built binary size:"
           ls -lh ../../target/riscv32imc-esp-espidf/release/blackbox
           echo "Checking generated partition configuration:"
@@ -252,7 +270,7 @@ jobs:
 
   python-lint:
     name: Python Lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
