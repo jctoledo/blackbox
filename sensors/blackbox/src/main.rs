@@ -427,7 +427,7 @@ fn main() {
     }
 
     // Create sensor manager
-    let mut sensors = SensorManager::new(imu_uart, gps_uart);
+    let mut sensors = SensorManager::new(imu_uart, gps_uart, config.gps.warmup_fixes);
 
     // Calibrate IMU
     if let Some(ref mut mqtt) = mqtt_opt {
@@ -539,14 +539,7 @@ fn main() {
                     s.acc_thr, s.acc_exit, s.brake_thr, s.brake_exit, s.lat_thr, s.lat_exit, s.yaw_thr, s.min_speed
                 );
 
-                // Visual confirmation: 3 green-white alternating flashes
-                for _ in 0..3 {
-                    status_mgr.led_mut().green().unwrap();
-                    FreeRtos::delay_ms(80);
-                    status_mgr.led_mut().white().unwrap();
-                    FreeRtos::delay_ms(80);
-                }
-                status_mgr.led_mut().set_low().unwrap();
+                // The regular LED task provides feedback without blocking sensor reads.
             }
 
             // Check for lap timer config changes from web UI
@@ -599,7 +592,7 @@ fn main() {
         }
 
         // Periodic diagnostics (serial log every 5s)
-        if now_ms - last_heap_check_ms >= 5000 {
+        if now_ms.wrapping_sub(last_heap_check_ms) >= 5000 {
             let free_heap = unsafe { esp_idf_svc::sys::esp_get_free_heap_size() };
             let (telem_count, fail_count) = publisher.get_stats();
             let telem_rate = telem_count / 5;
@@ -649,39 +642,15 @@ fn main() {
 
         // Connectivity check every 5 seconds (Station mode only)
         // In AP mode, we ARE the access point so connectivity checks don't apply
-        if !is_ap_mode && now_ms - last_connectivity_check_ms >= 5000 {
+        if !is_ap_mode && now_ms.wrapping_sub(last_connectivity_check_ms) >= 5000 {
             let wifi_connected = wifi.is_connected();
             let mqtt_connected = publisher
                 .mqtt_client_mut()
                 .map(|m| m.is_connected())
                 .unwrap_or(false);
 
-            // Blink while WiFi is disconnected (more critical - check first)
-            if !wifi_connected {
-                if was_wifi_connected {
-                    info!("WiFi connection lost!");
-                }
-                // 3 orange blinks for WiFi down
-                for _ in 0..3 {
-                    status_mgr.led_mut().orange().unwrap();
-                    FreeRtos::delay_ms(150);
-                    status_mgr.led_mut().set_low().unwrap();
-                    FreeRtos::delay_ms(150);
-                }
-            }
-            // Blink while MQTT is disconnected (only if WiFi is up)
-            else if !mqtt_connected {
-                if was_mqtt_connected {
-                    info!("MQTT connection lost!");
-                }
-                // 2 red blinks for MQTT down
-                for _ in 0..2 {
-                    status_mgr.led_mut().red().unwrap();
-                    FreeRtos::delay_ms(150);
-                    status_mgr.led_mut().set_low().unwrap();
-                    FreeRtos::delay_ms(150);
-                }
-            }
+            // Connectivity feedback must never pause GPS/IMU processing.
+            status_mgr.set_connectivity(wifi_connected, mqtt_connected);
 
             // Log connectivity status changes
             if was_wifi_connected != wifi_connected || was_mqtt_connected != mqtt_connected {
@@ -698,7 +667,7 @@ fn main() {
 
         // MQTT diagnostics (every 30s - low priority, LED handles connectivity
         // feedback)
-        if now_ms - last_mqtt_diag_ms >= 30000 {
+        if now_ms.wrapping_sub(last_mqtt_diag_ms) >= 30000 {
             if let Some(mqtt) = publisher.mqtt_client_mut() {
                 let (ekf_x, ekf_y) = estimator.ekf.position();
                 let gps_warmed = sensors.gps_parser.is_warmed_up();
@@ -887,7 +856,7 @@ fn main() {
         }
 
         // Update GPS status
-        let gps_locked = sensors.gps_parser.is_warmed_up(); // Remove the .valid check
+        let gps_locked = sensors.gps_is_fresh(now_ms);
         status_mgr.update_gps_status(
             gps_locked,
             sensors.gps_parser.is_warmed_up(),
@@ -896,7 +865,7 @@ fn main() {
         );
 
         // Publish telemetry at configured rate
-        if now_ms - last_telemetry_ms >= config.telemetry.interval_ms {
+        if now_ms.wrapping_sub(last_telemetry_ms) >= config.telemetry.interval_ms {
             // Get current speed and check if stationary
             let speed = sensors.get_speed(Some(&estimator.ekf));
             let (ax_corr, ay_corr, az_corr) = sensors.imu_parser.get_accel_corrected();

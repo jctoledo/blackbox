@@ -1,6 +1,6 @@
 # Lap Timer Guide
 
-Professional-grade timing that rivals $700-1200 commercial systems. Record tracks anywhere, get real-time lap times, and see live delta-to-best while driving.
+GPS-based lap timing for an open telemetry project. Record circuits or stages, select a track to arm timing, and compare laps in the device dashboard. Accuracy remains dependent on receiver performance and field validation; commercial-system equivalence has not been established.
 
 ---
 
@@ -71,7 +71,7 @@ UI shows "Run" instead of "Lap" and "Running" instead of "Timing."
 3. **Debounce** — 500ms minimum between crossings
 
 ### Precision
-- 30 Hz update rate (~33ms resolution)
+- Crossing detection on new GPS fixes, independent of browser refresh rate
 - At 100 km/h: ~1 meter position uncertainty per update
 - Sufficient for amateur and club-level timing
 
@@ -218,7 +218,7 @@ Complete at least one full lap. First completed lap becomes reference.
 ## Technical Reference
 
 ### Timing Precision
-30 Hz = 33ms resolution. At 100 km/h, ~0.9m position uncertainty per frame.
+Crossing times are interpolated between two fresh GPS fixes and stored in integer milliseconds. Millisecond storage and smooth display do **not** establish millisecond physical accuracy. Receiver latency, timestamp alignment, multipath, line geometry, and speed all matter. For scale, 1 m of along-track error at 100 km/h corresponds to about 36 ms; this is an illustrative conversion, not a measured error bound.
 
 ### Storage Estimates
 | Data | Size | 10 Tracks |
@@ -245,19 +245,11 @@ State machine with hysteresis:
 
 ---
 
-## Comparison to Commercial Systems
+## Validation and limits
 
-| Feature | Blackbox | VBOX LapTimer ($1,160) | AiM Solo 2 DL ($700) |
-|---------|----------|------------------------|----------------------|
-| Timing precision | ~33ms | ~10ms | ~10ms |
-| Delta display | Yes | Yes | Yes |
-| Track recording | Yes | Yes | Yes |
-| Session history | Yes | Yes | Yes |
-| Track auto-detect | Yes | Yes | Yes |
-| Separate display | No (phone) | Yes | Yes |
-| Price | ~$50 | $1,160 | $700 |
+Synthetic replays cover multiple track headings, latitudes, irregular sample intervals, and timestamp rollover. They verify algorithm behavior with known inputs; they do not measure the receiver's real-world errors. See [Review & validation](REVIEW.md) for the remaining field test plan.
 
-Main tradeoffs: timing precision (adequate for amateur use) and phone as display instead of dedicated screen.
+Timing uses fresh raw GPS positions and velocity from the same receiver. Gaps longer than two seconds break crossing continuity. A crossing during an outage may be missed; the software intentionally does not infer it from a long reconnect segment. Do not treat EKF interpolation or a higher display rate as additional position truth.
 
 ---
 
@@ -283,13 +275,13 @@ The key insight: each timing line carries its own GPS reference (the p1 endpoint
 
 ### Known Limitations & Mitigations
 
-#### GPS Noise (~1m jitter at 25Hz)
+#### GPS noise and line geometry
 
-**Issue:** Consumer GPS has position noise of approximately 1 meter.
+**Issue:** Consumer GPS has meter-scale uncertainty that changes with reception, antenna placement, and multipath. A fixed 1 m jitter bound is not established for this device.
 
-**Mitigation:** The lap timer uses trajectory-based intersection detection—it checks if the *path* from previous position to current position crosses the timing line, not just proximity. This is robust to per-sample noise.
+**Mitigation:** The lap timer uses trajectory-based intersection detection—it checks if the *path* from previous position to current position crosses the timing line, not just proximity. This catches crossings between samples, but cannot eliminate position noise.
 
-**Why it works:** A 24-meter timing line (12m each side of track center) easily absorbs 1m of noise. False triggers are prevented by direction validation (must be traveling the correct way).
+A sufficiently wide line reduces missed intersections near the track edge. Direction and minimum-lap gates reduce false triggers, but cannot guarantee their elimination. Verify that the saved line spans the route and that its direction matches the intended crossing.
 
 #### GPS Dropout
 
@@ -315,6 +307,6 @@ This maintains session independence while providing continuity during brief drop
 
 #### Coordinate Precision
 
-**f64 (double) Precision:** GPS coordinates use f64 for approximately 1mm precision at equator. More than sufficient for timing applications.
+**Numeric precision:** timing-line calculations and HTTP GPS coordinates use f64. Binary v4 packets retain f32 latitude/longitude for compatibility, introducing location-dependent sub-meter quantization. Numeric representation is separate from GPS measurement accuracy.
 
 **Local Conversion:** The `to_local()` function uses the timing line's p1 as reference, converting both line endpoints and vehicle position consistently. The intersection calculation uses f64 throughout.

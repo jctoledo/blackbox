@@ -13,13 +13,13 @@ Neither GPS nor IMU alone provides what we need:
 | **GPS** | Accurate position, no drift | Slow (5-25 Hz), dropouts in tunnels |
 | **IMU** | Fast (200 Hz), responsive | Drifts over time, affected by vibration |
 
-**Solution:** Combine them. Use IMU for responsive, high-rate updates. Use GPS to correct drift. Result: fast AND accurate.
+**Solution:** Combine them. Use IMU for responsive, high-rate updates. Use GPS to correct drift. The result is a responsive estimate whose accuracy must be validated against a reference.
 
 ---
 
 ## The 7-State Extended Kalman Filter
 
-The EKF is the core algorithm. It maintains estimates of 7 values (the "state vector") and continuously refines them as new sensor data arrives.
+The estimator maintains seven state values, with a **diagonal covariance approximation**. Cross-covariances and a full Jacobian covariance propagation are not implemented. Its reported uncertainty is an internal diagnostic, not a calibrated statistical guarantee. Sensor output rate, estimator update rate, and browser refresh rate are distinct; UART batches may coalesce samples.
 
 ### State Vector
 
@@ -63,7 +63,7 @@ x = [x, y, ψ, vx, vy, bax, bay]
 
 The EKF alternates between two steps:
 
-### Predict (IMU, 200 Hz)
+### Predict (on processed IMU samples)
 
 When new IMU data arrives:
 
@@ -72,7 +72,7 @@ When new IMU data arrives:
 3. Remove gravity using roll/pitch angles
 4. Transform to earth frame (horizontal plane)
 5. Update velocity: `vx += ax_earth × dt`
-6. Update position: `x += vx × dt + 0.5 × ax_earth × dt²`
+6. Update position using the velocity from the start of the step: `x += vx_old × dt + 0.5 × ax_earth × dt²`
 7. Update heading using gyroscope yaw rate
 8. Increase uncertainty (covariance grows)
 
@@ -159,7 +159,7 @@ Body Frame          Earth Frame          Vehicle Frame
 
 ## Zero-Velocity Update (ZUPT)
 
-ZUPT is critical for preventing drift. When the vehicle is stationary, we know velocity is exactly zero — a perfect measurement.
+ZUPT constrains velocity when the stationary detector has sufficient fresh evidence. Its correctness depends on the detector: slow motion, vibration, and GPS outages must not be mistaken for a verified stop.
 
 ### Detection Criteria
 

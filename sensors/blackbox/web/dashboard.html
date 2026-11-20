@@ -354,6 +354,15 @@ button:focus-visible,[role=button]:focus-visible,a:focus-visible,input:focus-vis
 @media(min-width:850px){.bbGCard{position:relative;min-height:440px}.bbGPlotWrap{position:absolute;right:8%;top:24px;width:44%}.bbGPlotFrame{width:min(42vh,360px)}.bbGTop,.bbGReadoutRow{width:45%}.bbGReadoutRow{margin:auto 0}.bbGMax{margin-top:auto}.bbLapMain{padding:20px 28px}}
 @media(max-width:420px){.bbTopbar{padding:8px 12px}.bbModeLabel,.bbModeIcon{display:none}.bbStatusCluster{gap:7px;font-size:10px}.bbDiag{font-size:10px}.bbTopRight{gap:4px}.bbApp{padding:0 10px 10px}.bbLapCard.inactive{padding:16px}.bbLapSetupText{font-size:15px}.bbLapSetupBtn{padding:10px 12px}.bbGPlotFrame{width:min(32vh,300px)}.bbGReadoutVal{font-size:28px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+.dark{--bg:#0c1210;--surface:#15211b;--text:#f1f6e9;--text-secondary:#c3d1bf;--text-tertiary:#9aac9b;--ok:#b6f566;--amber:#ffc46b}
+.bbBrandMark{color:var(--ok);font-size:20px}.bbBrand{letter-spacing:.08em;font-size:12px}
+.bbInstrumentLabel{font:10px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:6px}
+.bbSpeed,.bbLapTime,.bbLapHistValue,.bbGReadoutVal{font-family:var(--mono);font-weight:600;letter-spacing:-.05em}
+.bbSpeed{font-size:50px}.bbManeuver{font:10px var(--mono);letter-spacing:.12em;padding-top:5px}
+.dark .bbLapSetupBtn{background:#b6f566;color:#15211b}.bbLapSetupBtn{border-radius:6px;font-weight:700}
+.bbCard{border-radius:14px}.bbStatusItem{white-space:nowrap}.bbLapState{font-size:12px;line-height:1.5}
+.bbLapMain{border-top:3px solid var(--ok)}.bbLapHistLabel{font-family:var(--mono);letter-spacing:.1em}
+.bbGCard{background-image:radial-gradient(ellipse at 70% 35%,rgba(130,170,120,.045),transparent 65%)}
 </style></head>
 <body>
 
@@ -361,7 +370,7 @@ button:focus-visible,[role=button]:focus-visible,a:focus-visible,input:focus-vis
 <div id="view-dashboard" class="view active">
 <header class="bbTopbar">
     <button class="bbBrandToggle" id="brandToggle" aria-label="Toggle theme">
-        <span class="bbBrand">Blackbox</span>
+        <span class="bbBrand">BLACKBOX<span class="bbBrandMark" aria-hidden="true"> /</span></span>
         <span class="bbModeLabel" id="modeLabel">Bright</span>
         <span class="bbModeIcon" aria-hidden="true">◐</span>
     </button>
@@ -419,10 +428,10 @@ button:focus-visible,[role=button]:focus-visible,a:focus-visible,input:focus-vis
     <section class="bbCard bbGCard">
         <div class="bbGTop">
             <div class="bbGTopLeft">
-                <div class="bbSpeedLine"><span class="bbSpeed bbNum" id="speed">0</span><span class="bbUnit">km/h</span></div>
+                <div class="bbInstrumentLabel">Speed</div><div class="bbSpeedLine"><span class="bbSpeed bbNum" id="speed">0</span><span class="bbUnit">km/h</span></div>
                 <div class="bbManeuver" id="maneuver">IDLE</div>
             </div>
-            <div class="bbGTopRight"><span class="bbNum" id="session-time">0:00</span></div>
+            <div class="bbGTopRight"><div class="bbInstrumentLabel">Session</div><span class="bbNum" id="session-time">0:00</span></div>
         </div>
         <div class="bbGPlotWrap">
             <div class="bbGPlotFrame">
@@ -1760,8 +1769,8 @@ let trail=[];
 function drawG(){
     const size=cv.width/devicePixelRatio,cx=size/2,cy=size/2,r=size*0.38;
     ctx.clearRect(0,0,size,size);
-    const ringColor=isDark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.05)';
-    const axisColor=isDark?'rgba(255,255,255,0.15)':'rgba(0,0,0,0.12)';
+    const ringColor=isDark?'rgba(174,211,193,0.18)':'rgba(0,0,0,0.12)';
+    const axisColor=isDark?'rgba(174,211,193,0.32)':'rgba(0,0,0,0.22)';
     // Subtle concentric rings with dashed style
     ctx.setLineDash([4,4]);ctx.lineWidth=1;ctx.strokeStyle=ringColor;
     [0.25,0.5,0.75,1.0].forEach(f=>{ctx.beginPath();ctx.arc(cx,cy,r*f,0,Math.PI*2);ctx.stroke()});

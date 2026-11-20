@@ -551,159 +551,71 @@ impl NmeaParser {
         }
     }
 
-    #[cfg(any(test, feature = "std"))]
+    // Shared by std and no_std builds: only complete, valid fixes may advance timing.
     fn parse_rmc(&mut self, line: &str) {
-        let fields: Vec<&str> = line.split(',').collect();
-
-        if fields.len() < 10 {
+        self.last_fix.valid = false;
+        self.new_fix_available = false;
+        let mut fields = [""; 12];
+        let mut count = 0;
+        for (i, field) in line.split(',').take(fields.len()).enumerate() {
+            fields[i] = field;
+            count += 1;
+        }
+        if count < 10 || fields[2] != "A" {
             return;
         }
-
-        if fields[2] != "A" {
-            self.last_fix.valid = false;
+        let Some((h, m, sec)) = parse_time(fields[1]) else {
+            return;
+        };
+        let Some(lat) = parse_coordinate(fields[3], fields[4]) else {
+            return;
+        };
+        let Some(lon) = parse_coordinate(fields[5], fields[6]) else {
+            return;
+        };
+        if !matches!(fields[4], "N" | "S") || !matches!(fields[6], "E" | "W") {
             return;
         }
-
-        if let Some((h, m, s)) = parse_time(fields[1]) {
-            self.last_fix.hour = h;
-            self.last_fix.minute = m;
-            self.last_fix.second = s;
-        }
-
-        let lat = match parse_coordinate(fields[3], fields[4]) {
-            Some(lat) => lat,
-            None => return,
+        let Ok(speed_knots) = fields[7].parse::<f32>() else {
+            return;
         };
-
-        let lon = match parse_coordinate(fields[5], fields[6]) {
-            Some(lon) => lon,
-            None => return,
+        if !speed_knots.is_finite() || speed_knots < 0.0 {
+            return;
+        }
+        let speed = speed_knots * 0.514444;
+        let course = if fields[8].is_empty() && speed < 0.5 {
+            0.0 // Course is undefined at rest; speed gating prevents a crossing.
+        } else {
+            let Ok(deg) = fields[8].parse::<f32>() else {
+                return;
+            };
+            if !deg.is_finite() || !(0.0..=360.0).contains(&deg) {
+                return;
+            }
+            deg.to_radians()
         };
-
-        if let Ok(speed_knots) = fields[7].parse::<f32>() {
-            self.last_fix.speed = speed_knots * 0.514444; // knots to m/s
-        }
-
-        if let Ok(course_deg) = fields[8].parse::<f32>() {
-            self.last_fix.course = course_deg * (core::f32::consts::PI / 180.0);
-        }
-
-        // Warmup: average first N fixes for reference point
+        self.last_fix.hour = h;
+        self.last_fix.minute = m;
+        self.last_fix.second = sec;
+        self.last_fix.lat = lat;
+        self.last_fix.lon = lon;
+        self.last_fix.speed = speed;
+        self.last_fix.course = course;
         if !self.reference.set {
             self.warmup_count += 1;
             self.warmup_lat_sum += lat;
             self.warmup_lon_sum += lon;
-
             if self.warmup_count >= self.warmup_fixes {
                 self.reference.lat = self.warmup_lat_sum / self.warmup_count as f64;
                 self.reference.lon = self.warmup_lon_sum / self.warmup_count as f64;
                 self.reference.set = true;
-
                 self.last_valid_lat = lat;
                 self.last_valid_lon = lon;
             }
-
-            self.last_fix.valid = false;
             return;
         }
-
-        self.last_fix.lat = lat;
-        self.last_fix.lon = lon;
         self.last_fix.valid = true;
         self.new_fix_available = true;
-    }
-
-    #[cfg(not(any(test, feature = "std")))]
-    fn parse_rmc(&mut self, line: &str) {
-        // Manual field parsing without Vec allocation
-        let mut field_idx = 0;
-        let mut field_start = 0;
-        let mut fields: [&str; 12] = [""; 12];
-
-        for (i, &byte) in line.as_bytes().iter().enumerate() {
-            if byte == b',' || i == line.len() - 1 {
-                if field_idx < 12 {
-                    let end = if byte == b',' { i } else { i + 1 };
-                    fields[field_idx] = &line[field_start..end];
-                    field_idx += 1;
-                }
-                field_start = i + 1;
-            }
-        }
-
-        if field_idx < 10 {
-            return;
-        }
-
-        // Parse time (field 1)
-        if let Some((h, m, s)) = parse_time(fields[1]) {
-            self.last_fix.hour = h;
-            self.last_fix.minute = m;
-            self.last_fix.second = s;
-        }
-
-        // Parse latitude (fields 3, 4)
-        let lat = match parse_coordinate(fields[3], fields[4]) {
-            Some(lat) => lat,
-            None => {
-                self.last_fix.valid = false;
-                return;
-            }
-        };
-
-        // Parse longitude (fields 5, 6)
-        let lon = match parse_coordinate(fields[5], fields[6]) {
-            Some(lon) => lon,
-            None => {
-                self.last_fix.valid = false;
-                return;
-            }
-        };
-
-        // SANITY CHECK: Reject obviously invalid coordinates
-        if lat.abs() < 0.0001 && lon.abs() < 0.0001 {
-            // GPS hasn't locked yet, coords are ~(0,0)
-            self.last_fix.valid = false;
-            return;
-        }
-
-        // Parse speed (field 7) - knots to m/s
-        if let Ok(speed_knots) = parse_f32(fields[7]) {
-            self.last_fix.speed = speed_knots * 0.514444;
-        }
-
-        // Parse course (field 8) - degrees to radians
-        if let Ok(course_deg) = parse_f32(fields[8]) {
-            self.last_fix.course = course_deg * (core::f32::consts::PI / 180.0);
-        }
-
-        // Store lat/lon even if fix is invalid (for telemetry)
-        self.last_fix.lat = lat;
-        self.last_fix.lon = lon;
-
-        // Warmup: average first N fixes for reference
-        // ONLY accumulate if we have reasonable coordinates
-        if !self.reference.set && lat.abs() > 0.01 && lon.abs() > 0.01 {
-            self.warmup_count += 1;
-            self.warmup_lat_sum += lat;
-            self.warmup_lon_sum += lon;
-
-            if self.warmup_count >= self.warmup_fixes {
-                self.reference.lat = self.warmup_lat_sum / self.warmup_count as f64;
-                self.reference.lon = self.warmup_lon_sum / self.warmup_count as f64;
-                self.reference.set = true;
-                self.last_valid_lat = lat;
-                self.last_valid_lon = lon;
-            }
-        }
-
-        // Field 2: Status (A = valid, V = invalid)
-        if fields[2] == "A" {
-            self.last_fix.valid = true;
-            self.new_fix_available = true;
-        } else {
-            self.last_fix.valid = false;
-        }
     }
 }
 
@@ -749,12 +661,21 @@ fn parse_coordinate(coord_str: &str, dir_str: &str) -> Option<f64> {
         return None;
     }
 
-    // Parse f64 manually (no std::parse available in no_std)
-    let value = parse_f64(coord_str)?;
-
+    let value = coord_str.parse::<f64>().ok()?;
+    if !value.is_finite() || value < 0.0 {
+        return None;
+    }
     let degrees = floor(value / 100.0);
     let minutes = value - (degrees * 100.0);
     let mut decimal = degrees + (minutes / 60.0);
+    let limit = match dir_str {
+        "N" | "S" => 90.0,
+        "E" | "W" => 180.0,
+        _ => return None,
+    };
+    if minutes >= 60.0 || decimal > limit {
+        return None;
+    }
 
     if dir_str == "S" || dir_str == "W" {
         decimal = -decimal;
@@ -763,47 +684,10 @@ fn parse_coordinate(coord_str: &str, dir_str: &str) -> Option<f64> {
     Some(decimal)
 }
 
-// Add f64 parser
-#[cfg(not(any(test, feature = "std")))]
-fn parse_f64(s: &str) -> Option<f64> {
-    if s.is_empty() {
-        return None;
-    }
-
-    let mut result = 0.0f64;
-    let mut after_decimal = false;
-    let mut decimal_divisor = 1.0f64;
-    let mut negative = false;
-
-    for &byte in s.as_bytes() {
-        match byte {
-            b'-' => negative = true,
-            b'0'..=b'9' => {
-                let digit = (byte - b'0') as f64;
-                if after_decimal {
-                    decimal_divisor *= 10.0;
-                    result += digit / decimal_divisor;
-                } else {
-                    result = result * 10.0 + digit;
-                }
-            }
-            b'.' => after_decimal = true,
-            _ => return None,
-        }
-    }
-
-    Some(if negative { -result } else { result })
-}
-
-#[cfg(any(test, feature = "std"))]
-fn parse_f64(s: &str) -> Option<f64> {
-    s.parse::<f64>().ok()
-}
-
 /// Parse NMEA time field (hhmmss.ss format)
 #[allow(dead_code)] // Helper function for future use
 fn parse_time(time_str: &str) -> Option<(u8, u8, u8)> {
-    if time_str.len() < 6 {
+    if time_str.len() < 6 || !time_str.is_ascii() {
         return None;
     }
 
@@ -811,6 +695,9 @@ fn parse_time(time_str: &str) -> Option<(u8, u8, u8)> {
     let mm = time_str[2..4].parse::<u8>().ok()?;
     let ss = time_str[4..6].parse::<u8>().ok()?;
 
+    if hh > 23 || mm > 59 || ss > 60 {
+        return None;
+    }
     Some((hh, mm, ss))
 }
 
@@ -861,6 +748,31 @@ fn validate_nmea_checksum(line: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn invalid_rmc_cannot_reuse_previous_motion_or_advance_warmup() {
+        let mut parser = NmeaParser::with_warmup_fixes(1);
+        parser.parse_rmc("$GPRMC,123519,V,4807.038,N,01131.000,E,20,90,230394");
+        assert!(!parser.is_warmed_up());
+        let good = "$GPRMC,123519,A,4807.038,N,01131.000,E,20,90,230394";
+        parser.parse_rmc(good);
+        parser.parse_rmc(good);
+        assert!(parser.take_new_fix());
+        for bad in [",NaN,90,", ",20,,", ",20,NaN,"] {
+            parser.parse_rmc(&good.replace(",20,90,", bad));
+            assert!(!parser.last_fix().valid);
+            assert!(!parser.take_new_fix());
+        }
+    }
+
+    #[test]
+    fn coordinates_reject_invalid_minutes_and_hemispheres() {
+        assert_eq!(parse_coordinate("3761.0", "N"), None);
+        assert_eq!(parse_coordinate("9100.0", "N"), None);
+        assert_eq!(parse_coordinate("3720.0", "Q"), None);
+        assert_eq!(parse_coordinate("NaN", "N"), None);
+        assert_eq!(parse_coordinate("0000.0", "N"), Some(0.0));
+    }
 
     #[test]
     fn test_parse_coordinate() {

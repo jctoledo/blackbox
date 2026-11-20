@@ -43,10 +43,14 @@ pub struct SensorManager {
 }
 
 impl SensorManager {
-    pub fn new(imu_uart: UartDriver<'static>, gps_uart: UartDriver<'static>) -> Self {
+    pub fn new(
+        imu_uart: UartDriver<'static>,
+        gps_uart: UartDriver<'static>,
+        warmup_fixes: u8,
+    ) -> Self {
         Self {
             imu_parser: Wt901Parser::new(),
-            gps_parser: NmeaParser::new(),
+            gps_parser: NmeaParser::with_warmup_fixes(warmup_fixes),
             imu_uart,
             gps_uart,
             last_imu_us: unsafe { esp_idf_svc::sys::esp_timer_get_time() as u64 },
@@ -512,6 +516,7 @@ pub struct StatusManager {
     led: RgbLed,
     gps_was_locked: bool,
     last_gps_status_ms: u32,
+    connectivity: (bool, bool),
 }
 
 impl StatusManager {
@@ -520,6 +525,7 @@ impl StatusManager {
             led,
             gps_was_locked: false,
             last_gps_status_ms: 0,
+            connectivity: (true, true),
         }
     }
 
@@ -545,7 +551,7 @@ impl StatusManager {
         }
 
         // Periodic status updates
-        if !gps_locked && now_ms - self.last_gps_status_ms >= 5000 {
+        if !gps_locked && now_ms.wrapping_sub(self.last_gps_status_ms) >= 5000 {
             if let Some(ref mut mqtt_client) = mqtt {
                 if !gps_warmed_up {
                     mqtt_client.publish_status("waiting_gps", None).ok();
@@ -559,9 +565,17 @@ impl StatusManager {
         self.gps_was_locked = gps_locked;
     }
 
-    /// Update LED display
+    pub fn set_connectivity(&mut self, wifi: bool, mqtt: bool) {
+        self.connectivity = (wifi, mqtt);
+    }
+
+    /// Update LED display without sleeping in the sensor loop.
     pub fn update_led(&mut self, gps_locked: bool, now_ms: u32) {
-        if gps_locked {
+        if !self.connectivity.0 && now_ms % 1000 < 200 {
+            self.led.orange().ok();
+        } else if !self.connectivity.1 && now_ms % 1000 < 200 {
+            self.led.red().ok();
+        } else if gps_locked {
             if now_ms % 2000 < 100 {
                 self.led.cyan().ok();
             } else {

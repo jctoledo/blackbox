@@ -1,37 +1,46 @@
-# Blackbox - ESP32 Vehicle Telemetry System
+# Blackbox
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Rust](https://img.shields.io/badge/rust-1.75%2B-orange.svg)](https://www.rust-lang.org/)
-[![ESP32-C3](https://img.shields.io/badge/platform-ESP32--C3-blue.svg)](https://www.espressif.com/)
+**Understand your drive. Own the instrument.**
 
-Real-time GPS + IMU sensor fusion for vehicle dynamics. Track position, velocity, acceleration, and driving modes on $50 hardware. Built-in mobile dashboard with lap timer.
+Blackbox is an open-source ESP32-C3 telemetry project: GPS and inertial sensing, a live G-meter, circuit and stage timing, and a phone-friendly dashboard served directly over local Wi-Fi. Rust firmware, inspectable maths, and browser-local recordings—no cloud account required.
 
-**What you get:**
-- Live G-meter with mode detection (idle, accel, brake, corner)
-- Lap timer with delta-to-best display
-- 20-30 Hz telemetry streaming over WiFi
-- Works standalone — no phone app or internet needed
+[Project website & USB installer](https://jctoledo.github.io/blackbox/) · [Lap timer guide](docs/LAP_TIMER.md) · [Sensor fusion](docs/SENSOR_FUSION.md) · [Review & validation](docs/REVIEW.md)
 
-**Documentation:** [Lap Timer Guide](docs/LAP_TIMER.md) · [Sensor Fusion Guide](docs/SENSOR_FUSION.md) · [Flash Partition](docs/PARTITION_SIZE_ISSUES.md)
+[![License: MIT](https://img.shields.io/badge/License-MIT-3b6b3b.svg)](LICENSE)
+[![Host regressions](https://github.com/jctoledo/blackbox/actions/workflows/host-tests.yml/badge.svg)](https://github.com/jctoledo/blackbox/actions/workflows/host-tests.yml)
 
----
+### What it does
+
+- Shows speed, longitudinal/lateral acceleration, driving mode, and sensor health.
+- Records circuits or point-to-point stages and arms direction-aware GPS start/finish lines.
+- Interpolates crossings between fresh fixes; preserves completed lap results across missed browser polls.
+- Records telemetry in the browser and exports CSV; streams binary v4 telemetry to desktop tools.
+
+### Project status
+
+Active development. Automated physics, crossing replay, protocol, and browser regressions cover known failures; they do not establish real-world timing accuracy. The published firmware release can lag `main`. Read the release notes and choose the GPS model/rate that matches your hardware. The current estimator uses a diagonal covariance approximation; it is not a navigation-grade full covariance EKF.
 
 ## Quick Start
 
-### Option A: Flash from Browser (Easiest)
+### Option A: Flash a published release from your browser
 
 1. Go to **https://jctoledo.github.io/blackbox/**
 2. Connect ESP32-C3 via USB
-3. Click **Connect Device** → select port → **Flash Firmware**
+3. Select Blackbox and wait for the firmware checksum to verify.
+4. Click **Connect device**, select the ESP32-C3 port, then **Flash firmware**.
+5. Press RESET or reconnect USB after installation.
 
-*Requires Chrome, Edge, or Opera. Hold BOOT button if device isn't detected.*
+The installer writes a complete merged image at address `0x0`, including the device configuration area. It does not erase recordings stored in your browser. The download is served by this project’s Pages site, with SHA-256 verification before writing.
+
+*Use desktop Chrome or Edge with Web Serial. If connection times out: hold BOOT, tap RESET, release BOOT, and retry. Close other serial monitors. See the release notes before installing.*
 
 ### Option B: Build from Source
 
 ```bash
 # Install toolchain (one-time)
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-cargo install espup cargo-espflash
+cargo +stable install espup ldproxy --locked
+cargo +stable install cargo-espflash espflash --version 4.7.0 --locked
 espup install
 
 # Build and flash
@@ -47,22 +56,24 @@ First build takes 10-20 minutes. See [Build Guide](#building-from-source) for de
 1. Power on device → creates WiFi network **"Blackbox"**
 2. Connect your phone (password: `blackbox123`)
 3. Open browser → go to `192.168.71.1`
-4. Drive!
+4. Keep the unit still through calibration, then wait for a fresh GPS fix outdoors.
+5. Select or record a track to arm timing. Cross its finite start line in the recorded direction; check the displayed state before a timed run.
 
 ---
 
 ## Hardware
 
-### Required Components (~$50-100)
+### Required components
 
-| Component | Price | Notes |
-|-----------|-------|-------|
-| ESP32-C3 DevKit | $5 | Any C3 dev board works |
-| WT901 IMU | $25 | 9-axis, configurable to 200Hz |
-| GPS Module | $15-75 | NEO-6M (budget) or NEO-M9N (recommended) |
-| Wires + USB | $5 | — |
+| Component | Role / compatibility |
+|-----------|----------------------|
+| ESP32-C3 development board | Controller and Wi-Fi; check the GPIO mapping below against your board |
+| WT901 UART IMU | Acceleration, angular rate, and orientation; configure output rate and baud rate |
+| u-blox NEO-6M or NEO-M9N | GPS; match the firmware build configuration to the receiver |
+| WS2812 status LED | GPIO8 in this wiring; some boards include one |
+| USB power and wiring | Use suitable voltage levels for your specific breakouts |
 
-**GPS Choice:** NEO-M9N ($75) provides 25Hz updates and better accuracy. Worth it for serious use. NEO-6M ($15) works fine for learning.
+NEO-M9N supports up to 25 Hz, but that is an update-rate specification, not a lap-accuracy guarantee. Verify actual rates in Diagnostics. Parts prices and breakout-board capabilities vary.
 
 ### Wiring
 
@@ -206,7 +217,8 @@ sudo apt-get install -y git wget flex bison gperf python3 python3-pip \
   python3-venv cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0
 
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-cargo install espup cargo-espflash
+cargo +stable install espup ldproxy --locked
+cargo +stable install cargo-espflash espflash --version 4.7.0 --locked
 espup install
 rustup component add rust-src --toolchain esp
 ```
@@ -215,7 +227,8 @@ rustup component add rust-src --toolchain esp
 ```bash
 brew install cmake ninja dfu-util
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-cargo install espup cargo-espflash
+cargo +stable install espup ldproxy --locked
+cargo +stable install cargo-espflash espflash --version 4.7.0 --locked
 espup install
 rustup component add rust-src --toolchain esp
 ```
@@ -223,7 +236,8 @@ rustup component add rust-src --toolchain esp
 **Windows:**
 1. Install Visual Studio Build Tools, Python 3, Git
 2. Install Rust via rustup-init.exe
-3. Run: `cargo install espup cargo-espflash && espup install`
+3. Run: `cargo +stable install espup ldproxy --locked
+cargo +stable install cargo-espflash espflash --version 4.7.0 --locked && espup install`
 
 </details>
 
@@ -235,7 +249,7 @@ After cloning, run the partition setup script to configure paths for your machin
 ./scripts/setup-partition.sh
 ```
 
-This is required because the ESP-IDF build system needs absolute paths. See [Flash Partition](docs/PARTITION_SIZE_ISSUES.md) for details.
+This is required because the ESP-IDF build system needs absolute paths. See [Validation](docs/REVIEW.md) for details.
 
 ### Build Commands
 
@@ -364,13 +378,13 @@ Higher Q = trust sensors more. Higher R = trust sensors less.
 
 ### How Sensor Fusion Works
 
-The system combines fast IMU (200Hz) with accurate GPS (5-25Hz):
+The system combines configured IMU output (up to 200 Hz) with GPS fixes (typically 5 Hz for NEO-6M or 25 Hz for NEO-M9N). Actual processing and reception rates must be measured:
 
-1. **Predict** — IMU accelerations update position/velocity 200×/sec
-2. **Correct** — GPS fixes correct drift 5-25×/sec
+1. **Predict** — available IMU samples advance earth-frame position and velocity; UART batches can coalesce samples
+2. **Correct** — each new valid GPS fix updates position and velocity once
 3. **ZUPT** — When stopped, velocity forced to zero, biases learned
 
-**7-State Kalman Filter:** Position (x,y), heading, velocity (vx,vy), accelerometer biases (bax,bay)
+**7-state estimator with diagonal covariance:** Position (x,y), heading, velocity (vx,vy), accelerometer biases (bax,bay)
 
 ### Data Flow
 
