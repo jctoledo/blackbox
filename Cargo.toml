@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "tools/firmware-host-tests",
     "framework",           # motorsport-telemetry crate
     "drivers/wt901",       # WT901 IMU driver
     "drivers/ublox-gps",   # u-blox GPS driver (NEO-6M, NEO-M9N, etc.)

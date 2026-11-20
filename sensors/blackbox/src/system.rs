@@ -39,18 +39,36 @@ pub struct SensorManager {
     gps_uart: UartDriver<'static>,
     last_imu_us: u64,
     stationary_count: u32,
+    last_gps_fix_ms: Option<u32>,
 }
 
 impl SensorManager {
-    pub fn new(imu_uart: UartDriver<'static>, gps_uart: UartDriver<'static>) -> Self {
+    pub fn new(
+        imu_uart: UartDriver<'static>,
+        gps_uart: UartDriver<'static>,
+        warmup_fixes: u8,
+    ) -> Self {
         Self {
             imu_parser: Wt901Parser::new(),
-            gps_parser: NmeaParser::new(),
+            gps_parser: NmeaParser::with_warmup_fixes(warmup_fixes),
             imu_uart,
             gps_uart,
             last_imu_us: unsafe { esp_idf_svc::sys::esp_timer_get_time() as u64 },
             stationary_count: 0,
+            last_gps_fix_ms: None,
         }
+    }
+
+    pub fn record_gps_fix(&mut self, now_ms: u32) {
+        self.last_gps_fix_ms = Some(now_ms);
+    }
+
+    pub fn gps_age_ms(&self, now_ms: u32) -> Option<u32> {
+        self.last_gps_fix_ms.map(|t| now_ms.wrapping_sub(t))
+    }
+
+    pub fn gps_is_fresh(&self, now_ms: u32) -> bool {
+        self.gps_parser.last_fix().valid && self.gps_age_ms(now_ms).is_some_and(|age| age <= 1500)
     }
 
     /// Get IMU data (convenience method)
@@ -112,7 +130,12 @@ impl SensorManager {
         // Keep LED on during calibration (solid yellow)
         led.yellow().ok();
 
+        let started_us = unsafe { esp_idf_svc::sys::esp_timer_get_time() };
         while !calibrator.is_complete() {
+            if unsafe { esp_idf_svc::sys::esp_timer_get_time() } - started_us > 30_000_000 {
+                led.set_low().ok();
+                return Err(SystemError::CalibrationFailed);
+            }
             if self.imu_uart.read(&mut buf, 0).unwrap_or(0) > 0 {
                 let timestamp_us = unsafe { esp_idf_svc::sys::esp_timer_get_time() as u64 };
                 if let Some(packet_type) = self.imu_parser.feed_byte(buf[0], timestamp_us) {
@@ -136,6 +159,8 @@ impl SensorManager {
                         }
                     }
                 }
+            } else {
+                FreeRtos::delay_ms(1);
             }
         }
 
@@ -219,26 +244,25 @@ impl SensorManager {
         new_fix
     }
 
-    /// Check if vehicle is stationary
-    pub fn is_stationary(&mut self, ax: f32, ay: f32, wz: f32) -> bool {
-        const ACC_THR: f32 = 0.18 * 9.80665;
-        const WZ_THR: f32 = 12.0 * 0.017453293;
-        const GPS_SPEED_THR: f32 = 3.5;
-        const POS_SPEED_THR: f32 = 5.0;
-
-        let low_inertial = ax.abs() < ACC_THR && ay.abs() < ACC_THR && wz.abs() < WZ_THR;
-        let low_speed = self.gps_parser.last_fix().speed < GPS_SPEED_THR
-            && self.gps_parser.position_based_speed() < POS_SPEED_THR;
-
-        let stationary = low_inertial && low_speed;
-
-        if stationary {
-            self.stationary_count += 1;
+    /// Update once per new GPS fix; repeated telemetry polls are not new evidence.
+    pub fn update_stationary(&mut self, ax: f32, ay: f32, wz: f32, now_ms: u32) -> bool {
+        let stationary = self.gps_is_fresh(now_ms)
+            && sensor_fusion::stationary::stationary_candidate(
+                ax,
+                ay,
+                wz,
+                self.gps_parser.last_fix().speed,
+            );
+        self.stationary_count = if stationary {
+            self.stationary_count.saturating_add(1)
         } else {
-            self.stationary_count = 0;
-        }
+            0
+        };
+        self.is_stationary(now_ms)
+    }
 
-        stationary && self.stationary_count >= 5
+    pub fn is_stationary(&self, now_ms: u32) -> bool {
+        self.gps_is_fresh(now_ms) && self.stationary_count >= 5
     }
 }
 
@@ -342,7 +366,7 @@ impl TelemetryPublisher {
         estimator: &StateEstimator,
         sensor_fusion: &crate::fusion::SensorFusion,
         now_ms: u32,
-        lap_timer_data: Option<(u32, u16, u8)>,
+        lap_timer_data: Option<(&sensor_fusion::LapTimer, u8, u32)>,
     ) -> Result<(), SystemError> {
         // Get accelerations for display
         // lon: GPS-derived when fresh (no vibration), otherwise blended with heavy
@@ -398,7 +422,7 @@ impl TelemetryPublisher {
         packet.pos_sigma = estimator.ekf.get_effective_pos_sigma();
         packet.mode = estimator.mode_classifier.get_mode_u8();
 
-        if sensors.gps_parser.last_fix().valid {
+        if sensors.gps_is_fresh(now_ms) {
             packet.lat = sensors.gps_parser.last_fix().lat as f32;
             packet.lon = sensors.gps_parser.last_fix().lon as f32;
             packet.gps_valid = 1;
@@ -415,9 +439,9 @@ impl TelemetryPublisher {
         }
 
         // Add lap timer data if available
-        if let Some((lap_time_ms, lap_count, lap_flags)) = lap_timer_data {
-            packet.lap_time_ms = lap_time_ms;
-            packet.lap_count = lap_count;
+        if let Some((timer, lap_flags, _)) = lap_timer_data {
+            packet.lap_time_ms = timer.current_lap_ms();
+            packet.lap_count = timer.lap_count();
             packet.lap_flags = lap_flags;
         }
 
@@ -436,7 +460,22 @@ impl TelemetryPublisher {
 
         // Update HTTP server state if available (AP mode)
         if let Some(ref http_state) = self.http_state {
-            http_state.update_telemetry(bytes);
+            let fix = sensors.gps_parser.last_fix();
+            let status = crate::websocket_server::TimingTelemetry {
+                revision: lap_timer_data.map_or(0, |(_, _, revision)| revision),
+                state: lap_timer_data.map_or("idle", |(timer, _, _)| match timer.state() {
+                    sensor_fusion::LapTimerState::Idle => "idle",
+                    sensor_fusion::LapTimerState::Armed => "armed",
+                    sensor_fusion::LapTimerState::Timing => "timing",
+                }),
+                last_lap_ms: lap_timer_data.and_then(|(timer, _, _)| timer.last_lap_ms()),
+                best_lap_ms: lap_timer_data.and_then(|(timer, _, _)| timer.best_lap_ms()),
+                lat: fix.lat,
+                lon: fix.lon,
+                gps_valid: sensors.gps_is_fresh(now_ms),
+                gps_age_ms: sensors.gps_age_ms(now_ms),
+            };
+            http_state.update_telemetry(bytes, status);
             sent = true;
         }
 
@@ -477,6 +516,7 @@ pub struct StatusManager {
     led: RgbLed,
     gps_was_locked: bool,
     last_gps_status_ms: u32,
+    connectivity: (bool, bool),
 }
 
 impl StatusManager {
@@ -485,6 +525,7 @@ impl StatusManager {
             led,
             gps_was_locked: false,
             last_gps_status_ms: 0,
+            connectivity: (true, true),
         }
     }
 
@@ -510,7 +551,7 @@ impl StatusManager {
         }
 
         // Periodic status updates
-        if !gps_locked && now_ms - self.last_gps_status_ms >= 5000 {
+        if !gps_locked && now_ms.wrapping_sub(self.last_gps_status_ms) >= 5000 {
             if let Some(ref mut mqtt_client) = mqtt {
                 if !gps_warmed_up {
                     mqtt_client.publish_status("waiting_gps", None).ok();
@@ -524,9 +565,17 @@ impl StatusManager {
         self.gps_was_locked = gps_locked;
     }
 
-    /// Update LED display
+    pub fn set_connectivity(&mut self, wifi: bool, mqtt: bool) {
+        self.connectivity = (wifi, mqtt);
+    }
+
+    /// Update LED display without sleeping in the sensor loop.
     pub fn update_led(&mut self, gps_locked: bool, now_ms: u32) {
-        if gps_locked {
+        if !self.connectivity.0 && now_ms % 1000 < 200 {
+            self.led.orange().ok();
+        } else if !self.connectivity.1 && now_ms % 1000 < 200 {
+            self.led.red().ok();
+        } else if gps_locked {
             if now_ms % 2000 < 100 {
                 self.led.cyan().ok();
             } else {

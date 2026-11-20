@@ -10,6 +10,7 @@ mod mode;
 mod mqtt;
 mod rgb_led;
 mod system;
+mod telemetry_http;
 mod udp_stream;
 mod websocket_server;
 mod wifi;
@@ -426,7 +427,7 @@ fn main() {
     }
 
     // Create sensor manager
-    let mut sensors = SensorManager::new(imu_uart, gps_uart);
+    let mut sensors = SensorManager::new(imu_uart, gps_uart, config.gps.warmup_fixes);
 
     // Calibrate IMU
     if let Some(ref mut mqtt) = mqtt_opt {
@@ -449,6 +450,8 @@ fn main() {
 
     // Create lap timer (configured via HTTP API)
     let mut lap_timer = LapTimer::new();
+    let mut pending_lap_flags = 0u8;
+    let mut lap_revision = 0u32;
 
     // Create sensor fusion for mode detection
     //
@@ -536,18 +539,13 @@ fn main() {
                     s.acc_thr, s.acc_exit, s.brake_thr, s.brake_exit, s.lat_thr, s.lat_exit, s.yaw_thr, s.min_speed
                 );
 
-                // Visual confirmation: 3 green-white alternating flashes
-                for _ in 0..3 {
-                    status_mgr.led_mut().green().unwrap();
-                    FreeRtos::delay_ms(80);
-                    status_mgr.led_mut().white().unwrap();
-                    FreeRtos::delay_ms(80);
-                }
-                status_mgr.led_mut().set_low().unwrap();
+                // The regular LED task provides feedback without blocking sensor reads.
             }
 
             // Check for lap timer config changes from web UI
-            if let Some(config) = state.take_lap_timer_config() {
+            if let Some((revision, config)) = state.take_lap_timer_config() {
+                lap_revision = revision;
+                pending_lap_flags = 0;
                 match config {
                     LapTimerConfig::None => {
                         lap_timer.clear();
@@ -594,7 +592,7 @@ fn main() {
         }
 
         // Periodic diagnostics (serial log every 5s)
-        if now_ms - last_heap_check_ms >= 5000 {
+        if now_ms.wrapping_sub(last_heap_check_ms) >= 5000 {
             let free_heap = unsafe { esp_idf_svc::sys::esp_get_free_heap_size() };
             let (telem_count, fail_count) = publisher.get_stats();
             let telem_rate = telem_count / 5;
@@ -644,39 +642,15 @@ fn main() {
 
         // Connectivity check every 5 seconds (Station mode only)
         // In AP mode, we ARE the access point so connectivity checks don't apply
-        if !is_ap_mode && now_ms - last_connectivity_check_ms >= 5000 {
+        if !is_ap_mode && now_ms.wrapping_sub(last_connectivity_check_ms) >= 5000 {
             let wifi_connected = wifi.is_connected();
             let mqtt_connected = publisher
                 .mqtt_client_mut()
                 .map(|m| m.is_connected())
                 .unwrap_or(false);
 
-            // Blink while WiFi is disconnected (more critical - check first)
-            if !wifi_connected {
-                if was_wifi_connected {
-                    info!("WiFi connection lost!");
-                }
-                // 3 orange blinks for WiFi down
-                for _ in 0..3 {
-                    status_mgr.led_mut().orange().unwrap();
-                    FreeRtos::delay_ms(150);
-                    status_mgr.led_mut().set_low().unwrap();
-                    FreeRtos::delay_ms(150);
-                }
-            }
-            // Blink while MQTT is disconnected (only if WiFi is up)
-            else if !mqtt_connected {
-                if was_mqtt_connected {
-                    info!("MQTT connection lost!");
-                }
-                // 2 red blinks for MQTT down
-                for _ in 0..2 {
-                    status_mgr.led_mut().red().unwrap();
-                    FreeRtos::delay_ms(150);
-                    status_mgr.led_mut().set_low().unwrap();
-                    FreeRtos::delay_ms(150);
-                }
-            }
+            // Connectivity feedback must never pause GPS/IMU processing.
+            status_mgr.set_connectivity(wifi_connected, mqtt_connected);
 
             // Log connectivity status changes
             if was_wifi_connected != wifi_connected || was_mqtt_connected != mqtt_connected {
@@ -693,7 +667,7 @@ fn main() {
 
         // MQTT diagnostics (every 30s - low priority, LED handles connectivity
         // feedback)
-        if now_ms - last_mqtt_diag_ms >= 30000 {
+        if now_ms.wrapping_sub(last_mqtt_diag_ms) >= 30000 {
             if let Some(mqtt) = publisher.mqtt_client_mut() {
                 let (ekf_x, ekf_y) = estimator.ekf.position();
                 let gps_warmed = sensors.gps_parser.is_warmed_up();
@@ -767,7 +741,20 @@ fn main() {
             // (not on every GGA/GSA sentence while last_fix.valid is still true)
             let is_new_fix = sensors.gps_parser.take_new_fix();
             if is_new_fix {
+                sensors.record_gps_fix(now_ms);
                 diagnostics.record_gps_fix();
+            }
+
+            // Use each fresh GPS fix, with velocity from the same receiver/frame.
+            // EKF heading lag must not reject a real GPS timing-line crossing.
+            if is_new_fix && sensors.gps_parser.is_warmed_up() {
+                let fix = sensors.gps_parser.last_fix();
+                if let Some(velocity) = sensors.gps_parser.get_velocity_enu() {
+                    pending_lap_flags |=
+                        lap_timer.update(fix.lat, fix.lon, velocity, now_ms, fix.speed);
+                }
+            } else if !sensors.gps_parser.last_fix().valid {
+                lap_timer.invalidate_fix();
             }
 
             // ALWAYS feed GPS speed to sensor fusion when we have a new fix
@@ -789,8 +776,11 @@ fn main() {
 
             // Check if warmup complete (has reference point) AND fix is valid for EKF
             // updates
-            if sensors.gps_parser.is_warmed_up() && sensors.gps_parser.last_fix().valid {
-                let (ax_corr, ay_corr, _) = sensors.imu_parser.get_accel_corrected();
+            if is_new_fix
+                && sensors.gps_parser.is_warmed_up()
+                && sensors.gps_parser.last_fix().valid
+            {
+                let (ax_corr, ay_corr, az_corr) = sensors.imu_parser.get_accel_corrected();
 
                 // Always update position from GPS first (even when stationary)
                 // This prevents EKF from diverging during extended stops
@@ -803,7 +793,13 @@ fn main() {
                 }
 
                 // Check stationary FIRST - if stopped, lock position to prevent GPS noise
-                if sensors.is_stationary(ax_corr, ay_corr, sensors.imu_parser.data().wz) {
+                let stationary = sensors.update_stationary(
+                    ax_corr,
+                    ay_corr,
+                    sensors.imu_parser.data().wz,
+                    now_ms,
+                );
+                if stationary {
                     // Vehicle stopped - perform ZUPT and bias estimation
                     estimator.zupt();
                     estimator.ekf.lock_position(); // Reduce position covariance
@@ -812,17 +808,17 @@ fn main() {
                     estimator.ekf.lock_yaw();
                     diagnostics.record_zupt();
 
-                    let (ax_b, ay_b, _) = remove_gravity(
+                    let (ax_b, ay_b, az_b) = remove_gravity(
                         ax_corr,
                         ay_corr,
-                        sensors.imu_parser.data().az,
+                        az_corr,
                         sensors.imu_parser.data().roll,
                         sensors.imu_parser.data().pitch,
                     );
                     let (ax_e, ay_e) = body_to_earth(
                         ax_b,
                         ay_b,
-                        0.0,
+                        az_b,
                         sensors.imu_parser.data().roll,
                         sensors.imu_parser.data().pitch,
                         estimator.ekf.yaw(),
@@ -835,33 +831,19 @@ fn main() {
                     estimator
                         .ekf
                         .store_moving_yaw(sensor_fusion.get_aligned_heading());
-                    // Moving - update position from GPS (only when fix is valid)
-                    if let Some((x, y)) = sensors.gps_parser.to_local_coords() {
-                        // Sanity check: reject extreme position jumps (> 1000m)
-                        // This catches corrupt GPS data that passes checksum (rare but possible)
-                        // Normal driving: max 42 m/s (150 km/h) × 0.04s = 1.7m between 25Hz fixes
-                        let (ekf_x, ekf_y) = estimator.ekf.position();
-                        let jump_dist = ((x - ekf_x).powi(2) + (y - ekf_y).powi(2)).sqrt();
-
-                        if jump_dist < 1000.0 {
-                            estimator.update_position(x, y);
-                        } else {
-                            // Log rejected update (uncomment for debugging)
-                            // info!("GPS rejected: jump={:.0}m,
-                            // gps=({:.1},{:.1}), ekf=({:.1},{:.1})",
-                            //       jump_dist, x, y, ekf_x, ekf_y);
-                        }
-                    }
                 }
 
                 // Update EKF with velocity components (requires full validity)
-                if let Some((vx, vy)) = sensors.gps_parser.get_velocity_enu() {
+                if let Some((vx, vy)) = sensors
+                    .gps_parser
+                    .get_velocity_enu()
+                    .filter(|_| !stationary)
+                {
                     let speed = (vx * vx + vy * vy).sqrt();
                     // Sanity check: reject extreme velocities (> 100 m/s = 360 km/h)
                     // This catches NaN and corrupt GPS data
                     if speed < 100.0 && speed.is_finite() {
                         estimator.update_velocity(vx, vy);
-                        estimator.update_speed(speed);
                     }
                 }
             }
@@ -874,7 +856,7 @@ fn main() {
         }
 
         // Update GPS status
-        let gps_locked = sensors.gps_parser.is_warmed_up(); // Remove the .valid check
+        let gps_locked = sensors.gps_is_fresh(now_ms);
         status_mgr.update_gps_status(
             gps_locked,
             sensors.gps_parser.is_warmed_up(),
@@ -883,17 +865,21 @@ fn main() {
         );
 
         // Publish telemetry at configured rate
-        if now_ms - last_telemetry_ms >= config.telemetry.interval_ms {
+        if now_ms.wrapping_sub(last_telemetry_ms) >= config.telemetry.interval_ms {
             // Get current speed and check if stationary
             let speed = sensors.get_speed(Some(&estimator.ekf));
             let (ax_corr, ay_corr, az_corr) = sensors.imu_parser.get_accel_corrected();
-            let is_stationary =
-                sensors.is_stationary(ax_corr, ay_corr, sensors.imu_parser.data().wz);
+            let is_stationary = sensors.is_stationary(now_ms);
 
             // Process through sensor fusion (GPS-corrected orientation + blending)
             // Pass raw body-frame IMU data - fusion handles transforms with corrected
             // orientation
-            let dt = config.telemetry.interval_ms as f32 / 1000.0;
+            let dt = if last_telemetry_ms == 0 {
+                config.telemetry.interval_ms
+            } else {
+                now_ms.wrapping_sub(last_telemetry_ms)
+            } as f32
+                / 1000.0;
             let (lon_blended, lat_filtered) = sensor_fusion.process_imu(
                 ax_corr,                         // Raw body-frame X accel (bias-corrected)
                 ay_corr,                         // Raw body-frame Y accel (bias-corrected)
@@ -915,20 +901,20 @@ fn main() {
                 speed,
             );
 
-            // Update lap timer with GPS lat/lon and EKF velocity
-            // GPS lat/lon is session-independent, enabling timing lines to work across
-            // restarts
-            let gps_fix = sensors.gps_parser.last_fix();
-            let (ekf_vx, ekf_vy) = estimator.ekf.velocity();
-            let lap_flags =
-                lap_timer.update(gps_fix.lat, gps_fix.lon, (ekf_vx, ekf_vy), now_ms, speed);
-            let lap_timer_data =
-                Some((lap_timer.current_lap_ms(), lap_timer.lap_count(), lap_flags));
-
-            // Publish telemetry with tilt-corrected accelerations and lap timer data
+            if !sensors.gps_is_fresh(now_ms) {
+                lap_timer.invalidate_fix();
+            }
+            lap_timer.tick(now_ms);
             publisher
-                .publish_telemetry(&sensors, &estimator, &sensor_fusion, now_ms, lap_timer_data)
+                .publish_telemetry(
+                    &sensors,
+                    &estimator,
+                    &sensor_fusion,
+                    now_ms,
+                    Some((&lap_timer, pending_lap_flags, lap_revision)),
+                )
                 .ok();
+            pending_lap_flags = 0;
 
             // Update fusion diagnostics at telemetry rate for synchronized CSV export
             // This ensures fusion data (lon_imu, lon_gps, etc.) matches the telemetry

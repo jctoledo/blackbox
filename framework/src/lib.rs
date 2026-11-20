@@ -138,6 +138,7 @@ pub mod lap_timer;
 pub mod mode;
 pub mod sensor_framework;
 pub mod sensors;
+pub mod stationary;
 pub mod transforms;
 pub mod velocity;
 

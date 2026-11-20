@@ -2,7 +2,7 @@
 /// Reduces payload from ~300 bytes JSON to ~74 bytes binary
 /// Target: 20 Hz (50ms intervals) sustainable over MQTT
 ///
-/// Protocol Version: 2 (added lap timer fields)
+/// Protocol Version: 4 (GPS course and lap timer fields)
 use core::mem;
 
 /// Current protocol version
@@ -20,7 +20,7 @@ pub const PROTOCOL_VERSION: u8 = 4;
 #[repr(C, packed)]
 #[derive(Copy, Clone)]
 pub struct TelemetryPacket {
-    pub version: u8,       // Protocol version (2)
+    pub version: u8,       // Protocol version (4)
     pub header: u16,       // 0xAA55 magic
     pub timestamp_ms: u32, // milliseconds
 
@@ -43,7 +43,7 @@ pub struct TelemetryPacket {
     pub mode: u8,       // 0=IDLE, 1=ACCEL, 2=BRAKE, 4=CORNER, 5=ACCEL+CORNER, 6=BRAKE+CORNER
 
     // GPS data (13 bytes)
-    pub lat: f32, // degrees (f32 for size, ~1cm accuracy)
+    pub lat: f32, // degrees (compact f32; sub-meter quantization, not centimeter precision)
     pub lon: f32,
     pub gps_valid: u8,   // 0/1
     pub gps_course: f32, // Course over ground in radians (only valid when speed > ~1 m/s)
@@ -55,6 +55,12 @@ pub struct TelemetryPacket {
                            * 16=invalid */
 
     pub checksum: u16, // Simple checksum
+}
+
+impl Default for TelemetryPacket {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TelemetryPacket {
@@ -215,8 +221,8 @@ mod tests {
         packet.lap_count = 5;
         packet.lap_flags = 0x0F;
 
-        assert_eq!(packet.lap_time_ms, 65432);
-        assert_eq!(packet.lap_count, 5);
+        assert_eq!({ packet.lap_time_ms }, 65432);
+        assert_eq!({ packet.lap_count }, 5);
         assert_eq!(packet.lap_flags, 0x0F);
     }
 }

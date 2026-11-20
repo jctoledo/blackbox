@@ -4,7 +4,6 @@ on:
   push:
     tags:
       - "v*.*.*"
-  workflow_dispatch:  # Allow manual trigger
 
 permissions:
   contents: write
@@ -14,31 +13,39 @@ permissions:
 jobs:
   discover-projects:
     name: Discover Sensor Projects
-    runs-on: ubuntu-24.04
+    runs-on: [blackbox-lat]
     outputs:
       projects: ${{ steps.find-projects.outputs.projects }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Find all sensor projects
         id: find-projects
         run: |
           # Find all directories in sensors/ that have a project.json file
-          projects=$(find sensors -maxdepth 2 -name "project.json" -exec dirname {} \; | xargs -I {} basename {} | jq -R -s -c 'split("\n")[:-1]')
+          projects=$(python3 -c 'import json,pathlib; print(json.dumps(sorted(p.parent.name for p in pathlib.Path("sensors").glob("*/project.json"))))')
           echo "projects=$projects" >> $GITHUB_OUTPUT
           echo "Found projects: $projects"
 
   build-firmware:
     name: Build Firmware
     needs: discover-projects
-    runs-on: ubuntu-24.04
+    runs-on: [blackbox-lat]
     strategy:
       matrix:
         project: ${{ fromJson(needs.discover-projects.outputs.projects) }}
+        gps_model: [6m, m9n]
+    env:
+      GPS_MODEL: ${{ matrix.gps_model }}
+      GPS_RATE: ${{ matrix.gps_model == 'm9n' && '25' || '5' }}
     outputs:
       version: ${{ steps.get_version.outputs.VERSION }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Get version
         id: get_version
@@ -55,68 +62,54 @@ jobs:
           toolchain: nightly-2025-10-18
           components: rust-src
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
 
-      - name: Install ESP-IDF prerequisites
-        run: |
-          # Remove problematic Microsoft repos that sometimes return 403
-          sudo rm -f /etc/apt/sources.list.d/microsoft-prod.list /etc/apt/sources.list.d/azure-cli.list 2>/dev/null || true
-          sudo apt-get update
-          sudo apt-get install -y git wget flex bison gperf python3 python3-pip python3-venv cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0
-
-      - name: Install espup, cargo-espflash, espflash, and ldproxy
+      - name: Install pinned image packager and linker
         run: |
           rustup toolchain install stable --profile minimal
-          cargo +stable install espup ldproxy --locked
-          cargo +stable install cargo-espflash espflash --version 4.7.0 --locked
-
-      - name: Install ESP Rust toolchain
-        run: |
-          espup install
-          . $HOME/export-esp.sh
-          rustup component add rust-src --toolchain stable
+          command -v ldproxy >/dev/null || cargo +stable install ldproxy --locked
+          if ! espflash --version 2>/dev/null | grep -qx 'espflash 4.7.0'; then
+            cargo +stable install espflash --version 4.7.0 --locked
+          fi
 
       - name: Build firmware
         run: |
-          . $HOME/export-esp.sh
           cd sensors/${{ matrix.project }}
           cargo build --release --locked --target riscv32imc-esp-espidf
 
       - name: Generate flashable binary
         run: |
-          . $HOME/export-esp.sh
           cd sensors/${{ matrix.project }}
 
           # Create output directory
           mkdir -p ../../firmware-output
 
-          # Generate merged binary that can be flashed directly
-          # Note: cargo espflash save-image builds from the project, no input binary needed
-          # --partition-table is required for custom 2.5MB app partition
-          cargo espflash save-image \
-            --chip esp32c3 \
-            --merge \
+          # Full image: ESP32-C3 bootloader begins at address zero.
+          espflash save-image \
+            --chip esp32c3 --merge --flash-size 4mb \
+            --bootloader ../../target/riscv32imc-esp-espidf/release/bootloader.bin \
             --partition-table ../../partitions.csv \
-            --release \
-            ../../firmware-output/${{ matrix.project }}.bin
+            ../../target/riscv32imc-esp-espidf/release/blackbox \
+            ../../firmware-output/${{ matrix.project }}-${{ matrix.gps_model }}.bin
+          cd ../../firmware-output
+          sha256sum *.bin > SHA256SUMS-${{ matrix.gps_model }}.txt
 
       - name: Upload firmware artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: firmware-${{ matrix.project }}
-          path: firmware-output/${{ matrix.project }}.bin
+          name: firmware-${{ matrix.project }}-${{ matrix.gps_model }}
+          path: firmware-output/*
 
   create-release:
     name: Create GitHub Release
     needs: build-firmware
-    runs-on: ubuntu-24.04
+    runs-on: [blackbox-lat]
     outputs:
       upload_url: ${{ steps.create_release.outputs.upload_url }}
       version: ${{ needs.build-firmware.outputs.version }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Download all firmware artifacts
         uses: actions/download-artifact@v4
@@ -151,41 +144,8 @@ jobs:
           body_path: release-notes.md
           files: |
             firmware-artifacts/firmware-*/*.bin
+            firmware-artifacts/firmware-*/SHA256SUMS-*.txt
           draft: false
           prerelease: ${{ contains(needs.build-firmware.outputs.version, 'alpha') || contains(needs.build-firmware.outputs.version, 'beta') || contains(needs.build-firmware.outputs.version, 'rc') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  update-flasher:
-    name: Update Web Flasher
-    needs: [build-firmware, create-release]
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.11"
-
-      - name: Generate flasher configuration
-        env:
-          VERSION: ${{ needs.build-firmware.outputs.version }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          CI: true
-        run: |
-          python3 scripts/generate_flasher_config.py > docs/projects-config.js
-          echo "Generated docs/projects-config.js:"
-          cat docs/projects-config.js
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: 'docs'
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4

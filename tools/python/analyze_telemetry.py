@@ -29,9 +29,9 @@ def analyze_telemetry(filename):
     # Detect if we have fusion columns (new format)
     has_fusion = 'lon_imu' in rows[0] and 'lon_gps' in rows[0]
 
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"TELEMETRY ANALYSIS: {filename}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"Total samples: {len(rows)}")
     print(f"Format: {'Extended (with fusion diagnostics)' if has_fusion else 'Legacy'}")
     print()
@@ -43,8 +43,8 @@ def analyze_telemetry(filename):
     if intervals:
         avg_interval = statistics.mean(intervals)
         std_interval = statistics.stdev(intervals) if len(intervals) > 1 else 0
-        print(f"Sample rate: {1000/avg_interval:.1f} Hz (interval: {avg_interval:.0f}ms +/- {std_interval:.0f}ms)")
-        print(f"Duration: {(times[-1] - times[0])/1000:.1f} seconds")
+        print(f"Sample rate: {1000 / avg_interval:.1f} Hz (interval: {avg_interval:.0f}ms +/- {std_interval:.0f}ms)")
+        print(f"Duration: {(times[-1] - times[0]) / 1000:.1f} seconds")
     print()
 
     # === SPEED ANALYSIS ===
@@ -76,9 +76,9 @@ def analyze_telemetry(filename):
     near_zero = sum(1 for v in lon_g_vals if abs(v) < 0.05)
     positive = sum(1 for v in lon_g_vals if v >= 0.05)
     negative = sum(1 for v in lon_g_vals if v <= -0.05)
-    print(f"Distribution: negative={100*negative/len(rows):.0f}%, "
-          f"near-zero={100*near_zero/len(rows):.0f}%, "
-          f"positive={100*positive/len(rows):.0f}%")
+    print(f"Distribution: negative={100 * negative / len(rows):.0f}%, "
+          f"near-zero={100 * near_zero / len(rows):.0f}%, "
+          f"positive={100 * positive / len(rows):.0f}%")
 
     # Check for bias - compare when speed is stable
     stable_lon = []
@@ -118,7 +118,7 @@ def analyze_telemetry(filename):
             errors = [i - g for i, g in zip(imu_valid, gps_valid)]
             mean_error = statistics.mean(errors)
             std_error = statistics.stdev(errors)
-            print(f"IMU-GPS error: mean={mean_error:.3f} m/s² ({mean_error/9.81:.3f}g), "
+            print(f"IMU-GPS error: mean={mean_error:.3f} m/s² ({mean_error / 9.81:.3f}g), "
                   f"std={std_error:.3f} m/s²")
 
             # Correlation between IMU and GPS
@@ -197,7 +197,7 @@ def analyze_telemetry(filename):
     total_brake = modes.get(2, 0) + modes.get(6, 0)
     print(f"\n  Total ACCEL modes: {total_accel} ({100 * total_accel / total:.1f}%)")
     print(f"  Total BRAKE modes: {total_brake} ({100 * total_brake / total:.1f}%)")
-    print(f"  Ratio ACCEL/BRAKE: {total_accel/max(total_brake,1):.1f}x (should be ~1x for balanced driving)")
+    print(f"  Ratio ACCEL/BRAKE: {total_accel / max(total_brake, 1):.1f}x (should be ~1x for balanced driving)")
     print()
 
     # === GROUND TRUTH FROM SPEED CHANGES ===
@@ -329,15 +329,15 @@ def analyze_telemetry(filename):
 
     # Check for ACCEL/BRAKE imbalance
     if total_brake > 0 and total_accel / total_brake > 3:
-        issues.append(f"ACCEL/BRAKE ratio too high: {total_accel/total_brake:.1f}x (suggests positive bias)")
+        issues.append(f"ACCEL/BRAKE ratio too high: {total_accel / total_brake:.1f}x (suggests positive bias)")
     if total_accel > 0 and total_brake / total_accel > 3:
-        issues.append(f"BRAKE/ACCEL ratio too high: {total_brake/total_accel:.1f}x (suggests negative bias)")
+        issues.append(f"BRAKE/ACCEL ratio too high: {total_brake / total_accel:.1f}x (suggests negative bias)")
 
     # Check false positive rates
     if tp_accel + fp_accel > 0 and fp_accel / (tp_accel + fp_accel) > 0.3:
-        issues.append(f"High ACCEL false positive rate: {100*fp_accel/(tp_accel+fp_accel):.0f}%")
+        issues.append(f"High ACCEL false positive rate: {100 * fp_accel / (tp_accel + fp_accel):.0f}%")
     if tp_brake + fp_brake > 0 and fp_brake / (tp_brake + fp_brake) > 0.3:
-        issues.append(f"High BRAKE false positive rate: {100*fp_brake/(tp_brake+fp_brake):.0f}%")
+        issues.append(f"High BRAKE false positive rate: {100 * fp_brake / (tp_brake + fp_brake):.0f}%")
 
     # Check OrientationCorrector (if fusion data available)
     if has_fusion:
@@ -374,7 +374,7 @@ def analyze_telemetry(filename):
     else:
         print("• Re-record with latest firmware to get fusion diagnostics for detailed analysis")
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:

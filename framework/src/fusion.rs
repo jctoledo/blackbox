@@ -82,6 +82,7 @@ pub struct OrientationCorrector {
     max_correction: f32,
     /// Number of learning updates (for confidence calculation)
     update_count: u32,
+    roll_update_count: u32,
 }
 
 impl OrientationCorrector {
@@ -100,6 +101,7 @@ impl OrientationCorrector {
             min_accel: 0.3,       // ~0.03g - lowered to learn from more events
             max_correction: 0.26, // ~15 degrees max
             update_count: 0,
+            roll_update_count: 0,
         }
     }
 
@@ -142,9 +144,10 @@ impl OrientationCorrector {
             // Signal present - can learn pitch
             let pitch_innovation = lon_error / G;
 
-            // EMA update with clamping
-            self.pitch_correction =
-                (1.0 - self.alpha) * self.pitch_correction + self.alpha * pitch_innovation;
+            // Feedback update with clamping.
+            // The input already includes the current correction: this is a
+            // residual, so accumulate it rather than averaging it as an absolute angle.
+            self.pitch_correction += self.alpha * pitch_innovation;
             self.pitch_correction = self
                 .pitch_correction
                 .clamp(-self.max_correction, self.max_correction);
@@ -186,13 +189,15 @@ impl OrientationCorrector {
         if lat_gps.abs() > self.min_accel {
             let roll_innovation = lat_error / G;
 
-            self.roll_correction =
-                (1.0 - self.alpha) * self.roll_correction + self.alpha * roll_innovation;
+            // Positive roll subtracts positive lateral gravity; its sensitivity
+            // is opposite to pitch in remove_gravity().
+            self.roll_correction -= self.alpha * roll_innovation;
             self.roll_correction = self
                 .roll_correction
                 .clamp(-self.max_correction, self.max_correction);
 
-            self.roll_confidence = (self.update_count as f32 / 100.0).min(1.0);
+            self.roll_update_count = self.roll_update_count.saturating_add(1);
+            self.roll_confidence = (self.roll_update_count as f32 / 100.0).min(1.0);
         }
     }
 
@@ -246,6 +251,7 @@ impl OrientationCorrector {
         self.cruise_bias_count = 0;
         self.cruise_time = 0.0;
         self.update_count = 0;
+        self.roll_update_count = 0;
     }
 }
 
@@ -365,26 +371,28 @@ impl GpsAcceleration {
     /// # Returns
     /// The computed longitudinal acceleration, or None if not enough data
     pub fn update(&mut self, speed: f32, time: f32) -> Option<f32> {
-        self.time_since_fix = 0.0;
-
-        if self.prev_time > 0.0 {
-            let dt = time - self.prev_time;
-
-            // Validate dt: should be 20-200ms for 5-50Hz GPS
-            if dt > 0.02 && dt < 0.5 {
-                self.accel_lon = (speed - self.prev_speed) / dt;
-                self.valid = true;
-
-                self.prev_speed = speed;
-                self.prev_time = time;
-
-                return Some(self.accel_lon);
-            }
+        self.valid = false;
+        self.time_since_fix = 999.0;
+        if !speed.is_finite() || speed < 0.0 || !time.is_finite() {
+            self.prev_time = 0.0;
+            return None;
         }
-
+        let dt = time - self.prev_time;
+        let derivative = if self.prev_time > 0.0 && (0.02..=1.5).contains(&dt) {
+            Some((speed - self.prev_speed) / dt)
+        } else {
+            None
+        };
         self.prev_speed = speed;
         self.prev_time = time;
-        None
+        if let Some(accel) = derivative.filter(|a| a.is_finite()) {
+            self.accel_lon = accel;
+            self.valid = true;
+            self.time_since_fix = 0.0;
+            Some(accel)
+        } else {
+            None
+        }
     }
 
     /// Update GPS rate estimate
@@ -981,7 +989,7 @@ impl SensorFusion {
             .correct(ahrs_pitch_deg, ahrs_roll_deg);
 
         // Step 2: Remove gravity using corrected orientation
-        let (ax_nograv, ay_nograv, _az_nograv) = remove_gravity(
+        let (ax_nograv, ay_nograv, az_nograv) = remove_gravity(
             ax_raw,
             ay_raw,
             az_raw,
@@ -993,7 +1001,7 @@ impl SensorFusion {
         let (ax_earth, ay_earth) = body_to_earth(
             ax_nograv,
             ay_nograv,
-            0.0,
+            az_nograv,
             corrected_roll_deg,
             corrected_pitch_deg,
             yaw,
@@ -1032,7 +1040,11 @@ impl SensorFusion {
             if self.was_stationary {
                 self.tilt_estimator.reset_stationary();
             }
-            self.yaw_rate_calibrator.update(yaw_rate, speed, dt);
+            if gps_fresh {
+                self.yaw_rate_calibrator.update(yaw_rate, speed, dt);
+            } else {
+                self.yaw_rate_calibrator.reset_accumulator();
+            }
         }
         self.was_stationary = is_stationary;
 
@@ -1055,6 +1067,8 @@ impl SensorFusion {
                 );
             }
         }
+
+        let lon_imu_filtered = lon_imu_filtered - self.orientation_corrector.get_cruise_bias();
 
         // Step 12: Blend IMU and GPS based on orientation correction confidence
         // Higher confidence → trust corrected IMU more
@@ -1546,7 +1560,9 @@ mod tests {
         }
 
         // Drive straight with biased yaw rate until calibration kicks in
-        for _ in 0..100 {
+        for i in 0..100 {
+            fusion.process_gps(20.0, 1.0 + i as f32 * 0.05);
+            fusion.process_gps_heading(0.0);
             fusion.process_imu(0.0, 0.0, G, 0.0, 0.0, 0.0, 20.0, yaw_bias, 0.05, false);
         }
 
@@ -1974,82 +1990,24 @@ mod tests {
 
     #[test]
     fn test_orientation_corrector_learns_pitch_from_forward_accel() {
-        // Simulate: true accel = 3.0 m/s², but AHRS has pitch error
-        // causing IMU to show different value than GPS
-        //
-        // AHRS pitch error = -3° (thinks car tilting back during forward accel)
-        // This causes remove_gravity to subtract wrong gravity component
-        // Result: lon_imu is LESS than lon_gps
-        //
-        // Math: gravity error ≈ G * sin(3°) ≈ 0.51 m/s²
-        // So lon_imu ≈ 3.0 - 0.51 = 2.49 m/s² (if AHRS pitch = -3°)
-        // GPS shows truth: lon_gps = 3.0 m/s²
-        // Innovation = (2.49 - 3.0) / 9.8 ≈ -0.052 rad ≈ -3°
-
         let mut corrector = OrientationCorrector::new();
-
-        let lon_gps = 3.0; // Ground truth
-        let lon_imu = 2.49; // What IMU shows with -3° pitch error
-        let speed = 15.0; // 54 km/h, above min_speed
-
-        // Simulate many updates (EMA needs time to converge)
         for _ in 0..500 {
-            corrector.update(
-                lon_imu, // IMU longitudinal
-                lon_gps, // GPS longitudinal (truth)
-                0.0,     // lat_imu
-                0.0,     // lat_gps
-                speed, true,  // GPS fresh
-                0.033, // dt (~30Hz)
-            );
+            let residual = -0.052 - corrector.pitch_correction;
+            corrector.update(3.0 + G * residual, 3.0, 0.0, 0.0, 15.0, true, 0.033);
         }
-
-        // Pitch correction should converge toward the error
-        // Expected: ~-3° = ~-0.052 rad
-        let pitch_corr = corrector.pitch_correction;
-        assert!(
-            (pitch_corr - (-0.052)).abs() < 0.01,
-            "Pitch correction should be ~-0.052 rad (-3°), got {} rad ({}°)",
-            pitch_corr,
-            pitch_corr.to_degrees()
-        );
-
-        // Confidence should be high after many updates
-        assert!(
-            corrector.pitch_confidence > 0.9,
-            "Confidence should be >0.9 after 500 updates, got {}",
-            corrector.pitch_confidence
-        );
+        assert!((corrector.pitch_correction + 0.052).abs() < 0.001);
+        assert!(corrector.pitch_confidence > 0.9);
     }
 
     #[test]
     fn test_orientation_corrector_learns_roll_from_cornering() {
-        // During left turn, centripetal acceleration is positive (leftward)
-        // If AHRS has roll error, lat_imu differs from lat_gps
         let mut corrector = OrientationCorrector::new();
-
-        let lat_gps = 5.0; // Centripetal = speed * yaw_rate = 10 * 0.5 = 5 m/s²
-        let lat_imu = 4.5; // Roll error causes 0.5 m/s² difference
-        let speed = 15.0;
-
         for _ in 0..500 {
-            corrector.update(
-                0.0,     // lon_imu (not accelerating)
-                0.0,     // lon_gps
-                lat_imu, // IMU lateral
-                lat_gps, // GPS lateral (centripetal)
-                speed, true, 0.005, // dt = 5ms (200Hz)
-            );
+            let residual = 0.051 - corrector.roll_correction;
+            corrector.update(0.0, 0.0, 5.0 - G * residual, 5.0, 15.0, true, 0.033);
         }
-
-        // Roll correction should converge
-        // Error = (4.5 - 5.0) / 9.8 = -0.051 rad
-        let roll_corr = corrector.roll_correction;
-        assert!(
-            (roll_corr - (-0.051)).abs() < 0.01,
-            "Roll correction should be ~-0.051 rad, got {}",
-            roll_corr
-        );
+        assert!((corrector.roll_correction - 0.051).abs() < 0.001);
+        assert!(corrector.roll_confidence > 0.9);
     }
 
     #[test]
@@ -2427,7 +2385,7 @@ mod tests {
         aligner.update_gps_course(0.5);
 
         // Multiple updates should increase confidence
-        for i in 0..150 {
+        for _ in 0..150 {
             aligner.update_gps_course(0.5); // Keep GPS fresh
             aligner.update(0.0, 10.0, 0.01);
         }
@@ -2446,7 +2404,7 @@ mod tests {
         let mut fusion = SensorFusion::new(config);
 
         // Feed GPS course while moving
-        for i in 0..50 {
+        for _ in 0..50 {
             // GPS says we're heading North (0 rad)
             fusion.process_gps_heading(0.0);
 

@@ -41,14 +41,16 @@ pub fn select_best_velocity(
     // Try EKF first
     if let Some((vx, vy)) = ekf_velocity {
         let speed = (vx * vx + vy * vy).sqrt();
-        if speed > VELOCITY_THRESHOLD {
+        if speed.is_finite() && speed > VELOCITY_THRESHOLD {
             return (vx, vy, speed);
         }
     }
     // Fallback to GPS
     if let Some((vx, vy)) = gps_velocity {
         let speed = (vx * vx + vy * vy).sqrt();
-        return (vx, vy, speed);
+        if speed.is_finite() {
+            return (vx, vy, speed);
+        }
     }
     // No valid source
     (0.0, 0.0, 0.0)

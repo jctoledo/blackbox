@@ -1,0 +1,18 @@
+# Blackbox
+
+> Open-source ESP32-C3 vehicle telemetry: GPS + WT901 IMU, Rust sensor fusion, browser dashboard, circuit/stage lap timing, and local recordings.
+
+## Project
+- [Website and USB installer](https://jctoledo.github.io/blackbox/): project overview and verified published firmware installation.
+- [Source repository](https://github.com/jctoledo/blackbox): maintained code, README, issues, and contribution history.
+- [Releases](https://github.com/jctoledo/blackbox/releases): published firmware; releases can lag main.
+
+## Documentation
+- [Lap timer](https://jctoledo.github.io/blackbox/guides/lap-timer.html): record tracks, arm timing, and troubleshoot missed starts.
+- [Sensor fusion](https://jctoledo.github.io/blackbox/guides/sensor-fusion.html): frames, prediction, correction, and limitations.
+- [Engineering review](https://jctoledo.github.io/blackbox/guides/engineering-review.html): tested fixes, claims audit, open issues, and hardware acceptance plan.
+
+## Accuracy and status
+Blackbox is in active development. Millisecond timestamps and interpolated crossings are not millisecond physical-accuracy claims. The estimator uses diagonal covariance, not a full covariance EKF. Synthetic tests and cross-compilation do not substitute for reference-timed driving or a real USB flash/boot test. Rates depend on configured hardware and measured processing cadence.
+
+This file is a convenient reading index, not a crawler directive or a guarantee of search or AI inclusion.

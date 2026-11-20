@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
 
 permissions:
   contents: read
@@ -16,12 +19,27 @@ concurrency:
 
 jobs:
   deploy:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
+    runs-on: [blackbox-lat]
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Stage verified firmware on Pages origin
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python3 scripts/prepare_web_firmware.py
+
+      - name: Render crawlable documentation
+        run: |
+          python3 -m venv "$RUNNER_TEMP/docs-python"
+          "$RUNNER_TEMP/docs-python/bin/pip" install 'Markdown==3.7'
+          "$RUNNER_TEMP/docs-python/bin/python" scripts/build_docs.py
 
       - name: Setup Pages
         uses: actions/configure-pages@v4

@@ -19,9 +19,9 @@ def gps_to_local(lat, lon, ref_lat, ref_lon):
 
 def analyze_csv(filepath):
     """Analyze a single CSV file."""
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Analyzing: {filepath}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     rows = []
     with open(filepath, 'r') as f:
@@ -125,7 +125,7 @@ def analyze_csv(filepath):
     print(f"\n  Speed Statistics:")
     print(f"    Min speed: {min(speeds):.1f} km/h")
     print(f"    Max speed: {max(speeds):.1f} km/h")
-    print(f"    Avg speed: {sum(speeds)/len(speeds):.1f} km/h")
+    print(f"    Avg speed: {sum(speeds) / len(speeds):.1f} km/h")
 
     # Show first/last few positions
     print(f"\n  First 5 positions (x, y, speed):")

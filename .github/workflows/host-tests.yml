@@ -1,0 +1,23 @@
+name: Host regression tests
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: [blackbox-lat]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --locked -p sensor-fusion -p wt901 -p ublox-gps -p blackbox-host-tests
+      - run: node --test tests/*.test.cjs
+      - run: |
+          cargo run --quiet --locked -p blackbox-host-tests --example packet_fixture > /tmp/telemetry-v4.hex
+          diff tests/fixtures/telemetry-v4.hex /tmp/telemetry-v4.hex
+          python3 -m unittest discover -s tests -p 'test_*.py'
+      - name: Check static documentation generation
+        run: |
+          python3 -m venv "$RUNNER_TEMP/docs-python"
+          "$RUNNER_TEMP/docs-python/bin/pip" install 'Markdown==3.7'
+          "$RUNNER_TEMP/docs-python/bin/python" scripts/build_docs.py

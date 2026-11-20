@@ -1,309 +1,45 @@
 name: CI
-
 on:
   push:
-    branches: [main, develop]
-  pull_request:
     branches: [main]
-
-env:
-  CARGO_TERM_COLOR: always
-  RUST_BACKTRACE: 1
-
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: blackbox-ci-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
-  check:
-    name: Check Compilation
-    runs-on: ubuntu-24.04
+  validate:
+    runs-on: [blackbox-lat]
+    timeout-minutes: 40
     env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      CARGO_BUILD_JOBS: '4'
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install Rust nightly
-        uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: nightly-2025-10-18
-          components: rust-src
-
-      - name: Cache cargo (using Swatinem/rust-cache)
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: sensors/blackbox
-          cache-on-failure: true
-
-      - name: Cache cargo tools
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/espup
-            ~/.cargo/bin/ldproxy
-          key: ${{ runner.os }}-cargo-tools-v1
-          restore-keys: |
-            ${{ runner.os }}-cargo-tools-
-
-      - name: Cache ESP-IDF
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.espup/
-            ~/export-esp.sh
-          key: ${{ runner.os }}-espup-v2-partition-fix
-          restore-keys: |
-            ${{ runner.os }}-espup-v2-
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install ESP-IDF prerequisites
+          persist-credentials: false
+      - name: Host regression tests
         run: |
-          sudo apt-get update
-          sudo apt-get install -y git wget flex bison gperf python3 python3-pip python3-venv cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0
-
-      - name: Install tools from cache or compile
+          rustup component add rustfmt --toolchain stable
+          cargo +stable fmt --all -- --check
+          cargo +stable test --locked -p sensor-fusion -p wt901 -p ublox-gps -p blackbox-host-tests
+          node --test tests/*.test.cjs
+          cargo +stable run --quiet --locked -p blackbox-host-tests --example packet_fixture > "$RUNNER_TEMP/telemetry-v4.hex"
+          diff tests/fixtures/telemetry-v4.hex "$RUNNER_TEMP/telemetry-v4.hex"
+          python3 -m unittest discover -s tests -p 'test_*.py'
+          cargo +stable check --locked -p ublox-gps --no-default-features
+      - name: Documentation and Python lint
         run: |
-          if ! command -v espup &> /dev/null; then
-            echo "Installing espup..."
-            cargo install espup
-          else
-            echo "✓ espup found in cache"
-          fi
-
-          if ! command -v ldproxy &> /dev/null; then
-            echo "Installing ldproxy..."
-            cargo install ldproxy
-          else
-            echo "✓ ldproxy found in cache"
-          fi
-
-      - name: Install ESP-IDF
+          python3 -m venv "$RUNNER_TEMP/blackbox-python"
+          "$RUNNER_TEMP/blackbox-python/bin/pip" install 'Markdown==3.7' flake8
+          "$RUNNER_TEMP/blackbox-python/bin/python" scripts/build_docs.py
+          "$RUNNER_TEMP/blackbox-python/bin/flake8" tools/python/*.py --count --max-line-length=120 --ignore=E203,E302,E305,F541,W503 --statistics
+      - name: Check and build both GPS variants
+        working-directory: sensors/blackbox
         run: |
-          if [ ! -f ~/export-esp.sh ]; then
-            echo "Installing ESP-IDF..."
-            espup install
-          else
-            echo "✓ ESP-IDF found in cache"
-          fi
-          . $HOME/export-esp.sh
-
-      - name: Check compilation
-        run: |
-          . $HOME/export-esp.sh
-          cd sensors/blackbox
-          cargo check --locked
-
-  fmt:
-    name: Format Check
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt
-
-      - name: Check formatting
-        run: cargo fmt --all -- --check
-
-  clippy:
-    name: Clippy
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust nightly
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: nightly-2025-10-18
-          components: rust-src, clippy
-
-      - name: Cache cargo (using Swatinem/rust-cache)
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: sensors/blackbox
-          cache-on-failure: true
-
-      - name: Install ESP-IDF build prerequisites
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y git wget flex bison gperf python3 python3-pip python3-venv cmake ninja-build ccache libffi-dev libssl-dev libclang-dev dfu-util libusb-1.0-0
-          cargo install ldproxy --locked
-
-      - name: Run clippy
-        run: |
-          cd sensors/blackbox
-          cargo clippy --locked -- -D warnings
-
-  build:
-    name: Build Firmware
-    runs-on: ubuntu-24.04
-    env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust nightly
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: nightly-2025-10-18
-          components: rust-src
-
-      - name: Cache cargo (using Swatinem/rust-cache)
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: sensors/blackbox
-          cache-on-failure: true
-          shared-key: partition-fix-v2
-
-      - name: Cache cargo tools
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/espup
-            ~/.cargo/bin/ldproxy
-            ~/.cargo/bin/cargo-espflash
-            ~/.cargo/bin/espflash
-          key: ${{ runner.os }}-cargo-tools-v1
-          restore-keys: |
-            ${{ runner.os }}-cargo-tools-
-
-      - name: Cache ESP-IDF
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.espup/
-            ~/export-esp.sh
-          key: ${{ runner.os }}-espup-v2-partition-fix
-          restore-keys: |
-            ${{ runner.os }}-espup-v2-
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install ESP-IDF prerequisites
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y git wget flex bison gperf python3 python3-pip python3-venv cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0
-
-      - name: Install tools from cache or compile
-        run: |
-          # Check if tools are already in cache
-          if ! command -v espup &> /dev/null; then
-            echo "Installing espup..."
-            cargo install espup
-          else
-            echo "✓ espup found in cache"
-          fi
-
-          if ! command -v ldproxy &> /dev/null; then
-            echo "Installing ldproxy..."
-            cargo install ldproxy
-          else
-            echo "✓ ldproxy found in cache"
-          fi
-
-          if ! command -v cargo-espflash &> /dev/null; then
-            echo "Installing cargo-espflash and espflash..."
-            rustup toolchain install stable --profile minimal
-            cargo +stable install cargo-espflash espflash --version 4.7.0 --locked
-          else
-            echo "✓ cargo-espflash found in cache"
-          fi
-
-      - name: Install ESP-IDF
-        run: |
-          if [ ! -f ~/export-esp.sh ]; then
-            echo "Installing ESP-IDF..."
-            espup install
-          else
-            echo "✓ ESP-IDF found in cache"
-          fi
-          . $HOME/export-esp.sh
-
-      - name: Clean build to force partition table update
-        run: |
-          cd sensors/blackbox
-          rm -rf ../../target/riscv32imc-esp-espidf
-          rm -rf ../../.embuild
-          echo "✓ Cleaned ESP-IDF build cache (.embuild and target)"
-
-      - name: Build firmware
-        run: |
-          . $HOME/export-esp.sh
-          cd sensors/blackbox
-          cargo build --release --locked
-          echo "Built binary size:"
-          ls -lh ../../target/riscv32imc-esp-espidf/release/blackbox
-          echo "Checking generated partition configuration:"
-          grep "CONFIG_PARTITION_TABLE" ../../target/riscv32imc-esp-espidf/release/build/esp-idf-sys-*/out/sdkconfig | head -10
-          echo "Partition table binary:"
-          ls -lh ../../target/riscv32imc-esp-espidf/release/partition-table.bin
-          python3 -c "import sys; data = open('../../target/riscv32imc-esp-espidf/release/partition-table.bin', 'rb').read(); print(f'Partition table size: {len(data)} bytes')"
-
-      - name: Create merged binary for web flasher
-        run: |
-          cd sensors/blackbox
-          cargo espflash save-image \
-            --chip esp32c3 \
-            --merge \
-            --partition-table ../../partitions.csv \
-            --release \
-            ../../target/blackbox.bin
-          ls -lh ../../target/blackbox.bin
-
-      - name: Upload merged firmware
-        uses: actions/upload-artifact@v4
-        with:
-          name: firmware-esp32c3
-          path: target/blackbox.bin
-
-      - name: Upload individual components (debug)
-        uses: actions/upload-artifact@v4
-        with:
-          name: firmware-components
-          path: |
-            target/riscv32imc-esp-espidf/release/blackbox
-            target/riscv32imc-esp-espidf/release/bootloader.bin
-            target/riscv32imc-esp-espidf/release/partition-table.bin
-
-  python-lint:
-    name: Python Lint
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Check if Python files exist
-        id: check_files
-        run: |
-          if ls tools/python/*.py 1> /dev/null 2>&1; then
-            echo "files_exist=true" >> $GITHUB_OUTPUT
-          else
-            echo "files_exist=false" >> $GITHUB_OUTPUT
-            echo "No Python files found in tools/python/ - skipping lint"
-          fi
-
-      - name: Set up Python
-        if: steps.check_files.outputs.files_exist == 'true'
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.11"
-
-      - name: Install dependencies
-        if: steps.check_files.outputs.files_exist == 'true'
-        run: |
-          python -m pip install --upgrade pip
-          pip install flake8 black paho-mqtt pyserial
-
-      - name: Lint with flake8
-        if: steps.check_files.outputs.files_exist == 'true'
-        run: |
-          # Check for critical errors only (syntax errors, undefined names)
-          flake8 tools/python/*.py --count --select=E9,F63,F7,F82 --show-source --statistics
-          # Style checks - ignore common stylistic issues, focus on real problems
-          # E203: whitespace before ':' (conflicts with black)
-          # E302/E305: blank line issues (stylistic)
-          # F541: f-string without placeholders (works fine, just unnecessary)
-          # W503: line break before binary operator (outdated)
-          flake8 tools/python/*.py --count --max-line-length=120 --ignore=E203,E302,E305,F541,W503 --statistics
+          for model in 6m m9n; do
+            export GPS_MODEL="$model"
+            if [ "$model" = m9n ]; then export GPS_RATE=25; else export GPS_RATE=5; fi
+            cargo +nightly-2025-10-18 clippy --locked --release -- -D warnings
+            cargo +nightly-2025-10-18 build --locked --release
+          done

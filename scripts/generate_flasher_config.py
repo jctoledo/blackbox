@@ -58,14 +58,18 @@ def generate_flasher_js(projects: list[dict], repo: str, version: str) -> str:
         project_id = project['id']
 
         # Generate firmware URL based on GitHub release
-        firmware_url = f"https://github.com/{repo}/releases/download/{version}/{project_id}.bin"
+        firmware_url = (f"https://github.com/{repo}/releases/latest/download/{project_id}.bin"
+                        if version == "latest" else
+                        f"https://github.com/{repo}/releases/download/{version}/{project_id}.bin")
 
         project_js = f"""        '{project_id}': {{
             name: {json.dumps(project['name'])},
             description: {json.dumps(project['description'])},
             hardware: {json.dumps(project['hardware'])},
             software: {json.dumps(project['software'])},
-            firmwareUrl: {json.dumps(firmware_url)},
+            firmwareUrl: {json.dumps("firmware/" + project_id + ".bin")},
+            manifestUrl: "firmware/manifest.json",
+            releaseAssetUrl: {json.dumps(firmware_url)},
             chip: {json.dumps(project.get('chip', 'esp32c3'))},
             target: {json.dumps(project.get('target', 'riscv32imc-esp-espidf'))}
         }}"""
@@ -99,7 +103,7 @@ def main():
     # Get version and repo from environment or use defaults
     import os
     version = os.environ.get('VERSION', 'latest')
-    repo = os.environ.get('GITHUB_REPOSITORY', 'jctoledo/active_wing')
+    repo = os.environ.get('GITHUB_REPOSITORY', 'jctoledo/blackbox')
 
     print(f"Generating flasher config for {repo} version {version}", file=sys.stderr)
     print(f"Scanning: {sensors_dir}", file=sys.stderr)
