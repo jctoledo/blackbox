@@ -61,3 +61,31 @@ test('old track telemetry cannot be recorded against a newly selected track',()=
  c.updateLapTimer(50,8,4,{state:'timing',revision:1,last_lap_ms:45000,best_lap_ms:45000});
  assert.equal(saved.length,0);assert.equal(elements.get('lap-state').textContent,'Waiting for track confirmation');
 });
+
+test('recording commits preserve samples arriving during a pending write',async()=>{
+ const transactions=[],records=[];
+ const c={console,Date,Math,db:{transaction(){
+   const tx={objectStore:()=>({put:value=>records.push(value)})};transactions.push(tx);return tx;
+ }}};
+ vm.createContext(c);
+ vm.runInContext(section('// Recording state.', 'function updateRecUI()')+'function updateRecUI(){};sessionId=10;chunkBuffer=[{t:1}];',c);
+ const first=c.saveChunk();
+ vm.runInContext('chunkBuffer.push({t:2})',c);
+ const second=c.saveChunk();
+ assert.equal(records.length,1);
+ transactions[0].oncomplete();await first;
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(records.length,2);
+ assert.equal(records[0].data[0].t,1);assert.equal(records[1].data[0].t,2);
+ assert.equal(records[1].chunkIndex,1);
+ transactions[1].oncomplete();await second;
+ assert.equal(vm.runInContext('chunkBuffer.length',c),0);
+});
+test('aborted recording writes restore the batch before newer samples',async()=>{
+ let tx;const c={console,Date,Math,db:{transaction(){tx={objectStore:()=>({put(){}})};return tx}}};
+ vm.createContext(c);vm.runInContext(section('// Recording state.', 'function updateRecUI()')+'function updateRecUI(){};sessionId=10;chunkBuffer=[{t:1}];',c);
+ const pending=c.saveChunk();vm.runInContext('chunkBuffer.push({t:2})',c);
+ tx.onabort();await assert.rejects(pending,/storage failed/);
+ assert.equal(vm.runInContext('chunkBuffer.map(x=>x.t).join(",")',c),'1,2');
+ assert.equal(vm.runInContext('chunkIndex',c),0);
+});
