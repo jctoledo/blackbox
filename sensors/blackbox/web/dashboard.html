@@ -368,6 +368,8 @@ button,input,select{font:inherit}button:focus-visible,[role="button"]:focus-visi
 .bbSessionHealth{font-size:12px;line-height:1.6;color:var(--text-secondary);margin:8px 0}.bbConsistency{width:100%;font-size:13px;line-height:1.6;color:var(--text)}.bbConsistency small{display:block;color:var(--text-secondary);font:11px/1.5 system-ui}
 .bbSaveStatus{color:var(--text-secondary);font-size:12px;padding:0 4px}.bbSaveStatus[hidden]{display:none}@media(min-width:650px) and (max-height:600px){.drive-view .bbSaveStatus{grid-column:1/-1}}
 .bbRecordOverlay{visibility:hidden}.bbRecordOverlay.active{visibility:visible}
+.bbActionBtn.primary,.bbTrackBtn.primary,.bbRecordActionBtn.primary,.bbToastBtn.primary{color:var(--bg)}.bbRecordStartIcon{color:var(--ok);stroke-width:2}.bbRecordStartIconWrap{background:var(--bg);border:1px solid var(--divider);border-radius:8px}.bbRecordStartBtn{border-radius:8px;border-width:1px}.bbRecordStartBtn:active{border-color:var(--ok)}.bbRecordStartBtn::before{display:none}.bbHistoryLap{font-size:13px;padding:6px}.bbHistoryDate{font-size:13px}.bbHistorySessionStats{font-size:12px}.bbHistorySessionHeader{flex-wrap:wrap;gap:6px}
+@media(max-width:600px){.bbTrackInfo{flex-basis:100%;width:100%}.bbTrackActions{margin:12px 0 0;width:100%;gap:6px}.bbTrackActions .bbTrackBtn{flex:1}.bbTrackName{white-space:normal;overflow-wrap:anywhere}.bbTrackMeta{display:flex;flex-wrap:wrap;gap:4px 12px}.bbTrackMeta span{margin:0}.bbSessionItem,.bbTrackDataItem{flex-wrap:wrap}.bbSessionInfo,.bbTrackDataInfo{flex-basis:100%;width:100%}.bbSessionActions,.bbTrackDataActions{margin:10px 0 0;display:flex;flex-direction:row;width:100%}.bbSessionActions button,.bbTrackDataActions button{flex:1}}
 </style></head>
 <body>
 
@@ -591,11 +593,11 @@ button,input,select{font:inherit}button:focus-visible,[role="button"]:focus-visi
                     <div class="bbActiveTrackName" id="active-track-name">—</div>
                     <div class="bbActiveTrackMeta" id="active-track-meta">—</div>
                 </div>
-                <button class="bbActiveTrackClear" id="btn-clear-track" title="Clear active track">×</button>
+                <button class="bbActiveTrackClear" id="btn-clear-track" title="Clear active track" aria-label="Stop timing for active track">×</button>
             </div>
             <div class="bbModalSection" id="create-track-section">
                 <div class="bbSectionTitle">Record New Track</div>
-                <p class="bbCreateTrackHint">Drive to start position, then tap to begin</p>
+                <p class="bbCreateTrackHint">While parked at the start, choose a route type. Record the route first; time it on a later pass.</p>
                 <div class="bbCreateTrackBtns">
                     <button class="bbRecordStartBtn" id="btn-record-loop" onclick="startTrackRecording('loop')">
                         <div class="bbRecordStartIconWrap">
@@ -618,7 +620,7 @@ button,input,select{font:inherit}button:focus-visible,[role="button"]:focus-visi
                             </svg>
                         </div>
                         <span class="bbRecordStartLabel">Stage</span>
-                        <span class="bbRecordStartDesc">Mark finish when you're done</span>
+                        <span class="bbRecordStartDesc">Separate start and finish</span>
                     </button>
                 </div>
             </div>
@@ -638,7 +640,7 @@ button,input,select{font:inherit}button:focus-visible,[role="button"]:focus-visi
         </div>
         <div class="bbModalBody">
             <div class="bbStorageOverview">
-                <div class="bbStorageTotal"><div class="bbStorageLabel">Total Storage</div><div class="bbStorageValue" id="data-total-size">—</div></div>
+                <div class="bbStorageTotal"><div class="bbStorageLabel">Estimated data size</div><div class="bbStorageValue" id="data-total-size">—</div></div>
                 <div class="bbStorageBreakdown"><div class="bbStorageItem"><span class="bbStorageItemLabel">Recordings</span><span class="bbStorageItemValue" id="data-rec-size">—</span></div><div class="bbStorageItem"><span class="bbStorageItemLabel">Tracks</span><span class="bbStorageItemValue" id="data-track-size">—</span></div></div>
             </div>
             <div class="bbModalSection">
@@ -845,8 +847,8 @@ async function exportCSV(){
 // Data Management Functions
 function idbPromise(r){return new Promise((res,rej)=>{r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
 
-function recordingHealth(chunks){
-    let samples=0,gpsValid=0,first=Infinity,last=-Infinity,previous=null,maxGapMs=0,gaps=0,clockReversals=0;
+function recordingHealth(chunks,state={}){
+    let {samples=0,gpsValid=0,first=Infinity,last=-Infinity,previous=null,maxGapMs=0,gaps=0,clockReversals=0}=state;
     for(const chunk of [...chunks].sort((a,b)=>a.chunkIndex-b.chunkIndex))for(const row of chunk.data||[]){
         samples++;if(row.gpsOk===1)gpsValid++;
         if(Number.isFinite(row.t)){
@@ -855,7 +857,7 @@ function recordingHealth(chunks){
             previous=row.t;
         }
     }
-    return{samples,gpsPercent:samples?Math.round(100*gpsValid/samples):null,durationMs:Number.isFinite(first)&&Number.isFinite(last)?Math.max(0,last-first):0,maxGapMs,gaps,clockReversals};
+    return{samples,gpsValid,first,last,previous,gpsPercent:samples?Math.round(100*gpsValid/samples):null,durationMs:Number.isFinite(first)&&Number.isFinite(last)?Math.max(0,last-first):0,maxGapMs,gaps,clockReversals};
 }
 function lapConsistency(laps){
     const times=laps.map(l=>l.lapTimeMs).filter(t=>Number.isFinite(t)&&t>0).sort((a,b)=>a-b),n=times.length;
@@ -866,12 +868,19 @@ async function getAllSessions(){
     if(!db)await openDB();
     const tx=db.transaction(['sessions','chunks'],'readonly');
     const sessions=await idbPromise(tx.objectStore('sessions').getAll());
-    const allChunks=await idbPromise(tx.objectStore('chunks').getAll());
     const chunksBySession=new Map();
-    for(const c of allChunks){if(!chunksBySession.has(c.sessionId))chunksBySession.set(c.sessionId,[]);chunksBySession.get(c.sessionId).push(c)}
+    // Composite primary keys order chunks by session and index. Stream one chunk
+    // at a time instead of retaining every recording's samples in phone memory.
+    await new Promise((resolve,reject)=>{
+        const request=tx.objectStore('chunks').openCursor();request.onerror=()=>reject(request.error);
+        request.onsuccess=()=>{const cursor=request.result;if(!cursor){resolve();return}
+            const chunk=cursor.value,prior=chunksBySession.get(chunk.sessionId)||{count:0,bytes:0,health:undefined};
+            prior.count++;prior.bytes+=estimateObjectSize(chunk.data);prior.health=recordingHealth([chunk],prior.health);chunksBySession.set(chunk.sessionId,prior);cursor.continue();
+        };
+    });
     const enriched=sessions.map(s=>{
-        const chunks=chunksBySession.get(s.sessionId)||[],health=recordingHealth(chunks);
-        return{sessionId:s.sessionId,startTime:s.startTime||s.sessionId,status:s.status,chunkCount:chunks.length,sampleCount:health.samples,durationMs:health.durationMs,estimatedBytes:health.samples*50,health};
+        const summary=chunksBySession.get(s.sessionId)||{count:0,bytes:0,health:recordingHealth([])},health=summary.health;
+        return{sessionId:s.sessionId,startTime:s.startTime||s.sessionId,status:s.status,chunkCount:summary.count,sampleCount:health.samples,durationMs:health.durationMs,estimatedBytes:summary.bytes,health};
     });
     enriched.sort((a,b)=>b.sessionId-a.sessionId);
     return enriched;
@@ -1369,18 +1378,22 @@ async function handleTrackAction(action,id){
     }
 }
 
+function portableReference(ref){
+    if(!ref)return null;
+    return {...ref,sampleEncoding:'distance_metres_elapsed_ms_f32_pairs',samples:Array.from(new Float32Array(ref.samples))};
+}
 async function exportTrackData(id){
     try{
         const track=await getTrack(id);
         if(!track){alert('Track not found');return}
-        const history=await getLapHistory(id);
+        const history=await getLapHistory(id,Infinity);
         const refLap=await getRefLap(id);
         const exportData={
-            version:1,
+            version:2,
             exportedAt:new Date().toISOString(),
             track:track,
             lapHistory:history||[],
-            referenceLap:refLap||null
+            referenceLap:portableReference(refLap)
         };
         const json=JSON.stringify(exportData,null,2);
         const blob=new Blob([json],{type:'application/json'});
@@ -1404,18 +1417,18 @@ async function exportAllTracks(){
         const tracks=await getAllTracks();
         if(tracks.length===0){alert('No tracks to export');return}
         const allData={
-            version:1,
+            version:2,
             exportedAt:new Date().toISOString(),
             deviceInfo:{gpsRef:jsGpsRef},
             tracks:[]
         };
         for(const t of tracks){
-            const history=await getLapHistory(t.id);
+            const history=await getLapHistory(t.id,Infinity);
             const refLap=await getRefLap(t.id);
             allData.tracks.push({
                 track:t,
                 lapHistory:history||[],
-                referenceLap:refLap||null
+                referenceLap:portableReference(refLap)
             });
         }
         const json=JSON.stringify(allData,null,2);
@@ -1487,7 +1500,7 @@ async function activateTrack(track){
     // Helper to convert local (x,y) back to GPS using track's origin
     function toGps(x,y){return{lat:origin.lat+y/111320,lon:origin.lon+x/(111320*cosLat)}}
     const line=track.startLine,finLine=track.finishLine;
-    if(isP2P&&!finLine){alert('This stage has no finish line. Record or import a complete stage before arming.');return}
+    if(isP2P&&!finLine){alert('This stage has no finish line. Record a complete stage before arming.');return}
     const p1=toGps(line.p1[0],line.p1[1]);
     const p2=toGps(line.p2[0],line.p2[1]);
     // Direction is already in math convention (from atan2 in _calculateTimingLine)
@@ -2361,14 +2374,14 @@ $('btn-clear-all-recordings').onclick=async()=>{
     if(rec){alert('Cannot clear while recording. Stop recording first.');return}
     const stats=await getStorageStats();
     if(stats.sessionCount===0){alert('No recordings to clear.');return}
-    if(!confirm('Delete all '+stats.sessionCount+' recording'+(stats.sessionCount!==1?'s':'')+'?\\n\\nThis will free '+formatBytes(stats.totalBytes)+' of storage.\\n\\nThis cannot be undone.'))return;
+    if(!confirm('Delete all '+stats.sessionCount+' recording'+(stats.sessionCount!==1?'s':'')+'?\\n\\nEstimated data size: '+formatBytes(stats.totalBytes)+'.\\n\\nThis cannot be undone.'))return;
     try{$('btn-clear-all-recordings').textContent='Clearing...';$('btn-clear-all-recordings').disabled=true;await clearAllRecordings();await renderDataModal();$('btn-clear-all-recordings').textContent='Clear All Recordings'}
     catch(e){alert('Clear failed: '+e.message);$('btn-clear-all-recordings').textContent='Clear All Recordings';$('btn-clear-all-recordings').disabled=false}
 };
 $('btn-clear-all-tracks').onclick=async()=>{
     const stats=await getTrackDataStats();
     if(stats.tracks.length===0){alert('No tracks to clear.');return}
-    if(!confirm('Delete all '+stats.tracks.length+' track'+(stats.tracks.length!==1?'s':'')+'?\\n\\nThis will free '+formatBytes(stats.totalBytes)+' of storage.\\n\\nThis cannot be undone.'))return;
+    if(!confirm('Delete all '+stats.tracks.length+' track'+(stats.tracks.length!==1?'s':'')+'?\\n\\nEstimated data size: '+formatBytes(stats.totalBytes)+'.\\n\\nThis cannot be undone.'))return;
     try{$('btn-clear-all-tracks').textContent='Clearing...';$('btn-clear-all-tracks').disabled=true;await clearAllTracks();activeTrack=null;updateActiveTrackDisplay();await renderDataModal();$('btn-clear-all-tracks').textContent='Clear All Tracks'}
     catch(e){alert('Clear failed: '+e.message);$('btn-clear-all-tracks').textContent='Clear All Tracks';$('btn-clear-all-tracks').disabled=false}
 };

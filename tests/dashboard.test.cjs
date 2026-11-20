@@ -207,3 +207,18 @@ test('reference save completion cannot replace a newly selected track reference'
  vm.runInContext(section('async function saveNewRefLap(', 'async function saveTrack('),c);
  const p=c.saveNewRefLap('old',60000,{toBinary:()=>new ArrayBuffer(0),samples:[],dist:100});c.activeTrack={id:'new'};finish();await p;assert.equal(c.referenceLap,original);
 });
+
+
+test('track JSON preserves binary reference samples across serialization',()=>{
+ const c={Float32Array,Array};vm.createContext(c);vm.runInContext(section('function portableReference(', 'async function exportTrackData('),c);
+ const ref={samples:new Float32Array([0,0,25.5,1250]).buffer,lapTimeMs:1250};const restored=JSON.parse(JSON.stringify(c.portableReference(ref)));
+ assert.deepEqual(restored.samples,[0,0,25.5,1250]);assert.equal(restored.sampleEncoding,'distance_metres_elapsed_ms_f32_pairs');assert.equal(c.portableReference(null),null);
+});
+
+
+test('streamed recording summaries retain gaps and validity across chunk boundaries',()=>{
+ const c={Number,Math};vm.createContext(c);vm.runInContext(section('function recordingHealth(', 'async function getAllSessions('),c);
+ const chunks=[{chunkIndex:0,data:[{t:0,gpsOk:1},{t:100,gpsOk:1}]},{chunkIndex:1,data:[{t:2200,gpsOk:0}]}];
+ const whole=c.recordingHealth(chunks),streamed=c.recordingHealth([chunks[1]],c.recordingHealth([chunks[0]]));
+ assert.deepEqual(streamed,whole);assert.equal(streamed.gaps,1);assert.equal(streamed.gpsPercent,67);
+});

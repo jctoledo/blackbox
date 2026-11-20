@@ -34,8 +34,9 @@ Release candidate for bench and controlled-site validation, not a claim of measu
 - Slower first laps after re-arming no longer overwrite faster saved references.
 - Delta no longer extrapolates beyond reference samples; gaps, late starts, and large position jumps invalidate distance estimates.
 - Track/reference storage now waits for commit; reference replacement is atomic and failed timing-stop acknowledgements preserve active configuration.
-- Imported track names and IDs are escaped in both track lists; clearing a reference also clears its live display.
-- Recorded-session duration uses sample timestamps instead of assuming a fixed sample rate.
+- Stored track names and IDs are escaped in both track lists; clearing a reference also clears its live display.
+- Recorded-session duration uses sample timestamps instead of assuming a fixed sample rate; summaries stream chunks to limit phone memory usage.
+- Track JSON exports retain binary reference samples and all stored lap history.
 - Firmware installer and dependency actions are validated on the dedicated lat runner.
 
 ### Changed
