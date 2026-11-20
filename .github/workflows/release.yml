@@ -14,7 +14,7 @@ permissions:
 jobs:
   discover-projects:
     name: Discover Sensor Projects
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       projects: ${{ steps.find-projects.outputs.projects }}
     steps:
@@ -31,7 +31,7 @@ jobs:
   build-firmware:
     name: Build Firmware
     needs: discover-projects
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         project: ${{ fromJson(needs.discover-projects.outputs.projects) }}
@@ -111,7 +111,7 @@ jobs:
   create-release:
     name: Create GitHub Release
     needs: build-firmware
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       upload_url: ${{ steps.create_release.outputs.upload_url }}
       version: ${{ needs.build-firmware.outputs.version }}
@@ -159,7 +159,7 @@ jobs:
   update-flasher:
     name: Update Web Flasher
     needs: [build-firmware, create-release]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
