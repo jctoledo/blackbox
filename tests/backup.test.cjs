@@ -82,3 +82,29 @@ test('backup remains available with a selected track when the device is disconne
  const c=context();c.db=await database();c.trackDb=await database(true);c.activeTrack={id:'offline-track'};
  const value=await c.createBackup();assert.equal(value.format,'blackbox-backup');assert.equal(c.activeTrack.id,'offline-track');
 });
+function uiContext(){
+ const c=context(),elements=new Map();c.$=id=>{if(!elements.has(id))elements.set(id,{textContent:'',disabled:id==='backup-restore',value:'all'});return elements.get(id)};
+ c.document={querySelectorAll:()=>['backup-download','backup-choose','backup-restore','backup-scope'].map(c.$)};
+ c.genUUID=()=> 'ui-test';c.renderDataModal=async()=>{};c.renderTrackList=async()=>{};
+ return{c,elements};
+}
+test('file preview writes nothing, restore reports committed counts, and a bad replacement file disables restore',async()=>{
+ const {c,elements}=uiContext(),value=fixture(c);c.db=await database();c.trackDb=await database(true);
+ const text=JSON.stringify(value);await c.previewBackup({size:text.length,text:async()=>text});
+ assert.match(elements.get('backup-status').textContent,/Checksum verified.*1 recordings.*2 samples.*1 tracks/);
+ assert.equal(elements.get('backup-restore').disabled,false);assert.equal((await c.readBackupStores(c.db,['sessions'])).sessions.length,0);
+ await c.restoreBackup();assert.match(elements.get('backup-status').textContent,/Restore complete: 1 recordings and 1 tracks/);assert.equal(elements.get('backup-restore').disabled,true);
+ assert.equal((await c.readBackupStores(c.trackDb,['tracks'])).tracks.length,1);
+ await c.previewBackup({size:10,text:async()=>'{bad json'});assert.match(elements.get('backup-status').textContent,/not valid JSON/);assert.equal(elements.get('backup-restore').disabled,true);
+});
+test('restore UI reports partial commit and retries only the missing group',async()=>{
+ const {c,elements}=uiContext(),value=fixture(c);c.db=await database();const actual=await database(true);
+ c.trackDb={transaction(...args){const tx=actual.transaction(...args);queueMicrotask(()=>tx.abort());return tx}};
+ const text=JSON.stringify(value);await c.previewBackup({size:text.length,text:async()=>text});await c.restoreBackup();
+ assert.match(elements.get('backup-status').textContent,/Recordings committed; tracks were not restored/);assert.equal(elements.get('backup-restore').textContent,'Retry remaining data');assert.equal(elements.get('backup-restore').disabled,false);
+ c.trackDb=actual;await c.restoreBackup();assert.match(elements.get('backup-status').textContent,/Restore complete/);assert.equal((await c.readBackupStores(c.db,['sessions'])).sessions.length,1);assert.equal((await c.readBackupStores(actual,['tracks'])).tracks.length,1);
+});
+test('oversized backup is refused before reading the file or writing any data',async()=>{
+ const {c,elements}=uiContext();let read=false;await c.previewBackup({size:100*1024*1024+1,text:async()=>{read=true;return '{}'}});
+ assert.equal(read,false);assert.match(elements.get('backup-status').textContent,/100 MiB/);assert.equal(elements.get('backup-restore').disabled,true);
+});
