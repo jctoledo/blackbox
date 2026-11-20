@@ -2,7 +2,7 @@
 
 **Understand your drive. Own the instrument.**
 
-Blackbox is an open-source ESP32-C3 telemetry project: GPS and inertial sensing, a live G-meter, circuit and stage timing, and a phone-friendly dashboard served directly over local Wi-Fi. Rust firmware, inspectable maths, and browser-local recordings—no cloud account required.
+Blackbox is an open-source ESP32-C3 telemetry project: GPS and inertial sensing, circuit and stage timing, optional force analysis, and a phone-friendly dashboard served directly over local Wi-Fi. Rust firmware, inspectable maths, and browser-local recordings—no cloud account required.
 
 [Project website & USB installer](https://jctoledo.github.io/blackbox/) · [Lap timer guide](docs/LAP_TIMER.md) · [Sensor fusion](docs/SENSOR_FUSION.md) · [Review & validation](docs/REVIEW.md) · [Hardware checklist](docs/HARDWARE_VALIDATION.md) · [Try the demo](https://jctoledo.github.io/blackbox/demo.html)
 
@@ -122,7 +122,7 @@ Connect to the device's WiFi and open `192.168.71.1` in any browser.
 
 | Feature | Description |
 |---------|-------------|
-| G-Meter | Real-time lateral/longitudinal display with trail |
+| Force analysis | Optional Analysis view with lateral/longitudinal forces and a motion trail |
 | Speed | Current and max speed |
 | Mode Detection | IDLE, ACCEL, BRAKE, CORNER, or combined states |
 | Driving Presets | Track, Canyon, City, Highway, or Custom |

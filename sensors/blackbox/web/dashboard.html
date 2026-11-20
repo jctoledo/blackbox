@@ -370,6 +370,13 @@ button,input,select{font:inherit}button:focus-visible,[role="button"]:focus-visi
 .bbRecordOverlay{visibility:hidden}.bbRecordOverlay.active{visibility:visible}
 .bbActionBtn.primary,.bbTrackBtn.primary,.bbRecordActionBtn.primary,.bbToastBtn.primary{color:var(--bg)}.bbRecordStartIcon{color:var(--ok);stroke-width:2}.bbRecordStartIconWrap{background:var(--bg);border:1px solid var(--divider);border-radius:8px}.bbRecordStartBtn{border-radius:8px;border-width:1px}.bbRecordStartBtn:active{border-color:var(--ok)}.bbRecordStartBtn::before{display:none}.bbHistoryLap{font-size:13px;padding:6px}.bbHistoryDate{font-size:13px}.bbHistorySessionStats{font-size:12px}.bbHistorySessionHeader{flex-wrap:wrap;gap:6px}
 @media(max-width:600px){.bbTrackInfo{flex-basis:100%;width:100%}.bbTrackActions{margin:12px 0 0;width:100%;gap:6px}.bbTrackActions .bbTrackBtn{flex:1}.bbTrackName{white-space:normal;overflow-wrap:anywhere}.bbTrackMeta{display:flex;flex-wrap:wrap;gap:4px 12px}.bbTrackMeta span{margin:0}.bbSessionItem,.bbTrackDataItem{flex-wrap:wrap}.bbSessionInfo,.bbTrackDataInfo{flex-basis:100%;width:100%}.bbSessionActions,.bbTrackDataActions{margin:10px 0 0;display:flex;flex-direction:row;width:100%}.bbSessionActions button,.bbTrackDataActions button{flex:1}}
+/* Force analysis is optional; the default dashboard prioritizes timing and speed. */
+body:not(.analysis-view) .bbGPlotWrap,body:not(.analysis-view) .bbGReadoutRow,body:not(.analysis-view) .bbGMax,body:not(.analysis-view) .bbTelemetryStrip{display:none}
+body:not(.analysis-view) .bbApp .bbGCard{display:block;min-height:0}
+body:not(.analysis-view) .bbApp .bbGTop{display:flex;width:100%;padding:22px 24px}
+body:not(.analysis-view) .bbGTopRight{display:block}
+.drive-view #analysis-mode{display:none}
+@media(max-width:600px){body:not(.drive-view) .bbQuickActions{display:grid;grid-template-columns:repeat(6,1fr)}body:not(.drive-view) .bbQuickActions button{grid-column:span 2;margin:0;padding:10px 5px}body:not(.drive-view) #analysis-mode,body:not(.drive-view) #drive-mode{grid-column:span 3}}
 </style></head>
 <body>
 
@@ -393,7 +400,7 @@ button,input,select{font:inherit}button:focus-visible,[role="button"]:focus-visi
 </header>
 <main class="bbApp">
     <div id="connection-notice" class="bbConnectionNotice" role="status" hidden></div>
-    <div class="bbQuickActions" aria-label="Session controls"><button id="quick-tracks">Tracks</button><button id="quick-record">Record session</button><button id="quick-data">Saved data</button><button id="drive-mode" aria-pressed="false">Drive view</button></div>
+    <div class="bbQuickActions" aria-label="Session controls"><button id="quick-tracks">Tracks</button><button id="quick-record">Record session</button><button id="quick-data">Saved data</button><button id="analysis-mode" aria-pressed="false" aria-controls="g-card">Analysis</button><button id="drive-mode" aria-pressed="false">Drive view</button></div>
     <div id="save-status" class="bbSaveStatus" role="status" hidden></div>
     <div id="recording-notice" class="bbRecordingNotice" role="status" hidden></div>
     <section class="bbCard bbLapCard inactive" id="lap-section">
@@ -405,11 +412,11 @@ button,input,select{font:inherit}button:focus-visible,[role="button"]:focus-visi
             <button class="bbLapStop" id="btn-lap-stop" onclick="event.stopPropagation();confirmStopTiming();" title="Stop timing" aria-label="Stop timing">×</button>
             <div class="bbLapMain">
                 <div class="bbLapTime bbNum" id="lap-time">0:00.000</div>
-                <div class="bbDeltaBar no-ref" id="delta-bar"><div class="bbDeltaText" id="delta-text">Set best lap</div><div class="bbDeltaTrack"><div class="bbDeltaCenter"></div><div class="bbDeltaFill" id="delta-fill"></div></div></div>
+                <div class="bbDeltaBar no-ref" id="delta-bar"><div class="bbDeltaText" id="delta-text">Complete a reference lap</div><div class="bbDeltaTrack"><div class="bbDeltaCenter"></div><div class="bbDeltaFill" id="delta-fill"></div></div></div>
                 <div class="bbLapTrackName" id="lap-track-name"></div>
                 <div class="bbLapMeta">
                     <span class="bbLapCount" id="lap-count">Lap 1</span>
-                    <span class="bbLapState" id="lap-state" role="status">Armed</span>
+                    <span class="bbLapState" id="lap-state" role="status">Ready for start</span>
                 </div>
             </div>
             <div class="bbLapProgress" id="lap-progress" hidden><span id="lap-progress-label">Estimated distance</span><progress id="lap-progress-bar" max="100" value="0" aria-label="Estimated distance through reference lap"></progress></div>
@@ -478,7 +485,7 @@ button,input,select{font:inherit}button:focus-visible,[role="button"]:focus-visi
     <div class="bbTelemetryStrip">
         <span class="bbTItem"><span class="bbNum bbNum--hz" id="hz">0</span> Hz</span>
         <span class="bbTItem" title="Estimator position sigma, not measured GPS accuracy">Est. σ <span class="bbNum bbNum--gps" id="gps-acc">--</span>m</span>
-        <span class="bbTItem">Yaw <span class="bbNum" id="yaw">0</span>°</span>
+        <span class="bbTItem">Turn rate <span class="bbNum" id="yaw">0</span>°/s</span>
     </div>
 </main>
 </div>
@@ -502,7 +509,7 @@ button,input,select{font:inherit}button:focus-visible,[role="button"]:focus-visi
         <div class="bbRow"><span class="bbLbl">Chunks Saved</span><span class="bbVal bbNum" id="rec-chunks">0</span></div>
         <div class="bbRow"><span class="bbLbl">Last Save</span><span class="bbVal bbNum" id="rec-lastsave">--</span></div>
         <div style="padding-top:12px;display:flex;gap:8px">
-            <button class="bbRecBtn" id="diag-rec">Start Recording</button>
+            <button class="bbRecBtn" id="diag-rec">Record session</button>
             <button class="bbRecBtn" id="diag-export">Export CSV</button>
         </div>
     </section>
@@ -574,7 +581,7 @@ button,input,select{font:inherit}button:focus-visible,[role="button"]:focus-visi
 <div class="bbMenuOverlay" id="menu-overlay">
     <div class="bbMenuPanel">
         <button class="bbMenuItem" id="menu-data">Data</button>
-        <button class="bbMenuItem" id="menu-rec">Start Recording</button>
+        <button class="bbMenuItem" id="menu-rec">Record session</button>
         <button class="bbMenuItem" id="menu-export">Export CSV</button>
         <button class="bbMenuItem destructive" id="menu-clear">Clear Session</button>
     </div>
@@ -596,7 +603,7 @@ button,input,select{font:inherit}button:focus-visible,[role="button"]:focus-visi
                 <button class="bbActiveTrackClear" id="btn-clear-track" title="Clear active track" aria-label="Stop timing for active track">×</button>
             </div>
             <div class="bbModalSection" id="create-track-section">
-                <div class="bbSectionTitle">Record New Track</div>
+                <div class="bbSectionTitle">Create a track</div>
                 <p class="bbCreateTrackHint">While parked at the start, choose a route type. Record the route first; time it on a later pass.</p>
                 <div class="bbCreateTrackBtns">
                     <button class="bbRecordStartBtn" id="btn-record-loop" onclick="startTrackRecording('loop')">
@@ -608,7 +615,7 @@ button,input,select{font:inherit}button:focus-visible,[role="button"]:focus-visi
                             </svg>
                         </div>
                         <span class="bbRecordStartLabel">Circuit</span>
-                        <span class="bbRecordStartDesc">Auto-detects return to start</span>
+                        <span class="bbRecordStartDesc">Start and finish at the same line</span>
                     </button>
                     <button class="bbRecordStartBtn" id="btn-record-p2p" onclick="startTrackRecording('point_to_point')">
                         <div class="bbRecordStartIconWrap">
@@ -625,8 +632,8 @@ button,input,select{font:inherit}button:focus-visible,[role="button"]:focus-visi
                 </div>
             </div>
             <div class="bbModalSection">
-                <div class="bbSectionTitle">Saved Tracks</div>
-                <div class="bbTrackList" id="track-list"><div class="bbTrackEmpty">No saved tracks</div></div>
+                <div class="bbSectionTitle">Saved tracks</div>
+                <div class="bbTrackList" id="track-list"><div class="bbTrackEmpty">No saved tracks yet. Create a circuit or stage above.</div></div>
             </div>
         </div>
     </div>
@@ -670,12 +677,12 @@ button,input,select{font:inherit}button:focus-visible,[role="button"]:focus-visi
         <div class="bbRecordMeta">
             <div class="bbRecordMetaItem">
                 <span class="bbRecordMetaValue" id="rec-corners">0</span>
-                <span class="bbRecordMetaLabel">corners</span>
+                <span class="bbRecordMetaLabel">est. turns</span>
             </div>
             <div class="bbRecordMetaDivider"></div>
             <div class="bbRecordMetaItem">
                 <span class="bbRecordMetaValue" id="rec-points">0</span>
-                <span class="bbRecordMetaLabel">points</span>
+                <span class="bbRecordMetaLabel">route points</span>
             </div>
             <div class="bbRecordMetaDivider"></div>
             <div class="bbRecordMetaItem">
@@ -683,27 +690,27 @@ button,input,select{font:inherit}button:focus-visible,[role="button"]:focus-visi
                 <span class="bbRecordMetaLabel">elapsed</span>
             </div>
         </div>
-        <div class="bbRecordQuality">
+        <div class="bbRecordQuality" title="Estimator uncertainty only; not measured GPS accuracy">
             <div class="bbRecordQualityBar">
                 <div class="bbRecordQualityFill" id="rec-quality-fill" style="width:80%"></div>
             </div>
-            <span class="bbRecordQualityText" id="rec-quality-text">GPS Good</span>
+            <span class="bbRecordQualityText" id="rec-quality-text">Estimate pending</span>
         </div>
-        <p class="bbRecordHint" id="rec-hint">Complete one lap. We'll detect when you return.</p>
+        <p class="bbRecordHint" id="rec-hint">Record one circuit. Return to the start, then park safely to save it.</p>
         <div class="bbRecordActions" id="rec-actions-normal">
             <button class="bbRecordActionBtn secondary" onclick="cancelTrackRecording()">Cancel</button>
-            <button class="bbRecordActionBtn finish" id="btn-mark-finish" style="display:none" onclick="markRecordingFinish()">Mark Finish</button>
+            <button class="bbRecordActionBtn finish" id="btn-mark-finish" style="display:none" onclick="markRecordingFinish()">Mark finish</button>
         </div>
     </div>
     <div class="bbRecordState" id="rec-state-complete" style="display:none">
         <div class="bbRecordSuccess">
             <div class="bbRecordSuccessIcon">✓</div>
-            <div class="bbRecordSuccessTitle" id="rec-success-title">Track Complete!</div>
+            <div class="bbRecordSuccessTitle" id="rec-success-title">Route captured — not saved</div>
             <div class="bbRecordSuccessStats" id="rec-success-stats">—</div>
         </div>
         <div class="bbRecordActions">
-            <button class="bbRecordActionBtn secondary" onclick="continueTrackRecording()">Keep Driving</button>
-            <button class="bbRecordActionBtn primary" onclick="finishTrackRecording()">Save Track</button>
+            <button class="bbRecordActionBtn secondary" onclick="continueTrackRecording()">Continue route</button>
+            <button class="bbRecordActionBtn primary" onclick="finishTrackRecording()">Save track & arm</button>
         </div>
     </div>
 </div>
@@ -816,10 +823,10 @@ async function stopRecording(){
 function updateRecUI(){
     const dot=$('recDot'),txt=$('recTxt'),btn=$('menu-rec'),dbtn=$('diag-rec'),stat=$('rec-status');
     if(rec){
-        dot.classList.add('rec');txt.textContent='REC';btn.textContent='Stop Recording';dbtn.textContent='Stop Recording';dbtn.classList.add('recording');
+        dot.classList.add('rec');txt.textContent='REC';btn.textContent='Stop recording';dbtn.textContent='Stop recording';dbtn.classList.add('recording');
         stat.textContent='● Recording';stat.className='bbVal ok';
     }else{
-        dot.classList.remove('rec');txt.textContent='';btn.textContent='Start Recording';dbtn.textContent='Start Recording';dbtn.classList.remove('recording');
+        dot.classList.remove('rec');txt.textContent='';btn.textContent='Record session';dbtn.textContent='Record session';dbtn.classList.remove('recording');
         stat.textContent='Inactive';stat.className='bbVal';
     }
     if(recordingError){stat.textContent=recordingError;stat.className='bbVal err'}
@@ -1336,7 +1343,7 @@ async function renderTrackList(){
     const el=$('track-list');
     try{
         const tracks=await getAllTracks();
-        if(tracks.length===0){el.innerHTML='<div class=\"bbTrackEmpty\">No saved tracks</div>';return}
+        if(tracks.length===0){el.innerHTML='<div class=\"bbTrackEmpty\">No saved tracks yet. Create a circuit or stage above.</div>';return}
         tracks.sort((a,b)=>b.modified-a.modified);
         el.innerHTML=tracks.map(t=>{
             const best=t.bestLapMs?fmtLapTime(t.bestLapMs):'—';
@@ -1349,8 +1356,8 @@ async function renderTrackList(){
                     '<div class=\"bbTrackMeta\"><span>Best: '+best+'</span><span>'+lc+' '+unit+'</span></div>'+
                 '</div>'+
                 '<div class=\"bbTrackActions\">'+
-                    '<button class=\"bbTrackBtn primary\" data-action=\"use\">Use</button>'+
-                    (lc>0?'<button class=\"bbTrackBtn secondary\" data-action=\"history\" title=\"View history\">Laps</button>':'')+
+                    '<button class=\"bbTrackBtn primary\" data-action=\"use\">Arm timing</button>'+
+                    (lc>0?'<button class=\"bbTrackBtn secondary\" data-action=\"history\" title=\"View history\">History</button>':'')+
                     '<button class=\"bbTrackBtn secondary\" data-action=\"export\" title=\"Export track data\">Export</button>'+
                     '<button class=\"bbTrackBtn danger\" data-action=\"delete\" aria-label=\"Delete track\">×</button>'+
                 '</div></div>';
@@ -1358,7 +1365,7 @@ async function renderTrackList(){
         el.querySelectorAll('.bbTrackBtn').forEach(b=>{
             b.onclick=()=>handleTrackAction(b.dataset.action,b.closest('.bbTrackItem').dataset.id);
         });
-    }catch(e){console.error('Track list error:',e);el.innerHTML='<div class=\"bbTrackEmpty\">Error loading</div>'}
+    }catch(e){console.error('Track list error:',e);el.innerHTML='<div class=\"bbTrackEmpty\">Tracks could not be loaded. Close this panel and try again.</div>'}
 }
 
 async function handleTrackAction(action,id){
@@ -1556,7 +1563,7 @@ async function activateTrack(track){
         $('lap-track-name').textContent=track.name;
         const unit=isP2P?'Run':'Lap';
         $('lap-count').textContent=unit+' '+Math.max(1,track.lapCount||0);
-        $('lap-state').textContent='Armed';
+        $('lap-state').textContent='Ready for start';
         $('lap-state').classList.remove('timing','finished');
         $('best-lap').textContent=track.bestLapMs?fmtLapTime(track.bestLapMs):'—:——';
         $('last-lap').textContent='—:——';
@@ -1577,18 +1584,18 @@ async function deactivateTrack(){
     const sec=$('lap-section');
     sec.classList.add('inactive');
     sec.classList.remove('active','timing','p2p','first-run','has-ref');
-    $('lap-setup-text').textContent='Tap to configure';
+    $('lap-setup-text').textContent='Select a track to start timing';
     $('lap-track-name').textContent='';
     $('lap-time').textContent='0:00.000';
-    $('lap-state').textContent='Armed';
+    $('lap-state').textContent='Ready for start';
     $('lap-state').classList.remove('timing','finished');
     updateActiveTrackDisplay();
 }
 
 // Track Recording Functions
 function startTrackRecording(trackType='loop'){
-    if(!currentPos||!currentPos.valid){alert('Position not available');return false}
-    const ref=getGpsRef();if(!ref){alert('GPS reference not yet established. Wait for GPS lock.');return false}
+    if(!currentPos||!currentPos.valid){alert('No fresh GPS position. Wait outdoors for a fix before creating a track.');return false}
+    const ref=getGpsRef();if(!ref){alert('GPS is still starting. Wait for a fresh fix, then try again.');return false}
     if(!trackRecorder)trackRecorder=new TrackRecorder();
     // Use GPS course if valid, else EKF yaw (heading used for corner detection, not loop closure)
     const heading=currentPos.validGpsCourse?currentPos.gpsCourse:currentPos.yaw;
@@ -1598,7 +1605,7 @@ function startTrackRecording(trackType='loop'){
     const overlay=$('record-overlay');overlay.classList.add('active');
     $('rec-title').textContent=trackType==='loop'?'Recording Circuit':'Recording Stage';
     $('rec-distance').textContent='0';$('rec-corners').textContent='0';$('rec-points').textContent='0';$('rec-elapsed').textContent='0:00';
-    $('rec-hint').textContent=trackType==='loop'?"Complete one lap. We'll detect when you return.":'Record the route first. Stop safely at the end, then mark the finish. Timing is available on a later run.';
+    $('rec-hint').textContent=trackType==='loop'?"Record one circuit. Return to the start, then park safely to save it.":'Record the route first. Stop safely at the end, then mark the finish. Timing is available on a later run.';
     $('rec-state-recording').style.display='block';$('rec-state-complete').style.display='none';
     const markFinishBtn=$('btn-mark-finish');if(markFinishBtn)markFinishBtn.style.display=trackType==='point_to_point'?'flex':'none';
     closeTrackModal();return true;
@@ -1631,11 +1638,11 @@ function markRecordingFinish(){
 }
 function onLoopDetected(){
     const stats=trackRecorder.getStats();
-    const quality=(stats.gpsQuality||'good').charAt(0).toUpperCase()+(stats.gpsQuality||'good').slice(1);
+    const quality={excellent:'low',good:'low',fair:'moderate',poor:'high'}[stats.gpsQuality]||'unknown';
     const distance=Math.round(stats.totalDistance)||0,corners=stats.corners||0;
     const isStage=trackRecorder&&trackRecorder.trackType==='point_to_point';
-    $('rec-success-title').textContent=isStage?'Stage Complete!':'Circuit Complete!';
-    $('rec-success-stats').textContent=distance+'m · '+corners+' corners · '+quality+' quality';
+    $('rec-success-title').textContent=isStage?'Finish marked — not saved':'Circuit captured — not saved';
+    $('rec-success-stats').textContent=distance+'m · '+corners+' estimated turns · Estimated uncertainty: '+quality;
     $('rec-state-recording').style.display='none';$('rec-state-complete').style.display='block';
 }
 function continueTrackRecording(){
@@ -1643,7 +1650,7 @@ function continueTrackRecording(){
     trackRecorder.loopDetected=false;
     $('rec-state-recording').style.display='block';$('rec-state-complete').style.display='none';
     const isStage=trackRecorder.trackType==='point_to_point';
-    $('rec-hint').textContent=isStage?'Continue driving. Tap Mark Finish when done.':"Continue driving. We'll detect the next loop.";
+    $('rec-hint').textContent=isStage?'Continue the route. Stop safely at the end, then choose Mark finish.':"Continue driving. We'll detect the next loop.";
 }
 async function finishTrackRecording(){
     if(!trackRecorder||!trackRecorder.recording)return;
@@ -1651,18 +1658,18 @@ async function finishTrackRecording(){
     const trackName=prompt('Enter track name:',defaultName);if(!trackName)return;
     // Coordinates are already computed relative to gpsRef (set at start time)
     const trackData=trackRecorder.finish(trackName);
-    if(!trackData){alert('Failed to create track: not enough data or poor quality');return}
+    if(!trackData){alert('Not enough route points to save this track. Record the route again with a fresh GPS fix.');return}
     $('record-overlay').classList.remove('active');
     const track={id:trackData.id,name:trackData.name,type:trackData.type,startLine:trackData.startLine,finishLine:trackData.finishLine,origin:trackData.origin,gpsOrigin:trackData.gpsOrigin,centerline:trackData.centerline,bounds:trackData.bounds,pathLength:trackData.totalDistance||0,quality:trackData.quality,bestLapMs:null,lapCount:0,corners:trackData.corners||0,keyPoints:(trackData.centerline&&trackData.centerline.length)||trackData.keyPoints||0,createdAt:trackData.created,isNew:true};
     await saveTrack(track);await activateTrack(track);renderTrackList();
-    alert('Track "'+track.name+'" saved!\\n'+track.centerline.length+' points · '+Math.round(track.pathLength||0)+'m');
+    alert('Track "'+track.name+'" saved in this browser. Select it from Tracks whenever you want to arm timing.');
 }
 function updateRecordingQualityDisplay(quality){
     const fill=$('rec-quality-fill'),text=$('rec-quality-text');
     const pct={excellent:100,good:80,fair:60,poor:40}[quality]||50;
     fill.style.width=pct+'%';fill.className='bbRecordQualityFill';
     if(quality==='fair')fill.classList.add('fair');else if(quality==='poor')fill.classList.add('poor');
-    text.textContent='GPS '+(quality||'Good').charAt(0).toUpperCase()+(quality||'good').slice(1);
+    text.textContent='Uncertainty: '+({excellent:'low',good:'low',fair:'moderate',poor:'high'}[quality]||'unknown');
 }
 
 async function clearActiveTrack(){
@@ -1960,7 +1967,7 @@ function updateLapTimer(lapTimeMs,lapCnt,lapFlags,timing=null){
     if(timing?timing.state==='timing':lapTimeMs>0){
         stateEl.textContent=isP2P?'Running':'Timing';stateEl.classList.add('timing');sec.classList.add('timing');suppressStartLineIndicator=false;
         if(prevLapTimeMs===0)setTimeout(resize,300);
-    }else{stateEl.textContent=timing&&!timing.gps_valid?'Waiting for GPS':'Armed';stateEl.classList.remove('timing');sec.classList.remove('timing');if(prevLapTimeMs>0)setTimeout(resize,300)}
+    }else{stateEl.textContent=timing&&!timing.gps_valid?'Waiting for GPS':'Ready for start';stateEl.classList.remove('timing');sec.classList.remove('timing');if(prevLapTimeMs>0)setTimeout(resize,300)}
     // Handle new best flag FIRST - save as reference lap before reset
     if(newBest&&completedMs>0&&(!activeTrack.bestLapMs||completedMs<activeTrack.bestLapMs)){
         const bestEl=$('best-lap');bestEl.classList.add('bbLapBestFlash');setTimeout(()=>bestEl.classList.remove('bbLapBestFlash'),800);
@@ -2289,18 +2296,18 @@ async function renderSessionList(){
         clearBtn.disabled=stats.sessionCount===0||rec||!!chunkWrite||chunkBuffer.length>0;
         recoveredSessionCount=stats.sessions.filter(s=>s.status==='active'&&s.sessionId!==sessionId).length;updateRecUI();
         if(stats.sessionCount===0){
-            listEl.innerHTML='<div class=\"bbSessionEmpty\"><div class=\"icon\"></div>No recordings yet.<br>Start recording to capture telemetry.</div>';
+            listEl.innerHTML='<div class=\"bbSessionEmpty\"><div class=\"icon\"></div>No saved sessions yet.<br>Choose Record session to capture data in this browser.</div>';
             return;
         }
         listEl.innerHTML=stats.sessions.map(s=>{
             const isCur=rec&&s.sessionId===sessionId;
             const statusCls=isCur?'active':(s.status==='active'?'recovered':'complete');
-            const statusLbl=isCur?'● Recording':(s.status==='active'?'⚠ Recovered':'● Complete');
+            const statusLbl=isCur?'● Recording':(s.status==='active'?'Interrupted · saved data available':'Saved · recording stopped');
             return'<div class=\"bbSessionItem'+(isCur?' active':'')+'\" data-session-id=\"'+s.sessionId+'\">'+
                 '<div class=\"bbSessionInfo\">'+
                     '<div class=\"bbSessionDate\">'+formatSessionDate(s.startTime)+'</div>'+
                     '<div class=\"bbSessionMeta\"><span>'+s.chunkCount+' chunk'+(s.chunkCount!==1?'s':'')+'</span><span>'+formatBytes(s.estimatedBytes)+'</span><span>'+formatSessionDuration(s.durationMs)+'</span></div>'+
-                    '<div class=\"bbSessionHealth\">'+s.sampleCount+' samples · GPS valid '+(s.health.gpsPercent===null?'—':s.health.gpsPercent+'%')+'<br>Largest sample gap: '+(s.health.maxGapMs/1000).toFixed(2)+'s · '+s.health.gaps+' over 1.5s'+(s.health.clockReversals?' · Clock changed':'')+'</div>'+
+                    '<div class=\"bbSessionHealth\">'+s.sampleCount+' samples · Received samples with GPS fix: '+(s.health.gpsPercent===null?'—':s.health.gpsPercent+'%')+'<br>Largest sample gap: '+(s.health.maxGapMs/1000).toFixed(2)+'s · '+s.health.gaps+' over 1.5s'+(s.health.clockReversals?' · Clock changed':'')+'</div>'+
                     '<div class=\"bbSessionStatus '+statusCls+'\">'+statusLbl+'</div>'+
                 '</div>'+
                 '<div class=\"bbSessionActions\">'+
@@ -2310,7 +2317,7 @@ async function renderSessionList(){
             '</div>';
         }).join('');
         listEl.querySelectorAll('.bbSessionBtn').forEach(btn=>{btn.onclick=()=>handleSessionAction(btn)});
-    }catch(e){console.error('Failed to load sessions:',e);listEl.innerHTML='<div class=\"bbSessionEmpty\"><div class=\"icon\">⚠️</div>Error loading recordings</div>'}
+    }catch(e){console.error('Failed to load sessions:',e);listEl.innerHTML='<div class=\"bbSessionEmpty\"><div class=\"icon\">⚠️</div>Recordings could not be loaded. Close this panel and try again.</div>'}
 }
 
 async function renderTrackDataList(){
@@ -2338,7 +2345,7 @@ async function renderTrackDataList(){
             '</div>';
         }).join('');
         listEl.querySelectorAll('.bbSessionBtn').forEach(btn=>{btn.onclick=()=>handleTrackDataAction(btn)});
-    }catch(e){console.error('Failed to load tracks:',e);listEl.innerHTML='<div class=\"bbSessionEmpty\"><div class=\"icon\">⚠️</div>Error loading tracks</div>'}
+    }catch(e){console.error('Failed to load tracks:',e);listEl.innerHTML='<div class=\"bbSessionEmpty\"><div class=\"icon\">⚠️</div>Tracks could not be loaded. Close this panel and try again.</div>'}
 }
 
 async function handleSessionAction(btn){
@@ -2387,6 +2394,7 @@ $('btn-clear-all-tracks').onclick=async()=>{
 };
 
 $('drive-mode').onclick=()=>{const driving=document.body.classList.toggle('drive-view');$('drive-mode').setAttribute('aria-pressed',String(driving));$('drive-mode').textContent=driving?'Exit drive view':'Drive view';requestAnimationFrame(resize)};
+$('analysis-mode').onclick=()=>{const showing=document.body.classList.toggle('analysis-view');$('analysis-mode').setAttribute('aria-pressed',String(showing));$('analysis-mode').textContent=showing?'Close analysis':'Analysis';requestAnimationFrame(resize)};
 $('expand-g').onclick=()=>{const expanded=$('g-card').classList.toggle('expanded-g');$('expand-g').setAttribute('aria-expanded',String(expanded));$('expand-g').textContent=expanded?'Compact G-meter':'Expand G-meter';requestAnimationFrame(resize)};
 $('quick-tracks').onclick=openTrackModal;
 $('quick-record').onclick=()=>$('menu-rec').click();

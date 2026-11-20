@@ -127,3 +127,12 @@ The phone uses JavaScript/IndexedDB, not a cloud backend. Saving was shortened f
 The normal-drive collection plan and future acceptance criteria are tracked in [#54 corner matching](https://github.com/jctoledo/blackbox/issues/54), [#55 timestamp/crossing evidence](https://github.com/jctoledo/blackbox/issues/55), and [#56 braking/cornering comparisons](https://github.com/jctoledo/blackbox/issues/56). These are research plans, not implemented coaching features. Neighborhood/highway driving is useful for continuity and frame checks; independent crossing observations are needed for accuracy.
 
 Stage validation now includes a deterministic 20-mile replay and a missing-GPS finish rejection case. UI tests cover exact completed-stage results, preservation of faster references across arming, nonfinite data rejection, persistence failures, CSV evidence, and emergency export. All compilation and automated test execution remain on lat.
+
+
+## Copy, demo data, and motion review
+
+The primary dashboard no longer shows a G-meter. Optional Analysis exposes forces while parked; Drive view remains focused on timing and speed. This separation leaves room for future post-drive analysis without adding unimplemented controls. Copy now distinguishes a captured route from a committed save, a session recording from route creation, and estimator confidence from physical GPS accuracy. Heuristic turn counts are labeled estimated. The turn-rate readout now states degrees per second rather than implying heading.
+
+The public demo integrates distance over a smooth synthetic circuit with speed limited by curvature, varying sector pace, and a seeded reference. Packet position/velocity consistency, bounded acceleration, monotonic reference samples, lap-result timing, and connection loss are regression-tested. The synthetic source does not execute the firmware crossing detector and rejects stage configuration rather than pretending to validate it. No real driving data or location history is used.
+
+The website uses a small decorative SVG telemetry animation instead of a downloaded looping video. It has a pause control, stops offscreen/in a hidden tab, and respects reduced-motion preferences. The illustration remains explicitly labeled; it is not a preview of implemented spatial coaching.
