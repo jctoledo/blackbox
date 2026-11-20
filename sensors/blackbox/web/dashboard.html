@@ -327,42 +327,23 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
 .bbToastBtn{padding:8px 14px;border-radius:8px;border:none;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit}
 .bbToastBtn.primary{background:var(--ok);color:#fff}
 .bbToastBtn.secondary{background:var(--divider);color:var(--text)}
-/* Driver-facing hierarchy, readable status, and comfortable touch targets. */
-:root{--text-tertiary:#61676e;--ok:#178142;--amber:#a65a00;--divider:rgba(30,45,55,.13)}
-.dark{--bg:#0a1015;--surface:#141e27;--text:#f4f7fa;--text-secondary:#c2ced8;--text-tertiary:#9aaebd;--divider:rgba(196,220,235,.15);--ok:#62dc97;--amber:#ffc46b}
-.bbTopbar{padding:14px 20px;gap:10px;max-width:1100px;width:100%;margin:auto}
-.bbBrand{font-size:14px;font-weight:800;opacity:1;letter-spacing:.04em}
-.bbModeLabel,.bbModeIcon{opacity:.8}.bbStatusCluster{opacity:1;gap:10px;font-size:11px}
-.bbDiag{font-size:11px;opacity:1;color:var(--text-secondary);padding:12px 2px}
-.bbKebab{min-width:44px;min-height:44px;opacity:1}.bbDot{width:8px;height:8px}
-.bbApp{width:100%;max-width:1100px;margin:0 auto;padding:0 16px 12px;gap:10px}
-.bbCard{border:1px solid var(--divider);box-shadow:none!important;border-radius:20px}
-.bbLapCard{flex-shrink:0;margin-bottom:0}.bbLapCard.inactive{padding:20px}
-.bbLapSetup{gap:16px}.bbLapSetupText{font-size:17px;font-weight:650;color:var(--text)}
-.bbLapSetupText small{display:block;font-size:12px;font-weight:400;color:var(--text-secondary);margin-top:6px;line-height:1.5}
-.bbLapSetupBtn{min-height:44px;background:var(--text);color:var(--bg);white-space:nowrap}
-.bbGTop{padding:18px 22px 4px}.bbSpeed{font-size:44px;opacity:1;letter-spacing:-.04em}
-.bbUnit,.bbGTopRight{opacity:1;color:var(--text-secondary)}.bbGTopRight{padding-top:12px}
-.bbGPlotFrame{width:min(38vh,380px)}.bbGCard{flex-shrink:0;min-height:360px;margin:0}
-.bbAxis,.bbPlotMeta,.bbGReadoutLbl,.bbMiniLbl{opacity:1}.bbAxis,.bbPlotMeta{font-size:11px}
-.bbGReadoutRow{padding:12px 20px}.bbGReadoutVal{min-width:0;font-size:32px}
-.bbGReadoutVal .bbVal{font-size:inherit}.bbGReadoutLbl{font-size:12px}
-.bbGMax{padding:14px 22px}.bbMiniLbl{font-size:12px}.bbTelemetryStrip{flex-wrap:wrap;row-gap:6px;padding:8px 0;font-size:12px}
-.bbLapTime{font-size:clamp(42px,9vw,68px);letter-spacing:-.045em}.bbLapState{color:var(--text-secondary);opacity:1}
-.bbCardHead{font-size:12px}.bbRecBtn,.bbModalBtn,.bbToastBtn{min-height:44px}
-button:focus-visible,[role=button]:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid var(--amber);outline-offset:3px}
-@media(min-width:850px){.bbGCard{position:relative;min-height:440px}.bbGPlotWrap{position:absolute;right:8%;top:24px;width:44%}.bbGPlotFrame{width:min(42vh,360px)}.bbGTop,.bbGReadoutRow{width:45%}.bbGReadoutRow{margin:auto 0}.bbGMax{margin-top:auto}.bbLapMain{padding:20px 28px}}
-@media(max-width:420px){.bbTopbar{padding:8px 12px}.bbModeLabel,.bbModeIcon{display:none}.bbStatusCluster{gap:7px;font-size:10px}.bbDiag{font-size:10px}.bbTopRight{gap:4px}.bbApp{padding:0 10px 10px}.bbLapCard.inactive{padding:16px}.bbLapSetupText{font-size:15px}.bbLapSetupBtn{padding:10px 12px}.bbGPlotFrame{width:min(32vh,300px)}.bbGReadoutVal{font-size:28px}}
+/* Instrument system: carbon, signal lime, and legible measured values. */
+:root{--bg:#edf0f2;--surface:#fff;--text:#111820;--text-secondary:#3d4a55;--text-tertiary:#596873;--divider:#d4dce1;--ok:#287121;--amber:#995100;--red:#c73526}
+.dark{--bg:#090d12;--surface:#111820;--text:#f4f7f9;--text-secondary:#becbd5;--text-tertiary:#94a6b5;--divider:#2a3845;--ok:#d7ff45;--amber:#ffbc67;--red:#ff786b}
+body{font-size:16px}.bbTopbar{padding:12px 20px;gap:12px;max-width:1200px;width:100%;margin:0 auto;border-bottom:1px solid var(--divider)}
+.bbBrand{font-size:15px;font-weight:900;letter-spacing:.12em;opacity:1}.bbBrandMark{color:var(--ok);font-size:24px}.bbModeLabel{font-size:12px;opacity:.8}
+.bbStatusCluster{font:12px var(--mono);gap:12px;opacity:1}.bbStatusItem{white-space:nowrap}.bbDot{width:7px;height:7px}.bbDiag{font-size:12px;opacity:1;color:var(--text-secondary);padding:12px 0}.bbKebab{min-width:44px;min-height:44px;opacity:1}
+.bbApp{width:100%;max-width:1200px;margin:0 auto;padding:16px 20px;gap:12px}.bbQuickActions{display:flex;gap:8px;flex-shrink:0}.bbQuickActions button{min-height:44px;border:1px solid var(--divider);border-radius:7px;background:var(--surface);color:var(--text-secondary);padding:10px 18px;font-family:inherit;font-weight:600;font-size:14px;cursor:pointer}.bbQuickActions button:first-child{margin-right:auto}.bbQuickActions button.recording{border-color:var(--red);color:var(--red)}
+.bbCard{border:1px solid var(--divider);box-shadow:none!important;border-radius:12px}.bbLapCard{flex-shrink:0;margin:0;border-left:4px solid var(--ok)}.bbLapCard.inactive{padding:20px 24px;background:linear-gradient(110deg,var(--surface),var(--bg))}.bbLapSetup{gap:18px}.bbLapSetupText{font-size:20px;font-weight:750;color:var(--text)}.bbLapSetupText small{display:block;font-size:14px;font-weight:400;line-height:1.5;color:var(--text-secondary);margin-top:5px}
+.bbLapSetupBtn{min-height:46px;padding:12px 18px;background:var(--text);color:var(--bg);border-radius:6px;font-size:14px;white-space:nowrap}.dark .bbLapSetupBtn{background:var(--ok);color:#111820}.bbLapMain{padding:24px;border-top:0}.bbLapTime{font:600 clamp(44px,9vw,80px)/1 var(--mono);letter-spacing:-.065em}.bbLapState{font:600 13px/1.5 var(--mono);opacity:1;color:var(--text-secondary)}.bbLapTrackName{font-size:14px;opacity:1;color:var(--text-secondary)}.bbLapStop{width:44px;height:44px;right:8px;top:8px}.bbLapHistLabel{font:12px var(--mono);opacity:1}.bbLapHistValue{font:600 24px var(--mono)}
+.bbGCard{flex-shrink:0;min-height:400px;margin:0;position:relative;background-image:radial-gradient(ellipse at 65% 35%,rgba(160,195,225,.065),transparent 70%)}.bbGTop{padding:22px 24px 6px}.bbInstrumentLabel{font:12px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:5px}.bbSpeed{font:600 72px/1 var(--mono);letter-spacing:-.07em;opacity:1}.bbUnit{font-size:16px;opacity:1;color:var(--text-secondary);margin-left:5px}.bbManeuver{font:600 13px var(--mono);letter-spacing:.12em;padding-top:10px}.bbGTopRight{font:14px var(--mono);opacity:1;color:var(--text-secondary);padding-top:5px}.bbGPlotFrame{width:min(34vh,330px)}.bbAxis,.bbPlotMeta{font:11px var(--mono);opacity:1}.bbGReadoutRow{padding:18px 22px;margin:auto 0}.bbGReadoutLbl{font:12px var(--mono);letter-spacing:.05em;opacity:1}.bbGReadoutVal{min-width:0;font:600 36px var(--mono);letter-spacing:-.04em}.bbGReadoutVal .bbVal{font-size:inherit}.bbGMax{padding:16px 24px;gap:10px 18px}.bbMiniLbl{font-size:12px;opacity:1}.bbMiniVal{font:600 14px var(--mono)}
+.bbTelemetryStrip{flex-wrap:wrap;gap:8px 18px;font:12px var(--mono);padding:10px}.bbConnectionNotice,.bbRecordingNotice{border:1px solid var(--amber);border-left-width:4px;border-radius:6px;padding:12px 16px;font-size:14px;line-height:1.5;flex-shrink:0}.bbRecordingNotice{border-color:var(--red)}[hidden]{display:none!important}.telemetry-stale .bbSpeed,.telemetry-stale .bbGReadoutRow,.telemetry-stale .bbGPlot{opacity:.4}
+.bbModalTitle{font-size:20px}.bbModalContent{border:1px solid var(--divider);border-radius:12px}.bbModalBtn,.bbTrackBtn,.bbSessionBtn,.bbToastBtn,.bbRecBtn,.bbModalClose{min-height:44px;min-width:44px}.bbCardHead{font-size:13px}.bbLbl,.bbVal{font-size:14px}.bbTrackBtn{font-size:13px}.bbDiagCard{border:1px solid var(--divider);border-radius:12px}.bbTrackName{font-size:17px}.bbTrackMeta{font-size:13px}.bbRecordActionBtn.primary,.bbToastBtn.primary{background:var(--ok);color:var(--bg)}
+button:focus-visible,[role=button]:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid var(--amber);outline-offset:3px}button:disabled{opacity:.5;cursor:not-allowed}
+@media(min-width:850px){.bbGCard{min-height:480px}.bbGPlotWrap{position:absolute;right:7%;top:30px;width:45%}.bbGPlotFrame{width:min(45vh,380px)}.bbGTop,.bbGReadoutRow{width:46%}.bbGTop{padding:30px}.bbSpeed{font-size:100px}.bbGReadoutRow{margin:36px 0}.bbGMax{margin-top:auto}.bbLapMain{padding:24px 30px}}
+@media(max-width:600px){.bbTopbar{padding:8px 12px;flex-wrap:wrap;gap:0}.bbTopRight{gap:4px}.bbStatusCluster{gap:8px;font-size:11px}.bbModeLabel,.bbModeIcon{display:none}.bbDiag{font-size:11px}.bbBrand{font-size:13px}.bbApp{padding:12px 10px;gap:10px}.bbQuickActions{gap:6px}.bbQuickActions button{padding:10px 12px;font-size:13px}.bbLapCard.inactive{padding:16px}.bbLapSetupText{font-size:18px}.bbLapSetupText small{font-size:13px}.bbLapSetupBtn{padding:12px}.bbGTop{padding:18px 20px 4px}.bbSpeed{font-size:64px}.bbGReadoutVal{font-size:32px}.bbGPlotFrame{width:min(30vh,290px)}.bbGCard{min-height:380px}.bbLapHistValue{font-size:20px}.bbTelemetryStrip{font-size:11px}.bbGMax{padding:14px 20px}}
+@media(max-width:360px){.bbBrand{font-size:12px}.bbDiag{display:none}.bbLapSetup{align-items:flex-start}.bbLapSetupText{font-size:16px}.bbQuickActions button{padding:10px}.bbSpeed{font-size:58px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
-.dark{--bg:#0c1210;--surface:#15211b;--text:#f1f6e9;--text-secondary:#c3d1bf;--text-tertiary:#9aac9b;--ok:#b6f566;--amber:#ffc46b}
-.bbBrandMark{color:var(--ok);font-size:20px}.bbBrand{letter-spacing:.08em;font-size:12px}
-.bbInstrumentLabel{font:10px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:6px}
-.bbSpeed,.bbLapTime,.bbLapHistValue,.bbGReadoutVal{font-family:var(--mono);font-weight:600;letter-spacing:-.05em}
-.bbSpeed{font-size:50px}.bbManeuver{font:10px var(--mono);letter-spacing:.12em;padding-top:5px}
-.dark .bbLapSetupBtn{background:#b6f566;color:#15211b}.bbLapSetupBtn{border-radius:6px;font-weight:700}
-.bbCard{border-radius:14px}.bbStatusItem{white-space:nowrap}.bbLapState{font-size:12px;line-height:1.5}
-.bbLapMain{border-top:3px solid var(--ok)}.bbLapHistLabel{font-family:var(--mono);letter-spacing:.1em}
-.bbGCard{background-image:radial-gradient(ellipse at 70% 35%,rgba(130,170,120,.045),transparent 65%)}
 </style></head>
 <body>
 
@@ -385,6 +366,9 @@ button:focus-visible,[role=button]:focus-visible,a:focus-visible,input:focus-vis
     </div>
 </header>
 <main class="bbApp">
+    <div id="connection-notice" class="bbConnectionNotice" role="status" hidden></div>
+    <div class="bbQuickActions" aria-label="Session controls"><button id="quick-tracks">Tracks</button><button id="quick-record">Record session</button><button id="quick-data">Saved data</button></div>
+    <div id="recording-notice" class="bbRecordingNotice" role="status" hidden></div>
     <section class="bbCard bbLapCard inactive" id="lap-section">
         <div class="bbLapSetup" id="lap-setup">
             <span class="bbLapSetupText" id="lap-setup-text">Ready for a session?<small>Select a track to arm lap timing.</small></span>
@@ -808,6 +792,8 @@ function updateRecUI(){
         stat.textContent='Inactive';stat.className='bbVal';
     }
     if(recordingError){stat.textContent=recordingError;stat.className='bbVal err'}
+    const quick=$('quick-record');quick.textContent=rec?'Stop recording':'Record session';quick.disabled=recordingBusy;quick.classList.toggle('recording',rec);
+    $('recording-notice').hidden=!recordingError;$('recording-notice').textContent=recordingError;
     $('rec-chunks').textContent=chunkIndex;
     $('rec-lastsave').textContent=lastSaveTime?(Math.floor((Date.now()-lastSaveTime)/1000)+'s ago'):'--';
     $('rec-duration').textContent=sessionStart?fmtTime(Date.now()-sessionStart):'--';
@@ -930,24 +916,23 @@ async function getCombinedStorageStats(){
 }
 
 async function deleteTrackWithRef(trackId){
+    if(activeTrack&&activeTrack.id===trackId&&await deactivateTrack()===false)throw new Error('Track retained: device timing is still active');
     if(!trackDb)await openTrackDB();
-    // First delete lap history using its index
-    await deleteLapHistory(trackId);
-    // Then delete track and reference lap in single transaction
-    const tx=trackDb.transaction(['tracks','reference_laps'],'readwrite');
-    await idbPromise(tx.objectStore('tracks').delete(trackId));
-    await idbPromise(tx.objectStore('reference_laps').delete(trackId));
-    await new Promise((res,rej)=>{tx.oncomplete=res;tx.onerror=()=>rej(tx.error)});
-    if(activeTrack&&activeTrack.id===trackId)clearSession();
+    await commitTrackWrite(['tracks','reference_laps','lap_history'],tx=>{
+        tx.objectStore('tracks').delete(trackId);
+        for(const name of ['reference_laps','lap_history']){
+            const request=tx.objectStore(name).index('trackId').openCursor(IDBKeyRange.only(trackId));
+            request.onsuccess=()=>{const cursor=request.result;if(cursor){cursor.delete();cursor.continue()}};
+        }
+    });
 }
 
 async function clearAllTracks(){
+    if(activeTrack&&await deactivateTrack()===false)throw new Error('Tracks retained: device timing is still active');
     if(!trackDb)await openTrackDB();
-    const tx=trackDb.transaction(['tracks','reference_laps','lap_history'],'readwrite');
-    await idbPromise(tx.objectStore('tracks').clear());
-    await idbPromise(tx.objectStore('reference_laps').clear());
-    await idbPromise(tx.objectStore('lap_history').clear());
-    await new Promise((res,rej)=>{tx.oncomplete=res;tx.onerror=()=>rej(tx.error)});
+    await commitTrackWrite(['tracks','reference_laps','lap_history'],tx=>{
+        for(const name of ['tracks','reference_laps','lap_history'])tx.objectStore(name).clear();
+    });
     clearSession();
 }
 
@@ -1115,6 +1100,16 @@ async function activateDetectedTrack(){
     const track=t._detectedTrack;dismissActiveToast();await activateTrack(track)
 }
 
+function commitTrackWrite(stores,write,result){
+    return new Promise((resolve,reject)=>{
+        const tx=trackDb.transaction(stores,'readwrite');
+        tx.oncomplete=()=>resolve(result);
+        tx.onerror=()=>reject(tx.error||new Error('Track storage failed'));
+        tx.onabort=()=>reject(tx.error||new Error('Track storage failed'));
+        try{write(tx)}catch(error){tx.abort();reject(error)}
+    });
+}
+
 function openTrackDB(){
     return new Promise((res,rej)=>{
         const r=indexedDB.open(TRACK_DB,TRACK_DB_VER);
@@ -1141,7 +1136,13 @@ function openTrackDB(){
 }
 
 // Reference lap CRUD
-async function saveRefLap(ref){if(!trackDb)await openTrackDB();return new Promise((res,rej)=>{const tx=trackDb.transaction('reference_laps','readwrite');const r=tx.objectStore('reference_laps').put(ref);r.onsuccess=()=>res(ref);r.onerror=()=>rej(r.error)})}
+async function saveRefLap(ref){
+    if(!trackDb)await openTrackDB();
+    return commitTrackWrite('reference_laps',tx=>{
+        const store=tx.objectStore('reference_laps'),old=store.index('trackId').getKey(ref.trackId);
+        old.onsuccess=()=>{if(old.result!==undefined&&old.result!==ref.id)store.delete(old.result);store.put(ref)};
+    },ref);
+}
 async function getRefLap(trackId){if(!trackDb)await openTrackDB();return new Promise((res,rej)=>{const tx=trackDb.transaction('reference_laps','readonly');const r=tx.objectStore('reference_laps').index('trackId').get(trackId);r.onsuccess=()=>res(r.result||null);r.onerror=()=>rej(r.error)})}
 async function deleteRefLap(trackId){if(!trackDb)await openTrackDB();return new Promise((res,rej)=>{const tx=trackDb.transaction('reference_laps','readwrite');const r=tx.objectStore('reference_laps').index('trackId').openCursor(IDBKeyRange.only(trackId));r.onsuccess=()=>{const c=r.result;if(c){c.delete();c.continue()}else res()};r.onerror=()=>rej(r.error)})}
 
@@ -1155,7 +1156,7 @@ function clearSession(){currentSessionId=null;currentSessionStart=null}
 async function recordLapHistory(trackId,lapTimeMs,lapNum){
     if(!trackDb)await openTrackDB();if(!currentSessionId)return;
     const lap={id:genUUID(),trackId,timestamp:Date.now(),lapTimeMs,lapNumber:lapNum,sessionId:currentSessionId,sessionStart:currentSessionStart};
-    return new Promise((res,rej)=>{const tx=trackDb.transaction('lap_history','readwrite');const r=tx.objectStore('lap_history').put(lap);r.onsuccess=()=>res(lap);r.onerror=()=>rej(r.error)})
+    return new Promise((res,rej)=>{const tx=trackDb.transaction('lap_history','readwrite');tx.oncomplete=()=>res(lap);tx.onabort=()=>rej(tx.error||new Error('Lap history storage failed'));tx.onerror=()=>rej(tx.error);tx.objectStore('lap_history').put(lap)})
 }
 async function getLapHistory(trackId,limit=200){
     if(!trackDb)await openTrackDB();
@@ -1201,8 +1202,8 @@ function updateDeltaBar(opts){const{deltaMs,trend=0,hasRef=false,isP2P=false}=op
 async function saveNewRefLap(trackId,lapTimeMs,tracker){
     try{
         const ref={id:'ref_'+Date.now()+'_'+Math.random().toString(36).substr(2,9),trackId,lapTimeMs,created:Date.now(),samples:tracker.toBinary(),sampleCount:tracker.samples.length,totalDistance:tracker.dist};
-        referenceLap=ref;const sec=$('lap-section');if(sec)sec.classList.add('has-ref');console.log('Reference lap created:',fmtLapTime(lapTimeMs),'('+ref.sampleCount+' samples)');
-        await deleteRefLap(trackId);await saveRefLap(ref);console.log('Reference lap saved to IndexedDB')
+        await saveRefLap(ref);referenceLap=ref;const sec=$('lap-section');if(sec)sec.classList.add('has-ref');console.log('Reference lap created:',fmtLapTime(lapTimeMs),'('+ref.sampleCount+' samples)');
+        console.log('Reference lap saved to IndexedDB')
     }catch(e){console.error('Failed to save ref lap:',e)}
 }
 
@@ -1211,8 +1212,8 @@ async function saveTrack(track){
     track.modified=Date.now();
     return new Promise((res,rej)=>{
         const tx=trackDb.transaction('tracks','readwrite');
-        const r=tx.objectStore('tracks').put(track);
-        r.onsuccess=()=>res(track);r.onerror=()=>rej(r.error);
+        tx.oncomplete=()=>res(track);tx.onabort=()=>rej(tx.error||new Error('Track storage failed'));tx.onerror=()=>rej(tx.error);
+        tx.objectStore('tracks').put(track);
     });
 }
 
@@ -1284,9 +1285,9 @@ async function renderTrackList(){
                 '</div>'+
                 '<div class=\"bbTrackActions\">'+
                     '<button class=\"bbTrackBtn primary\" data-action=\"use\">Use</button>'+
-                    (lc>0?'<button class=\"bbTrackBtn secondary\" data-action=\"history\" title=\"View history\">H</button>':'')+
-                    '<button class=\"bbTrackBtn secondary\" data-action=\"export\" title=\"Export track data\">↓</button>'+
-                    '<button class=\"bbTrackBtn danger\" data-action=\"delete\">×</button>'+
+                    (lc>0?'<button class=\"bbTrackBtn secondary\" data-action=\"history\" title=\"View history\">Laps</button>':'')+
+                    '<button class=\"bbTrackBtn secondary\" data-action=\"export\" title=\"Export track data\">Export</button>'+
+                    '<button class=\"bbTrackBtn danger\" data-action=\"delete\" aria-label=\"Delete track\">×</button>'+
                 '</div></div>';
         }).join('');
         el.querySelectorAll('.bbTrackBtn').forEach(b=>{
@@ -1302,9 +1303,7 @@ async function handleTrackAction(action,id){
         closeTrackModal();
     }else if(action==='delete'){
         if(confirm('Delete this track and all lap history?')){
-            await deleteLapHistory(id);
-            await deleteTrackFromDB(id);
-            if(activeTrack&&activeTrack.id===id)await deactivateTrack();
+            try{await deleteTrackWithRef(id)}catch(e){alert(e.message);return}
             renderTrackList();
         }
     }else if(action==='history'){
@@ -1454,7 +1453,7 @@ async function activateTrack(track){
             '&dir='+startDir.toFixed(4);
     }
     try{
-        const r=await fetch(url);
+        const r=await requestDevice(url);
         const j=await r.json();
         if(!r.ok||j.error){alert('Failed to configure lap timer: '+(j.error||r.status));return}
         expectedLapRevision=j.revision??null;
@@ -1497,7 +1496,7 @@ async function activateTrack(track){
 }
 
 async function deactivateTrack(){
-    try{await fetch('/api/laptimer/configure?type=clear')}catch(e){}
+    try{const r=await requestDevice('/api/laptimer/configure?type=clear');if(!r.ok)throw new Error('Device rejected the request');const j=await r.json();if(j.error)throw new Error(j.error);expectedLapRevision=j.revision??null}catch(e){alert('Could not stop device timing. Reconnect and retry. '+e.message);return false}
     activeTrack=null;referenceLap=null;clearSession();
     if(lapTracker)lapTracker.reset();
     p2pNeedsWarmup=false;
@@ -2042,12 +2041,22 @@ function process(buf,timing=null){
     }
 }
 
+let lastTelemetryAt=0;
+async function requestDevice(url){
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),3000);
+    try{return await fetch(url,{signal:controller.signal})}finally{clearTimeout(timer)}
+}
+function markTelemetryUnavailable(label){
+    $('liveDot').classList.remove('on');$('gpsDot').classList.remove('on');$('stxt').textContent=label;
+    $('gpsHz').textContent='GPS --';currentPos.valid=false;lastGpsState=false;
+    document.body.classList.add('telemetry-stale');$('connection-notice').hidden=false;
+    $('connection-notice').textContent=label==='Offline'?'Connection lost. Showing last received values; reconnect to Blackbox Wi-Fi.':'Telemetry paused. Values below are not live.';
+}
 async function poll(){
     try{
-        const r=await fetch('/api/telemetry');
+        const r=await requestDevice('/api/telemetry');if(!r.ok)throw new Error('Telemetry unavailable');
         const j=await r.json();
         if(j.data&&j.seq!==lastSeq){
-            lastSeq=j.seq;
             if(j.f){
                 fusion.lon_imu=j.f.li||0;fusion.lon_gps=j.f.lg||0;fusion.gps_wt=j.f.gw||0;fusion.gps_rate=j.f.gr||0;
                 fusion.pitch_c=j.f.pc||0;fusion.pitch_cf=j.f.pf||0;fusion.roll_c=j.f.rc||0;fusion.roll_cf=j.f.rf||0;
@@ -2055,11 +2064,13 @@ async function poll(){
             }
             const b=atob(j.data),a=new Uint8Array(b.length);
             for(let i=0;i<b.length;i++)a[i]=b.charCodeAt(i);
-            process(a.buffer,j.timing||null);
+            process(a.buffer,j.timing||null);lastSeq=j.seq;lastTelemetryAt=Date.now();
+            document.body.classList.remove('telemetry-stale');$('connection-notice').hidden=true;
             $('liveDot').classList.add('on');$('stxt').textContent='LIVE';
         }
+        if(!lastTelemetryAt||Date.now()-lastTelemetryAt>1500)markTelemetryUnavailable('No fresh data');
         setTimeout(poll,33);
-    }catch(e){$('liveDot').classList.remove('on');$('stxt').textContent='Offline';setTimeout(poll,500)}
+    }catch(e){markTelemetryUnavailable('Offline');setTimeout(poll,500)}
 }
 
 // Diagnostics polling
@@ -2269,6 +2280,10 @@ $('btn-clear-all-tracks').onclick=async()=>{
     try{$('btn-clear-all-tracks').textContent='Clearing...';$('btn-clear-all-tracks').disabled=true;await clearAllTracks();activeTrack=null;updateActiveTrackDisplay();await renderDataModal();$('btn-clear-all-tracks').textContent='Clear All Tracks'}
     catch(e){alert('Clear failed: '+e.message);$('btn-clear-all-tracks').textContent='Clear All Tracks';$('btn-clear-all-tracks').disabled=false}
 };
+
+$('quick-tracks').onclick=openTrackModal;
+$('quick-record').onclick=()=>$('menu-rec').click();
+$('quick-data').onclick=openDataModal;
 
 // Init
 setInterval(()=>{

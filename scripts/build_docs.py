@@ -4,6 +4,7 @@ import html
 from pathlib import Path
 import re
 import markdown
+from build_demo import main as build_demo
 
 ROOT = Path(__file__).resolve().parents[1]
 BASE = 'https://jctoledo.github.io/blackbox/'
@@ -27,7 +28,8 @@ def link(match):
 def main():
     directory = ROOT / 'docs/guides'
     directory.mkdir(exist_ok=True)
-    urls = [BASE]
+    build_demo()
+    urls = [BASE, BASE + "demo.html"]
     for source, (slug, description) in PAGES.items():
         content = markdown.markdown((ROOT / 'docs' / source).read_text(),
                                     extensions=['fenced_code', 'tables', 'toc'])

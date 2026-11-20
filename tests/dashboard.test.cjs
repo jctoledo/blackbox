@@ -89,3 +89,31 @@ test('aborted recording writes restore the batch before newer samples',async()=>
  assert.equal(vm.runInContext('chunkBuffer.map(x=>x.t).join(",")',c),'1,2');
  assert.equal(vm.runInContext('chunkIndex',c),0);
 });
+
+test('track save waits for transaction commit and rejects a later abort',async()=>{
+ let tx;const c={Date,trackDb:{transaction(){tx={objectStore:()=>({put(){}})};return tx}}};
+ vm.createContext(c);vm.runInContext(section('async function saveTrack(', 'async function getTrack('),c);
+ let settled=false;const pending=c.saveTrack({id:'track'});pending.then(()=>{settled=true},()=>{});
+ await Promise.resolve();assert.equal(settled,false);
+ tx.onabort();await assert.rejects(pending,/Track storage failed/);
+});
+test('reference replacement deletes old key and writes new lap in one committed transaction',async()=>{
+ const ops=[];let tx,lookup;const store={index:()=>({getKey:()=>lookup={}}),delete:key=>ops.push(['delete',key]),put:ref=>ops.push(['put',ref.id])};
+ const c={trackDb:{transaction(){tx={objectStore:()=>store};return tx}}};vm.createContext(c);
+ vm.runInContext(section('function commitTrackWrite(', 'function openTrackDB(')+section('async function saveRefLap(', 'async function getRefLap('),c);
+ let settled=false;const p=c.saveRefLap({id:'new',trackId:'track'}).then(()=>{settled=true});
+ lookup.result='old';lookup.onsuccess();await Promise.resolve();assert.equal(settled,false);
+ assert.deepEqual(ops,[['delete','old'],['put','new']]);tx.oncomplete();await p;assert.equal(settled,true);
+});
+test('failed stop acknowledgement preserves the active track',async()=>{
+ const active={id:'still-running'},messages=[];
+ const c={activeTrack:active,requestDevice:async()=>({ok:false}),alert:s=>messages.push(s)};
+ vm.createContext(c);vm.runInContext(section('async function deactivateTrack(', '// Track Recording Functions'),c);
+ assert.equal(await c.deactivateTrack(),false);assert.equal(c.activeTrack,active);assert.match(messages[0],/Could not stop/);
+});
+test('a stalled request is aborted and its timer is cleaned up',async()=>{
+ let timeout,cleared=false;
+ const c={AbortController,setTimeout:fn=>{timeout=fn;return 9},clearTimeout:id=>{assert.equal(id,9);cleared=true},fetch:(_,options)=>new Promise((resolve,reject)=>options.signal.addEventListener('abort',()=>reject(new Error('aborted'))))};
+ vm.createContext(c);vm.runInContext(section('async function requestDevice(', 'function markTelemetryUnavailable('),c);
+ const p=c.requestDevice('/api/telemetry');timeout();await assert.rejects(p,/aborted/);assert.equal(cleared,true);
+});
