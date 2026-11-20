@@ -69,7 +69,7 @@ Existing hardware and dependency PRs are outside the implemented fix stack and m
 3. Static test: verify calibration completes; unplugged IMU times out; GPS warmup and loss are visible. Confirm no false laps from noise while stationary.
 4. At a safe controlled test location, record a wide start line. Cross in both directions at several speeds. Test arming before the line, starting near the line, finite-line endpoints, and a GPS outage near the line. Export the telemetry and timing state.
 5. Repeat circuits and stages with an independent timing reference. Compare error distributions, missed starts, false starts, and worst cases—not only average error. Test phone polling gaps and Wi-Fi reconnection.
-6. Review logs before changing sensor-fusion gains or enabling inferred crossings during outages. Publish a new release only after its GPS configuration and boot/drive results are recorded.
+6. Review logs before changing sensor-fusion gains or enabling inferred crossings during outages. Promote a hardware-validation candidate to a stable release only after its GPS configuration and boot/drive results are recorded.
 
 ## Reproduce automated checks
 
