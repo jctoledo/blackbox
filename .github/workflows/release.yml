@@ -171,6 +171,13 @@ jobs:
           echo "Generated docs/projects-config.js:"
           cat docs/projects-config.js
 
+      - name: Stage verified firmware on Pages origin
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          VERSION: ${{ needs.build-firmware.outputs.version }}
+        run: python3 scripts/prepare_web_firmware.py
+
       - name: Setup Pages
         uses: actions/configure-pages@v4
 

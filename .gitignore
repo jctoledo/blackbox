@@ -72,3 +72,6 @@ flash_download_tool_*.zip
 # Documentation build
 docs/_build/
 site/
+
+# Verified release assets staged during Pages deployment
+docs/firmware/

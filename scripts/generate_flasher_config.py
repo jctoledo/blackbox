@@ -67,7 +67,9 @@ def generate_flasher_js(projects: list[dict], repo: str, version: str) -> str:
             description: {json.dumps(project['description'])},
             hardware: {json.dumps(project['hardware'])},
             software: {json.dumps(project['software'])},
-            firmwareUrl: {json.dumps(firmware_url)},
+            firmwareUrl: {json.dumps("firmware/" + project_id + ".bin")},
+            manifestUrl: "firmware/manifest.json",
+            releaseAssetUrl: {json.dumps(firmware_url)},
             chip: {json.dumps(project.get('chip', 'esp32c3'))},
             target: {json.dumps(project.get('target', 'riscv32imc-esp-espidf'))}
         }}"""

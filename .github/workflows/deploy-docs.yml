@@ -23,6 +23,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Stage verified firmware on Pages origin
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python3 scripts/prepare_web_firmware.py
+
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
