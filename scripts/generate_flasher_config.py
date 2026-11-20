@@ -58,7 +58,9 @@ def generate_flasher_js(projects: list[dict], repo: str, version: str) -> str:
         project_id = project['id']
 
         # Generate firmware URL based on GitHub release
-        firmware_url = f"https://github.com/{repo}/releases/download/{version}/{project_id}.bin"
+        firmware_url = (f"https://github.com/{repo}/releases/latest/download/{project_id}.bin"
+                        if version == "latest" else
+                        f"https://github.com/{repo}/releases/download/{version}/{project_id}.bin")
 
         project_js = f"""        '{project_id}': {{
             name: {json.dumps(project['name'])},
@@ -99,7 +101,7 @@ def main():
     # Get version and repo from environment or use defaults
     import os
     version = os.environ.get('VERSION', 'latest')
-    repo = os.environ.get('GITHUB_REPOSITORY', 'jctoledo/active_wing')
+    repo = os.environ.get('GITHUB_REPOSITORY', 'jctoledo/blackbox')
 
     print(f"Generating flasher config for {repo} version {version}", file=sys.stderr)
     print(f"Scanning: {sensors_dir}", file=sys.stderr)
