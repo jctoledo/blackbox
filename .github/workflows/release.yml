@@ -14,7 +14,7 @@ permissions:
 jobs:
   discover-projects:
     name: Discover Sensor Projects
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       projects: ${{ steps.find-projects.outputs.projects }}
     steps:
@@ -31,7 +31,7 @@ jobs:
   build-firmware:
     name: Build Firmware
     needs: discover-projects
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         project: ${{ fromJson(needs.discover-projects.outputs.projects) }}
@@ -50,9 +50,14 @@ jobs:
           fi
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: nightly-2025-10-18
           components: rust-src
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
       - name: Install ESP-IDF prerequisites
         run: |
@@ -63,7 +68,9 @@ jobs:
 
       - name: Install espup, cargo-espflash, espflash, and ldproxy
         run: |
-          cargo install espup cargo-espflash espflash ldproxy
+          rustup toolchain install stable --profile minimal
+          cargo +stable install espup ldproxy --locked
+          cargo +stable install cargo-espflash espflash --version 4.7.0 --locked
 
       - name: Install ESP Rust toolchain
         run: |
@@ -75,7 +82,7 @@ jobs:
         run: |
           . $HOME/export-esp.sh
           cd sensors/${{ matrix.project }}
-          cargo build --release --target riscv32imc-esp-espidf
+          cargo build --release --locked --target riscv32imc-esp-espidf
 
       - name: Generate flashable binary
         run: |
@@ -104,7 +111,7 @@ jobs:
   create-release:
     name: Create GitHub Release
     needs: build-firmware
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       upload_url: ${{ steps.create_release.outputs.upload_url }}
       version: ${{ needs.build-firmware.outputs.version }}
@@ -152,7 +159,7 @@ jobs:
   update-flasher:
     name: Update Web Flasher
     needs: [build-firmware, create-release]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
