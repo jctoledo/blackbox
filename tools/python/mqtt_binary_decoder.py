@@ -1,108 +1,13 @@
 #!/usr/bin/env python3
 """
 Binary telemetry decoder for ESP32-C3 Blackbox telemetry system
-Decodes 67-byte binary packets published to car/telemetry_bin
+Decodes version-1 and version-4 binary packets published to car/telemetry_bin
 """
 
-import struct
 import paho.mqtt.client as mqtt
 import time
 from datetime import datetime
-
-
-class TelemetryDecoder:
-    """Decoder for binary telemetry packets"""
-
-    # Rust struct (packed, no padding):
-    # u8 version,
-    # u16 header, u32 timestamp_ms,
-    # f32 ax, ay, az, wz, roll, pitch,  (6 floats)
-    # f32 yaw, x, y, vx, vy, speed_kmh, (6 floats)
-    # u8 mode,
-    # f32 lat, lon,                      (2 floats)
-    # u8 gps_valid,
-    # u16 checksum
-    # Total: 1+2+4+(12*4)+1+8+1+2 = 67 bytes
-
-    FORMAT = "=BHIffffffffffffBffBH"  # B for version, 12 f's for 12 floats
-    SIZE = 67  # Verified from actual packets
-
-    MODE_NAMES = {
-        0: "IDLE",
-        1: "ACCEL",
-        2: "BRAKE",
-        4: "CORNER",
-        5: "ACCEL+CORNER",
-        6: "BRAKE+CORNER",
-    }
-
-    def __init__(self):
-        self.packet_count = 0
-        self.error_count = 0
-        self.last_time = time.time()
-        self.packets_per_second = 0
-        print(f"📦 Packet size: {self.SIZE} bytes")
-
-    def decode(self, payload):
-        """Decode binary packet to dictionary"""
-        if len(payload) != self.SIZE:
-            self.error_count += 1
-            print(f"❌ Invalid packet size: {len(payload)} (expected {self.SIZE})")
-            return None
-
-        try:
-            data = struct.unpack(self.FORMAT, payload)
-        except struct.error as e:
-            self.error_count += 1
-            print(f"❌ Unpack error: {e}")
-            return None
-
-        # Verify header (index 1 after version byte)
-        if data[1] != 0xAA55:
-            self.error_count += 1
-            print(f"❌ Invalid header: 0x{data[1]:04X} (expected 0xAA55)")
-            return None
-
-        # Verify checksum (last field in struct)
-        checksum_calc = sum(payload[:-2]) & 0xFFFF
-        checksum_recv = data[-1]  # Last item in unpacked tuple
-        if checksum_calc != checksum_recv:
-            self.error_count += 1
-            print(
-                f"⚠️  Checksum mismatch: calc=0x{checksum_calc:04X} "
-                f"recv=0x{checksum_recv:04X} (ignoring)"
-            )
-            # Don't return None - continue anyway for debugging
-
-        # Update packet rate
-        self.packet_count += 1
-        now = time.time()
-        if now - self.last_time >= 1.0:
-            self.packets_per_second = self.packet_count
-            self.packet_count = 0
-            self.last_time = now
-
-        # Build dictionary (indices match struct order, version at index 0)
-        return {
-            "version": data[0],
-            "timestamp_ms": data[2],
-            "ax": data[3],
-            "ay": data[4],
-            "az": data[5],
-            "wz": data[6],
-            "roll": data[7],
-            "pitch": data[8],
-            "yaw": data[9],
-            "x": data[10],
-            "y": data[11],
-            "vx": data[12],
-            "vy": data[13],
-            "speed_kmh": data[14],
-            "mode": self.MODE_NAMES.get(data[15], "UNKNOWN"),
-            "lat": data[16],
-            "lon": data[17],
-            "gps_valid": bool(data[18]),
-        }
+from telemetry_protocol import TelemetryDecoder
 
 
 class TelemetryDisplay:

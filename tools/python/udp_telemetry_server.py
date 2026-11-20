@@ -6,92 +6,9 @@ No connection management - just receive packets!
 """
 
 import socket
-import struct
 import time
 from datetime import datetime
-
-
-class TelemetryDecoder:
-    # Format: B = version, H = header, I = timestamp, then floats, bytes, checksum
-    FORMAT = "=BHIffffffffffffBffBH"
-    SIZE = 67
-
-    MODE_NAMES = {
-        0: "IDLE",
-        1: "ACCEL",
-        2: "BRAKE",
-        4: "CORNER",
-        5: "ACCEL+CORNER",
-        6: "BRAKE+CORNER",
-    }
-
-    def __init__(self):
-        self.packet_count = 0
-        self.error_count = 0
-        self.last_time = time.time()
-        self.packets_per_second = 0
-        print(f"📦 Packet size: {self.SIZE} bytes")
-
-    def decode(self, payload):
-        if len(payload) != self.SIZE:
-            self.error_count += 1
-            return None
-
-        try:
-            data = struct.unpack(self.FORMAT, payload)
-        except struct.error as e:
-            self.error_count += 1
-            print(f"❌ Unpack error: {e}")
-            return None
-
-        # Verify version
-        if data[0] != 1:
-            self.error_count += 1
-            print(f"⚠️  Unknown version: {data[0]} (expected 1)")
-
-        # Verify header
-        if data[1] != 0xAA55:
-            self.error_count += 1
-            print(f"❌ Invalid header: 0x{data[1]:04X} (expected 0xAA55)")
-            return None
-
-        # Verify checksum
-        checksum_calc = sum(payload[:-2]) & 0xFFFF
-        checksum_recv = data[-1]
-        if checksum_calc != checksum_recv:
-            self.error_count += 1
-            print(
-                f"⚠️  Checksum mismatch: calc=0x{checksum_calc:04X} recv=0x{checksum_recv:04X}"
-            )
-
-        # Update rate
-        self.packet_count += 1
-        now = time.time()
-        if now - self.last_time >= 1.0:
-            self.packets_per_second = self.packet_count
-            self.packet_count = 0
-            self.last_time = now
-
-        return {
-            "version": data[0],
-            "timestamp_ms": data[2],
-            "ax": data[3],
-            "ay": data[4],
-            "az": data[5],
-            "wz": data[6],
-            "roll": data[7],
-            "pitch": data[8],
-            "yaw": data[9],
-            "x": data[10],
-            "y": data[11],
-            "vx": data[12],
-            "vy": data[13],
-            "speed_kmh": data[14],
-            "mode": self.MODE_NAMES.get(data[15], "UNKNOWN"),
-            "lat": data[16],
-            "lon": data[17],
-            "gps_valid": bool(data[18]),
-        }
+from telemetry_protocol import TelemetryDecoder
 
 
 class TelemetryDisplay:
