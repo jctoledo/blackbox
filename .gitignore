@@ -80,3 +80,6 @@ docs/firmware/
 docs/guides/
 
 /docs/demo.html
+
+# Host-only JavaScript test dependencies
+/node_modules/

@@ -19,11 +19,16 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22.14.0'
+          cache: npm
       - name: Host regression tests
         run: |
           rustup component add rustfmt --toolchain stable
           cargo +stable fmt --all -- --check
           cargo +stable test --locked -p sensor-fusion -p wt901 -p ublox-gps -p blackbox-host-tests
+          npm ci --ignore-scripts
           node --test tests/*.test.cjs
           cargo +stable run --quiet --locked -p blackbox-host-tests --example packet_fixture > "$RUNNER_TEMP/telemetry-v4.hex"
           diff tests/fixtures/telemetry-v4.hex "$RUNNER_TEMP/telemetry-v4.hex"
