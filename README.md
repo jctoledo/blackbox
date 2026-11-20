@@ -126,7 +126,7 @@ Connect to the device's WiFi and open `192.168.71.1` in any browser.
 | Speed | Current and max speed |
 | Mode Detection | IDLE, ACCEL, BRAKE, CORNER, or combined states |
 | Driving Presets | Track, Canyon, City, Highway, or Custom |
-| Lap Timer | Record tracks, time laps, see delta-to-best |
+| Lap Timer | Record tracks, time laps, compare against a saved reference |
 | Recording | Capture sessions, export to CSV |
 | Diagnostics | Sensor rates, GPS quality, EKF health |
 
@@ -152,7 +152,7 @@ Record tracks anywhere and get real-time lap timing with delta display.
 1. **Record a Track** — Tap lap timer card → **+** → drive one lap → **Stop**
 2. **Activate Track** — Tap saved track to enable timing
 3. **Drive** — Cross start line, timing begins automatically
-4. **Watch Delta** — Green = ahead, Red = behind your best
+4. **Watch Delta** — Negative/green = ahead; positive/red = behind the saved reference
 
 ### Delta Bar
 

@@ -167,7 +167,7 @@ Every lap time saves automatically, grouped by session.
 ### What's Saved
 - Every lap time with session grouping
 - Best lap per session highlighted
-- Reference lap (for delta) auto-updated on new best
+- Reference lap (for delta) updated by a faster usable trace; an invalid trace cannot replace it
 
 ---
 
