@@ -2373,12 +2373,16 @@ function readRecordingBackup(scope){
     });
 }
 async function createBackup(scope='all'){
-    backupIdle();if(!db)await openDB();if(!trackDb)await openTrackDB();
+    backupIdle();
+    // A visibility-change save may detach the buffer while database reads wait.
+    // Snapshot the tail first, then deduplicate it against committed chunk keys.
+    const tail={sessionId,sessionStart,chunkIndex,data:chunkBuffer.slice()};
+    if(!db)await openDB();if(!trackDb)await openTrackDB();
     const [recording,track]=await Promise.all([readRecordingBackup(scope),readBackupStores(trackDb,['tracks','reference_laps','lap_history'])]);
     // Include the unsaved tail even when storage is full; export must not require a write.
-    if(chunkBuffer.length&&(scope==='all'||Number(scope)===sessionId)){
-        if(!recording.sessions.some(s=>s.sessionId===sessionId))recording.sessions.push({sessionId,startTime:sessionStart,status:'active'});
-        recording.chunks.push({sessionId,chunkIndex,data:chunkBuffer.slice(),timestamp:Date.now()});
+    if(tail.data.length&&(scope==='all'||Number(scope)===tail.sessionId)&&!recording.chunks.some(c=>c.sessionId===tail.sessionId&&c.chunkIndex===tail.chunkIndex)){
+        if(!recording.sessions.some(s=>s.sessionId===tail.sessionId))recording.sessions.push({sessionId:tail.sessionId,startTime:tail.sessionStart,status:'active'});
+        recording.chunks.push({sessionId:tail.sessionId,chunkIndex:tail.chunkIndex,data:tail.data,timestamp:Date.now()});
     }
     const value={format:BACKUP_FORMAT,version:BACKUP_VERSION,createdAt:new Date().toISOString(),data:{sessions:recording.sessions,chunks:recording.chunks,tracks:track.tracks,references:track.reference_laps.map(portableReference),history:track.lap_history}};
     value.checksum=backupChecksum(value.data);validateBackup(value);return value;

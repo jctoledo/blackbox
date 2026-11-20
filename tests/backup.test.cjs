@@ -108,3 +108,14 @@ test('oversized backup is refused before reading the file or writing any data',a
  const {c,elements}=uiContext();let read=false;await c.previewBackup({size:100*1024*1024+1,text:async()=>{read=true;return '{}'}});
  assert.equal(read,false);assert.match(elements.get('backup-status').textContent,/100 MiB/);assert.equal(elements.get('backup-restore').disabled,true);
 });
+
+test('backup cannot lose or duplicate the pending tail when a background save detaches it during reads',async()=>{
+ for(const committed of [false,true]){
+  const c=context();c.db=await database();c.trackDb=await database(true);c.sessionId=100;c.sessionStart=100;c.chunkIndex=0;c.chunkBuffer=[{t:101,sp:20}];
+  const read=c.readBackupStores;c.readBackupStores=async(database,names)=>{
+   if(database===c.db){const rows=c.chunkBuffer;c.chunkBuffer=[];return{sessions:[{sessionId:100,startTime:100,status:'active'}],chunks:committed?[{sessionId:100,chunkIndex:0,data:rows}]:[]}}
+   return read(database,names);
+  };
+  const value=await c.createBackup();assert.equal(value.data.chunks.length,1);assert.equal(value.data.chunks[0].data.length,1);assert.equal(value.data.chunks[0].data[0].sp,20);
+ }
+});
