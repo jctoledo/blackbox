@@ -35,6 +35,7 @@ Release candidate for hardware validation. No real USB write/boot or reference-t
 - `blackbox-6m.bin`: NEO-6M, 5 Hz GPS.
 - `blackbox-m9n.bin`: NEO-M9N, 25 Hz GPS.
 - Both are complete 4 MiB ESP32-C3 images for offset `0x0`; full-image flashing replaces device configuration. Verify the matching `SHA256SUMS-*.txt` before CLI flashing.
+- The current IMU wiring uses GPIO18/19, also used by native ESP32-C3 USB. Verify board/USB-bridge compatibility; do not share those pins with an IMU and native USB concurrently.
 - Keep the unit still during calibration, verify sensor rates, then follow `docs/REVIEW.md` before relying on lap results. Synthetic replay accuracy is not a physical timing-accuracy guarantee.
 
 ## [0.0.2] - 2025-01-10

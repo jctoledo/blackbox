@@ -77,6 +77,8 @@ NEO-M9N supports up to 25 Hz, but that is an update-rate specification, not a la
 
 ### Wiring
 
+**Check your board's USB wiring first.** This mapping assigns GPIO18/19 to the IMU UART. Those pins are also the ESP32-C3 native USB D−/D+ pins. Do not connect the IMU to them while also using that native USB connection; use a compatible USB-to-UART bridge or change the firmware pin mapping and wiring together. See [Espressif's serial-connection guide](https://docs.espressif.com/projects/esp-idf/en/latest/esp32c3/get-started/establish-serial-connection.html). A board marketed simply as “ESP32-C3” is not enough to establish compatibility.
+
 ```
 ESP32-C3              WT901 IMU         GPS Module
 ─────────             ─────────         ──────────
