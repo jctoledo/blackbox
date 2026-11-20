@@ -118,3 +118,12 @@ CSV recordings now retain browser epoch milliseconds (`time`), device uptime mil
 - **Highest-value next evidence:** reference-timed M9N crossings plus antenna/mount/actual-rate metadata, followed by timestamp alignment, raw sample logging, and reference-path matching with ambiguous-section rejection. Higher display rates alone cannot solve measurement uncertainty.
 
 The project can be compelling as an enthusiast instrument and a transparent engineering platform. Its competitive argument is ownership, repairability, customization, and inspectable evidence. A better-looking dashboard must not be presented as equivalent to a validated commercial timing/coaching system.
+
+
+### Follow-up evidence and research tickets
+
+The phone uses JavaScript/IndexedDB, not a cloud backend. Saving was shortened from a minute to approximately five seconds while receiving data. Aborted writes restore the unsaved batch and stop collection; export snapshots saved plus pending rows without another write. Reload exposes unfinished sessions without silently resuming. Browser suspension, quota/eviction, and unsaved tails remain limitations; no background/durable-storage guarantee is made.
+
+The normal-drive collection plan and future acceptance criteria are tracked in [#54 corner matching](https://github.com/jctoledo/blackbox/issues/54), [#55 timestamp/crossing evidence](https://github.com/jctoledo/blackbox/issues/55), and [#56 braking/cornering comparisons](https://github.com/jctoledo/blackbox/issues/56). These are research plans, not implemented coaching features. Neighborhood/highway driving is useful for continuity and frame checks; independent crossing observations are needed for accuracy.
+
+Stage validation now includes a deterministic 20-mile replay and a missing-GPS finish rejection case. UI tests cover exact completed-stage results, preservation of faster references across arming, nonfinite data rejection, persistence failures, CSV evidence, and emergency export. All compilation and automated test execution remain on lat.

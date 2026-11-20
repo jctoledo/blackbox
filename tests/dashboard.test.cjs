@@ -200,3 +200,10 @@ test('emergency export includes committed and unsaved rows without another write
  vm.createContext(c);vm.runInContext(section('function samplesToCSV(', 'async function exportCSV(')+section('async function exportSessionById(', 'function formatBytes('),c);
  const result=await c.exportSessionById(10);assert.equal(result.sampleCount,2);assert.equal(clicked,true);assert.equal(csv.trim().split('\n').length,3);assert.equal(c.chunkBuffer.length,1);
 });
+
+
+test('reference save completion cannot replace a newly selected track reference',async()=>{
+ let finish;const original={lapTimeMs:50000};const c={console,Date,Math,activeTrack:{id:'old'},referenceLap:original,saveRefLap:()=>new Promise(resolve=>{finish=resolve})};vm.createContext(c);
+ vm.runInContext(section('async function saveNewRefLap(', 'async function saveTrack('),c);
+ const p=c.saveNewRefLap('old',60000,{toBinary:()=>new ArrayBuffer(0),samples:[],dist:100});c.activeTrack={id:'new'};finish();await p;assert.equal(c.referenceLap,original);
+});

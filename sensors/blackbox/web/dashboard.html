@@ -1246,7 +1246,7 @@ function updateDeltaBar(opts){const{deltaMs,trend=0,hasRef=false,isP2P=false}=op
 async function saveNewRefLap(trackId,lapTimeMs,tracker){
     try{
         const ref={id:'ref_'+Date.now()+'_'+Math.random().toString(36).substr(2,9),trackId,lapTimeMs,created:Date.now(),samples:tracker.toBinary(),sampleCount:tracker.samples.length,totalDistance:tracker.dist};
-        await saveRefLap(ref);referenceLap=ref;const sec=$('lap-section');if(sec)sec.classList.add('has-ref');console.log('Reference lap created:',fmtLapTime(lapTimeMs),'('+ref.sampleCount+' samples)');
+        await saveRefLap(ref);if(!activeTrack||activeTrack.id!==trackId)return;referenceLap=ref;const sec=$('lap-section');if(sec)sec.classList.add('has-ref');console.log('Reference lap created:',fmtLapTime(lapTimeMs),'('+ref.sampleCount+' samples)');
         console.log('Reference lap saved to IndexedDB')
     }catch(e){console.error('Failed to save ref lap:',e)}
 }
@@ -2041,7 +2041,7 @@ function process(buf,timing=null){
     const gpsCourse=d.getFloat32(69,1);
     // EKF state for track manager
     const ekfYaw=d.getFloat32(31,1),ekfX=d.getFloat32(35,1),ekfY=d.getFloat32(39,1);
-    if(![ax,ay,wz,sp,posSigma,ekfYaw,ekfX,ekfY].every(Number.isFinite)||sp<0||posSigma<0)throw new Error('Invalid numeric telemetry');
+    if(![ax,ay,wz,sp,posSigma,ekfYaw,ekfX,ekfY].every(Number.isFinite)||(!Number.isFinite(gpsCourse)&&!Number.isNaN(gpsCourse))||sp<0||posSigma<0)throw new Error('Invalid numeric telemetry');
     if(gpsOk===1&&(!Number.isFinite(lat)||!Number.isFinite(lon)||Math.abs(lat)>90||Math.abs(lon)>180))throw new Error('Invalid GPS coordinates');
     // Lap timer fields (82-byte protocol v4)
     const lapTimeMs=buf.byteLength>=80?d.getUint32(73,1):0;
@@ -2055,7 +2055,7 @@ function process(buf,timing=null){
     // This ensures dashboard coords match firmware's EKF coordinate frame for timing line crossing.
     let localX=ekfX,localY=ekfY; // fallback to EKF if GPS ref not ready
     const ref=getGpsRef();if(ref&&gpsOk===1&&lat&&lon){const local=gpsToLocal(lat,lon);if(local){localX=local.x;localY=local.y}}
-    const validGpsCourse=!isNaN(gpsCourse)&&sp>2.0;
+    const validGpsCourse=Number.isFinite(gpsCourse)&&sp>2.0;
     currentPos={x:localX,y:localY,yaw:ekfYaw,gpsCourse:gpsCourse,validGpsCourse:validGpsCourse,speed:sp,valid:gpsOk===1,sigma:posSigma,lat:lat,lon:lon};
     updateTrackRecording();
     updateStartLineIndicator();
