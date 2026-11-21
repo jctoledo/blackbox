@@ -454,6 +454,29 @@ body.cluster-view.cluster-forces .bbForceTools{position:absolute;top:0;right:4px
 
 body.cluster-view .bbRunTitle{padding-top:44px}body.cluster-view .bbClusterRuns .bbPeakGrid{padding-top:8px;gap:10px}body.cluster-view .bbClusterRuns dd{font-size:24px}
 body.cluster-view.cluster-controls .bbKebab{display:block}
+/* Warning rows and expanded Controls reduce card height independently of viewport height. */
+body.cluster-view .bbLapCard,body.cluster-view .bbApp .bbGCard{container:cluster-card / size}
+@container cluster-card (max-height:210px){
+    body.cluster-view .bbLapMain{grid-template-rows:12px 12px minmax(0,1fr);padding:6px 10px;gap:2px 8px}
+    body.cluster-view .bbLapMeta{grid-row:2;margin-top:0!important;gap:6px}
+    body.cluster-view .bbLapTime{grid-row:3;font-size:clamp(24px,18cqh,32px)}
+    body.cluster-view .bbReferenceLabel,body.cluster-view .bbLapProgress{display:none}
+    body.cluster-view .bbLapHistory{flex-basis:42px;height:42px;padding:4px 8px}
+    body.cluster-view .bbLapHistValue{font-size:16px}
+    body.cluster-view .bbLapResult,body.cluster-view .bbStartLineIndicator,body.cluster-view .bbFinishLineIndicator{bottom:42px}
+    body.cluster-view .bbApp .bbGTop{grid-template-rows:minmax(0,1fr) 42px}
+    body.cluster-view .bbGTopLeft{padding:44px 10px 4px}
+    body.cluster-view .bbApp .bbSpeed{font-size:clamp(40px,28cqh,56px)}
+    body.cluster-view .bbManeuver{font-size:10px}
+    body.cluster-view .bbApp .bbGTopRight{padding:0 10px}
+    body.cluster-view .bbPeakGrid{padding:44px 10px 8px;gap:8px}
+    body.cluster-view .bbPeakGrid dd{font-size:clamp(24px,16cqh,30px)}
+    body.cluster-view.cluster-forces .bbApp .bbGReadoutRow{flex-basis:42px;height:42px;padding:4px 8px}
+    body.cluster-view .bbGReadoutVal{font-size:18px}
+    body.cluster-view .bbGDivider{height:24px}
+    body.cluster-view.cluster-forces .bbApp .bbGPlotFrame{top:60px;width:min(100cqw,calc(100cqh - 60px));height:min(100cqw,calc(100cqh - 60px))}
+}
+
 .bbRecordingDetails{overflow-wrap:anywhere;min-width:0;font-size:12px;line-height:1.5}.bbRecordingDetails summary{cursor:pointer;min-height:44px;padding:12px 0;color:var(--text);font-weight:600}.bbRecordingDetails .bbSessionBtn{margin-top:12px}
 .bbDetailsGroup{padding:12px 0;border-top:1px solid var(--divider)}.bbDetailsGroup h4{font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px}.bbDetailsGroup dl{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.6fr);gap:5px 12px}.bbDetailsGroup dt{color:var(--text-secondary)}.bbDetailsGroup dd{color:var(--text);min-width:0;font-variant-numeric:tabular-nums}.bbDetailsNote{padding:10px 12px;margin:4px 0 12px;border-left:3px solid var(--amber);background:var(--bg);color:var(--text)}.bbDetailsLimit{color:var(--text-secondary);font-size:11px;margin-top:6px}
 </style></head>
@@ -532,7 +555,7 @@ body.cluster-view.cluster-controls .bbKebab{display:block}
         <div class="bbGTop">
             <div class="bbGTopLeft">
                 <div class="bbInstrumentLabel">Speed</div><div class="bbSpeedMaximum" title="Maximum speed estimate with fresh GPS, this page session">MAX <span id="speed-maximum">—</span> <span id="speed-maximum-unit">km/h</span></div><div class="bbSpeedLine"><span class="bbSpeed bbNum" id="speed">0</span><span class="bbUnit" id="speed-unit">km/h</span></div>
-                <div class="bbManeuver" id="maneuver">IDLE</div>
+                <div class="bbManeuver" id="maneuver">—</div>
             </div>
             <div class="bbGTopRight"><div class="bbInstrumentLabel">Session</div><span class="bbNum" id="session-time">0:00</span></div>
         </div>
@@ -568,7 +591,7 @@ body.cluster-view.cluster-controls .bbKebab{display:block}
     <div class="bbTelemetryStrip">
         <span class="bbTItem" title="Accepted dashboard samples per second, not GPS receiver rate">UI <span class="bbNum bbNum--hz" id="hz">0</span> Hz</span>
         <span class="bbTItem" title="Estimator position sigma, not measured GPS accuracy">Est. σ <span class="bbNum bbNum--gps" id="gps-acc">--</span>m</span>
-        <span class="bbTItem">Turn rate <span class="bbNum" id="yaw">0</span>°/s</span>
+        <span class="bbTItem">Sensor Z rate <span class="bbNum" id="yaw">0</span>°/s</span>
     </div>
 </main>
 </div>
@@ -669,7 +692,7 @@ body.cluster-view.cluster-controls .bbKebab{display:block}
         <button class="bbMenuItem" id="menu-data">Data</button>
         <button class="bbMenuItem" id="menu-rec">Record session</button>
         <button class="bbMenuItem" id="menu-export">Export CSV</button>
-        <button class="bbMenuItem destructive" id="menu-clear">Clear Session</button>
+        <button class="bbMenuItem destructive" id="menu-clear" title="Resets page speed and force statistics; recording and lap history continue">Reset speed / force stats</button>
     </div>
 </div>
 
@@ -896,7 +919,7 @@ function openDB(){
     });
 }
 
-const failedRecordingMetadata=new Map();
+const failedRecordingMetadata=new Map(),pendingRecordingMetadata=new Set();
 // Recording details: bounded v1 projection; clocks are browser wall time and controller uptime.
 function projectRecordingSnapshot(value){
     const fail=()=>{throw Error('Invalid recording metadata')},object=v=>v&&typeof v==='object'&&!Array.isArray(v);
@@ -936,14 +959,15 @@ function patchRecordingSession(database,id,patch){
     });
 }
 async function captureRecordingMetadata(database,owner,request=requestDevice){
-    const {requestedAt}=owner.recordingMetadata;let metadata;
+    const {requestedAt}=owner.recordingMetadata;let metadata;owner.metadataPending=true;pendingRecordingMetadata.add(owner.sessionId);
     try{
         const response=await request('/api/recording-metadata',{timeoutMs:3000,maxBytes:8192,cache:'no-store'});
         if(!response.ok)throw Error('Metadata unavailable');
         metadata={status:'captured',requestedAt,receivedAt:Date.now(),snapshot:projectRecordingSnapshot(await response.json())};
     }catch{metadata={status:'unavailable',requestedAt,receivedAt:Date.now(),reason:'Metadata request unavailable'}}
-    owner.recordingMetadata=metadata;
+    owner.recordingMetadata=metadata;owner.metadataPending=false;pendingRecordingMetadata.delete(owner.sessionId);
     try{await patchRecordingSession(database,owner.sessionId,{recordingMetadata:metadata})}catch(error){owner.metadataSaveFailed=true;failedRecordingMetadata.set(owner.sessionId,metadata);console.warn('Recording details remain available in this tab',error)}
+    if(typeof refreshRecordingDetails==='function')refreshRecordingDetails(owner);
 }
 // End recording details core.
 
@@ -1077,7 +1101,7 @@ function updateRecUI(){
     }
     if(recordingError){stat.textContent=recordingError;stat.className='bbVal err'}
     const quick=$('quick-record');quick.textContent=rec?'Stop recording':'Record session';quick.disabled=recordingBusy;quick.classList.toggle('recording',rec);
-    const notice=recordingError||lapPersistenceError||(recoveredSessionCount?recoveredSessionCount+' unfinished recording(s) found in Saved data. Saved chunks are available; recording has not resumed.':'');
+    const notice=recordingError||lapPersistenceError||(recoveredSessionCount?recoveredSessionCount+' interrupted recording(s) found in Saved data. Check saved sample counts; recording has not resumed.':'');
     $('recording-notice').hidden=!notice;$('recording-notice').textContent=notice;
     const saveStatus=$('save-status');saveStatus.hidden=!sessionId;saveStatus.textContent=chunkWrite?'Saving recording…':chunkBuffer.length?chunkBuffer.length+' samples pending save':lastSaveTime?'Recording saved in this browser':'No samples saved yet';
     $('rec-chunks').textContent=chunkIndex;
@@ -1134,7 +1158,7 @@ async function getAllSessions(){
     });
     const enriched=sessions.map(s=>{
         const summary=chunksBySession.get(s.sessionId)||{count:0,bytes:0,health:recordingHealth([])},health=summary.health;
-        return{sessionId:s.sessionId,startTime:s.startTime||s.sessionId,recordingMetadata:failedRecordingMetadata.get(s.sessionId)||(recordingContext?.sessionId===s.sessionId?recordingContext.recordingMetadata:s.recordingMetadata),metadataSaveFailed:failedRecordingMetadata.has(s.sessionId),label:typeof s.label==='string'?s.label:'',status:s.status,chunkCount:summary.count,sampleCount:health.samples,durationMs:health.durationMs,estimatedBytes:summary.bytes,health};
+        return{sessionId:s.sessionId,startTime:s.startTime||s.sessionId,recordingMetadata:failedRecordingMetadata.get(s.sessionId)||(recordingContext?.sessionId===s.sessionId?recordingContext.recordingMetadata:s.recordingMetadata),metadataPending:pendingRecordingMetadata.has(s.sessionId),pendingSamples:s.sessionId===sessionId?chunkBuffer.length:0,metadataSaveFailed:failedRecordingMetadata.has(s.sessionId),label:typeof s.label==='string'?s.label:'',status:s.status,chunkCount:summary.count,sampleCount:health.samples,durationMs:health.durationMs,estimatedBytes:summary.bytes,health};
     });
     enriched.sort((a,b)=>b.sessionId-a.sessionId);
     return enriched;
@@ -2173,7 +2197,10 @@ resize();window.addEventListener('resize',resize);
 $('range-val').onclick=()=>{currentScale=SCALE_STEPS[(SCALE_STEPS.indexOf(currentScale)+1)%SCALE_STEPS.length];$('range-val').textContent='Scale '+currentScale.toFixed(1)+' g';drawG()};
 function forcePoint(x,y,scale){const mag=Math.hypot(x,y),factor=mag>scale?scale/mag:1;return{x:x*factor/scale,y:y*factor/scale,clipped:mag>scale}}
 function forcesUsable(gps,age,imuAge){return gps===1&&Number.isFinite(age)&&age>=0&&age<=300&&Number.isFinite(imuAge)&&imuAge>=0&&imuAge<=200}
-function clearForces(label){trail=[];emaGx=emaGy=0;lastT=0;effortPeaks.update(0,0,false);$('force-status').textContent=label;$('lat-g').textContent=$('lon-g').textContent='—';drawG()}
+// Moving-sample heuristic, not a force-accuracy guarantee; callers supply metres per second.
+const SUSTAINED_EFFORT_MIN_SPEED_MPS=10/3.6;
+function sustainedEffortUsable(speedMps,gps,gpsAge,imuAge){return Number.isFinite(speedMps)&&speedMps>=SUSTAINED_EFFORT_MIN_SPEED_MPS&&forcesUsable(gps,gpsAge,imuAge)}
+function clearForces(label){trail=[];emaGx=emaGy=0;lastT=0;effortPeaks.update(0,0,false);$('force-status').textContent=label;$('lat-g').textContent=$('lon-g').textContent='—';$('maneuver').textContent='—';$('maneuver').style.color=MODE_COLORS[0];currentModeColor=getModeColorHex(0);drawG()}
 
 function hexToRgba(hex,a){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return`rgba(${r},${g},${b},${a})`}
 function downsampleTrail(points,maxPoints){
@@ -2409,6 +2436,17 @@ function showLapResult(time,previousBest){
     box.hidden=false;
     setTimeout(()=>{if(generation===lapResultGeneration)box.hidden=true},5000);
 }
+function clearUnconfirmedTiming(label){
+    $('lap-state').textContent=label;$('lap-state').classList.remove('timing','finished');$('lap-section').classList.remove('timing');
+    $('lap-time').textContent='—:——';$('lap-result').hidden=true;lapResultGeneration++;
+    if(lapTracker){
+        // A late response from before track activation must not taint a lap that has not started.
+        if(lapTracker.startTime!=null||prevLapTimeMs>0)lapTracker.invalidate?.();
+        lapTracker.matcher=null;lapTracker.match=null;
+    }
+    lastDeltaMs=0;deltaTrend=0;updateLapProgress(false);
+    updateDeltaBar({deltaMs:null,hasRef:!!referenceLap,isP2P:activeTrack?.type==='point_to_point',reason:label});
+}
 function updateLapTimer(lapTimeMs,lapCnt,lapFlags,timing=null){
     updateLapProgress(false);
     $('reference-label').textContent=referenceLap?.spatial?'Reference '+fmtLapTime(referenceLap.lapTimeMs):referenceLap?'Older reference · complete a clean lap/run to upgrade':'';
@@ -2417,13 +2455,17 @@ function updateLapTimer(lapTimeMs,lapCnt,lapFlags,timing=null){
     // Only deactivate via explicit deactivateTrack() call
     if(!lapTimerActive||!activeTrack)return;
     if(timing&&timing.state==='idle'){
-        $('lap-state').textContent='Select track to re-arm';
-        sec.classList.remove('timing');
+        clearUnconfirmedTiming('Select track to re-arm');
         return;
     }
     if(timing&&expectedLapRevision!==null&&timing.revision!==expectedLapRevision){
-        $('lap-state').textContent='Waiting for track confirmation';
+        clearUnconfirmedTiming('Waiting for track confirmation');
         return;
+    }
+    // P2P completion is also armed: retain its tracker until completion/reference processing below.
+    if(timing?.state==='armed'&&lapCnt===prevLapCnt&&lapTracker&&(lapTracker.startTime!=null||lapTracker.reliable===false)){
+        lapTracker.reset();lastDeltaMs=0;deltaTrend=0;
+        updateDeltaBar({deltaMs:null,hasRef:!!referenceLap,isP2P:activeTrack.type==='point_to_point'});
     }
     const completedMs=timing?timing.last_lap_ms:prevLapTimeMs;
     const countIncreased=lapCnt>prevLapCnt;
@@ -2515,6 +2557,9 @@ function resetState(){
     trail=[];currentScale=1;
     $('range-val').textContent='Scale '+currentScale.toFixed(1)+' g';
     emaGx=emaGy=0;displaySessionStart=Date.now();effortPeaks.reset();
+    $('speed-maximum').textContent='—';
+    for(const id of ['effort-accel','effort-brake','effort-left','effort-right'])$(id).textContent='—';
+    drawG();
 }
 
 let peakHighlightTimeout=null;
@@ -2598,12 +2643,13 @@ function process(buf,timing=null){
     if(gpsOk===1&&Number.isFinite(timing?.gps_age_ms)&&timing.gps_age_ms>=0&&timing.gps_age_ms<=300)maximumFreshSpeed=Math.max(maximumFreshSpeed??0,sp);
     $('speed-maximum').textContent=maximumFreshSpeed===null?'—':speedForDisplay(maximumFreshSpeed);
 
-    currentModeColor=getModeColorHex(mo);
+    const modeUsable=forcesUsable(gpsOk,timing?.gps_age_ms,timing?.imu_age_ms);
+    currentModeColor=getModeColorHex(modeUsable?mo:0);
     const el=$('maneuver');
-    el.textContent=MODES[mo]||'IDLE';
-    el.style.color=MODE_COLORS[mo]||MODE_COLORS[0];
+    el.textContent=modeUsable?(MODES[mo]||'IDLE'):'—';
+    el.style.color=modeUsable?(MODE_COLORS[mo]||MODE_COLORS[0]):MODE_COLORS[0];
 
-    effortPeaks.update(d.getUint32(3,true),lng,forcesUsable(gpsOk,timing?.gps_age_ms,timing?.imu_age_ms)&&sp>=10,latg);
+    effortPeaks.update(d.getUint32(3,true),lng,sustainedEffortUsable(sp/3.6,gpsOk,timing?.gps_age_ms,timing?.imu_age_ms),latg);
     $('effort-accel').textContent=effortPeaks.accel===null?'—':effortPeaks.accel.toFixed(2);$('effort-brake').textContent=effortPeaks.brake===null?'—':effortPeaks.brake.toFixed(2);
     $('effort-left').textContent=effortPeaks.left===null?'—':effortPeaks.left.toFixed(2);$('effort-right').textContent=effortPeaks.right===null?'—':effortPeaks.right.toFixed(2);
     updateReadouts(gx,gy);
@@ -2943,7 +2989,7 @@ async function previewBackup(file){
         if(file.size>BACKUP_MAX_BYTES)throw new Error('Backup is larger than the supported 100 MiB limit.');
         let value;try{value=JSON.parse(await file.text())}catch{throw new Error('This file is not valid JSON. Choose a Blackbox backup file, not a CSV export.');}
         value=normalizeBackup(value);const summary=validateBackup(value);backupPreview=value;
-        $('backup-status').textContent=(value.legacyImport?'Track JSON export (no original checksum). ':'Checksum verified. ')+summary.recordings+' recordings · '+summary.sampleCount+' samples · '+summary.tracks+' tracks · '+summary.references+' references · '+summary.laps+' lap results. Restore adds copies without changing existing data. Importing the same file again creates another copy. Location data is included; nothing is uploaded.';
+        $('backup-status').textContent=(value.legacyImport?'Track JSON export (no original checksum). ':'Checksum verified. ')+summary.recordings+' recordings · '+summary.sampleCount+' '+(summary.sampleCount===1?'sample':'samples')+' · '+summary.tracks+' tracks · '+summary.references+' references · '+summary.laps+' lap results. Restore adds copies without changing existing data. Importing the same file again creates another copy. Location data is included; nothing is uploaded.';
     });
 }
 async function restoreBackup(){
@@ -2974,32 +3020,44 @@ async function renderDataModal(){
     $('data-track-size').textContent=formatBytes(combined.tracksBytes);
     $('data-rec-count').textContent='('+combined.sessionCount+')';
     const scope=$('backup-scope'),selected=scope.value,sessions=await getAllSessions();
-    scope.innerHTML='<option value="all">All saved data</option><option value="recordings">Recordings only</option><option value="tracks">Tracks, references &amp; history only</option>'+sessions.map(s=>'<option value="'+s.sessionId+'">Recording '+escHtml(formatSessionDate(s.startTime))+' · '+s.sampleCount+' samples</option>').join('');
+    scope.innerHTML='<option value="all">All saved data</option><option value="recordings">Recordings only</option><option value="tracks">Tracks, references &amp; history only</option>'+sessions.map(s=>'<option value="'+s.sessionId+'">Recording '+escHtml(formatSessionDate(s.startTime))+' · '+s.sampleCount+' '+(s.sampleCount===1?'sample':'samples')+'</option>').join('');
     if(Array.from(scope.options).some(option=>option.value===selected))scope.value=selected;
     $('data-track-count').textContent='('+combined.trackCount+')';
     await renderSessionList();
     await renderTrackDataList()
 }
 
+function recordingRecoveryLabel(session){return session.sampleCount?'Interrupted · saved data available':'Interrupted · no saved samples'}
+function refreshRecordingDetails(owner){
+    if(typeof document==='undefined')return;
+    const modal=$('data-modal');if(!modal.classList.contains('open'))return;
+    const row=modal.querySelector('[data-session-id="'+owner.sessionId+'"]');
+    const details=row?.querySelector('.bbRecordingDetails'),body=details?.querySelector('.bbRecordingDetailsBody');if(!body)return;
+    const focused=body.contains(document.activeElement),scroller=modal.querySelector('.bbModalBody'),scrollTop=scroller.scrollTop;
+    const template=document.createElement('template');template.innerHTML=recordingDetailsHTML({recordingMetadata:owner.recordingMetadata,metadataSaveFailed:owner.metadataSaveFailed});
+    body.replaceChildren(...template.content.querySelector('.bbRecordingDetailsBody').childNodes);
+    const button=body.querySelector('[data-action="details-export"]');button.onclick=()=>handleSessionAction(button);
+    if(focused)button.focus({preventScroll:true});scroller.scrollTop=scrollTop;
+}
 function recordingDetailsHTML(session){
     const m=session.recordingMetadata,show=v=>v===null?'Unknown':String(v);
     const note=text=>'<p class="bbDetailsNote">'+escHtml(text)+'</p>';
     const group=(title,rows)=>'<div class="bbDetailsGroup"><h4>'+escHtml(title)+'</h4><dl>'+rows.map(([label,value])=>'<dt>'+escHtml(label)+'</dt><dd>'+escHtml(value)+'</dd>').join('')+'</dl></div>';
     let body;
     if(!m)body=note('Unknown · no historical snapshot was saved.');
-    else if(m.status!=='captured')body=note(m.status==='pending'?'Pending · request has not completed.':'Unavailable · recording continued without a snapshot.')+group('Snapshot',[['Requested',new Date(m.requestedAt).toLocaleString()]]);
+    else if(m.status!=='captured')body=note(m.status==='pending'?(session.metadataPending?'Pending · snapshot request is running.':'Snapshot interrupted · no request is running. No historical snapshot was saved.'):'Unavailable · recording continued without a snapshot.')+group('Snapshot',[['Requested',new Date(m.requestedAt).toLocaleString()]]);
     else{
         const s=m.snapshot,b=s.build,g=s.gps,i=s.imu,c=s.calibration;
         body=(s.simulated?note('SIM · Synthetic example; no hardware measurement.'):'')+
             group('Firmware',[['Application',show(b.app_version)],['ESP-IDF / target',show(b.idf_version)+' / '+b.target],['Source SHA',show(b.source_sha)]])+
             group('GPS setup',[['Receiver',g.configured_model],['Configured',g.configured_rate_hz+' Hz · '+g.configured_uart_baud+' baud'],['Verification','Unverified']])+
-            group('IMU link',[['Sensor',i.model+' / '+i.transport],['UART',show(i.configured_uart_baud)+' baud · '+i.baud_selection],['Output rate',show(i.configured_output_rate_hz)]])+
-            group('Applied calibration',[['Bias · sensor axes',c.accelerometer_bias_mps2?['x','y','z'].map(k=>k+' '+c.accelerometer_bias_mps2[k]).join(', ')+' m/s²':'Unknown'],['Saved alignment enabled',c.mount_alignment?String(c.mount_alignment.is_calibrated):'Unknown'],['Yaw offset',c.mount_alignment?c.mount_alignment.yaw_offset_rad+' rad':'Unknown']])+
+            group('IMU link',[['Sensor',i.model+' / '+i.transport],['UART',show(i.configured_uart_baud)+' baud · '+({pending:'not determined yet',header_probe:'detected from sensor header',fallback:'fallback setting'})[i.baud_selection]],['Output rate',show(i.configured_output_rate_hz)]])+
+            group('Applied calibration',[['Bias · sensor axes',c.accelerometer_bias_mps2?['x','y','z'].map(k=>k+' '+c.accelerometer_bias_mps2[k]).join(', ')+' m/s²':'Unknown'],['Saved alignment enabled',c.mount_alignment?(c.mount_alignment.is_calibrated?'Yes':'No'):'Unknown'],['Yaw offset',c.mount_alignment?c.mount_alignment.yaw_offset_rad+' rad':'Unknown']])+
             group('Snapshot',[['Boot ID',String(s.boot_id)],['Uptime',s.captured_uptime_ms+' ms'],['Requested',new Date(m.requestedAt).toLocaleString()],['Received',new Date(m.receivedAt).toLocaleString()]])+
             '<p class="bbDetailsLimit">One snapshot, not a history of settings. Configured rates are not delivered rates; hardware configuration is unverified.</p>';
     }
     if(session.metadataSaveFailed)body=note('Details could not be saved in browser storage. Download details JSON or a backup before closing this tab.')+body;
-    return '<details class="bbRecordingDetails"><summary>Recording details</summary>'+body+'<button class="bbSessionBtn" data-action="details-export">Download details JSON</button></details>';
+    return '<details class="bbRecordingDetails"><summary>Recording details</summary><div class="bbRecordingDetailsBody">'+body+'<button class="bbSessionBtn" data-action="details-export">Download details JSON</button></div></details>';
 }
 async function exportRecordingDetails(targetId){
     if(!db)await openDB();
@@ -3023,12 +3081,12 @@ async function renderSessionList(){
         listEl.innerHTML=stats.sessions.map(s=>{
             const isCur=rec&&s.sessionId===sessionId;
             const statusCls=isCur?'active':(s.status==='active'?'recovered':'complete');
-            const statusLbl=isCur?'● Recording':(s.status==='active'?'Interrupted · saved data available':'Saved · recording stopped');
+            const statusLbl=isCur?'● Recording':(s.status==='active'?recordingRecoveryLabel(s):'Saved · recording stopped');
             return'<div class=\"bbSessionItem'+(isCur?' active':'')+'\" data-session-id=\"'+s.sessionId+'\">'+
                 '<div class=\"bbSessionInfo\">'+
                     '<div class=\"bbSessionDate\">'+(s.label?escHtml(s.label)+' · ':'')+formatSessionDate(s.startTime)+'</div>'+
                     '<div class=\"bbSessionMeta\"><span>'+s.chunkCount+' chunk'+(s.chunkCount!==1?'s':'')+'</span><span>'+formatBytes(s.estimatedBytes)+'</span><span>'+formatSessionDuration(s.durationMs)+'</span></div>'+
-                    '<div class=\"bbSessionHealth\">'+s.sampleCount+' samples · Received samples with GPS fix: '+(s.health.gpsPercent===null?'—':s.health.gpsPercent+'%')+'<br>Largest sample gap: '+(s.health.maxGapMs/1000).toFixed(2)+'s · '+s.health.gaps+' over 1.5s'+(s.health.clockReversals?' · Clock changed':'')+'<br>'+(s.health.gpsEvents?'GPS evidence: '+s.health.gpsEvents+' events · '+s.health.gpsMissing+' missing · '+s.health.gpsRestarts+' device restarts':'GPS evidence unavailable in this recording')+'</div>'+
+                    '<div class=\"bbSessionHealth\">'+s.sampleCount+' saved '+(s.sampleCount===1?'sample':'samples')+(s.pendingSamples?' · '+s.pendingSamples+' '+(s.pendingSamples===1?'sample':'samples')+' pending save in this tab':'')+' · Received samples with GPS fix: '+(s.health.gpsPercent===null?'—':s.health.gpsPercent+'%')+'<br>Largest sample gap: '+(s.health.maxGapMs/1000).toFixed(2)+'s · '+s.health.gaps+' over 1.5s'+(s.health.clockReversals?' · Clock changed':'')+'<br>'+(s.health.gpsEvents?'GPS evidence: '+s.health.gpsEvents+' events · '+s.health.gpsMissing+' missing · '+s.health.gpsRestarts+' device restarts':'GPS evidence unavailable in this recording')+'</div>'+
                     '<div class=\"bbSessionStatus '+statusCls+'\">'+statusLbl+'</div>'+recordingDetailsHTML(s)+
                 '</div>'+
                 '<div class=\"bbSessionActions\">'+

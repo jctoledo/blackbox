@@ -59,3 +59,8 @@ test('horizontal swipes cycle instrument tabs without changing timing or recordi
  events.touchstart(start);events.touchend(end);assert.equal(elements.get('cluster-runs')['aria-pressed'],'true');
  events.touchstart(start);events.touchend(end);assert.equal(elements.get('cluster-speed')['aria-pressed'],'true');
 });
+test('sustained effort qualifies low-speed acceleration in explicit metres per second',()=>{
+ const c={Number,Math};vm.createContext(c);vm.runInContext(html.slice(html.indexOf('function forcesUsable('),html.indexOf('function clearForces('))+html.slice(html.indexOf('class EffortPeaks{'),html.indexOf('const effortPeaks='))+';this.Peaks=EffortPeaks;',c);
+ for(const speed of [2.8,3.0,3.3]){const p=new c.Peaks();for(let t=0;t<=500;t+=50)p.update(t,.2,c.sustainedEffortUsable(speed,1,0,0));assert.ok(Math.abs(p.accel-.2)<1e-8)}
+ for(const [speed,gps,gpsAge,imuAge] of [[2.7,1,0,0],[1,1,0,0],[3,0,0,0],[3,1,301,0],[3,1,0,201],[3,1,0,null]]){const p=new c.Peaks();for(let t=0;t<=500;t+=50)p.update(t,.2,c.sustainedEffortUsable(speed,gps,gpsAge,imuAge));assert.equal(p.accel,null)}
+});
