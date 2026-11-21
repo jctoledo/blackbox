@@ -12,6 +12,11 @@
 - [Sensor fusion](https://jctoledo.github.io/blackbox/guides/sensor-fusion.html): frames, prediction, correction, and limitations.
 - [Engineering review](https://jctoledo.github.io/blackbox/guides/engineering-review.html): tested fixes, claims audit, open issues, and hardware acceptance plan.
 
+## Capabilities and evidence
+Blackbox supports circuit/stage timing, interpolated fresh-fix crossings, position-matched references, CSV export, and validated backup/restore. Configuration targets are 25 Hz GPS with NEO-M9N (5 Hz with NEO-6M) and configurable WT901 output up to 200 Hz. No project subscription or cloud account is required.
+
+- [Build or buy comparison](https://jctoledo.github.io/blackbox/guides/comparison.html): documented capabilities alongside RaceBox, RaceChrono Pro, and Performance Box Touch; cost assumptions and proposed features are separate from delivered features.
+
 ## Accuracy and status
 Blackbox is in active development. Millisecond timestamps and interpolated crossings are not millisecond physical-accuracy claims. The estimator uses diagonal covariance, not a full covariance EKF. Synthetic tests and cross-compilation do not substitute for reference-timed driving or a real USB flash/boot test. Rates depend on configured hardware and measured processing cadence.
 

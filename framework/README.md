@@ -1,6 +1,6 @@
 # Sensor Fusion Framework
 
-A modular, extensible Rust framework for building custom sensor fusion systems. Build professional-grade telemetry for track days, racing, vehicle dynamics research, and fleet monitoring without vendor lock-in.
+A modular, extensible Rust framework for building custom sensor fusion systems. Build inspectable telemetry experiments with reusable sensor interfaces and coordinate transforms. The Blackbox application supplies a concrete vehicle project, regression tests, and a documented field-validation path.
 
 ## Features
 
@@ -198,7 +198,7 @@ sensor-fusion = { version = "0.1", features = ["esp32", "mqtt"] }
 See the `sensors/blackbox/` directory for a complete working example:
 - ESP32-C3 firmware
 - WT901 IMU + NEO-6M GPS
-- TCP telemetry streaming (20 Hz)
+- Binary v4 telemetry with configurable output cadence
 - MQTT status messages
 - Driving mode classification
 

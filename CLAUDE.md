@@ -54,7 +54,7 @@ ESP32-C3 vehicle telemetry system performing real-time sensor fusion of IMU and 
 
 - **Target**: ESP32-C3 microcontroller
 - **Sensors**: WT901 9-axis IMU (UART @ 115200), NEO-M9N GPS (UART, 25Hz)
-- **Output**: HTTP dashboard (~30Hz, AP mode) or UDP streaming (20Hz, Station mode)
+- **Output**: HTTP dashboard or UDP streaming (33 ms telemetry target, actual cadence measured)
 - **Operating Modes**: Access Point (standalone) or Station (network integration)
 
 ## Build Commands
@@ -133,7 +133,7 @@ Recorded timing-line directions come from `_calculateTimingLine` using `atan2`, 
 │              mode.rs (driving mode)                        │
 │                      │                                      │
 │                      ▼                                      │
-│         binary_telemetry.rs → TCP/HTTP @ 20Hz             │
+│         binary_telemetry.rs → UDP/HTTP, configured cadence             │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -302,7 +302,7 @@ RGB LED:      GPIO8 (WS2812, RMT channel 0)
 - Implication: Each power cycle = new origin. Cross-session data needs transformation.
 
 **lap_timer.rs - Line Crossing:**
-- Uses `line_segment_intersection()` for sub-sample precision at 200Hz
+- Uses fresh GPS fixes and interpolated line crossings; IMU rate is not crossing frequency
 - Direction validation: `atan2(vy, vx)` compared against expected direction
 - **Direction must be in math convention** (0 = East, π/2 = North)
 - ±90° tolerance by default
@@ -376,14 +376,18 @@ python3 tools/python/tcp_telemetry_server.py  # Live telemetry
 2. Power on, wait for calibration (yellow pulse) - DON'T TOUCH
 3. Wait for GPS lock (cyan pulse, can take 30-60s cold start)
 4. Drive, verify mode transitions (IDLE → ACCEL → BRAKE → CORNER)
-5. Stop at light, verify ZUPT (no position drift)
+5. Stop at light, verify ZUPT behavior and measure residual drift
 6. Check lap timer: record track, verify crossings detected
 
 ## Performance
 
-- **IMU**: 200Hz sampling (5ms between packets)
-- **GPS**: 25Hz updates (NEO-M9N)
-- **Telemetry**: 20Hz output (50ms intervals)
-- **Latency**: <50ms sensor → TCP
-- **Heap**: ~60KB used, stable during operation
-- **Position accuracy**: ±1m between GPS fixes (with ZUPT working)
+- **IMU**: configurable 200 Hz output target; packet and processed-sample rates differ
+- **GPS**: 25 Hz NEO-M9N configuration target; verify delivered rate
+- **Telemetry**: configured 33 ms output interval; measure reception cadence
+- **Latency**: measure sensor-to-browser latency; no universal bound established
+- **Heap**: inspect runtime Diagnostics and record observed free heap
+- **Position accuracy**: no measured universal bound; do not infer accuracy from ZUPT or output rate
+
+## Public claims and reference pace
+
+Use `docs/COMPARISON.md` for current capabilities and evidence. Distinguish configured rates from measured performance. Binary telemetry is v4, 82 bytes; source layout and cross-language fixture are authoritative. Live reference pace now uses spatial position/time traces with conservative match rejection; historical best is separate. Legacy distance-only references need a clean spatial replacement. Acceleration/drag tests, slope correction, and adaptive coaching remain proposals.

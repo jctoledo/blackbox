@@ -1,6 +1,6 @@
 # Lap Timer Guide
 
-GPS-based lap timing for an open telemetry project. Record circuits or stages, select a track to arm timing, and compare laps in the device dashboard. Accuracy remains dependent on receiver performance and field validation; commercial-system equivalence has not been established.
+GPS-based lap timing for an open telemetry project. Record circuits or stages, select a track to arm timing, and compare laps in the device dashboard. Position-matched reference pace and local recordings make it an inspectable DIY timing instrument. See the [capability comparison](COMPARISON.md) for packaged alternatives and the [hardware checklist](HARDWARE_VALIDATION.md) for measuring your setup.
 
 ---
 
@@ -17,11 +17,11 @@ GPS-based lap timing for an open telemetry project. Record circuits or stages, s
 1. Tap saved track → **Use**
 2. **Start line indicator** shows distance and direction: "Start line: 150 m ↗"
 3. Drive across start line — timing begins automatically
-4. Complete laps; best lap auto-saves as reference
+4. Complete a clean lap/run to save a spatial reference; faster valid references replace it
 
 ### Watch the Delta
 After first lap, delta bar shows real-time comparison:
-- **Green** = ahead of best, **Red** = behind
+- **Green** = ahead of the reference, **Red** = behind
 - **Arrows** show trend: ▲ gaining, ▼ losing
 
 ---
@@ -176,7 +176,7 @@ Access via **Data** in hamburger menu.
 
 **Recordings:** Export CSV, delete individual sessions, clear all
 
-**Tracks:** Clear best lap, delete track, clear all tracks
+**Tracks:** Clear reference, delete track, clear all tracks
 
 ---
 
@@ -195,8 +195,8 @@ Access via **Data** in hamburger menu.
 - For new P2P: drive away, then return
 - Wait for GPS lock (cyan LED pulse) before starting
 
-### Delta Shows "No Best"
-Complete at least one full lap. First completed lap becomes reference.
+### Delta asks for a new reference
+Complete a clean lap/run with fresh GPS throughout. Older distance-only references remain stored but cannot supply a spatial comparison. A suppressed delta does not stop firmware lap timing.
 
 ### Lap Times Seem Wrong
 - Re-record with cleaner GPS
@@ -302,6 +302,6 @@ This maintains session independence while providing continuity during brief drop
 
 #### Coordinate Precision
 
-**Numeric precision:** timing-line calculations and HTTP GPS coordinates use f64. Binary v4 packets retain f32 latitude/longitude for compatibility, introducing location-dependent sub-meter quantization. Numeric representation is separate from GPS measurement accuracy.
+**Numeric precision:** timing-line calculations and HTTP GPS coordinates use f64. Binary v4 packets retain f32 latitude/longitude for compatibility, introducing location-dependent quantization that can reach meter scale. Numeric representation is separate from GPS measurement accuracy.
 
 **Local Conversion:** The `to_local()` function uses the timing line's p1 as reference, converting both line endpoints and vehicle position consistently. The intersection calculation uses f64 throughout.

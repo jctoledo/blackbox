@@ -4,17 +4,17 @@
 
 Blackbox is an open-source ESP32-C3 vehicle telemetry project. It combines GPS and a WT901 IMU, serves a browser dashboard over local Wi-Fi, detects configured start/finish crossings, and records telemetry in browser storage. The source and current validation limits are public.
 
-It is in active development. “Professional-grade”, “always reliable”, “90% of the functionality at 5% of the price”, and equivalent-to-commercial accuracy are **not established claims**. Earlier versions of this FAQ used those descriptions without supporting measurements; they have been removed.
+The appeal is an instrument you can build, inspect, and extend: receiver-specific GPS configuration, interpolated line crossings, spatial reference pace, and recordings you can export and restore. It is in active development; the [capability comparison](COMPARISON.md) separates shipped features, configured specifications, and measured performance.
 
 ## Can it replace a paid lap timer or data logger?
 
-That depends on your requirements and measured results. Blackbox implements a lap timer, g-force display, circuit/stage recording, reference-lap delta display, and CSV exports. It does not establish parity with any named product's timing accuracy, durability, support, sensor configuration, or integrations.
+For a hands-on enthusiast who wants local timing, inspectable firmware, and ownership of recordings, Blackbox is worth evaluating. RaceBox offers packaged GPS hardware and performance modes; RaceChrono Pro has mature video/data analysis; Performance Box Touch combines a dedicated display with performance testing. See the [sourced comparison](COMPARISON.md) for the actual tradeoffs.
 
-Compare specific requirements: missed/false crossings, timing error against a reference, sunlight readability, installation, recovery after power/network loss, export compatibility, and support. Use the [hardware validation checklist](HARDWARE_VALIDATION.md). Do not infer equivalent performance from update-rate numbers or the number of decimal places on screen.
+Choose by the job: circuit/stage timing, phone versus dedicated screen, autonomous recording, video/OBD integration, assembly effort, and support. Then verify missed/false crossings and timing error against an independent reference using the [hardware checklist](HARDWARE_VALIDATION.md). We publish configuration targets and implementation evidence; a head-to-head timing-error result is still to be measured.
 
 ## Is there a subscription or cloud account?
 
-The project requires neither. Firmware is MIT licensed. The device serves its dashboard locally; recordings are stored in the browser. Hardware, assembly, and validation have costs that vary by supplier and setup. There is no maintained fixed-price bill of materials or substantiated commercial price comparison.
+The project requires neither. Firmware is MIT licensed. The device serves its dashboard locally; recordings are stored in the browser. Hardware, assembly, and validation have costs that vary by supplier and setup. Compare the complete installed bill of materials, including power, enclosure, mount, antenna, and build time, with current regional vendor pricing.
 
 ## Can I try it without hardware?
 

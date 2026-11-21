@@ -16,6 +16,12 @@ Blackbox is an open-source ESP32-C3 telemetry project: GPS and inertial sensing,
 - Interpolates crossings between fresh fixes; preserves completed lap results across missed browser polls.
 - Records telemetry in the browser and exports CSV; streams binary v4 telemetry to desktop tools.
 
+### Why build Blackbox?
+
+Own the instrument from sensor input to exported recording. Configure a NEO-M9N for a 25 Hz GPS target (or NEO-6M for 5 Hz), configure WT901 output up to 200 Hz, and inspect the actual delivered rates in Diagnostics. Time circuits and stages with interpolated GPS crossings, compare pace against a position-matched reference, and keep portable CSV/JSON backups. No project subscription or cloud account is required.
+
+These are concrete capabilities and configuration targets. Measured timing accuracy is a separate question. See the [capability and paid-product comparison](docs/COMPARISON.md) for RaceBox, RaceChrono Pro, and Performance Box Touch, including where their packaged hardware and analysis workflows offer more.
+
 ### Project status
 
 Active development. Automated physics, crossing replay, protocol, and browser regressions cover known failures; they do not establish real-world timing accuracy. The published firmware release can lag `main`. Read the release notes and choose the GPS model/rate that matches your hardware. The current estimator uses a diagonal covariance approximation; it is not a navigation-grade full covariance EKF.
@@ -397,7 +403,7 @@ The system combines configured IMU output (up to 200 Hz) with GPS fixes (typical
 
 ```
 GPS (5-25Hz) ──┐
-               ├──► EKF ──► Mode Classifier ──► Telemetry (20Hz)
+               ├──► EKF ──► Mode Classifier ──► Telemetry (~30 Hz target)
 IMU (200Hz) ───┘
 ```
 
@@ -473,3 +479,5 @@ MIT License — see [LICENSE](LICENSE).
 **Questions?** Open an [issue](https://github.com/jctoledo/blackbox/issues).
 
 **Ready to build?** [Start with Quick Start ↑](#quick-start)
+
+Website background footage is separately licensed and credited in [media provenance](docs/assets/README.md); the MIT license applies to project code.
