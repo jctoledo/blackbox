@@ -2426,7 +2426,8 @@ function updateLapTimer(lapTimeMs,lapCnt,lapFlags,timing=null){
         clearUnconfirmedTiming('Waiting for track confirmation');
         return;
     }
-    if(timing?.state==='armed'&&lapTracker&&(lapTracker.startTime!=null||lapTracker.reliable===false)){
+    // P2P completion is also armed: retain its tracker until completion/reference processing below.
+    if(timing?.state==='armed'&&lapCnt===prevLapCnt&&lapTracker&&(lapTracker.startTime!=null||lapTracker.reliable===false)){
         lapTracker.reset();lastDeltaMs=0;deltaTrend=0;
         updateDeltaBar({deltaMs:null,hasRef:!!referenceLap,isP2P:activeTrack.type==='point_to_point'});
     }

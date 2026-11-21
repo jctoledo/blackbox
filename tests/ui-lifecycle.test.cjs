@@ -58,3 +58,14 @@ test('interrupted active lap stays invalid until a confirmed armed attempt reset
  c.updateLapTimer(0,0,0,{state:'armed',revision:2,gps_valid:true});assert.equal(c.lapTracker.reliable,true);assert.equal(c.lapTracker.startTime,null);
  c.updateLapTimer(100,0,0,{state:'timing',revision:2,gps_valid:true});assert.equal(c.lapTracker.reliable,true);
 });
+for(const upgrade of [false,true])test('P2P armed completion '+(upgrade?'upgrades':'captures')+' its clean reference before resetting the tracker',()=>{
+ const c=timingFixture();c.activeTrack.type='point_to_point';
+ for(let i=1;i<=11;i++){c.currentPos.x=i*6;c.updateLapTimer(i*100,0,0,{state:'timing',revision:2,gps_valid:true})}
+ assert.equal(c.lapTracker.isValid(),true);
+ if(upgrade)c.referenceLap={lapTimeMs:2000,spatial:{}};
+ let referenceSaved=0,historySaved=0;c.saveNewRefLap=(id,ms,tracker)=>{assert.equal(id,'new');assert.equal(ms,1200);assert.equal(tracker.isValid(),true);referenceSaved++};c.updateTrackBestLap=async ms=>{assert.equal(ms,1200);historySaved++};
+ c.updateLapTimer(0,1,0,{state:'armed',revision:2,gps_valid:true,last_lap_ms:1200,best_lap_ms:1200});
+ assert.equal(referenceSaved,1);assert.equal(historySaved,1);assert.equal(c.lapTracker.startTime,null);assert.equal(c.lapTracker.reliable,true);
+ // Repeated armed telemetry must not invent another completion.
+ c.updateLapTimer(0,1,0,{state:'armed',revision:2,gps_valid:true,last_lap_ms:1200,best_lap_ms:1200});assert.equal(referenceSaved,1);assert.equal(historySaved,1);
+});
