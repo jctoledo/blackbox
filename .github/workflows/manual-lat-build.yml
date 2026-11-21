@@ -26,14 +26,17 @@ jobs:
         with:
           persist-credentials: false
       - name: Host regressions
-        run: cargo +stable test --locked -p sensor-fusion -p wt901 -p ublox-gps
+        run: |
+          source "$GITHUB_WORKSPACE/scripts/cargo-cache.sh" stable host
+          cargo +stable test --locked -p sensor-fusion -p wt901 -p ublox-gps
       - name: Firmware checks and release build
         working-directory: sensors/blackbox
         run: |
+          source "$GITHUB_WORKSPACE/scripts/cargo-cache.sh" nightly-2025-10-18 firmware
           cargo +nightly-2025-10-18 clippy --locked --release -- -D warnings
           cargo +nightly-2025-10-18 build --locked --release
       - uses: actions/upload-artifact@v6
         with:
           name: blackbox-elf-${{ inputs.gps_model }}
-          path: target/riscv32imc-esp-espidf/release/blackbox
+          path: ${{ env.CARGO_TARGET_DIR }}/riscv32imc-esp-espidf/release/blackbox
           retention-days: 14

@@ -296,6 +296,8 @@ Fixes #123
 
 ## Testing
 
+Maintainer runner and build-cache behavior is documented in [build infrastructure](docs/BUILD_INFRASTRUCTURE.md). Keep workflow commands and pinned toolchains as the source of truth.
+
 ### Hardware Testing
 
 If your changes affect hardware interaction:

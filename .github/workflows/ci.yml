@@ -26,6 +26,7 @@ jobs:
           cache: npm
       - name: Host regression tests
         run: |
+          source "$GITHUB_WORKSPACE/scripts/cargo-cache.sh" stable host
           python3 scripts/embed_dashboard_fonts.py --check
           rustup component add rustfmt --toolchain stable
           cargo +stable fmt --all -- --check
@@ -49,6 +50,7 @@ jobs:
           for model in 6m m9n; do
             export GPS_MODEL="$model"
             if [ "$model" = m9n ]; then export GPS_RATE=25; else export GPS_RATE=5; fi
+            source "$GITHUB_WORKSPACE/scripts/cargo-cache.sh" nightly-2025-10-18 firmware
             cargo +nightly-2025-10-18 clippy --locked --release -- -D warnings
             cargo +nightly-2025-10-18 build --locked --release
           done
