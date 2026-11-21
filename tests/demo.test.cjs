@@ -3,10 +3,10 @@ const assert=require('node:assert/strict');
 const vm=require('node:vm');
 const fs=require('node:fs');
 function demo(){
- let now=0,ready,track,reference;const button={textContent:''};
- const c={console,URL,Response,DOMException,DataView,Uint8Array,Float32Array,Math,Date,btoa,window:{},location:{href:'https://example.test/demo.html'},performance:{now:()=>now},document:{addEventListener:(_,fn)=>{ready=fn},getElementById:()=>button},openTrackDB:async()=>{},getAllTracks:async()=>[],getRefLap:async()=>null,saveRefLap:async r=>{reference=r},saveTrack:async t=>{track=t},activateTrack:async()=>{}};
+ let now=0,ready,track,reference;const buttons=new Map();const button={textContent:''};buttons.set('demo-connection',button);
+ const c={console,URL,Response,DOMException,DataView,Uint8Array,Float32Array,Math,Date,btoa,window:{},location:{href:'https://example.test/demo.html'},performance:{now:()=>now},document:{addEventListener:(_,fn)=>{ready=fn},getElementById:id=>{if(!buttons.has(id))buttons.set(id,{textContent:''});return buttons.get(id)}},openTrackDB:async()=>{},getAllTracks:async()=>[],getRefLap:async()=>null,saveRefLap:async r=>{reference=r},saveTrack:async t=>{track=t},activateTrack:async()=>{}};
  vm.createContext(c);vm.runInContext(fs.readFileSync('docs/demo.js','utf8'),c);
- return {fetch:c.window.fetch,advance:ms=>{now+=ms},ready:()=>ready(),button,track:()=>track,reference:()=>reference};
+ return {fetch:c.window.fetch,advance:ms=>{now+=ms},ready:()=>ready(),button,interval:()=>buttons.get('demo-interval').onclick({target:buttons.get('demo-interval')}),track:()=>track,reference:()=>reference};
 }
 async function sample(d){const j=await(await d.fetch('/api/telemetry')).json();return {j,p:Buffer.from(j.data,'base64')}}
 test('synthetic telemetry preserves packet, clock, lap result and configuration contracts',async()=>{
@@ -67,4 +67,11 @@ test('demo road texture is deterministic and differs from ideal acceleration',as
  const a=demo(),b=demo();let residual=0;
  for(let i=0;i<600;i++){a.advance(40);b.advance(40);const x=await sample(a),y=await sample(b);assert.equal(x.p.readFloatLE(7),y.p.readFloatLE(7));const noise=-x.p.readFloatLE(7)-x.j.f.li;assert.ok(Math.abs(noise)<.91);residual=Math.max(residual,Math.abs(noise))}
  assert.ok(residual>.3);
+});
+
+test('explicit interval demo produces timestamped evidence for a complete rolling run',async()=>{
+ const html=fs.readFileSync('sensors/blackbox/web/dashboard.html','utf8'),c={Math,Number};vm.createContext(c);vm.runInContext(html.slice(html.indexOf('class RollingRuns{'),html.indexOf('const rollingRuns='))+';this.Runs=RollingRuns;',c);
+ const d=demo();await d.ready();await d.interval();const runs=new c.Runs();let seen=0;
+ for(let i=0;i<12;i++){d.advance(1000);const log=await(await d.fetch('/api/gps-log')).json();for(const e of log.events){if(e.seq<=seen)continue;seen=e.seq;runs.update({rowType:1,gpsActive:1,gpsAccepted:1,sp:e.speed_mps,gpsCourse:e.course_rad,gpsUtcUs:e.utc_us,gpsDate:e.date_ddmmyy,gpsFractionDigits:e.fractional_digits,gpsBootId:log.boot_id,gpsSeq:e.seq,gpsSynthetic:1})}}
+ const result=runs.results.find(r=>r.status==='accepted');assert.ok(result);assert.ok(Math.abs(result.seconds-5.588)<1e-8);assert.equal(result.synthetic,1);
 });
