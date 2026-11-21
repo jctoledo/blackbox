@@ -77,6 +77,28 @@ pub struct Sample {
     pub pitch_deg: f32,
 }
 impl Sample {
+    /// The receiver driver already reports metres per second. Keep that contract
+    /// at this adapter boundary rather than converting it as a display value.
+    pub fn from_fix(
+        fix: &ublox_gps::GpsFix,
+        at_ms: u32,
+        accel: (f32, f32),
+        yaw_rate: f32,
+        imu_age_ms: u32,
+        tilt: (f32, f32),
+    ) -> Option<Self> {
+        fix.valid.then_some(Self {
+            at_ms,
+            speed_mps: fix.speed,
+            course_rad: fix.course,
+            ax: accel.0,
+            ay: accel.1,
+            yaw_rate,
+            imu_age_ms,
+            roll_deg: tilt.0,
+            pitch_deg: tilt.1,
+        })
+    }
     fn valid(self) -> bool {
         [
             self.speed_mps,
@@ -327,6 +349,37 @@ mod tests {
                 angle,
             ));
         }
+    }
+    #[test]
+    fn receiver_to_calibrator_preserves_metres_per_second() {
+        let mut parser = ublox_gps::NmeaParser::with_warmup_fixes(1);
+        let mut c = armed(0);
+        for i in 0..=26 {
+            let speed = 15.0 - 3.0 * i as f32 * 0.04;
+            let t = i * 40;
+            let body = format!(
+                "GPRMC,1200{:02}.{:03},A,3700.000,N,12200.000,W,{:.6},90.0,201126,,,A",
+                t / 1000,
+                t % 1000,
+                speed / 0.514444
+            );
+            let checksum = body.bytes().fold(0u8, |a, b| a ^ b);
+            let sentence = format!("${body}*{checksum:02X}\r\n");
+            for b in sentence.bytes() {
+                parser.feed_byte(b);
+            }
+            if parser.take_new_fix() {
+                let s =
+                    Sample::from_fix(parser.last_fix(), i * 40, (-3.0, 0.0), 0.0, 5, (0.0, 0.0))
+                        .unwrap();
+                assert!((s.speed_mps - speed).abs() < 0.001);
+                c.sample(s);
+            }
+        }
+        assert_eq!(c.status.state, "review");
+        assert!(c.candidate.unwrap().yaw_offset.abs() < 0.001);
+        let invalid = ublox_gps::GpsFix::default();
+        assert!(Sample::from_fix(&invalid, 0, (0.0, 0.0), 0.0, 0, (0.0, 0.0)).is_none());
     }
     #[test]
     fn rotated_braking_at_both_receiver_rates_and_clock_wrap() {

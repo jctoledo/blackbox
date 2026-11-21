@@ -515,7 +515,7 @@ fn main() {
 
         mount_calibrator.tick(now_ms);
         mount_calibrator.status.parked = sensors.gps_is_fresh(now_ms)
-            && sensors.gps_parser.last_fix().speed < 1.8
+            && sensors.gps_parser.last_fix().speed < 0.5
             && sensors.is_stationary(now_ms)
             && sensors.calibration_imu_age_ms(now_ms) <= 60;
         if let Some(ref state) = telemetry_state {
@@ -787,17 +787,16 @@ fn main() {
                 let (ax, ay, az) = sensors.imu_parser.get_accel_corrected();
                 let (x, y, z) = remove_gravity(ax, ay, az, imu.roll, imu.pitch);
                 let (x, y) = body_to_earth(x, y, z, imu.roll, imu.pitch, 0.0);
-                mount_calibrator.sample(calibration::Sample {
-                    at_ms: now_ms,
-                    speed_mps: fix.speed / 3.6,
-                    course_rad: fix.course,
-                    ax: x,
-                    ay: y,
-                    yaw_rate: imu.wz,
-                    imu_age_ms: sensors.calibration_imu_age_ms(now_ms),
-                    roll_deg: imu.roll,
-                    pitch_deg: imu.pitch,
-                });
+                if let Some(sample) = calibration::Sample::from_fix(
+                    fix,
+                    now_ms,
+                    (x, y),
+                    imu.wz,
+                    sensors.calibration_imu_age_ms(now_ms),
+                    (imu.roll, imu.pitch),
+                ) {
+                    mount_calibrator.sample(sample);
+                }
             } else if !sensors.gps_parser.last_fix().valid {
                 mount_calibrator.invalidate();
             }
