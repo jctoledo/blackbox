@@ -2452,11 +2452,12 @@ function resetState(){
 let peakHighlightTimeout=null;
 
 // Receipt freshness watchdog. Browser receipt age is independent of network completion.
-let lastTelemetryAt=null;
+const telemetryStartedAt=performance.now();
+let lastTelemetryAt=null,telemetryUnavailable=false;
 function checkTelemetryFreshness(){
-    const age=lastTelemetryAt===null?Infinity:performance.now()-lastTelemetryAt;
+    const age=performance.now()-(lastTelemetryAt??telemetryStartedAt);
     if(age>300)clearForces('No fresh force data');
-    if(age>1500)markTelemetryUnavailable('No fresh data');
+    if(age>1500&&!telemetryUnavailable){telemetryUnavailable=true;markTelemetryUnavailable('No fresh data')}
 }
 // End receipt freshness watchdog.
 
@@ -2601,6 +2602,7 @@ async function requestDevice(url,{timeoutMs=3000,maxBytes=64*1024,...options}={}
     finally{clearTimeout(timer);controller.abort();cleanReader()}
 }
 function markTelemetryUnavailable(label){
+    telemetryUnavailable=true;
     clearForces('No live force data');
     $('lap-result').hidden=true;lapResultGeneration++;
     if(lapTimerActive){$('lap-state').textContent='Timing unconfirmed';$('lap-state').classList.remove('timing');$('lap-section').classList.remove('timing')}
@@ -2624,7 +2626,7 @@ async function poll(){
             const b=atob(j.data),a=new Uint8Array(b.length);
             for(let i=0;i<b.length;i++)a[i]=b.charCodeAt(i);
             try{process(a.buffer,j.timing||null)}catch(error){markTelemetryUnavailable('Invalid data');console.error(error);setTimeout(poll,500);return}
-            lastSeq=j.seq;lastTelemetryAt=performance.now();
+            lastSeq=j.seq;lastTelemetryAt=performance.now();telemetryUnavailable=false;
             document.body.classList.remove('telemetry-stale');$('connection-notice').hidden=true;
             $('liveDot').classList.add('on');$('stxt').textContent='LIVE';
         }
