@@ -25,3 +25,16 @@ for(const interval of [{label:'30-60 mph',lo:30*.44704,hi:60*.44704},{label:'50-
  });
 }
 test('no start from a brief threshold spike and no repeat until rearmed below threshold',()=>{const c=context(),d=new c.Runs();for(let i=0;i<220;i++)d.update(row(i,i===30?20.15:i===31?19.9:19.6));assert.equal(d.results.some(r=>r.status==='accepted'),false);assert.ok(d.results.some(r=>r.reason==='Start not sustained'))});
+
+test('all intervals work at 5 Hz and rearm only on a new below-threshold lead-in',()=>{
+ const c=context();for(const interval of vm.runInContext('runIntervals',c)){
+  const d=new c.Runs(interval);for(let i=0;i<100;i++)d.update(row(i,10+i*.4,{gpsUtcUs:1000000+i*200000}));
+  assert.equal(d.results.filter(r=>r.status==='accepted').length,1);
+  assert.ok(Math.abs(d.results[0].seconds-(interval.hi-interval.lo)/2)<1e-8);
+ }
+});
+test('CSV preserves distinct SI thresholds and all three detector results',()=>{
+ const c=context();vm.runInContext(html.slice(html.indexOf('function runsToCSV('),html.indexOf('// End receiver-time rolling intervals.')),c);
+ const rows=Array.from({length:400},(_,i)=>row(i,10+i*.08));const csv=c.runsToCSV(rows);
+ for(const label of ['45-70 mph','30-60 mph','50-100 km/h'])assert.ok(csv.includes(label+',accepted,'));
+});

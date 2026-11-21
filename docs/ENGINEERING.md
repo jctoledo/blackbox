@@ -89,7 +89,7 @@ The older dashboard waited another 33 ms after a request completed. A 30 ms requ
 
 ## Other instruments, without hiding the evidence
 
-Landscape keeps elapsed time and delta in place while the other panel switches between Speed, G-meter, Peaks and Runs. Tap the instrument name to reveal the picker or swipe horizontally; choosing a view hides the picker again. Speed includes a page-session maximum while GPS is fresh. Portrait brings setup and saved data back into reach. **Menu → Speed units** switches Speed and MAX between mph and km/h and remembers the preference in this browser. Exported units and the named 45–70 mph, 30–60 mph and 50–100 km/h test keep their existing definitions.
+Landscape keeps elapsed time and delta in place while the other panel switches between Speed, G-meter, Peaks and Runs. Tap the instrument name to reveal the picker or swipe horizontally; choosing a view hides the picker again. Speed includes a page-session maximum while GPS is fresh. Portrait brings setup and saved data back into reach. **Menu → Speed units** switches Speed and MAX between mph and km/h and remembers the preference in this browser. Exported units and the named 45–70 mph, 30–60 mph and 50–100 km/h tests keep their existing definitions.
 
 Runs currently estimates rolling **45–70 mph, 30–60 mph and 50–100 km/h** intervals from receiver timestamps, not browser arrival times. It interpolates threshold crossings and rejects gaps, restarts, turns and incomplete attempts. It has no slope correction or distance rollout. Standing-start 0–60 mph needs its own validated launch rule and is not implemented. Read [the timing rules and export format](RUNS.md).
 
