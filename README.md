@@ -66,6 +66,8 @@ First build takes 10-20 minutes. See [Build Guide](#building-from-source) for de
 
 ---
 
+Read [How Blackbox works](docs/ENGINEERING.md) for the complete measurement story and [Build Blackbox](docs/BUILD.md) for assembly, mounting and the photo journal.
+
 ## Hardware
 
 ### Required components

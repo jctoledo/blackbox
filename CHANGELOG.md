@@ -24,6 +24,7 @@ Release candidate for weekend data collection; hardware timing accuracy remains 
 - Offline timestamp analyzer and collection guide; synthetic demo GPS logs are explicitly labelled.
 
 ### Changed
+- Prominent How it works explainer beside the website CTA, with the full measurement pipeline, worked maths and a dedicated build/assembly journal.
 - Landscape instrument picker collapses after selection; larger force plot, space-efficient Peaks and maximum speed with fresh-GPS gating. Circuit demo now anticipates braking zones and limits corner-exit acceleration using route curvature, with continuous lap-boundary speeds.
 - Startup bias calibration separates AHRS-predicted gravity from accelerometer offset, rejects stale/moving/unstable collection and uses precise averaging. Inclined-pose software tests pass; physical driveway validation remains open.
 - Receiver-timed 45–70 mph Runs instrument and derived Runs CSV with rejection reasons; explicit synthetic interval scenario and banner-free website demo. Standing-start and slope-corrected timing remain unimplemented.

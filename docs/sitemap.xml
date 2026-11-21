@@ -1,6 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://jctoledo.github.io/blackbox/</loc></url>
+  <url><loc>https://jctoledo.github.io/blackbox/demo.html</loc></url>
+  <url><loc>https://jctoledo.github.io/blackbox/guides/build.html</loc></url>
+  <url><loc>https://jctoledo.github.io/blackbox/guides/rolling-runs.html</loc></url>
+  <url><loc>https://jctoledo.github.io/blackbox/guides/maths-and-rates.html</loc></url>
+  <url><loc>https://jctoledo.github.io/blackbox/guides/gps-logging.html</loc></url>
+  <url><loc>https://jctoledo.github.io/blackbox/guides/mount-alignment.html</loc></url>
+  <url><loc>https://jctoledo.github.io/blackbox/guides/comparison.html</loc></url>
+  <url><loc>https://jctoledo.github.io/blackbox/guides/faq.html</loc></url>
+  <url><loc>https://jctoledo.github.io/blackbox/guides/hardware-validation.html</loc></url>
   <url><loc>https://jctoledo.github.io/blackbox/guides/lap-timer.html</loc></url>
   <url><loc>https://jctoledo.github.io/blackbox/guides/sensor-fusion.html</loc></url>
   <url><loc>https://jctoledo.github.io/blackbox/guides/engineering-review.html</loc></url>

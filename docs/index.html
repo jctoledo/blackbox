@@ -101,7 +101,7 @@
             </a>
             <div class="nav-links">
                 <a href="demo.html" class="demo-nav">Try demo</a>
-                <a href="#hardware">Hardware</a>
+                <a href="#build">Build</a>
                 <a href="https://github.com/jctoledo/blackbox/blob/main/README.md" target="_blank">Docs</a>
                 <a href="https://github.com/jctoledo/blackbox" target="_blank">GitHub</a>
                 <a href="#flash" class="nav-cta">Flash</a>
@@ -115,7 +115,7 @@
         <h1>Every lap.<br><em>Your data.</em></h1>
         <p class="hero-sub">An open-source GPS lap timer and vehicle telemetry system. Build it on ESP32-C3. See your driving in a local browser dashboard. Keep your recordings yours.</p>
 
-        <div class="hero-ctas"><a href="demo.html" class="btn btn-primary">Try the dashboard</a><a href="#flash" class="btn btn-secondary">Install firmware</a></div>
+        <div class="hero-ctas"><a href="demo.html" class="btn btn-primary">Try the dashboard</a><a href="#flash" class="btn btn-secondary">Install firmware</a><a href="guides/engineering-review.html" class="btn btn-secondary">How it works →</a></div>
         <div class="hero-note">Rust firmware <span>/</span> Local Wi-Fi <span>/</span> MIT licensed</div>
 
     </section>
@@ -236,6 +236,17 @@
         </div>
     </section>
 
+    <section class="section" id="build" aria-labelledby="build-title"><div class="section-inner">
+        <div class="section-head"><span class="eyebrow">MADE BY YOU</span><h2 id="build-title">From components<br>to cockpit.</h2><p>The build is part of the project. Follow the parts, wiring and mounting decisions, then keep a record of the installation that produced your data.</p></div>
+        <div class="features">
+            <article class="feature"><span class="eyebrow">01 / ON THE BENCH</span><h3>Know your hardware.</h3><p>Identify the controller and sensor variants. Check the USB pin arrangement, wire the serial links, and establish fresh sensor data before closing the enclosure.</p></article>
+            <article class="feature"><span class="eyebrow">02 / IN THE CAR</span><h3>Make the mount count.</h3><p>Secure the sensor, document its axes, position the antenna and learn the car-forward direction. The mounting arrangement belongs with the measurements.</p></article>
+            <article class="feature"><span class="eyebrow">03 / THE BUILD JOURNAL</span><h3>Show the details.</h3><p>A dedicated assembly journal for wiring, enclosure and installation photos as the build is documented. Each stage includes the details a fellow builder needs to reproduce it.</p></article>
+        </div>
+        <p><a class="preview-link" href="guides/build.html">Parts, wiring and build journal →</a></p>
+        <!-- Add real, captioned assembly figures here as docs/assets/build/ photos become available. Preserve native aspect ratios; do not substitute stock hardware images. -->
+    </div></section>
+
     <section class="section quickstart" id="start">
         <div class="section-inner"><span class="eyebrow">FROM BENCH TO DASHBOARD</span><h2>Three steps to your first session.</h2>
         <ol class="start-grid"><li><span>01</span><h3>Build &amp; flash</h3><p>Wire the ESP32-C3, WT901, GPS, and LED. Choose firmware for your GPS model and connect over USB.</p></li><li><span>02</span><h3>Connect &amp; settle</h3><p>Calibrate with the sensor level and stationary on level ground. Join its Wi-Fi, open the dashboard, and wait for a fresh GPS fix outdoors.</p></li><li><span>03</span><h3>Record &amp; return</h3><p>Record a circuit or stage, then select it to arm timing. Cross the start line in the recorded direction.</p></li></ol>
@@ -304,7 +315,7 @@
             <a href="https://github.com/jctoledo/blackbox/blob/main/README.md">README</a>
             <a href="guides/lap-timer.html">Lap Timer Guide</a>
             <a href="guides/sensor-fusion.html">Sensor Fusion Guide</a>
-            <a href="guides/engineering-review.html">How it works</a>
+            <a href="guides/engineering-review.html">How it works</a><a href="guides/build.html">Build journal</a>
             <a href="guides/hardware-validation.html">Hardware checklist</a><a href="guides/faq.html">FAQ</a><a href="guides/gps-logging.html">GPS logging</a><a href="guides/maths-and-rates.html">Maths &amp; rates</a><a href="guides/mount-alignment.html">Align sensor to car</a><a href="guides/rolling-runs.html">Rolling intervals</a><a href="guides/comparison.html">Build or buy</a><a href="demo.html">Live demo</a><a href="llms.txt">Project index</a>
             <a href="https://github.com/jctoledo/blackbox/issues">Issues</a>
         </div>
