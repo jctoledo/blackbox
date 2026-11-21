@@ -39,3 +39,5 @@ Physical/R&D issues stay open until their evidence exists. The glossary distingu
 ## Skill use
 
 `research` follows questions to primary sources; `codebase-design` keeps complexity behind an appropriate interface; `writing-for-agents` keeps house guidance concise. `code-review` supports the review format above. Other installed skills remain optional; evaluating one does not validate all of them. The interactive setup skill is available but its interview was not run; these repository pointers were authored from known project rules and the maintainer-provided adoption guide.
+
+Use `grilling` when the maintainer requests a product/design interview. Ask only unresolved decisions, investigate facts from source, and wait for shared design confirmation before implementing that design. Continue independent fixes already authorized by the session. The confirmed decisions belong in the issue spec; an interview is not a prerequisite for every specified bug fix.
