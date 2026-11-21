@@ -7,7 +7,7 @@ const html=fs.readFileSync('sensors/blackbox/web/dashboard.html','utf8');
 const slice=(start,end)=>html.slice(html.indexOf(start),html.indexOf(end,html.indexOf(start)));
 function context(){
  const c={console,Number,Math,Date,Map,Set,Float32Array,ArrayBuffer,Promise,rec:false,recordingBusy:false,chunkWrite:null,activeTrack:null,trackRecorder:null,chunkBuffer:[],sessionId:null,sessionStart:0,chunkIndex:0};
- vm.createContext(c);vm.runInContext(slice('// Versioned backup / restore.','// End backup / restore'),c);
+ vm.createContext(c);vm.runInContext(slice('function validSpatialReference(', 'class SpatialMatcher'),c);vm.runInContext(slice('// Versioned backup / restore.','// End backup / restore'),c);
  vm.runInContext(slice('function portableReference(', 'async function exportTrackData'),c);
  vm.runInContext(slice('function createRecordingSession(', 'async function startRecording'),c);return c;
 }
@@ -125,4 +125,13 @@ test('recordings can be backed up even when a legacy stored track is not restora
  await c.addBackupStores(c.db,{sessions:value.data.sessions,chunks:value.data.chunks});await c.addBackupStores(c.trackDb,{tracks:[{id:'legacy',name:'Incomplete old track'}]});
  await assert.rejects(c.createBackup('all'),/Invalid backup/);
  const recording=await c.createBackup('recordings');assert.equal(recording.data.sessions.length,1);assert.equal(recording.data.chunks[0].data.length,2);assert.equal(recording.data.tracks.length,0);
+});
+
+
+test('spatial reference geometry survives backup restore and malformed traces are rejected',async()=>{
+ const c=context(),value=fixture(c),r=value.data.references[0];
+ r.spatial={version:1,closed:false,origin:{lat:37,lon:-122},points:Array.from({length:61},(_,i)=>({x:i,y:0,t:i*1000}))};value.checksum=c.backupChecksum(value.data);c.validateBackup(value);
+ c.db=await database();c.trackDb=await database(true);const plan=c.makeRestorePlan(value,[],'spatial',100);await c.executeRestore(plan,c.db,c.trackDb);
+ const restored=(await c.readBackupStores(c.trackDb,['reference_laps'])).reference_laps[0];assert.deepEqual(restored.spatial,r.spatial);
+ r.spatial.points[5].t=1;value.checksum=c.backupChecksum(value.data);assert.throws(()=>c.validateBackup(value),/spatial reference/);
 });

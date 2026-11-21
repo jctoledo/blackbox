@@ -195,6 +195,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
 .bbActionBtn.primary{background:var(--ok);color:#fff}
 .bbActionBtn.secondary{background:var(--bg);color:var(--text)}
 .bbActionBtn:disabled{opacity:0.4;cursor:not-allowed}
+.bbReferenceLabel{font-size:12px;color:var(--text-secondary);margin:4px 0;line-height:1.4}
 .bbTrackList{border-radius:12px;overflow:hidden;background:var(--bg)}
 .bbTrackEmpty{padding:20px;text-align:center;color:var(--text-tertiary);font-size:13px}
 .bbTrackItem{display:flex;flex-direction:column;align-items:stretch;gap:12px;padding:16px;border-bottom:1px solid var(--divider)}
@@ -412,7 +413,7 @@ body:not(.analysis-view) .bbGTopRight{display:block}
             <button class="bbLapStop" id="btn-lap-stop" onclick="event.stopPropagation();confirmStopTiming();" title="Stop timing" aria-label="Stop timing">×</button>
             <div class="bbLapMain">
                 <div class="bbLapTime bbNum" id="lap-time">0:00.000</div>
-                <div class="bbDeltaBar no-ref" id="delta-bar"><div class="bbDeltaText" id="delta-text">Complete a reference lap</div><div class="bbDeltaTrack"><div class="bbDeltaCenter"></div><div class="bbDeltaFill" id="delta-fill"></div></div></div>
+                <div class="bbReferenceLabel" id="reference-label"></div><div class="bbDeltaBar no-ref" id="delta-bar"><div class="bbDeltaText" id="delta-text">Complete a reference lap</div><div class="bbDeltaTrack"><div class="bbDeltaCenter"></div><div class="bbDeltaFill" id="delta-fill"></div></div></div>
                 <div class="bbLapTrackName" id="lap-track-name"></div>
                 <div class="bbLapMeta">
                     <span class="bbLapCount" id="lap-count">Lap 1</span>
@@ -1243,42 +1244,108 @@ async function deleteLapHistory(trackId){if(!trackDb)await openTrackDB();return 
 async function clearAllLapHistory(){if(!trackDb)await openTrackDB();return new Promise((res,rej)=>{const tx=trackDb.transaction('lap_history','readwrite');const r=tx.objectStore('lap_history').clear();r.onsuccess=()=>res();r.onerror=()=>rej(r.error)})}
 
 // LapTracker - tracks distance and samples during lap for delta calculation
+// Spatial references use a persistent geographic origin, never the reboot-local EKF frame.
+function referencePosition(pos,origin){
+    if(!pos?.valid||!origin||![pos.lat,pos.lon,origin.lat,origin.lon].every(Number.isFinite)||Math.abs(origin.lat)>85)return null;
+    return{x:(pos.lon-origin.lon)*111320*Math.cos(origin.lat*Math.PI/180),y:(pos.lat-origin.lat)*111320};
+}
+function validSpatialReference(spatial,lapTimeMs){
+    if(!Number.isFinite(lapTimeMs)||lapTimeMs<=0||(spatial?.closed!==undefined&&typeof spatial.closed!=='boolean'))return false;
+    if(spatial?.version!==1||!spatial.origin||!Number.isFinite(spatial.origin.lat)||!Number.isFinite(spatial.origin.lon)||Math.abs(spatial.origin.lat)>85||Math.abs(spatial.origin.lon)>180||!Array.isArray(spatial.points)||spatial.points.length<10)return false;
+    let previous=null;
+    for(const p of spatial.points){
+        if(!p||![p.x,p.y,p.t].every(Number.isFinite)||Math.abs(p.x)>2e7||Math.abs(p.y)>2e7||p.t<0||p.t>lapTimeMs)return false;
+        if(previous&&(p.t<=previous.t||p.t-previous.t>1500||Math.hypot(p.x-previous.x,p.y-previous.y)>=50))return false;
+        previous=p;
+    }
+    return spatial.points[0].t<=1000&&lapTimeMs-previous.t<=1500;
+}
+class SpatialMatcher{
+    constructor(ref){
+        this.ref=ref;this.last=null;this.segments=[];this.length=0;this.grid=new Map();
+        if(!validSpatialReference(ref?.spatial,ref?.lapTimeMs))return;
+        const points=ref.spatial.points;
+        for(let i=1;i<points.length;i++){
+            const a=points[i-1],b=points[i],dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy);
+            if(len>.05){
+                const seg={a,b,dx,dy,len,s:this.length};this.segments.push(seg);
+                for(let x=Math.floor((Math.min(a.x,b.x)-12)/25);x<=Math.floor((Math.max(a.x,b.x)+12)/25);x++){
+                    for(let y=Math.floor((Math.min(a.y,b.y)-12)/25);y<=Math.floor((Math.max(a.y,b.y)+12)/25);y++){
+                        const key=x+','+y;if(!this.grid.has(key))this.grid.set(key,[]);this.grid.get(key).push(seg);
+                    }
+                }
+            }
+            this.length+=len;
+        }
+    }
+    match(pos,timeMs){
+        const fail=reason=>({valid:false,reason});
+        if(!this.segments.length)return fail('Record a new reference');
+        if(!Number.isFinite(pos?.gpsAgeMs)||pos.gpsAgeMs<0||pos.gpsAgeMs>250)return fail('Waiting for fresh GPS');
+        const p=referencePosition(pos,this.ref.spatial.origin),t=timeMs-pos.gpsAgeMs;
+        if(!p||t<0)return fail('Waiting for position');
+        const dt=this.last?t-this.last.t:t;
+        if(dt<0||dt>1500)return fail('Reference match lost');
+        if(!Number.isFinite(pos.speed))return fail('Waiting for speed');
+        if(pos.speed<5){
+            // Fresh stationary fixes can maintain continuity, but cannot establish direction or a delta.
+            if(this.last&&Math.hypot(p.x-this.last.x,p.y-this.last.y)<=12)this.last.t=t;
+            return fail('Waiting for movement');
+        }
+        if(!pos.validGpsCourse||!Number.isFinite(pos.gpsCourse))return fail('Waiting for direction');
+        const heading=Math.PI/2-pos.gpsCourse,candidates=[];
+        // Search all nearby geometry to detect intersections, then enforce continuity.
+        for(const seg of this.grid.get(Math.floor(p.x/25)+','+Math.floor(p.y/25))||[]){
+            const raw=((p.x-seg.a.x)*seg.dx+(p.y-seg.a.y)*seg.dy)/(seg.len*seg.len);
+            if(raw< -1e-5/seg.len||raw>1+1e-5/seg.len)continue; // Micrometre tolerance for geographic conversion, no route extrapolation.
+            const f=Math.max(0,Math.min(1,raw));
+            const error=Math.hypot(p.x-seg.a.x-f*seg.dx,p.y-seg.a.y-f*seg.dy);
+            if(error>12||(Math.cos(heading)*seg.dx+Math.sin(heading)*seg.dy)/seg.len<.5)continue;
+            candidates.push({s:seg.s+f*seg.len,error,refTime:seg.a.t+f*(seg.b.t-seg.a.t)});
+        }
+        const reach=Math.max(15,pos.speed/3.6*dt/1000*2+10);
+        const eligible=candidates.filter(c=>this.last?c.s>=this.last.s-3&&c.s<=this.last.s+reach:c.s<=reach);
+        eligible.sort((a,b)=>a.error-b.error);
+        if(!eligible.length)return fail('Off reference route');
+        const best=eligible[0];
+        const sameSeam=c=>this.ref.spatial.closed===true&&this.length>50&&((best.s<15&&c.s>this.length-15)||(c.s<15&&best.s>this.length-15));
+        if(candidates.some(c=>Math.abs(c.s-best.s)>25&&c.error<=best.error+3&&!sameSeam(c)))return fail('Ambiguous route position');
+        this.last={s:best.s,t,x:p.x,y:p.y};
+        return{valid:true,deltaMs:t-best.refTime,progress:Math.min(99,Math.floor(100*best.s/this.length)),error:best.error};
+    }
+}
+// End spatial reference matching.
 class LapTracker{
     constructor(){this.reset()}
-    reset(){this.dist=0;this.lastPos=null;this.samples=[];this.startTime=null;this.lastSampleT=0;this.lastTime=null;this.reliable=true}
+    reset(){this.dist=0;this.lastPos=null;this.samples=[];this.startTime=null;this.lastSampleT=0;this.lastTime=null;this.reliable=true;this.spatialPoints=[];this.spatialOrigin=null;this.matcher=null;this.match=null}
     invalidate(){this.reliable=false;this.lastPos=null}
-    update(x,y,lapTimeMs){
+    update(x,y,lapTimeMs,pos=null,origin=null){
         if(!Number.isFinite(x)||!Number.isFinite(y)||!Number.isFinite(lapTimeMs)){this.invalidate();return this.dist}
         if(this.startTime===null){this.startTime=lapTimeMs;if(lapTimeMs>1000)this.invalidate()}
         if(this.lastTime!==null&&(lapTimeMs-this.lastTime>1500||lapTimeMs<this.lastTime))this.invalidate();
         this.lastTime=lapTimeMs;
         if(this.lastPos){const dx=x-this.lastPos.x,dy=y-this.lastPos.y,d=Math.sqrt(dx*dx+dy*dy);if(d>=50)this.invalidate();else if(d>0.01)this.dist+=d}
         this.lastPos={x,y};
-        if(lapTimeMs-this.lastSampleT>=100){this.samples.push({d:this.dist,t:lapTimeMs});this.lastSampleT=lapTimeMs}
+        if(lapTimeMs-this.lastSampleT>=100){
+            this.samples.push({d:this.dist,t:lapTimeMs});this.lastSampleT=lapTimeMs;
+            if(!this.spatialOrigin&&origin)this.spatialOrigin={...origin};
+            const p=referencePosition(pos,this.spatialOrigin),age=pos?.gpsAgeMs,t=lapTimeMs-age,previous=this.spatialPoints.at(-1);
+            if(p&&Number.isFinite(age)&&age>=0&&age<=250&&t>=0&&(!previous||t>previous.t))this.spatialPoints.push({...p,t});
+        }
         return this.dist
     }
     toBinary(){const buf=new ArrayBuffer(this.samples.length*8),v=new Float32Array(buf);for(let i=0;i<this.samples.length;i++){v[i*2]=this.samples[i].d;v[i*2+1]=this.samples[i].t}return buf}
     isValid(){return this.reliable&&this.samples.length>=10&&this.dist>50}
 }
 
-function calcDelta(dist,time,ref){
-    if(!ref||!ref.samples||!Number.isFinite(dist)||!Number.isFinite(time))return{deltaMs:0,valid:false};
-    const s=new Float32Array(ref.samples),n=s.length/2;
-    if(n<2||dist>s[(n-1)*2]||dist<s[0])return{deltaMs:0,valid:false};
-    let lo=0,hi=n-1;while(hi-lo>1){const mid=Math.floor((lo+hi)/2);if(s[mid*2]<dist)lo=mid;else hi=mid}
-    const d0=s[lo*2],t0=s[lo*2+1],d1=s[hi*2],t1=s[hi*2+1];
-    if(d1===d0)return{deltaMs:time-t0,valid:true};
-    const frac=(dist-d0)/(d1-d0),refT=t0+frac*(t1-t0);
-    return{deltaMs:time-refT,valid:true}
-}
-
 function fmtDelta(ms){const sign=ms>0?'+':'',sec=ms/1000;return sign+(Math.abs(sec)<10?sec.toFixed(2):sec.toFixed(1))}
 
-function updateDeltaBar(opts){const{deltaMs,trend=0,hasRef=false,isP2P=false}=opts;const bar=$('delta-bar'),fill=$('delta-fill'),txt=$('delta-text');if(!bar||!fill||!txt)return;if(!hasRef){bar.classList.add('no-ref');fill.className='bbDeltaFill';fill.style.width='0%';fill.style.left='50%';txt.textContent=isP2P?'Complete a reference run':'Complete a reference lap';txt.className='bbDeltaText';return}if(!Number.isFinite(deltaMs)){bar.classList.add('no-ref');fill.style.width='0%';txt.textContent='Delta unavailable';txt.className='bbDeltaText';return}if(deltaMs===0){bar.classList.remove('no-ref');fill.className='bbDeltaFill';fill.style.width='0%';fill.style.left='50%';txt.textContent='±0.00';txt.className='bbDeltaText';return}bar.classList.remove('no-ref');const MAX=2000,abs=Math.abs(deltaMs),pct=Math.min(50,(abs/MAX)*50),ahead=deltaMs<0;if(ahead){fill.style.left=(50-pct)+'%';fill.style.width=pct+'%'}else{fill.style.left='50%';fill.style.width=pct+'%'}let fc='bbDeltaFill';if(abs>30)fc+=ahead?' ahead':' behind';if(abs>1000)fc+=ahead?' glow-ahead':' glow-behind';fill.className=fc;let ds=fmtDelta(deltaMs);if(trend<-5)ds+=' ▲';else if(trend>5)ds+=' ▼';txt.textContent=ds;txt.className='bbDeltaText'+(abs>30?(ahead?' ahead':' behind'):'')}
+function updateDeltaBar(opts){const{deltaMs,trend=0,hasRef=false,isP2P=false}=opts;const bar=$('delta-bar'),fill=$('delta-fill'),txt=$('delta-text');if(!bar||!fill||!txt)return;if(!hasRef){bar.classList.add('no-ref');fill.className='bbDeltaFill';fill.style.width='0%';fill.style.left='50%';txt.textContent=isP2P?'Complete a reference run':'Complete a reference lap';txt.className='bbDeltaText';return}if(!Number.isFinite(deltaMs)){bar.classList.add('no-ref');fill.style.width='0%';txt.textContent=opts.reason||'Delta unavailable';txt.className='bbDeltaText';return}if(deltaMs===0){bar.classList.remove('no-ref');fill.className='bbDeltaFill';fill.style.width='0%';fill.style.left='50%';txt.textContent='±0.00';txt.className='bbDeltaText';return}bar.classList.remove('no-ref');const MAX=2000,abs=Math.abs(deltaMs),pct=Math.min(50,(abs/MAX)*50),ahead=deltaMs<0;if(ahead){fill.style.left=(50-pct)+'%';fill.style.width=pct+'%'}else{fill.style.left='50%';fill.style.width=pct+'%'}let fc='bbDeltaFill';if(abs>30)fc+=ahead?' ahead':' behind';if(abs>1000)fc+=ahead?' glow-ahead':' glow-behind';fill.className=fc;let ds=fmtDelta(deltaMs)+'s';if(trend<-5)ds+=' ▲';else if(trend>5)ds+=' ▼';txt.textContent=ds;txt.className='bbDeltaText'+(abs>30?(ahead?' ahead':' behind'):'')}
 
 async function saveNewRefLap(trackId,lapTimeMs,tracker){
     try{
-        const ref={id:'ref_'+Date.now()+'_'+Math.random().toString(36).substr(2,9),trackId,lapTimeMs,created:Date.now(),samples:tracker.toBinary(),sampleCount:tracker.samples.length,totalDistance:tracker.dist};
+        const ref={id:'ref_'+Date.now()+'_'+Math.random().toString(36).substr(2,9),trackId,lapTimeMs,created:Date.now(),samples:tracker.toBinary(),sampleCount:tracker.samples.length,totalDistance:tracker.dist,spatial:{version:1,closed:activeTrack?.type==='loop',origin:tracker.spatialOrigin,points:tracker.spatialPoints.map(p=>({...p}))}};
+        if(!validSpatialReference(ref.spatial,lapTimeMs))return;
         await saveRefLap(ref);if(!activeTrack||activeTrack.id!==trackId)return;referenceLap=ref;const sec=$('lap-section');if(sec)sec.classList.add('has-ref');console.log('Reference lap created:',fmtLapTime(lapTimeMs),'('+ref.sampleCount+' samples)');
         console.log('Reference lap saved to IndexedDB')
     }catch(e){console.error('Failed to save ref lap:',e)}
@@ -1937,14 +2004,10 @@ function fmtTime(ms){const s=Math.floor(ms/1000),m=Math.floor(s/60),h=Math.floor
 
 function fmtLapTime(ms){if(ms===0)return'0:00.000';const mins=Math.floor(ms/60000),secs=Math.floor((ms%60000)/1000),millis=ms%1000;return mins+':'+String(secs).padStart(2,'0')+'.'+String(millis).padStart(3,'0')}
 
-function estimatedLapProgress(tracker,ref){
-    if(!tracker||tracker.reliable!==true||!ref||!Number.isFinite(ref.totalDistance)||ref.totalDistance<=50||!Number.isFinite(tracker.dist)||tracker.dist<0||tracker.dist>ref.totalDistance*1.1)return null;
-    return Math.min(99,Math.floor(100*tracker.dist/ref.totalDistance));
-}
 function updateLapProgress(active){
-    const value=active?estimatedLapProgress(lapTracker,referenceLap):null;
+    const value=active&&lapTracker?.reliable&&lapTracker.match?.valid?lapTracker.match.progress:null;
     $('lap-progress').hidden=value===null;
-    if(value!==null){$('lap-progress-label').textContent='Est. distance · '+value+'%';$('lap-progress-bar').value=value}
+    if(value!==null){$('lap-progress-label').textContent='Reference route · '+value+'%';$('lap-progress-bar').value=value}
 }
 let lapResultGeneration=0;
 function showLapResult(time,previousBest){
@@ -1957,6 +2020,7 @@ function showLapResult(time,previousBest){
 }
 function updateLapTimer(lapTimeMs,lapCnt,lapFlags,timing=null){
     updateLapProgress(false);
+    $('reference-label').textContent=referenceLap?.spatial?'Vs reference '+fmtLapTime(referenceLap.lapTimeMs)+' · position matched':referenceLap?'Older reference · complete a clean lap/run to upgrade':'';
     const sec=$('lap-section');
     // Don't deactivate if we have an active track - firmware zeros just means "armed"
     // Only deactivate via explicit deactivateTrack() call
@@ -1993,7 +2057,7 @@ function updateLapTimer(lapTimeMs,lapCnt,lapFlags,timing=null){
         // Save reference lap for delta (use prevLapTimeMs which is the completed lap time)
 
     }
-    if(countIncreased&&completedMs>0&&lapCnt===prevLapCnt+1&&lapTracker&&lapTracker.isValid()&&(!referenceLap||completedMs<referenceLap.lapTimeMs))saveNewRefLap(activeTrack.id,completedMs,lapTracker);
+    if(countIncreased&&completedMs>0&&lapCnt===prevLapCnt+1&&lapTracker&&lapTracker.isValid()&&(!referenceLap||!referenceLap.spatial||completedMs<referenceLap.lapTimeMs))saveNewRefLap(activeTrack.id,completedMs,lapTracker);
     // Handle new lap - detect via flag OR via lapCnt increase (fallback for missed flags)
     // Firmware flag only lasts ~40ms but we poll at 60-70ms, so we often miss it
     const flagTriggered=(lapFlags&LAP_FLAG_NEW_LAP)&&!(prevLapFlags&LAP_FLAG_NEW_LAP);
@@ -2021,26 +2085,27 @@ function updateLapTimer(lapTimeMs,lapCnt,lapFlags,timing=null){
         }
         // Reset lap tracker for next lap
         if(lapTracker){lapTracker.reset();lastDeltaMs=0;deltaTrend=0}
-        updateDeltaBar({deltaMs:0,trend:0,hasRef:!!referenceLap,isP2P:activeTrack&&activeTrack.type==='point_to_point'})
+        updateDeltaBar({deltaMs:null,hasRef:!!referenceLap,isP2P,reason:'Waiting for reference match'})
         // P2P: Show "Finished!" briefly then return to "Armed"
         if(isP2P){stateEl.textContent='Finished · ready for next start';stateEl.classList.remove('timing');sec.classList.remove('timing')}
     }
     if((timing?timing.state==='timing':lapTimeMs>0)&&!countIncreased){
         // Track distance and calculate delta
         if(lapTracker&&currentPos&&currentPos.valid){
-            const dist=lapTracker.update(currentPos.x,currentPos.y,lapTimeMs);
+            lapTracker.update(currentPos.x,currentPos.y,lapTimeMs,currentPos,activeTrack.gpsOrigin);
             const isP2P=activeTrack&&activeTrack.type==='point_to_point';
             if(referenceLap&&lapTracker.reliable!==false){
-                const delta=calcDelta(dist,lapTimeMs,referenceLap);
+                if(!lapTracker.matcher||lapTracker.matcher.ref!==referenceLap)lapTracker.matcher=new SpatialMatcher(referenceLap);
+                const delta=lapTracker.matcher.match(currentPos,lapTimeMs);lapTracker.match=delta;
                 if(delta.valid){
                     deltaTrend=0.15*(delta.deltaMs-lastDeltaMs)+0.85*deltaTrend;lastDeltaMs=delta.deltaMs;
                     updateDeltaBar({deltaMs:delta.deltaMs,trend:deltaTrend,hasRef:true,isP2P});
-                }else updateDeltaBar({deltaMs:null,hasRef:true,isP2P});
+                }else updateDeltaBar({deltaMs:null,hasRef:true,isP2P,reason:delta.reason});
             }else{updateDeltaBar({deltaMs:null,hasRef:!!referenceLap,isP2P})}
             updateLapProgress(true);
         }
     }
-    if(!currentPos.valid||(timing&&!timing.gps_valid)){if(lapTracker?.invalidate)lapTracker.invalidate();updateLapProgress(false);updateDeltaBar({deltaMs:null,hasRef:!!referenceLap,isP2P})}
+    if(!currentPos?.valid||(timing&&!timing.gps_valid)){if(lapTracker?.invalidate)lapTracker.invalidate();updateLapProgress(false);updateDeltaBar({deltaMs:null,hasRef:!!referenceLap,isP2P})}
     prevLapTimeMs=lapTimeMs;
     prevLapFlags=lapFlags;
     prevLapCnt=lapCnt;
@@ -2093,7 +2158,7 @@ function process(buf,timing=null){
     let localX=ekfX,localY=ekfY; // fallback to EKF if GPS ref not ready
     const ref=getGpsRef();if(ref&&gpsOk===1&&lat&&lon){const local=gpsToLocal(lat,lon);if(local){localX=local.x;localY=local.y}}
     const validGpsCourse=Number.isFinite(gpsCourse)&&sp>2.0;
-    currentPos={x:localX,y:localY,yaw:ekfYaw,gpsCourse:gpsCourse,validGpsCourse:validGpsCourse,speed:sp,valid:gpsOk===1,sigma:posSigma,lat:lat,lon:lon};
+    currentPos={gpsAgeMs:timing?.gps_age_ms,x:localX,y:localY,yaw:ekfYaw,gpsCourse:gpsCourse,validGpsCourse:validGpsCourse,speed:sp,valid:gpsOk===1,sigma:posSigma,lat:lat,lon:lon};
     updateTrackRecording();
     updateStartLineIndicator();
     updateFinishLineIndicator();
@@ -2335,6 +2400,7 @@ function validateBackup(value){
         backupCheck(finite(r.lapTimeMs)&&r.lapTimeMs>0&&finite(r.totalDistance)&&r.totalDistance>0,'invalid reference totals');
         for(let i=0;i<r.samples.length;i+=2){const d=r.samples[i],t=r.samples[i+1];backupCheck(finite(d)&&finite(t)&&d>=0&&t>=0&&Number.isFinite(Math.fround(d))&&Number.isFinite(Math.fround(t))&&(!i||(d>=r.samples[i-2]&&t>r.samples[i-1])),'unordered reference samples')}
         backupCheck(r.samples[r.samples.length-2]<=r.totalDistance+1&&r.samples[r.samples.length-1]<=r.lapTimeMs+1000,'reference exceeds totals');
+        if(r.spatial!==undefined)backupCheck(validSpatialReference(r.spatial,r.lapTimeMs),'invalid spatial reference');
     }
     for(const lap of data.history)backupCheck(tracks.has(lap.trackId)&&typeof lap.sessionId==='string'&&finite(lap.timestamp)&&finite(lap.sessionStart)&&finite(lap.lapTimeMs)&&lap.lapTimeMs>0&&integer(lap.lapNumber),'invalid lap history');
     return{value,sampleCount,recordings:data.sessions.length,tracks:data.tracks.length,references:data.references.length,laps:data.history.length};

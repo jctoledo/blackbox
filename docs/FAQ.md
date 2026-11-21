@@ -77,15 +77,17 @@ Those are open development issues, not completed features. Automatic sleep requi
 
 Begin on the bench, verify the mounting/axes, and test at a controlled location with an independent timing reference. Configure the device while stopped; use a passenger/operator or recorded logs during motion. See the [step-by-step hardware checklist](HARDWARE_VALIDATION.md) and [engineering review](REVIEW.md).
 
-## What does estimated lap progress mean?
+## How do reference delta and route progress work?
 
-After a usable reference lap, the dashboard divides accumulated distance in the current lap by the reference's recorded distance. It shows whole percentages, capped at 99%; only the firmware's line crossing completes a lap. Different driving lines, position noise, and sample gaps affect the estimate. It is not map matching, remaining-time prediction, or a measured GPS confidence interval.
+New references retain GPS position and elapsed time in the track's geographic frame. The dashboard projects the current fresh position onto nearby reference segments, checks direction and continuity, then interpolates reference time at that position. Delta is current elapsed time minus reference elapsed time: negative is ahead, positive is behind. GPS fix age is removed from the comparison timestamp. A different driving line no longer automatically changes the comparison just because it is longer.
 
-Progress and live delta are suppressed after detected connection/GPS gaps, late tracking starts, or large position jumps. A new lap resets tracking. Delta compares elapsed time at equal accumulated distance and does not extrapolate past the reference samples. Last/best completed times remain separate from these estimates.
+The label identifies the reference time; it may differ from the historical best. Old distance-only references remain stored/exportable, but live spatial delta waits for a new clean lap/run. The next eligible spatial reference upgrades an old reference even if slower, while historical best times remain intact.
+
+Route progress follows the matched reference trace, capped at 99%; only a firmware line crossing completes timing. A 12 m matching corridor, direction agreement within 60°, sequential progress, and overlap rejection are conservative software gates, not accuracy bounds. Stale fixes, ambiguous branches, late acquisition, and large gaps suppress the comparison. Fresh stationary fixes can preserve local continuity; the delta stays hidden until movement resumes. No reference extrapolation or guaranteed recovery through GPS loss is claimed. A new lap/run resets tracking.
 
 ## Can Blackbox call out corners or tell me when to brake?
 
-No. The current reference stores distance/time samples, not a spatially matched corner model. Wrong identification would otherwise repeat each lap. Before adding coaching, we need position traces, ambiguous-section rejection, consistent corner detection across laps, and independent validation. A polished display is not evidence of those capabilities.
+No. Position-matched references provide a foundation, but do not identify or learn corners. Before adding coaching, we need repeatable corner identification across laps and independent validation. A polished display is not evidence of those capabilities.
 
 ## Which display should I use?
 

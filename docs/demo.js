@@ -71,9 +71,9 @@
    await openTrackDB();
    const id='demo-circuit-v3',track={id,name:'Demo circuit · simulated',type:'loop',gpsOrigin:origin,startLine:{p1:[155,0],p2:[195,0],direction:Math.PI/2},centerline:route.map(p=>({x:p.x,y:p.y})),pathLength:laps[0][steps].distance,lapCount:0,bestLapMs:Math.round(durations[0]),createdAt:Date.now(),quality:'good'};
    const previous=(await getAllTracks()).find(item=>item.id===id);if(previous){track.bestLapMs=previous.bestLapMs;track.lapCount=previous.lapCount}
-   if(!await getRefLap(id)){
+   if(!(await getRefLap(id))?.spatial){
     const pairs=new Float32Array(laps[0].flatMap(p=>[p.distance,p.time]));
-    await saveRefLap({id:'demo-reference-v3',trackId:id,lapTimeMs:Math.round(durations[0]),created:Date.now(),samples:pairs.buffer,sampleCount:steps+1,totalDistance:track.pathLength});
+    await saveRefLap({id:'demo-reference-v3',trackId:id,lapTimeMs:Math.round(durations[0]),created:Date.now(),samples:pairs.buffer,sampleCount:steps+1,totalDistance:track.pathLength,spatial:{version:1,closed:true,origin,points:laps[0].map(p=>({x:p.x,y:p.y,t:Math.min(p.time,Math.round(durations[0]))}))}});
    }
    await saveTrack(track);await activateTrack(track);
   }catch(error){document.getElementById('demo-note').textContent='Simulated data. Browser storage unavailable; recording and saved tracks require storage access.';console.error(error)}

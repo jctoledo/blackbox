@@ -137,3 +137,11 @@ Keep failures and untested cases visible. Promote a candidate to stable only whe
 - [ ] Restore into a profile containing disposable existing data; confirm the existing data remains and restored items have separate IDs.
 - [ ] In a disposable profile, exercise transaction failure. Check partial-result messaging and retry only the remaining group while the tab stays open.
 - [ ] Keep location-containing backups private. Do not clear the only existing copy to test recovery.
+
+## Spatial reference acceptance
+
+- [ ] Back up saved data before updating. Verify old reference times and best results remain visible; a new clean lap/run upgrades the reference without changing historical best.
+- [ ] On a repeated controlled route, compare delta at the same physical locations on slightly different driven lines. Save CSV and a full JSON backup, which includes spatial reference points.
+- [ ] Check a stationary pause: delta hides, then resumes locally when fresh positions and direction return. Test GPS loss separately: do not expect uninterrupted comparison or automatic recovery.
+- [ ] At nearby parallel/crossed sections, verify ambiguous matches are hidden rather than jumping along the route. Check start/finish seam behavior and repeated stage starts.
+- [ ] Record phone/browser, GPS installation, reference time, and observed failures. The matching gates are heuristics; independently timed crossings remain necessary to establish physical timing error.
