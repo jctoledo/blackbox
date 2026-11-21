@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 660" style="width:100%;height:auto;display:block" role="img" aria-labelledby="mount-title mount-desc">
+  <title id="mount-title">Sensor mounting and road attitude: side views</title>
+  <desc id="mount-desc">Three stacked schematic side views. Baseline: a support on a sloping dash keeps the sensor parallel to the horizontal car floor. Research extension: the sensor follows the sloping dash and is tilted relative to the floor. Road attitude: the sensor remains parallel to the car floor while the whole car follows an inclined road. No permitted tilt angle is specified.</desc>
+  <defs>
+    <style>
+      text { font-family: system-ui, sans-serif; fill: #edf3f8; font-size: 15px; }
+      .heading { font-size: 17px; font-weight: 650; }
+      .sensor { fill: #203742; stroke: #64d3e3; stroke-width: 2; }
+      .surface { fill: none; stroke: #8c9ba7; stroke-width: 3; }
+      .floor { stroke: #d7ff45; stroke-width: 3; }
+      .road { stroke: #687b89; stroke-width: 4; }
+      .leader { fill: none; stroke: #8c9ba7; stroke-width: 1.2; }
+      .muted { fill: #bac7d0; }
+    </style>
+  </defs>
+  <rect width="360" height="660" rx="12" fill="#101820"/>
+  <text x="18" y="27" class="muted">SIDE VIEWS · SCHEMATIC</text>
+
+  <g transform="translate(0 40)">
+    <text x="18" y="22" class="heading">1 · Baseline: parallel to floor</text>
+    <path class="surface" d="M70 126 L268 86"/>
+    <path d="M126 115 L126 87 L211 87 L211 98 Z" fill="#475563" stroke="#bac7d0" stroke-width="1.2"/>
+    <rect class="sensor" x="137" y="76" width="63" height="11" rx="2"/>
+    <path class="floor" d="M52 152 H306"/>
+    <text x="18" y="56" style="fill:#64d3e3">Sensor</text>
+    <path class="leader" d="M83 52 L144 76"/>
+    <text x="226" y="64">Support</text>
+    <path class="leader" d="M235 70 L203 95"/>
+    <text x="18" y="132" class="muted">Dash</text>
+    <text x="18" y="177" style="fill:#d7ff45">Car floor · assumed horizontal</text>
+  </g>
+
+  <path d="M18 236 H342" stroke="#34434f"/>
+  <g transform="translate(0 247)">
+    <text x="18" y="22" class="heading">2 · Tilted mounting: R&amp;D</text>
+    <text x="18" y="48" class="muted">Requires validation</text>
+    <path class="surface" d="M70 126 L268 86"/>
+    <g transform="translate(138 112) rotate(-11.42)">
+      <rect class="sensor" x="0" y="-11" width="63" height="11" rx="2"/>
+    </g>
+    <text x="210" y="76" style="fill:#64d3e3">Sensor</text>
+    <path class="leader" d="M225 81 L185 97"/>
+    <text x="18" y="132" class="muted">Dash</text>
+    <path class="floor" d="M52 152 H306"/>
+    <text x="18" y="177" style="fill:#d7ff45">Sensor tilted relative to car floor</text>
+  </g>
+
+  <path d="M18 443 H342" stroke="#34434f"/>
+  <g transform="translate(0 454)">
+    <text x="18" y="22" class="heading">3 · Car on an inclined road</text>
+    <text x="18" y="48" class="muted">Sensor stays parallel to floor</text>
+    <g transform="translate(180 119) rotate(-10)">
+      <rect class="sensor" x="-37" y="-32" width="63" height="11" rx="2"/>
+      <path class="leader" d="M-30 -21 V0 M20 -21 V0"/>
+      <path class="floor" d="M-128 0 H126"/>
+      <path class="road" d="M-145 35 H145"/>
+    </g>
+    <text x="18" y="89" style="fill:#64d3e3">Sensor</text>
+    <path class="leader" d="M84 85 L143 88"/>
+    <text x="242" y="94" style="fill:#d7ff45">Car floor</text>
+    <path class="leader" d="M256 99 L251 106"/>
+    <text x="18" y="168" class="muted">Road</text>
+    <text x="18" y="192">Road attitude ≠ mounting offset</text>
+  </g>
+</svg>
