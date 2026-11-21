@@ -17,6 +17,13 @@ level when parked on level ground. Verify acceleration/braking and turn signs in
 that installation. Non-horizontal sensor mounting remains R&D requiring physical
 validation; the software fixes do not expand the normal mounting contract.
 
+On a sloping dash, use a rigid support or wedge to keep the sensor parallel to
+the car floor. A driveway incline tilts the whole car; it does not change the
+sensor-to-car mounting offset. Prefer level ground for the initial baseline
+checks and keep the car motionless during startup.
+
+![Side views: a support keeps the sensor parallel to the floor, a tilted mount is R&D, and an inclined road changes the whole car’s attitude.](assets/mounting-side-view.svg)
+
 Perfect mechanical flatness is not required by the gravity/acceleration equations.
 Firmware derives distinct heading and planar angular evidence from all three gyro
 axes and removes predicted gravity for stationary detection. This makes the
