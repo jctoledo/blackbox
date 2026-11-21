@@ -157,7 +157,9 @@ Connect to the device's WiFi and open `192.168.71.1` in any browser.
 | Analysis | Show optional force analysis |
 | Drive view / Dashboard | Enter the focused display or return to controls |
 
-Landscape offers Speed, G-meter, sustained Peaks and Runs, with timing fixed alongside. Tap the instrument name to reveal its picker, or swipe horizontally to switch; the picker closes after selection. Speed includes a subtle maximum speed estimate while GPS is fresh for this page session. Choose **Menu → Speed units** for mph or km/h; the preference stays in this browser and applies to Speed and MAX. Recording/export units and the named 45–70 mph, 30–60 mph and 50–100 km/h intervals do not change. Tap Controls for the toolbar; the G-meter uses a selectable fixed scale and clears when data becomes unavailable.
+With no selected track, the timing frame shows recording readiness, duration and partial GPS observed distance. Stop freezes the summary; selecting a track restores timing while recording continues. See the [Drive recording guide](docs/DRIVE.md).
+
+Landscape offers Speed, G-meter, sustained Peaks and Runs, with timing or Drive alongside. Tap the instrument name to reveal its picker, or swipe horizontally to switch; the picker closes after selection. Speed includes a subtle maximum speed estimate while GPS is fresh for this page session. Choose **Menu → Speed units** for mph or km/h; the preference stays in this browser and applies to Speed and MAX. Recording/export units and the named 45–70 mph, 30–60 mph and 50–100 km/h intervals do not change. Tap Controls for the toolbar; the G-meter uses a selectable fixed scale and clears when data becomes unavailable.
 
 ![Landscape cluster with synthetic demo data](docs/dashboard-cluster-v6.png)
 

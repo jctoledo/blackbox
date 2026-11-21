@@ -89,15 +89,28 @@
   return {version:1,simulated:true,boot_id:boot,captured_uptime_ms:Math.max(0,Math.floor(uptime)),build:{app_version:'SIM demo',idf_version:null,source_sha:null,target:'esp32c3'},gps:{configured_model:'SIMULATED',configured_rate_hz:25,configured_uart_baud:115200,configuration_verified:false},imu:{model:'WT901',transport:'uart',configured_uart_baud:null,baud_selection:'pending',configured_output_rate_hz:null},calibration:{accelerometer_bias_mps2:null,mount_alignment:null}};
  }
  function exampleMetadata(time,boot){return {status:'captured',requestedAt:time,receivedAt:time,snapshot:recordingSnapshot(0,boot)}}
+ function exampleDrive(id,rows){
+  const d=new DriveSession(id),gps=rows.filter(r=>r.rowType===1),wall=rows[0].t;
+  d.apply({owner:id,type:'start',mono:0,wall});
+  d.apply({owner:id,type:'gps',rows:gps.slice(0,64)});
+  d.apply({owner:id,type:'gps',rows:gps.slice(64)});
+  d.apply({owner:id,type:'stop',mono:Math.max(0,rows.at(-1).t-wall),wall:rows.at(-1).t});
+  return d.snapshot();
+ }
  async function seedExampleRecording(database,label,rows,fixtureId){
   const boot=rows.find(row=>row.gpsBootId!==undefined)?.gpsBootId??({'circuit-v6':101,'rolling-v7':102}[fixtureId]);
   return new Promise((resolve,reject)=>{
    const tx=database.transaction(['sessions','chunks'],'readwrite'),sessions=tx.objectStore('sessions');let id;
    tx.oncomplete=()=>resolve(id);tx.onerror=tx.onabort=()=>reject(tx.error||new Error('Demo example could not be saved'));
    const request=sessions.getAll();request.onsuccess=()=>{
-    const existing=request.result.find(s=>s.demoFixture===fixtureId);if(existing){id=existing.sessionId;const metadata=existing.recordingMetadata;if(!metadata)sessions.put({...existing,recordingMetadata:exampleMetadata(existing.startTime,boot)});else if(metadata.status==='captured'&&metadata.snapshot.simulated&&metadata.snapshot.boot_id!==boot)sessions.put({...existing,recordingMetadata:{...metadata,snapshot:{...metadata.snapshot,boot_id:boot}}});return}
+    const existing=request.result.find(s=>s.demoFixture===fixtureId);if(existing){
+     id=existing.sessionId;const metadata=existing.recordingMetadata,patch={...existing,drive:existing.drive??(rows.length?exampleDrive(id,rows):undefined)};
+     if(!metadata)patch.recordingMetadata=exampleMetadata(existing.startTime,boot);
+     else if(metadata.status==='captured'&&metadata.snapshot.simulated&&metadata.snapshot.boot_id!==boot)patch.recordingMetadata={...metadata,snapshot:{...metadata.snapshot,boot_id:boot}};
+     sessions.put(patch);return;
+    }
     id=request.result.reduce((next,s)=>Math.max(next,s.sessionId+1),Date.now());
-    sessions.add({sessionId:id,startTime:rows[0].t,status:'complete',label,demoFixture:fixtureId,recordingMetadata:exampleMetadata(rows[0].t,boot)});
+    sessions.add({sessionId:id,startTime:rows[0].t,status:'complete',label,demoFixture:fixtureId,drive:exampleDrive(id,rows),recordingMetadata:exampleMetadata(rows[0].t,boot)});
     for(let offset=0;offset<rows.length;offset+=250)tx.objectStore('chunks').add({sessionId:id,chunkIndex:offset/250,data:rows.slice(offset,offset+250),timestamp:rows[Math.min(offset+249,rows.length-1)].t});
    };
   });
@@ -153,6 +166,8 @@
   return Promise.resolve(new Response('{"error":"Unavailable in demo"}',{status:404}));
  };
  document.addEventListener('DOMContentLoaded',async()=>{
+  const drivePreview=new URL(location.href).searchParams.get('view')==='drive';
+  document.getElementById('demo-drive').onclick=async()=>{if(activeTrack)await deactivateTrack();document.getElementById('menu-overlay')?.classList?.remove('open');renderDrive()};
   document.getElementById('demo-interval').onclick=async event=>{
    intervalStart=intervalStart===null?Math.floor(performance.now()-start):null;demoBoot++;revision++;armedCycle=null;
    event.target.textContent=intervalStart===null?'Simulate rolling interval':'Return to circuit demo';
@@ -170,9 +185,9 @@
     const pairs=new Float32Array(laps[0].flatMap(p=>[p.distance,p.time]));
     await saveRefLap({id:'demo-reference-v6',trackId:id,lapTimeMs:Math.round(durations[0]),created:Date.now(),samples:pairs.buffer,sampleCount:steps+1,totalDistance:track.pathLength,spatial:{version:1,closed:true,origin,points:laps[0].map(p=>({x:p.x,y:p.y,t:Math.min(p.time,Math.round(durations[0]))}))}});
    }
-   demoTrack=track;await saveTrack(track);await activateTrack(track);
-   armedCycle=clock(performance.now()-start).cycle-1;
+   demoTrack=track;await saveTrack(track);if(!drivePreview){await activateTrack(track);armedCycle=clock(performance.now()-start).cycle-1;}
    await populateExamples(track);
+   if(drivePreview){const databaseForDrive=await openDB();await loadLatestDrive(databaseForDrive,await idbPromise(databaseForDrive.transaction('sessions','readonly').objectStore('sessions').getAll()));renderDrive()}
   }catch(error){document.getElementById('demo-note').textContent='Simulated data. Browser storage unavailable; recording and saved tracks require storage access.';console.error(error)}
  });
 })();
