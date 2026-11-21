@@ -1019,7 +1019,7 @@ function updateRecUI(){
     }
     if(recordingError){stat.textContent=recordingError;stat.className='bbVal err'}
     const quick=$('quick-record');quick.textContent=rec?'Stop recording':'Record session';quick.disabled=recordingBusy;quick.classList.toggle('recording',rec);
-    const notice=recordingError||(recoveredSessionCount?recoveredSessionCount+' unfinished recording(s) found in Saved data. Saved chunks are available; recording has not resumed.':'');
+    const notice=recordingError||lapPersistenceError||(recoveredSessionCount?recoveredSessionCount+' unfinished recording(s) found in Saved data. Saved chunks are available; recording has not resumed.':'');
     $('recording-notice').hidden=!notice;$('recording-notice').textContent=notice;
     const saveStatus=$('save-status');saveStatus.hidden=!sessionId;saveStatus.textContent=chunkWrite?'Saving recording…':chunkBuffer.length?chunkBuffer.length+' samples pending save':lastSaveTime?'Recording saved in this browser':'No samples saved yet';
     $('rec-chunks').textContent=chunkIndex;
@@ -1401,8 +1401,10 @@ function clearSession(){currentSessionId=null;currentSessionStart=null}
 
 // Lap history CRUD
 async function recordLapHistory(trackId,lapTimeMs,lapNum){
-    if(!trackDb)await openTrackDB();if(!currentSessionId)return;
-    const lap={id:genUUID(),trackId,timestamp:Date.now(),lapTimeMs,lapNumber:lapNum,sessionId:currentSessionId,sessionStart:currentSessionStart};
+    const sessionId=currentSessionId,sessionStart=currentSessionStart;
+    if(!sessionId)throw new Error('No active lap history session');
+    const lap={id:genUUID(),trackId,timestamp:Date.now(),lapTimeMs,lapNumber:lapNum,sessionId,sessionStart};
+    if(!trackDb)await openTrackDB();
     return new Promise((res,rej)=>{const tx=trackDb.transaction('lap_history','readwrite');tx.oncomplete=()=>res(lap);tx.onabort=()=>rej(tx.error||new Error('Lap history storage failed'));tx.onerror=()=>rej(tx.error);tx.objectStore('lap_history').put(lap)})
 }
 async function getLapHistory(trackId,limit=200){
@@ -1413,8 +1415,25 @@ async function getLapHistory(trackId,limit=200){
             const sessions=Array.from(sm.values());sessions.sort((a,b)=>b.sessionStart-a.sessionStart);for(const s of sessions)s.laps.sort((a,b)=>a.lapNumber-b.lapNumber);
             res({sessions,totalLaps:laps.length})};r.onerror=()=>rej(r.error)})
 }
-async function deleteLapHistory(trackId){if(!trackDb)await openTrackDB();return new Promise((res,rej)=>{const tx=trackDb.transaction('lap_history','readwrite');const r=tx.objectStore('lap_history').index('trackId').openCursor(IDBKeyRange.only(trackId));r.onsuccess=()=>{const c=r.result;if(c){c.delete();c.continue()}else res()};r.onerror=()=>rej(r.error)})}
-async function clearAllLapHistory(){if(!trackDb)await openTrackDB();return new Promise((res,rej)=>{const tx=trackDb.transaction('lap_history','readwrite');const r=tx.objectStore('lap_history').clear();r.onsuccess=()=>res();r.onerror=()=>rej(r.error)})}
+async function clearLapHistory(trackId=null){
+    if(!trackDb)await openTrackDB();
+    await new Promise((resolve,reject)=>{
+        const tx=trackDb.transaction(['tracks','lap_history'],'readwrite');
+        tx.oncomplete=resolve;tx.onabort=tx.onerror=()=>reject(tx.error||new Error('Lap history deletion failed'));
+        const history=tx.objectStore('lap_history'),tracks=tx.objectStore('tracks');
+        if(trackId===null){
+            history.clear();
+            const request=tracks.openCursor();request.onsuccess=()=>{const cursor=request.result;if(cursor){cursor.update({...cursor.value,lapCount:0});cursor.continue()}};
+        }else{
+            const request=history.index('trackId').openCursor(IDBKeyRange.only(trackId));
+            request.onsuccess=()=>{const cursor=request.result;if(cursor){cursor.delete();cursor.continue()}};
+            const track=tracks.get(trackId);track.onsuccess=()=>{if(track.result)tracks.put({...track.result,lapCount:0})};
+        }
+    });
+    if(activeTrack&&(trackId===null||activeTrack.id===trackId))activeTrack.lapCount=0;
+}
+async function deleteLapHistory(trackId){return clearLapHistory(trackId)}
+async function clearAllLapHistory(){return clearLapHistory()}
 
 // LapTracker - tracks distance and samples during lap for delta calculation
 // Spatial references use a persistent geographic origin, never the reboot-local EKF frame.
@@ -1745,8 +1764,8 @@ async function showTrackHistory(id){
 }
 async function clearTrackHistoryConfirm(id){
     if(confirm('Clear all lap history for this track?')){
-        await deleteLapHistory(id);
-        const t=await getTrack(id);if(t){t.lapCount=0;await saveTrack(t)}
+        try{await deleteLapHistory(id)}
+        catch(error){alert('Could not clear lap history. Saved history and track count are unchanged. '+error.message);return}
         renderTrackList();
     }
 }
@@ -1941,12 +1960,26 @@ function confirmStopTiming(){
 }
 
 async function updateTrackBestLap(lapTimeMs){
-    if(!activeTrack)return;
-    if(!activeTrack.bestLapMs||lapTimeMs<activeTrack.bestLapMs)activeTrack.bestLapMs=lapTimeMs;
-    activeTrack.lapCount=(activeTrack.lapCount||0)+1;
-    await saveTrack(activeTrack);
-    // Record lap to history
-    recordLapHistory(activeTrack.id,lapTimeMs,activeTrack.lapCount).catch(e=>console.error('Failed to record lap:',e));
+    // Capture ownership before any asynchronous work: setup may change meanwhile.
+    const owner=activeTrack,session=currentSessionId,sessionStart=currentSessionStart;
+    if(!owner)return;
+    const track={...owner},lap={id:genUUID(),trackId:owner.id,timestamp:Date.now(),lapTimeMs,sessionId:session,sessionStart};
+    if(!session)throw new Error('No active lap history session');
+    if(!trackDb)await openTrackDB();
+    const saved=await new Promise((resolve,reject)=>{
+        const tx=trackDb.transaction(['tracks','lap_history'],'readwrite');let result,failure;
+        tx.oncomplete=()=>resolve(result);tx.onabort=tx.onerror=()=>reject(failure||tx.error||new Error('Lap result storage failed'));
+        // Read inside the transaction so overlapping completions cannot lose counts
+        // and an earlier failed completion cannot inflate a later saved result.
+        const tracks=tx.objectStore('tracks'),request=tracks.get(track.id);
+        request.onsuccess=()=>{
+            if(!request.result){failure=new Error('Track was deleted before the lap result could be saved');tx.abort();return}
+            const previous=request.result;
+            result={...previous,lapCount:(previous.lapCount||0)+1,bestLapMs:Math.min(previous.bestLapMs||Infinity,lapTimeMs),modified:Date.now()};
+            tracks.put(result);tx.objectStore('lap_history').add({...lap,lapNumber:result.lapCount});
+        };
+    });
+    if(activeTrack===owner){owner.bestLapMs=saved.bestLapMs;owner.lapCount=saved.lapCount}
 }
 
 // Start line indicator
@@ -2299,7 +2332,7 @@ function updateLapProgress(active){
     $('lap-progress').hidden=value===null;
     if(value!==null){$('lap-progress-label').textContent=(activeTrack?.type==='point_to_point'?'Stage progress · ':'Lap progress · ')+value+'%';$('lap-progress-bar').value=value}
 }
-let lapResultGeneration=0;
+let lapPersistenceError='',lapResultGeneration=0;
 function showLapResult(time,previousBest){
     const box=$('lap-result'),generation=++lapResultGeneration;
     const better=!previousBest||time<previousBest;
@@ -2371,7 +2404,7 @@ function updateLapTimer(lapTimeMs,lapCnt,lapFlags,timing=null){
                 deltaEl.className='bbLapHistValue bbNum delta '+(deltaMs<0?'faster':deltaMs>0?'slower':'');
             }
             const displayBest=Math.min(activeTrack.bestLapMs||Infinity,completedMs);$('best-lap').textContent=fmtLapTime(displayBest);
-            updateTrackBestLap(completedMs).catch(e=>{$('recording-notice').hidden=false;$('recording-notice').textContent='Lap result could not be saved. Export your session before closing this tab.';console.error('Lap history storage failed:',e)});
+            updateTrackBestLap(completedMs).catch(e=>{lapPersistenceError='Lap result '+fmtLapTime(completedMs)+' could not be saved. Keep this tab open and note this result before closing.';$('recording-notice').hidden=false;$('recording-notice').textContent=lapPersistenceError;console.error('Lap history storage failed:',e)});
         }
         // Reset lap tracker for next lap
         if(lapTracker){lapTracker.reset();lastDeltaMs=0;deltaTrend=0}
