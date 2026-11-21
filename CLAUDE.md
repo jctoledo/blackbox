@@ -18,6 +18,8 @@ GPS course is clockwise from north; local east/north bearings and timing-line di
 
 The estimator integrates earth-frame acceleration and uses diagonal covariance. It does not implement CTRA, full covariance propagation, RTK or calibrated error probabilities. The force-display orientation/blending path is distinct from EKF prediction. Timing uses consecutive valid receiver positions and velocities, interpolated with host receive timestamps; receiver epoch/PPS synchronization is not implemented.
 
+Speed units depend on the source: binary v4 `speed_kmh` and ordinary browser `row.sp` are km/h; GPS-log `speed_mps` and `rowType:1` browser `row.sp` are m/s. Convert at the adapter; distinguish row types before calculations.
+
 Binary telemetry is v4, **82 bytes**. Use `binary_telemetry.rs`, the shared fixture and Python/JS decoders rather than copying a stale offset table. Legacy decoder support is explicit. Latitude/longitude in the packet are f32 and may lose metre-scale precision; firmware crossing calculations retain f64.
 
 ## UI and data
