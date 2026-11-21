@@ -2,7 +2,7 @@
 
 A GPS lap timer can display thousandths of a second without measuring crossings to that accuracy. Blackbox stores interpolated crossing times in milliseconds; its real-world timing error has not yet been measured against an independent reference. This guide explains what determines that error and what evidence would make an accuracy claim useful.
 
-[Try the instrument](https://jctoledo.github.io/blackbox/demo.html?v=0.0.4-rc.9) · [Build a GPS lap timer](DIY_GPS_LAP_TIMER.md) · [Detailed maths and rate budgets](MATHS_AND_RATES.md)
+[Try the instrument](https://jctoledo.github.io/blackbox/demo.html?v=0.0.4-rc.10) · [Build a GPS lap timer](DIY_GPS_LAP_TIMER.md) · [Detailed maths and rate budgets](MATHS_AND_RATES.md)
 
 ## What happens between two GPS fixes?
 

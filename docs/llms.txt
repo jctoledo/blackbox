@@ -40,3 +40,5 @@ This file is a convenient reading index, not a crawler directive or a guarantee 
 - [DIY GPS lap timer](https://jctoledo.github.io/blackbox/guides/diy-gps-lap-timer.html): parts, wiring gates, installation and first saved session.
 - [NEO-M9N ESP32 logger](https://jctoledo.github.io/blackbox/guides/neo-m9n-esp32-gps-logger.html): receiver/host timestamps, delivered cadence and export workflow.
 - [GPS timing accuracy](https://jctoledo.github.io/blackbox/guides/gps-lap-timer-accuracy.html): interpolation examples and a pending real measurement report.
+
+- [First drive](https://jctoledo.github.io/blackbox/guides/first-drive.html): concise NEO-M9N setup, parked baselines, ordinary-drive recording, exports and photo plan.

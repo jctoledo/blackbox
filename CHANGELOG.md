@@ -14,6 +14,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Obsolete documentation files (RELEASE.md, IMPLEMENTATION_SUMMARY.md, release-notes.md)
 
+## [0.0.4-rc.10] - 2026-11-21
+
+### Fixed
+- Lap history, track best and counts commit atomically under captured track/session ownership. Failed saves remain visible; clearing history waits for commit and a pending result cannot resurrect a deleted track.
+- Lap timing replays intermediate RMC fixes from UART batches and preserves invalid-fix boundaries. Queue loss, stale/invalid data and indistinguishable host timestamps break continuity rather than inventing crossings.
+
+### Added
+- DIY GPS lap timer, NEO-M9N logging and timing-accuracy search guides, linked from the homepage and sitemap.
+- A short first-drive guide, build-photo/measurement plan, launch drafts and primary-source discovery notes.
+- Rendered-site checks for navigation, anchors, headings, metadata and sitemap coverage; refreshed issue templates and maintainer skill documentation.
+
+Release candidate for ESP32-C3 hardware evaluation. Includes rc.9's rolling interval and notice-layout fixes. Host receive timing is still not receiver-epoch/PPS synchronization; physical accuracy and real-drive detection metrics remain unvalidated.
+
 ## [0.0.4-rc.9] - 2026-11-21
 
 ### Added

@@ -14,7 +14,7 @@ I wanted a driving instrument I could inspect from GPS input to exported recordi
 
 It has circuit/stage timing, a landscape dashboard with Speed/G-meter/Peaks/Runs, position-matched reference pace and local recordings with CSV export and backup/restore. NEO-M9N is configured for a 25 Hz GPS target; delivered rates and real-world timing accuracy still need installation-specific evidence.
 
-You can try the synthetic dashboard without hardware: https://jctoledo.github.io/blackbox/demo.html?v=0.0.4-rc.9
+You can try the synthetic dashboard without hardware: https://jctoledo.github.io/blackbox/demo.html?v=0.0.4-rc.10
 
 Source, build instructions and verified release installer: https://jctoledo.github.io/blackbox/
 
@@ -48,6 +48,8 @@ I’d value review of coordinate-frame assumptions, timestamp handling, reproduc
 | 75–90 s | Build guide and repository | Invite builders and reproducible bug reports |
 
 Use a passenger/static camera for moving footage. Hide private route details, credentials and identifying paperwork. A decorative background clip is not a product demonstration.
+
+[Short first-drive checklist](FIRST_DRIVE.md) · [Build journal](BUILD.md)
 
 ## First four weeks
 

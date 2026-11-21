@@ -4,7 +4,7 @@ Blackbox turns a small sensor box and a phone into an instrument for your drive.
 
 The useful question is not simply “how fast does it update?” It is **what does each number mean, and when should you trust it?** This guide follows a measurement from the car to the screen.
 
-[Try the dashboard](https://jctoledo.github.io/blackbox/demo.html?v=0.0.4-rc.9) · [Build the hardware](BUILD.md) · [Equations and rate budgets](MATHS_AND_RATES.md)
+[Try the dashboard](https://jctoledo.github.io/blackbox/demo.html?v=0.0.4-rc.10) · [Build the hardware](BUILD.md) · [Equations and rate budgets](MATHS_AND_RATES.md)
 
 [TOC]
 
@@ -22,6 +22,12 @@ The phone is the display and recording store. It compares your current route pos
 | Phone browser | Instruments, reference matching, recording and exports | Your saved sessions live here; a disconnected or suspended browser can miss data |
 
 That split has a practical consequence: losing Wi-Fi is different from losing GPS. A lap may finish on the controller while the phone is disconnected, but the phone cannot reconstruct every missed telemetry sample afterwards.
+
+### Batched GPS evidence and missing data
+
+The UART reader can receive several RMC sentences during one poll. Timing now replays a bounded queue of individual fix snapshots rather than using only the last parsed position. Invalid fixes remain in that evidence stream so a valid-invalid-valid batch cannot silently bridge the invalid segment. Queue overflow breaks continuity before the retained tail is replayed.
+
+Each snapshot uses its host sentence-completion time. Stale/future evidence, long gaps and timestamps that collapse into the same millisecond invalidate interpolation continuity. The implementation does not spread buffered fixes across invented receiver times; receiver-epoch/PPS synchronization remains future work. These checks fix software evidence handling, while physical missed-crossing rates still need reference tests.
 
 ## A lap starts at a line, not at a screen refresh
 
