@@ -1,12 +1,16 @@
-# Mounting tilt: frames, present limits and pending corrections
+# Mounting tilt: frames, source audit and validation limits
 
-Reviewed 2026-11-21 against `a226d2a`. This is source-only research: no builds, automated tests, sensor configuration changes, flashing or physical measurements were performed. Proposed corrections below remain pending implementation and independent review. Read alongside [sensor fusion](../SENSOR_FUSION.md), [experimental alignment](../CALIBRATION.md) and [hardware acceptance](../HARDWARE_VALIDATION.md).
+Reviewed 2026-11-21 against `a226d2a`. This is source-only research: no builds, automated tests, sensor configuration changes, flashing or physical measurements were performed. The source audit below describes that historical commit; the implementation follow-up records subsequent corrections. Read alongside [sensor fusion](../SENSOR_FUSION.md), [experimental alignment](../CALIBRATION.md) and [hardware acceptance](../HARDWARE_VALIDATION.md).
 
 ## Accepted mounting contract
 
 The maintainer confirmed the baseline: the sensor plane is parallel to the car floor, with that floor assumed horizontal for setup. Use a small support or wedge if a sloping dashboard would otherwise tilt the sensor. A sensor following a non-horizontal mounting surface is an R&D extension requiring validation. When the car climbs or banks, a sensor still parallel to its floor changes attitude with the car; that is road/vehicle attitude, not a changed mounting offset. This accepted product contract supplements the historical source audit at `a226d2a` below; it does not claim that tilted installations have been validated.
 
 ![Three side views distinguish a level sensor on a support, a tilted sensor following the dash, and a floor-parallel sensor on an inclined road.](../assets/mounting-side-view.svg)
+
+## Implementation follow-up
+
+[PR #109](https://github.com/jctoledo/blackbox/pull/109), merged as `d093210`, separates Euler heading rate from earth-vertical angular rate, uses gravity-free acceleration and full-vector angular motion for stationary evidence, and resets sustained evidence across GPS/IMU gaps. Software regressions cover tilted stationary vectors, compound rotations, stale/invalid inputs and singularity handling; both receiver builds passed on lat. These changes address the software defects identified below. They do not validate a tilted installation or replace the physical acceptance work. See [current calibration guidance](../CALIBRATION.md) and [IMU evidence adapter](../../sensors/blackbox/src/imu_evidence.rs).
 
 ## Source audit at a226d2a: dashboard or hood mount
 

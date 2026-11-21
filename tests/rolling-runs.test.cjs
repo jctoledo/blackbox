@@ -64,3 +64,12 @@ test('CSV preserves distinct SI thresholds and all three detector results',()=>{
  const rows=Array.from({length:400},(_,i)=>row(i,10+i*.08));const csv=c.runsToCSV(rows);
  for(const label of ['45-70 mph','30-60 mph','50-100 km/h'])assert.ok(csv.includes(label+',accepted,'));
 });
+test('80-120 km/h has independent exact thresholds, source endpoints and SIM/gap evidence',()=>{
+ const c=context(),interval=vm.runInContext('runIntervals.find(i=>i.label==="80-120 km/h")',c);assert.ok(interval,'80–120 preset exists');
+ assert.equal(interval.lo,80/3.6);assert.equal(interval.hi,120/3.6);
+ const d=new c.Runs(interval);for(let i=0;i<400;i++)d.update(row(i,10+i*.08,{gpsSynthetic:i===0?1:0,t:900000+i}));
+ const r=d.results.find(r=>r.status==='accepted');assert.ok(r);assert.ok(Math.abs(r.seconds-50/9)<1e-8);assert.equal(r.interval,'80-120 km/h');assert.equal(r.synthetic,1);assert.equal(r.boot,7);assert.equal(r.date,211126);
+ assert.equal(r.startSeq,153);assert.equal(r.endSeq,293);assert.ok(Math.abs(r.startUs-(1000000+(80/3.6-10)/2*1e6))<1e-8);
+ const gap=new c.Runs(interval);for(let i=0;i<400;i++)gap.update(row(i,10+i*.08,i===200?{gpsMissing:1}:{}));assert.equal(gap.results.some(r=>r.status==='accepted'),false);assert.ok(gap.results.some(r=>r.status==='rejected'&&r.reason==='GPS gap or clock boundary'));
+ vm.runInContext(html.slice(html.indexOf('function runsToCSV('),html.indexOf('// End receiver-time rolling intervals.')),c);const csv=c.runsToCSV(Array.from({length:400},(_,i)=>row(i,10+i*.08)));assert.match(csv,/80-120 km\/h,accepted,/);
+});

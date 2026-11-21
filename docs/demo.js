@@ -178,7 +178,7 @@
   document.getElementById('demo-interval').onclick=async event=>{
    intervalStart=intervalStart===null?Math.floor(performance.now()-start):null;demoBoot++;revision++;armedCycle=null;
    event.target.textContent=intervalStart===null?'Simulate rolling interval':'Return to circuit demo';
-   document.getElementById('demo-note').textContent=intervalStart===null?'Synthetic circuit and sensor texture. No measured driving data.':'Synthetic straight-line 45–70 mph, 30–60 mph and 50–100 km/h intervals. Record a session, then open Runs. No measured driving data.';
+   document.getElementById('demo-note').textContent=intervalStart===null?'Synthetic circuit and sensor texture. No measured driving data.':'Synthetic straight-line mph and km/h intervals, including 80–120 km/h. Record a session, then open Runs; presets follow Speed units. No measured driving data.';
    document.getElementById('menu-overlay')?.classList?.remove('open');
    if(intervalStart===null&&demoTrack)await activateTrack(demoTrack);
    else if(typeof deactivateTrack==='function')await deactivateTrack();
