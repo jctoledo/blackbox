@@ -1,6 +1,6 @@
 # Recording metadata API
 
-`GET /api/recording-metadata` returns JSON with `Cache-Control: no-store`. Before initialization (or if the snapshot cannot be supplied), it returns HTTP 503 with `{"status":"unavailable"}`. HTTP 200 supplies the typed version 1 snapshot below. This endpoint does not change binary telemetry or automatically add metadata to browser recordings; browser capture is a separate integration.
+`GET /api/recording-metadata` returns JSON with `Cache-Control: no-store`. Before initialization (or if the snapshot cannot be supplied), it returns HTTP 503 with `{"status":"unavailable"}`. HTTP 200 supplies the typed version 1 snapshot below. This endpoint does not change binary telemetry. Browser capture/export is a separate integration planned for **v0.0.4-rc.11**, not a capability of rc.10.
 
 ```json
 {
@@ -9,7 +9,7 @@
   "boot_id": 123,
   "captured_uptime_ms": 4294976295,
   "build": {
-    "app_version": "v0.0.4-rc.10",
+    "app_version": "v0.0.4-rc.11",
     "idf_version": "v5.1.4",
     "source_sha": null,
     "target": "esp32c3"
@@ -42,6 +42,16 @@ GPS values describe the effective configured model, requested rate and controlle
 
 IMU baud selection is `pending` with null baud until probing completes; `header_probe` means the controller selected a baud after seeing enough WT901 header bytes; `fallback` means the probe failed and the controller requested 9600 baud (the baud is null if the controller UART change failed). The baud is also null if a probe-stage UART change failed, even if header bytes were observed afterward. A header probe does not verify complete packets or sensor configuration. Output rate remains unknown/null.
 
-`accelerometer_bias_mps2` is either null or `{ "x": 0.0, "y": 0.0, "z": 0.0 }` with the successfully applied bias in metres per second squared. Zero is a known value. Failed recalibration retains the previously applied bias. `mount_alignment` is either null or `{ "is_calibrated": false, "yaw_offset_rad": 0.0 }` for the saved/applied mounting state; candidates never appear here. The yaw offset follows [the calibration frame convention](SENSOR_FUSION.md). Storage unavailable means initial alignment is unknown/null; an available store with no valid record uses the firmware's uncalibrated zero default. Nonfinite calibration values are unavailable/null.
+`accelerometer_bias_mps2` is either null or `{ "x": 0.0, "y": 0.0, "z": 0.0 }` with the successfully applied startup/recalibration bias in metres per second squared, in sensor axes before mount alignment. It is separate from the estimator's learned earth-frame bias. Zero is a known value. Failed recalibration retains the previously applied bias. `mount_alignment` is either null or `{ "is_calibrated": false, "yaw_offset_rad": 0.0 }` for the saved/applied mounting state; candidates never appear here. The yaw offset follows [the calibration frame convention](SENSOR_FUSION.md). Storage unavailable means initial alignment is unknown/null; an available store with no valid record uses the firmware's uncalibrated zero default. Nonfinite calibration values are unavailable/null.
 
 No Wi-Fi credentials, tokens, broker/server settings, or additional hardware identity are exposed. Hardware detection, receiver readback and physical accuracy still require bench/drive evidence.
+
+## Browser recording contract (planned for v0.0.4-rc.11)
+
+A new session has an optional `recordingMetadata` field. Capture starts with `{status:"pending", requestedAt}` and never delays telemetry recording. One bounded request covers both response headers and body parsing. A supported, validated response becomes `{status:"captured", requestedAt, receivedAt, snapshot}`; an old endpoint, timeout, malformed or unsupported response becomes explicit `unavailable`. Browser request/receipt timestamps are wall-clock milliseconds; the snapshot's uptime is a separate device monotonic clock.
+
+Before storage, the browser projects a bounded version 1 whitelist. A late response can update only its original existing session, including after stop; it cannot create a deleted session or attach itself to a later recording. Stop/save patches preserve context. Recovery retains stored context without fetching current firmware for an old recording.
+
+The existing full-backup format stays at version 1 with a strictly validated optional `recordingMetadata` field. Absence in legacy recordings/backups means unknown, not captured or a fabricated default. Available context follows restore-as-new copies, interrupted sessions and unsaved-tail backups. Existing row/chunk preservation and partial-database failure behavior still apply.
+
+Saved data is intended to expose expandable **Recording details** and **Download details JSON** for a companion export. The companion does not replace sample CSVs or a restorable backup. Demo snapshots, including seeded recordings, must carry `simulated:true` and display explicit **SIM** labeling; they do not represent a physical build or calibration. Manual phone/antenna/mounting notes and the flashed image SHA-256 are still needed.
