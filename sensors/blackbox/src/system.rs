@@ -13,6 +13,7 @@ use sensor_fusion::velocity::select_best_velocity;
 use crate::{
     binary_telemetry,
     gps::NmeaParser,
+    gps_timing::GpsTimingQueue,
     imu::{ImuBias, ImuCalibrator, PacketType, Wt901Parser},
     mode::ModeClassifier,
     mqtt::MqttClient,
@@ -42,6 +43,7 @@ pub struct SensorManager {
     last_angle_us: u64,
     stationary_count: u32,
     last_gps_fix_ms: Option<u32>,
+    gps_timing: GpsTimingQueue,
 }
 
 impl SensorManager {
@@ -60,6 +62,7 @@ impl SensorManager {
             last_angle_us: 0,
             stationary_count: 0,
             last_gps_fix_ms: None,
+            gps_timing: GpsTimingQueue::new(),
         }
     }
 
@@ -288,6 +291,11 @@ impl SensorManager {
                     let timing = self.gps_parser.rmc_timing();
                     if timing.sequence != before {
                         let host_us = unsafe { esp_idf_svc::sys::esp_timer_get_time() as u64 };
+                        let fix = *self.gps_parser.last_fix();
+                        self.gps_timing.push(fix, host_us);
+                        if fix.valid {
+                            self.record_gps_fix((host_us / 1000) as u32);
+                        }
                         if let Some(server) = server {
                             server.record_gps_event(timing, self.gps_parser.last_fix(), host_us);
                         }
@@ -296,6 +304,10 @@ impl SensorManager {
             }
         }
         new_fix
+    }
+
+    pub fn replay_gps_timing(&mut self, timer: &mut sensor_fusion::LapTimer, now_us: u64) -> u8 {
+        self.gps_timing.replay(timer, now_us)
     }
 
     /// Update once per new GPS fix; repeated telemetry polls are not new evidence.

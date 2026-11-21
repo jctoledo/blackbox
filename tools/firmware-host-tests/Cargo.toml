@@ -7,3 +7,4 @@ publish = false
 serde.workspace = true
 serde_json.workspace = true
 ublox-gps = { path = "../../drivers/ublox-gps" }
+sensor-fusion = { path = "../../framework" }

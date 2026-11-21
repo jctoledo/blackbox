@@ -110,6 +110,7 @@ dependencies = [
 name = "blackbox-host-tests"
 version = "0.1.0"
 dependencies = [
+ "sensor-fusion",
  "serde",
  "serde_json",
  "ublox-gps",
