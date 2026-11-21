@@ -60,3 +60,46 @@ pub fn motion_evidence(
         age_ms,
     })
 }
+
+/// Application GPS freshness and sustained parked evidence. Only new receiver fixes
+/// may call observe_candidate; packet polling can invalidate but never add evidence.
+#[derive(Default)]
+pub struct StationaryTracker {
+    count: u32,
+    last_gps_fix_ms: Option<u32>,
+}
+
+impl StationaryTracker {
+    pub fn record_gps_fix(&mut self, now_ms: u32) {
+        // Check before replacing the timestamp: recovery must not make old
+        // stationary evidence fresh, including when the loop itself was stalled.
+        if !self.gps_is_fresh(now_ms) {
+            self.invalidate();
+        }
+        self.last_gps_fix_ms = Some(now_ms);
+    }
+
+    pub fn gps_age_ms(&self, now_ms: u32) -> Option<u32> {
+        self.last_gps_fix_ms.map(|at| now_ms.wrapping_sub(at))
+    }
+
+    pub fn gps_is_fresh(&self, now_ms: u32) -> bool {
+        self.gps_age_ms(now_ms).is_some_and(|age| age <= 1500)
+    }
+
+    pub fn observe_candidate(&mut self, candidate: bool) {
+        self.count = if candidate {
+            self.count.saturating_add(1)
+        } else {
+            0
+        };
+    }
+
+    pub fn invalidate(&mut self) {
+        self.count = 0;
+    }
+
+    pub fn confirmed(&self) -> bool {
+        self.count >= 5
+    }
+}

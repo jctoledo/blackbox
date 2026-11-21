@@ -83,7 +83,8 @@ speed below 12°/s and GPS speed below 3.5 km/h. Norms make the evidence invaria
 to sensor mounting rotation and reject horizontal-axis rotation and vertical
 acceleration too. The application also requires fresh GPS, acceleration/gyro/attitude
 packets no older than 200 ms and five consecutive candidate fixes. Invalid/stale
-or moving IMU evidence interrupts that collection. Very slow motion and vibration remain hardware validation cases. Missing/invalid
+GPS or IMU evidence, or moving IMU evidence, interrupts that collection. A recovered
+GPS fix starts a new five-fix collection even if no polling step observed the gap. Very slow motion and vibration remain hardware validation cases. Missing/invalid
 IMU evidence pauses force learning and preserves the last finite packet values;
 HTTP `imu_age_ms: null` marks forces unavailable while GPS timing continues.
 Legacy v4/UDP alone has no equivalent force-validity metadata. ZUPT constrains velocity; it does not establish absolute position truth.

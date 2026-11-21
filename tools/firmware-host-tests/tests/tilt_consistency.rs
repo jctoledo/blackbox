@@ -200,3 +200,33 @@ fn imu_loss_preserves_finite_packet_and_healthy_gps_timing_json() {
     assert_eq!(json["timing"]["state"], "timing");
     assert_eq!(json["timing"]["last_lap_ms"], 4321);
 }
+
+#[test]
+fn gps_only_gap_requires_five_new_stationary_fixes_even_without_a_poll() {
+    use blackbox_host_tests::imu_evidence::StationaryTracker;
+    for start in [1000_u32, u32::MAX - 100] {
+        let mut tracker = StationaryTracker::default();
+        for i in 0..5 {
+            tracker.record_gps_fix(start.wrapping_add(i * 40));
+            tracker.observe_candidate(true);
+        }
+        assert!(tracker.confirmed());
+        // IMU is healthy throughout. Recovery can happen before another polling
+        // callback observes stale GPS (e.g. a stalled loop or buffered fixes).
+        let recovered = start.wrapping_add(1661);
+        assert!(!tracker.gps_is_fresh(recovered));
+        tracker.record_gps_fix(recovered);
+        tracker.observe_candidate(true);
+        assert!(!tracker.confirmed(), "recovery reused parked evidence");
+        for i in 1..4 {
+            tracker.record_gps_fix(recovered.wrapping_add(i * 40));
+            tracker.observe_candidate(true);
+            assert!(!tracker.confirmed());
+        }
+        tracker.record_gps_fix(recovered.wrapping_add(160));
+        tracker.observe_candidate(true);
+        assert!(tracker.confirmed());
+        tracker.invalidate();
+        assert!(!tracker.confirmed());
+    }
+}

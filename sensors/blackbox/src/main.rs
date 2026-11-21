@@ -813,19 +813,13 @@ fn main() {
             }
             // Only run EKF prediction after reset is done
             let imu_now_ms = (imu_at_us / 1000) as u32;
-            if unsafe { EKF_RESET_DONE } && sensors.motion_evidence(imu_now_ms).is_some() {
+            if let Some(evidence) = sensors
+                .motion_evidence(imu_now_ms)
+                .filter(|_| unsafe { EKF_RESET_DONE })
+            {
                 // Near Euler pitch singularity, skip prediction rather than inventing a rate.
-                if let Some(heading_rate) =
-                    sensors.angular_rates(imu_now_ms).and_then(|r| r.heading)
-                {
-                    let (ax_corr, ay_corr, az_corr) = sensors.imu_parser.get_accel_corrected();
-                    let (ax_b, ay_b, az_b) = remove_gravity(
-                        ax_corr,
-                        ay_corr,
-                        az_corr,
-                        sensors.imu_parser.data().roll,
-                        sensors.imu_parser.data().pitch,
-                    );
+                if let Some(heading_rate) = evidence.rates.heading {
+                    let [ax_b, ay_b, az_b] = evidence.linear_body;
                     let (ax_e, ay_e) = body_to_earth(
                         ax_b,
                         ay_b,
