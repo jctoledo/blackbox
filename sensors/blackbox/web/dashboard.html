@@ -255,20 +255,21 @@ body{font-family:Inter,-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Di
 .bbTrackDataRef{margin-top:6px;font-size:12px}
 .bbTrackDataRef.has-ref{color:var(--ok);font-weight:500}
 .bbTrackDataRef.no-ref{color:var(--text-tertiary);font-style:italic}
-.bbTrackDataActions{display:flex;gap:8px;flex-shrink:0}
+.bbTrackDataActions{display:flex;gap:8px;flex-shrink:0;width:100%}
 .bbSessionList{border-radius:12px;overflow:hidden;background:var(--bg);max-height:calc(100vh - 350px);overflow-y:auto}
 .bbSessionEmpty{padding:30px 20px;text-align:center;color:var(--text-tertiary);font-size:13px}
 .bbSessionEmpty .icon{font-size:32px;margin-bottom:10px;opacity:0.4}
-.bbSessionItem{padding:14px 16px;border-bottom:1px solid var(--divider);display:flex;justify-content:space-between;align-items:center;gap:12px}
+.bbSessionItem{padding:14px 16px;border-bottom:1px solid var(--divider);display:flex;flex-direction:column;align-items:stretch;gap:12px}
 .bbSessionItem:last-child{border-bottom:none}
 .bbSessionItem.active{background:rgba(52,199,89,0.08)}
-.bbSessionInfo{flex:1;min-width:0}
+.bbSessionInfo{flex:1;min-width:0;width:100%}
 .bbSessionDate{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .bbSessionMeta{font-size:11px;color:var(--text-tertiary);margin-top:3px;display:flex;gap:8px;flex-wrap:wrap}
 .bbSessionStatus{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;margin-top:4px}
 .bbSessionStatus.complete{color:var(--ok)}
 .bbSessionStatus.active,.bbSessionStatus.recovered{color:var(--amber)}
-.bbSessionActions{display:flex;gap:8px;flex-shrink:0}
+.bbSessionActions{display:flex;gap:8px;flex-shrink:0;width:100%}
+.bbSessionActions button,.bbTrackDataActions button{flex:1;min-width:0;min-height:44px;overflow-wrap:anywhere}
 .bbSessionBtn{background:var(--surface);border:none;border-radius:6px;padding:8px 14px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer;font-family:inherit;transition:opacity 0.15s}
 .bbSessionBtn:active{opacity:0.7}
 .bbSessionBtn:disabled{opacity:0.4;cursor:not-allowed}
@@ -374,7 +375,7 @@ button,input,select{font:inherit}button:focus-visible,[role="button"]:focus-visi
 .bbSaveStatus{color:var(--text-secondary);font-size:12px;padding:0 4px}.bbSaveStatus[hidden]{display:none}@media(min-width:650px) and (max-height:600px){.drive-view .bbSaveStatus{grid-column:1/-1}}
 .bbRecordOverlay{visibility:hidden}.bbRecordOverlay.active{visibility:visible}
 .bbActionBtn.primary,.bbTrackBtn.primary,.bbRecordActionBtn.primary,.bbToastBtn.primary{color:var(--bg)}.bbRecordStartIcon{color:var(--ok);stroke-width:2}.bbRecordStartIconWrap{background:var(--bg);border:1px solid var(--divider);border-radius:8px}.bbRecordStartBtn{border-radius:8px;border-width:1px}.bbRecordStartBtn:active{border-color:var(--ok)}.bbRecordStartBtn::before{display:none}.bbHistoryLap{font-size:13px;padding:6px}.bbHistoryDate{font-size:13px}.bbHistorySessionStats{font-size:12px}.bbHistorySessionHeader{flex-wrap:wrap;gap:6px}
-@media(max-width:600px){.bbTrackInfo{flex-basis:100%;width:100%}.bbTrackActions{margin:12px 0 0;width:100%;gap:6px}.bbTrackActions .bbTrackBtn{flex:1}.bbTrackName{white-space:normal;overflow-wrap:anywhere}.bbTrackMeta{display:flex;flex-wrap:wrap;gap:4px 12px}.bbTrackMeta span{margin:0}.bbSessionItem,.bbTrackDataItem{flex-wrap:wrap}.bbSessionInfo,.bbTrackDataInfo{flex-basis:100%;width:100%}.bbSessionActions,.bbTrackDataActions{margin:10px 0 0;display:flex;flex-direction:row;width:100%}.bbSessionActions button,.bbTrackDataActions button{flex:1}}
+@media(max-width:600px){.bbTrackInfo{flex-basis:100%;width:100%}.bbTrackActions{margin:12px 0 0;width:100%;gap:6px}.bbTrackActions .bbTrackBtn{flex:1}.bbTrackName{white-space:normal;overflow-wrap:anywhere}.bbTrackMeta{display:flex;flex-wrap:wrap;gap:4px 12px}.bbTrackMeta span{margin:0}.bbSessionActions,.bbTrackDataActions{margin:10px 0 0}}
 /* Force analysis is optional; the default dashboard prioritizes timing and speed. */
 body:not(.analysis-view) .bbGPlotWrap,body:not(.analysis-view) .bbGReadoutRow,body:not(.analysis-view) .bbGMax,body:not(.analysis-view) .bbTelemetryStrip{display:none}
 body:not(.analysis-view) .bbApp .bbGCard{display:block;min-height:0}
