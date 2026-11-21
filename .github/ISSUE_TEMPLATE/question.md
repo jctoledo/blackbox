@@ -1,6 +1,6 @@
 ---
 name: Question
-about: Ask a question about Active Wing
+about: Ask a question about Blackbox
 title: '[QUESTION] '
 labels: question
 assignees: ''

@@ -249,7 +249,7 @@
 
     <section class="section quickstart" id="start">
         <div class="section-inner"><span class="eyebrow">FROM BENCH TO DASHBOARD</span><h2>Three steps to your first session.</h2>
-        <ol class="start-grid"><li><span>01</span><h3>Build &amp; flash</h3><p>Wire the ESP32-C3, WT901, GPS, and LED. Choose firmware for your GPS model and connect over USB.</p></li><li><span>02</span><h3>Connect &amp; settle</h3><p>Calibrate with the sensor level and stationary on level ground. Join its Wi-Fi, open the dashboard, and wait for a fresh GPS fix outdoors.</p></li><li><span>03</span><h3>Record &amp; return</h3><p>Record a circuit or stage, then select it to arm timing. Cross the start line in the recorded direction.</p></li></ol>
+        <ol class="start-grid"><li><span>01</span><h3>Build &amp; flash</h3><p>Wire the ESP32-C3, WT901, GPS, and LED. Choose firmware for your GPS model and connect over USB.</p></li><li><span>02</span><h3>Connect &amp; settle</h3><p>Keep the sensor stationary for startup calibration; use level ground for the initial baseline. Join its Wi-Fi, open the dashboard, and wait for a fresh GPS fix outdoors.</p></li><li><span>03</span><h3>Record &amp; return</h3><p>Record a circuit or stage, then select it to arm timing. Cross the start line in the recorded direction.</p></li></ol>
         <p class="field-note">In active development. Timing accuracy depends on GPS reception, update rate, and line geometry. Validate your setup before relying on lap results. <a href="guides/lap-timer.html">Setup and timing guide</a></p>
         </div>
     </section>
@@ -307,6 +307,15 @@
                 </div>
             </div>
         </div>
+    </section>
+
+    <section class="section" aria-labelledby="start-reading" id="guides">
+      <div class="section-inner"><span class="eyebrow">BUILD. RECORD. UNDERSTAND.</span><h2 id="start-reading">Start with the question you have.</h2>
+      <div class="features">
+        <article class="feature"><h3>Build a GPS lap timer</h3><p>Choose compatible ESP32-C3 hardware, check the wiring and get your first saved session.</p><a class="preview-link" href="guides/diy-gps-lap-timer.html">DIY build and first-session guide →</a></article>
+        <article class="feature"><h3>Inspect your GPS data</h3><p>Capture NEO-M9N receiver epochs and distinguish sensor cadence from phone collection gaps.</p><a class="preview-link" href="guides/neo-m9n-esp32-gps-logger.html">NEO-M9N logging workflow →</a></article>
+        <article class="feature"><h3>Understand timing accuracy</h3><p>See what 25 Hz and interpolation mean, and which real measurements are still needed.</p><a class="preview-link" href="guides/gps-lap-timer-accuracy.html">Timing accuracy explained →</a></article>
+      </div></div>
     </section>
 
     <footer class="footer">

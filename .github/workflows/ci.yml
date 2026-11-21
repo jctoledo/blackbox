@@ -41,6 +41,7 @@ jobs:
           python3 -m venv "$RUNNER_TEMP/blackbox-python"
           "$RUNNER_TEMP/blackbox-python/bin/pip" install 'Markdown==3.7' flake8
           "$RUNNER_TEMP/blackbox-python/bin/python" scripts/build_docs.py
+          python3 scripts/check_docs_site.py
           "$RUNNER_TEMP/blackbox-python/bin/flake8" tools/python/*.py --count --max-line-length=120 --ignore=E203,E302,E305,F541,W503 --statistics
       - name: Check and build both GPS variants
         working-directory: sensors/blackbox

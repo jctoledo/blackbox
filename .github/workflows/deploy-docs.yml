@@ -41,6 +41,7 @@ jobs:
           python3 -m venv "$RUNNER_TEMP/docs-python"
           "$RUNNER_TEMP/docs-python/bin/pip" install 'Markdown==3.7'
           "$RUNNER_TEMP/docs-python/bin/python" scripts/build_docs.py
+          python3 scripts/check_docs_site.py
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
