@@ -10,4 +10,4 @@ GitHub project Pages is hosted below `/blackbox/`. An effective robots.txt must 
 
 Keep claims consistent across README, About, structured data, and the website. Regenerate static guides with `python3 scripts/build_docs.py` (Markdown 3.7); Pages workflows do this automatically. Do not add unsupported ratings, invented benchmarks, keyword stuffing, or hidden bot-only claims.
 
-Use [COMPARISON.md](COMPARISON.md) as the public capability/evidence reference. Lead with what users can do; distinguish implementation, configuration targets, and measured results. Keep vendor comparisons sourced and dated. Proposed acceleration tests, slope correction, replay, and coaching must not appear as available features.
+Use [COMPARISON.md](COMPARISON.md) as the public capability/evidence reference. Lead with what users can do; distinguish implementation, configuration targets, and measured results. Keep vendor comparisons sourced and dated. Proposed standing-start acceleration tests, slope correction, replay, and coaching must not appear as available features.

@@ -30,6 +30,12 @@ For firmware metadata, compare a clean tagged checkout and a clean untagged chec
 
 Performance observations belong with the exact command, receiver variant, cache state and runner configuration. An empty target with an already installed SDK is different from a run that includes first-time downloads. Neither implies a universal build duration.
 
+## Artifact availability
+
+CI waits for its uploaded protocol fixture to appear in the run's REST index, then downloads it and compares the bytes with the source fixture. Index visibility does not guarantee download availability: run `44960323851` passed the builds and regressions but received a download-endpoint 404 afterward.
+
+The official download action now gets at most three attempts, each limited to two minutes, with a three-second delay after a failed attempt. Retries inspect the step's `outcome`, which preserves failure before `continue-on-error` changes its conclusion. A successful attempt skips the remaining attempts; the third attempt is fatal, and the byte-for-byte round-trip check remains required. This only tolerates brief service failures; missing artifacts, permission failures and corrupt data still fail CI. It adds no runner, token permissions or third-party action. See [GitHub's step outcome semantics](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#steps-context).
+
 ## Observations on lat, 2026-11-21
 
 Firmware source `5ec5b47`, four-CPU/8-GiB container, pinned nightly/ESP-IDF configuration:
