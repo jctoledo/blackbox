@@ -8,16 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
-- Startup bias calibration separates AHRS-predicted gravity from accelerometer offset, rejects stale/moving/unstable collection and uses precise averaging. Inclined-pose software tests pass; physical driveway validation remains open.
-- Landscape Speed / G-meter / Peaks tabs and swipe selection; compact status and a collapsible toolbar. Fixed force scale, dropout clearing and consistent lateral/longitudinal signs; time-weighted half-second page-session peaks.
-- Textured synthetic demo, fullscreen banner hiding, simpler timing labels and refreshed website screenshots.
 - Renamed `neo6m` driver to `ublox-gps` to reflect support for multiple u-blox GPS modules (NEO-6M, NEO-M9N, etc.)
 - Updated driver documentation with UBX protocol examples and dynamic platform models
 
 ### Removed
 - Obsolete documentation files (RELEASE.md, IMPLEMENTATION_SUMMARY.md, release-notes.md)
 
-## [0.0.4-rc.7] - 2026-11-20
+## [0.0.4-rc.7] - 2026-11-21
 
 Release candidate for weekend data collection; hardware timing accuracy remains unmeasured. Includes rc.6.
 
@@ -25,6 +22,15 @@ Release candidate for weekend data collection; hardware timing accuracy remains 
 - Bounded, per-RMC GPS timestamp evidence: receiver fractional UTC/date, device parse time, per-boot sequence, invalid fixes and explicit capture gaps.
 - Separate GPS CSV in Saved data, with deduplication, restart boundaries, backup/restore preservation and a final fetch before stopping. Ordinary Session CSV also carries the latest GPS timestamp snapshot.
 - Offline timestamp analyzer and collection guide; synthetic demo GPS logs are explicitly labelled.
+
+### Changed
+- Prominent How it works explainer beside the website CTA, with the full measurement pipeline, worked maths and a dedicated build/assembly journal.
+- Landscape instrument picker collapses after selection; larger force plot, space-efficient Peaks and maximum speed with fresh-GPS gating. Circuit demo now anticipates braking zones and limits corner-exit acceleration using route curvature, with continuous lap-boundary speeds.
+- Startup bias calibration separates AHRS-predicted gravity from accelerometer offset, rejects stale/moving/unstable collection and uses precise averaging. Inclined-pose software tests pass; physical driveway validation remains open.
+- Receiver-timed 45–70 mph Runs instrument and derived Runs CSV with rejection reasons; explicit synthetic interval scenario and banner-free website demo. Standing-start and slope-corrected timing remain unimplemented.
+- Landscape Speed / G-meter / Peaks tabs and swipe selection; compact status and a collapsible toolbar. Fixed force scale, dropout clearing and consistent lateral/longitudinal signs; time-weighted half-second page-session peaks.
+- Circuit-driving synthetic demo, removed demo banner, simpler timing labels and refreshed website screenshots.
+- Sensor-to-car alignment schematic in the setup screen and guide; live forces require fresh acceleration, gyro and attitude packets, with IMU age exported in Session CSV.
 
 ### Fixed
 - Dashboard polling subtracts request/processing time from its 33 ms interval instead of adding another 33 ms; the measured UI receive rate is labelled separately from the firmware telemetry target.

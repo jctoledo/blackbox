@@ -66,6 +66,8 @@ First build takes 10-20 minutes. See [Build Guide](#building-from-source) for de
 
 ---
 
+Read [How Blackbox works](docs/ENGINEERING.md) for the complete measurement story and [Build Blackbox](docs/BUILD.md) for assembly, mounting and the photo journal.
+
 ## Hardware
 
 ### Required components
@@ -147,9 +149,9 @@ Connect to the device's WiFi and open `192.168.71.1` in any browser.
 | Analysis | Show optional force analysis |
 | Drive view / Dashboard | Enter the focused display or return to controls |
 
-Landscape automatically offers Speed, G-meter and sustained Peaks tabs, with timing fixed alongside. Tap Controls for the toolbar; the G-meter uses a selectable fixed scale and clears when data becomes unavailable.
+Landscape offers Speed, G-meter, sustained Peaks and Runs, with timing fixed alongside. Tap the instrument name to reveal its picker, or swipe horizontally to switch; the picker closes after selection. Speed includes a subtle maximum speed estimate while GPS is fresh for this page session. Tap Controls for the toolbar; the G-meter uses a selectable fixed scale and clears when data becomes unavailable.
 
-![Landscape cluster with synthetic demo data](docs/dashboard-cluster-v3.png)
+![Landscape cluster with synthetic demo data](docs/dashboard-cluster-v5.png)
 
 
 ---
@@ -480,10 +482,12 @@ Website background footage is separately licensed and credited in [media provena
 
 Tap **Full screen** on supported Android browsers. On iPhone, use **Menu → Phone setup** for Safari's Home Screen steps. Back up saved data before changing browsers or launch mode; storage may be separate. The landscape layout follows orientation without changing timing or recording.
 
-**Menu → Mount alignment** offers experimental horizontal mounting calibration with signed GPS braking evidence, candidate review and persistent save while parked. It changes force axes, not timing-line direction. Read the [alignment guide](docs/CALIBRATION.md) and validate signs on your device before relying on the result.
+**Menu → Align sensor to car** offers experimental horizontal mounting calibration with signed GPS braking evidence, candidate review and persistent save while parked. It changes force axes, not timing-line direction. Read the [alignment guide](docs/CALIBRATION.md) and validate signs on your device before relying on the result.
 
 ### GPS evidence for a drive
 
 Timestamp-logging firmware saves receiver UTC and device parse times alongside recordings. In **Saved data**, export both **Session CSV** and **GPS CSV**; the latter reveals receiver cadence, repeated epochs and phone collection gaps. [Capture and analysis guide](docs/GPS_LOGGING.md). It does not establish absolute lap accuracy.
 
 For the implemented equations, rate budgets, force-display semantics and current driveway-calibration limitation, see [Maths and update rates](docs/MATHS_AND_RATES.md).
+
+[Rolling interval estimates](docs/RUNS.md) use receiver timestamps for 45–70 mph, with rejected-attempt evidence in Runs CSV. Standing-start 0–60 and slope correction are not yet implemented.

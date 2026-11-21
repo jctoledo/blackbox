@@ -133,4 +133,4 @@ Download a full backup from Saved data before changing browser or launch mode. H
 
 ## Can I calibrate a rotated device mount?
 
-**Menu → Mount alignment** provides an experimental candidate workflow for nearly level horizontal mounting. It uses signed GPS deceleration and consistent straight-line brake vectors, then requires saving while parked. It corrects force axes, not lap timing or GPS heading. See [the alignment guide](CALIBRATION.md). Forward travel, mounting, signs and physical accuracy still require operator validation.
+**Menu → Align sensor to car** provides an experimental candidate workflow for nearly level horizontal mounting. It uses signed GPS deceleration and consistent straight-line brake vectors, then requires saving while parked. It corrects force axes, not lap timing or GPS heading. See [the alignment guide](CALIBRATION.md). Forward travel, mounting, signs and physical accuracy still require operator validation.

@@ -6,6 +6,7 @@ on:
       - "v*.*.*"
 
 permissions:
+  actions: read
   contents: write
   pages: write
   id-token: write
@@ -99,6 +100,11 @@ jobs:
           name: firmware-${{ matrix.project }}-${{ matrix.gps_model }}
           path: firmware-output/*
 
+      - name: Wait for firmware artifact index
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/wait_for_artifact.py firmware-${{ matrix.project }}-${{ matrix.gps_model }}
+
   create-release:
     name: Create GitHub Release
     needs: build-firmware
@@ -114,6 +120,7 @@ jobs:
       - name: Download all firmware artifacts
         uses: actions/download-artifact@v7
         with:
+          github-token: ${{ github.token }}
           path: firmware-artifacts
 
       - name: Extract changelog

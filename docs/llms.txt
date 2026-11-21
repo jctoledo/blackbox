@@ -31,3 +31,7 @@ This file is a convenient reading index, not a crawler directive or a guarantee 
 - [GPS timestamp logging](https://jctoledo.github.io/blackbox/guides/gps-logging.html): receiver UTC, device parse times, bounded capture, export and offline interval analysis.
 
 - [Maths and hardware rates](https://jctoledo.github.io/blackbox/guides/maths-and-rates.html): interpolation, update-rate budgets, estimator limits, force estimates and calibration assumptions.
+
+- [Rolling intervals](https://jctoledo.github.io/blackbox/guides/rolling-runs.html): 45–70 mph receiver-time estimates, validity gates and evidence export; not validated drag timing.
+
+- [Build Blackbox](https://jctoledo.github.io/blackbox/guides/build.html): current C3 parts and signal mapping, mounting, bench checks and assembly photo journal.

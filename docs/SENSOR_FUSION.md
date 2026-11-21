@@ -13,7 +13,7 @@ Blackbox combines GPS and a WT901 IMU for vehicle telemetry. It has two related 
 | WT901 roll/pitch/yaw parser output | Degrees; gyro output rad/s; acceleration m/s² |
 | Vehicle acceleration | Forward/left positive; divide by 9.80665 for g |
 
-Convert compass course to mathematical yaw with `π/2 − course` only at the relevant boundary. Recorded timing-line bearings already use `atan2(y,x)` and must not be converted again. An arbitrary sensor mounting/yaw offset is not automatically validated by this convention table; bench/drive checks must establish axis signs and mounting alignment. Experimental [Mount alignment](CALIBRATION.md) provides an explicitly reviewed horizontal offset for force projection. It leaves the EKF device-heading basis and GPS timing path unchanged.
+Convert compass course to mathematical yaw with `π/2 − course` only at the relevant boundary. Recorded timing-line bearings already use `atan2(y,x)` and must not be converted again. An arbitrary sensor mounting/yaw offset is not automatically validated by this convention table; bench/drive checks must establish axis signs and mounting alignment. Experimental [Align sensor to car](CALIBRATION.md) provides an explicitly reviewed horizontal offset for force projection. It leaves the EKF device-heading basis and GPS timing path unchanged.
 
 `remove_gravity` subtracts the body-frame vector `g × [−sin(pitch), sin(roll)cos(pitch), cos(roll)cos(pitch)]`. `body_to_earth` applies `Rz(yaw) Ry(pitch) Rx(roll)`. `earth_to_car` applies the inverse horizontal yaw rotation. The full gravity-free body vector, including z, belongs in that transform.
 
