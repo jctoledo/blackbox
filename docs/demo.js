@@ -40,7 +40,7 @@
  const durations=laps.map(lap=>lap[steps].time),superPeriod=durations.reduce((a,b)=>a+b,0);
  const start=performance.now()-(durations[0]-5000);
  let revision=0,armedCycle=null,paused=false,intervalStart=null,demoBoot=1,demoTrack=null;
- const json=data=>Promise.resolve(new Response(JSON.stringify(data),{headers:{'Content-Type':'application/json'}}));
+ const json=data=>Promise.resolve(new Response(JSON.stringify(data),{headers:{'Content-Type':'application/json','Cache-Control':'no-store'}}));
  function clock(elapsed){
   let cycle=Math.floor(elapsed/superPeriod)*laps.length,lapMs=elapsed%superPeriod,index=0;
   while(index<laps.length-1&&lapMs>=durations[index]){lapMs-=durations[index];index++;cycle++}
@@ -85,14 +85,19 @@
   }
   return rows;
  }
+ function recordingSnapshot(uptime=0,boot=demoBoot){
+  return {version:1,simulated:true,boot_id:boot,captured_uptime_ms:Math.max(0,Math.floor(uptime)),build:{app_version:'SIM demo',idf_version:null,source_sha:null,target:'esp32c3'},gps:{configured_model:'SIMULATED',configured_rate_hz:25,configured_uart_baud:115200,configuration_verified:false},imu:{model:'WT901',transport:'uart',configured_uart_baud:null,baud_selection:'pending',configured_output_rate_hz:null},calibration:{accelerometer_bias_mps2:null,mount_alignment:null}};
+ }
+ function exampleMetadata(time,boot){return {status:'captured',requestedAt:time,receivedAt:time,snapshot:recordingSnapshot(0,boot)}}
  async function seedExampleRecording(database,label,rows,fixtureId){
+  const boot=rows.find(row=>row.gpsBootId!==undefined)?.gpsBootId??({'circuit-v6':101,'rolling-v7':102}[fixtureId]);
   return new Promise((resolve,reject)=>{
    const tx=database.transaction(['sessions','chunks'],'readwrite'),sessions=tx.objectStore('sessions');let id;
    tx.oncomplete=()=>resolve(id);tx.onerror=tx.onabort=()=>reject(tx.error||new Error('Demo example could not be saved'));
    const request=sessions.getAll();request.onsuccess=()=>{
-    const existing=request.result.find(s=>s.demoFixture===fixtureId);if(existing){id=existing.sessionId;return}
+    const existing=request.result.find(s=>s.demoFixture===fixtureId);if(existing){id=existing.sessionId;const metadata=existing.recordingMetadata;if(!metadata)sessions.put({...existing,recordingMetadata:exampleMetadata(existing.startTime,boot)});else if(metadata.status==='captured'&&metadata.snapshot.simulated&&metadata.snapshot.boot_id!==boot)sessions.put({...existing,recordingMetadata:{...metadata,snapshot:{...metadata.snapshot,boot_id:boot}}});return}
     id=request.result.reduce((next,s)=>Math.max(next,s.sessionId+1),Date.now());
-    sessions.add({sessionId:id,startTime:rows[0].t,status:'complete',label,demoFixture:fixtureId});
+    sessions.add({sessionId:id,startTime:rows[0].t,status:'complete',label,demoFixture:fixtureId,recordingMetadata:exampleMetadata(rows[0].t,boot)});
     for(let offset=0;offset<rows.length;offset+=250)tx.objectStore('chunks').add({sessionId:id,chunkIndex:offset/250,data:rows.slice(offset,offset+250),timestamp:rows[Math.min(offset+249,rows.length-1)].t});
    };
   });
@@ -143,6 +148,7 @@
    return json({seq:Math.floor(elapsed/40),data:btoa(String.fromCharCode(...data)),timing:{simulated:true,state:armedCycle===null?'idle':timing?'timing':'armed',revision,last_lap_ms:count?Math.round(completed[0]):null,best_lap_ms:count?Math.round(Math.min(...completed)):null,lat,lon,gps_valid:true,gps_age_ms:0,imu_age_ms:0},f:{li:m.lonAccel,lg:m.lonAccel,gw:.3,gr:25,pc:0,pf:95,rc:0,rf:95,tx:0,ty:0}});
   }
   if(url.pathname==='/api/mount-calibration')return json({state:'unavailable',message:'Sensor-to-car alignment needs a real device and fresh GPS/IMU evidence. The demo does not simulate a successful calibration.',saved:{is_calibrated:false,yaw_offset:0},candidate_degrees:null,samples:0,parked:false,storage_available:false});
+  if(url.pathname==='/api/recording-metadata')return json(recordingSnapshot(elapsed));
   if(url.pathname==='/api/diagnostics')return json({sensor_rates:{imu_hz:200,gps_hz:25,loop_hz:900,imu_expected:200,gps_expected:25,zupt_per_min:0,ekf_per_gps:8},ekf:{pos_sigma:2.5,vel_sigma:.2,yaw_sigma_deg:2,bias_x:0,bias_y:0},system:{heap_free:100000,uptime_s:Math.floor(elapsed/1000),tx_ok:100,tx_fail:0},gps:{model:'SIMULATED',rate_hz:25,fix:true,warmup:true,satellites:12,hdop:1,ref_lat:origin.lat,ref_lon:origin.lon},wifi:{mode:'DEMO',ssid:'SIMULATED DATA'},config:{telemetry_hz:30,gps_model:'demo',warmup_fixes:5},fusion:{lon_raw:m.lonAccel,lon_filtered:m.lonAccel,lon_blended:m.lonAccel,gps_weight:.3,gps_accel:m.lonAccel,gps_rate:25,gps_rejected:false,pitch_corr:0,roll_corr:0,pitch_conf:95,roll_conf:95,yaw_bias:0,yaw_calibrated:true,tilt_x:0,tilt_y:0,tilt_valid:true}});
   return Promise.resolve(new Response('{"error":"Unavailable in demo"}',{status:404}));
  };
