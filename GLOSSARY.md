@@ -8,6 +8,7 @@
 - **GPS fix:** a receiver observation, including validity. Freshness and continuity determine whether it can support timing.
 - **Receiver UTC:** time carried by the receiver message. **Host completion time:** controller clock when parsing completes. **Browser receipt time:** phone clock on delivery. These clocks are not interchangeable; see the timing/logging guides.
 - **Configured rate:** requested sensor behavior. **Delivered GPS rate:** observations actually received. **Dashboard rate:** updates reaching the display.
+- **Recorded speed units:** ordinary telemetry `sp` is km/h; GPS evidence (`rowType:1`) `sp` is m/s. The shared field name does not imply shared units. Binary/CSV field definitions remain authoritative.
 - **Rolling interval:** named speed-threshold test evaluated from recorded receiver evidence. It is distinct from a standing-start/rollout test.
 - **Force estimate / Peaks:** displayed motion estimates; Peaks summarizes qualified half-second windows. Neither is a calibrated force-accuracy claim.
 - **Controller target:** current release firmware supports ESP32-C3; the proposed S3 schematic is a separate hardware port.
