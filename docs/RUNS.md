@@ -1,6 +1,15 @@
 # Rolling speed-interval estimates
 
-The landscape **Runs** instrument reports the last and best **45–70 mph, 30–60 mph and 50–100 km/h** intervals from GPS evidence collected while recording. All three detectors run automatically during recording, regardless of the displayed instrument. Use the interval selector inside Runs to choose which results to review. Tap the instrument name to reveal the picker and select Runs, or swipe horizontally. **Record session** uses the ordinary recording flow; no performance maneuver is required for an ordinary neighborhood or highway data-collection trip.
+The landscape **Runs** instrument reports the last and best rolling acceleration intervals from GPS evidence collected while recording. The interval button opens ordinary page buttons with the same readable type as the closed control. Choose a family using the current **Menu → Speed units** preference:
+
+| Family | mph preference | km/h preference |
+| --- | --- | --- |
+| Lower speed | 30–60 mph | 50–100 km/h |
+| Overtaking | 45–70 mph | 80–120 km/h |
+
+These are purpose counterparts, not exact unit conversions. Changing units preserves the selected family and shows that preset's own results; it never converts or relabels a completed time. All four independent detectors keep collecting qualified evidence during recording, regardless of the displayed instrument or units. Selecting a family does not reset recording, timing or detector history. The opened chooser scrolls when space is short; Escape returns focus to its interval button, and choosing an option, clicking outside or leaving Runs closes it.
+
+Tap the instrument name to reveal the picker and select Runs, or swipe horizontally. **Record session** uses the ordinary recording flow; no performance maneuver is required for an ordinary neighborhood or highway data-collection trip.
 
 This first implementation is an uncorrected GPS estimate. It is not a validated drag timer, and it does not yet implement standing-start 0–60 mph. Defining launch from noisy near-zero speed needs separate validation; a nonzero threshold must not silently be sold as a true zero-speed start. There is no distance rollout, slope correction, wind correction or vehicle-efficiency inference.
 
@@ -23,16 +32,18 @@ Last/best display values reset with a new recording or page reload. **Saved data
 
 A run may never qualify: a short recording, no lower-threshold crossing, missing receiver time, an interrupted stream or a turn can all explain that. An empty result is not zero seconds.
 
-Changing dashboard speed units does not redefine this interval: the named thresholds remain fixed. Labelled real-drive precision/recall evaluation is tracked in [issue #79](https://github.com/jctoledo/blackbox/issues/79).
+CSV interval names retain their literal fixed thresholds for all four detectors, independently of the currently displayed units. Labelled real-drive precision/recall evaluation is tracked in [issue #79](https://github.com/jctoledo/blackbox/issues/79).
 
 ## Try the synthetic scenario
 
-The demo starts with a clearly labelled saved rolling example: two accepted intervals and a third rejected by a deliberate six-event GPS gap. Its Last/Best values come from the same GPS evidence available in Saved data, not a separately invented result. Starting your own recording resets those example results.
+The demo starts with a clearly labelled saved rolling example: two accepted attempts and a third rejected by a deliberate six-event GPS gap for each of the four presets. Its Last/Best values come from the same GPS evidence available in Saved data, not a separately invented result. Starting your own recording resets those example results.
 
-In the website demo, open **Menu → Simulate rolling interval**, then record a session and select **Runs** in landscape. This explicitly changes the synthetic data source to a straight-line acceleration/deceleration scenario and disarms circuit timing. The 2 m/s² acceleration produces an interpolated 45–70 interval of 5.588 s (displayed as 5.59 s); 30–60 mph takes 6.7056 s and 50–100 km/h takes 6.9444 s. The menu can return to the textured circuit scenario. **SIM** remains visible; these are not measured driving results.
+In the website demo, open **Menu → Simulate rolling interval**, then record a session and select **Runs** in landscape. This explicitly changes the synthetic data source to a straight-line acceleration/deceleration scenario and disarms circuit timing. The 2 m/s² acceleration produces an interpolated 45–70 interval of 5.588 s (displayed as 5.59 s); 30–60 mph takes 6.7056 s and 50–100 km/h takes 6.9444 s and 80–120 km/h takes 5.5556 s. The menu can return to the textured circuit scenario. **SIM** remains visible; these are not measured driving results.
 
 ## Remaining acceptance
 
 Replay known recordings and compare repeated controlled runs against independent timing before making an accuracy claim. Check rate, speed noise, course stability, slope/wind context, phone background interruption and saved-data recovery. Standing starts, braking-distance tests and custom intervals remain separate work in issue #62.
 
 Synthetic regressions cover exact crossing times, incomplete lead-in, threshold spikes, gaps, restarts and duplicate events. They do not establish real-drive precision, recall or F1. Hold out entire trips and use independently labelled positives and negatives before tuning or claiming detection quality.
+
+Check opened and closed chooser readability and touch/keyboard focus on physical Android and iPhone browsers, including short landscape cards. Desktop device emulation does not establish physical-phone behaviour.

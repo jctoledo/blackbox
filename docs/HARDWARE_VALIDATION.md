@@ -199,3 +199,8 @@ The startup/alignment collection gates are not accepted physical tolerances.
 
 Do not infer arbitrary/inverted mounting support, full 3D vehicle attitude,
 validated bank/grade compensation or tyre loads from these checks.
+
+## Runs chooser phone acceptance (issue #106)
+
+- [ ] Check opened options match the closed Runs button typography and remain touch-readable on actual Android and iPhone browsers, including short landscape with warning rows. Check scrolling, selection, Escape/keyboard focus and outside dismissal where supported.
+- [ ] Switch mph/km/h and confirm the selected lower-speed or overtaking family persists while its own literal preset/result changes; recording and timing continue. Desktop device emulation is software layout evidence only.

@@ -42,7 +42,7 @@ Likewise, the estimator's diagonal covariance is an internal model quantity, not
 
 ## Two different timing jobs
 
-Circuit and stage timing estimates a position crossing. Rolling 45–70 mph, 30–60 mph and 50–100 km/h tests estimate speed-threshold crossings from receiver UTC. Those rolling detectors require recording, retained lead-in evidence, sustained thresholds and continuity. They reject gaps and other invalid sequences; they do not correct slope or implement standing-start 0–60. [Rolling interval rules](RUNS.md).
+Circuit and stage timing estimates a position crossing. Rolling 45–70 mph, 30–60 mph, 50–100 km/h and 80–120 km/h tests estimate speed-threshold crossings from receiver UTC. Those rolling detectors require recording, retained lead-in evidence, sustained thresholds and continuity. They reject gaps and other invalid sequences; they do not correct slope or implement standing-start 0–60. [Rolling interval rules](RUNS.md).
 
 ## The measurement report we intend to publish
 

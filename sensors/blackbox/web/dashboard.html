@@ -383,7 +383,7 @@ body:not(.analysis-view) .bbApp .bbGTop{display:flex;width:100%;padding:22px 24p
 body:not(.analysis-view) .bbGTopRight{display:block}
 .drive-view #analysis-mode{display:none}
 @media(max-width:600px){body:not(.drive-view) .bbQuickActions{display:grid;grid-template-columns:repeat(6,1fr)}body:not(.drive-view) .bbQuickActions button{grid-column:span 2;margin:0;padding:10px 5px}body:not(.drive-view) #analysis-mode,body:not(.drive-view) #drive-mode{grid-column:span 3}}
-.bbRunAction{min-height:44px;margin:0 18px 10px;border:1px solid var(--divider);background:transparent;border-radius:6px;color:var(--text);font:600 11px Inter,sans-serif;cursor:pointer}.bbRunTitle{font:500 34px var(--mono);padding:16px 18px 0}.bbRunTitle select{width:100%;background:var(--surface);color:var(--text);border:1px solid var(--divider);border-radius:6px;font:500 18px var(--mono);padding:8px 4px}.bbRunTitle small{font-size:12px;color:var(--text-secondary)}.bbClusterRuns p{font:10px/1.4 var(--mono);color:var(--text-secondary);padding:0 18px 10px}body.cluster-view.cluster-runs .bbClusterRuns{display:flex;flex-direction:column;flex:1;min-height:0;overflow:auto}.bbClusterRuns .bbPeakGrid{padding-top:8px;padding-bottom:8px}.bbClusterRuns dd{font-size:24px}
+.bbRunAction{min-height:44px;margin:0 18px 10px;border:1px solid var(--divider);background:transparent;border-radius:6px;color:var(--text);font:600 11px Inter,sans-serif;cursor:pointer}.bbRunTitle{font:500 34px var(--mono);padding:16px 18px 0}.bbRunChooser{position:relative}.bbRunChoice{display:block;width:100%;min-height:44px;text-align:left;background:var(--surface);color:var(--text);border:1px solid var(--divider);border-radius:6px;font:500 18px var(--mono);padding:8px 10px;cursor:pointer}.bbRunChoice[aria-expanded]::after{content:'';display:inline-block;float:right;border:4px solid transparent;border-top-color:currentColor;margin:9px 0 0 8px}.bbRunOptions{position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:8;max-height:max(44px,min(180px,calc(100cqh - 100px)));overflow-y:auto;overscroll-behavior:contain;background:var(--surface);border:1px solid var(--divider);border-radius:6px;padding:4px;box-shadow:0 6px 18px #0005}.bbRunOptions .bbRunChoice{border-color:transparent}.bbRunOptions .bbRunChoice[aria-pressed="true"]{border-color:var(--ok);color:var(--ok)}.bbRunChoice:focus-visible{outline:2px solid var(--ok);outline-offset:-3px}.bbRunTitle small{font-size:12px;color:var(--text-secondary)}.bbClusterRuns p{font:10px/1.4 var(--mono);color:var(--text-secondary);padding:0 18px 10px}body.cluster-view.cluster-runs .bbClusterRuns{display:flex;flex-direction:column;flex:1;min-height:0;overflow:auto}.bbClusterRuns .bbPeakGrid{padding-top:8px;padding-bottom:8px}.bbClusterRuns dd{font-size:24px}
 /* Landscape cluster: fixed timing, selectable instrument, aligned footer rails. */
 .bbElapsedLabel,.bbClusterRecording,.bbClusterTabs,.bbClusterPeaks,.bbClusterRuns,.bbClusterHeader{display:none}
 body.cluster-view #view-dashboard{position:relative}
@@ -551,7 +551,7 @@ body.cluster-view .bbLapCard,body.cluster-view .bbApp .bbGCard{container:cluster
     </section>
     <section class="bbCard bbGCard" id="g-card">
         <button class="bbInstrumentReveal" id="instrument-reveal" aria-expanded="false" aria-label="Choose instrument">Speed ···</button><div class="bbClusterTabs" role="group" aria-label="Cluster instrument"><button id="cluster-speed" aria-pressed="true">Speed</button><button id="cluster-forces" aria-pressed="false">G-meter</button><button id="cluster-peaks" aria-pressed="false">Peaks</button><button id="cluster-runs" aria-pressed="false">Runs</button></div>
-        <div class="bbClusterRuns"><div class="bbRunTitle"><select id="run-interval" aria-label="Run interval"><option value="0">45–70 mph</option><option value="1">30–60 mph</option><option value="2">50–100 km/h</option></select></div><dl class="bbPeakGrid"><div><dt>LAST</dt><dd id="run-last">—</dd></div><div><dt>BEST</dt><dd id="run-best">—</dd></div></dl><p id="run-status">Record to collect receiver timestamps</p><button class="bbRunAction" id="run-record">Record session</button><div class="bbPeakNote">GPS estimate · uncorrected<br>No distance rollout</div></div><div class="bbClusterPeaks" title="Strongest 0.5-second averages, moving samples this page session"><dl class="bbPeakGrid"><div><dt>ACCEL</dt><dd><span id="effort-accel">—</span><small> g</small></dd></div><div><dt>BRAKING</dt><dd><span id="effort-brake">—</span><small> g</small></dd></div><div><dt>LEFT</dt><dd><span id="effort-left">—</span><small> g</small></dd></div><div><dt>RIGHT</dt><dd><span id="effort-right">—</span><small> g</small></dd></div></dl></div>
+        <div class="bbClusterRuns"><div class="bbRunTitle"><div class="bbRunChooser" id="run-chooser"><button class="bbRunChoice" id="run-interval" aria-label="Run interval: 80–120 km/h" aria-expanded="false" aria-controls="run-options">80–120 km/h</button><div class="bbRunOptions" id="run-options" role="group" aria-label="Run interval choices" hidden><button class="bbRunChoice" id="run-lower" aria-pressed="false">50–100 km/h</button><button class="bbRunChoice" id="run-overtaking" aria-pressed="true">80–120 km/h</button></div></div></div><dl class="bbPeakGrid"><div><dt>LAST</dt><dd id="run-last">—</dd></div><div><dt>BEST</dt><dd id="run-best">—</dd></div></dl><p id="run-status">Record to collect receiver timestamps</p><button class="bbRunAction" id="run-record">Record session</button><div class="bbPeakNote">GPS estimate · uncorrected<br>No distance rollout</div></div><div class="bbClusterPeaks" title="Strongest 0.5-second averages, moving samples this page session"><dl class="bbPeakGrid"><div><dt>ACCEL</dt><dd><span id="effort-accel">—</span><small> g</small></dd></div><div><dt>BRAKING</dt><dd><span id="effort-brake">—</span><small> g</small></dd></div><div><dt>LEFT</dt><dd><span id="effort-left">—</span><small> g</small></dd></div><div><dt>RIGHT</dt><dd><span id="effort-right">—</span><small> g</small></dd></div></dl></div>
         <div class="bbGTop">
             <div class="bbGTopLeft">
                 <div class="bbInstrumentLabel">Speed</div><div class="bbSpeedMaximum" title="Maximum speed estimate with fresh GPS, this page session">MAX <span id="speed-maximum">—</span> <span id="speed-maximum-unit">km/h</span></div><div class="bbSpeedLine"><span class="bbSpeed bbNum" id="speed">0</span><span class="bbUnit" id="speed-unit">km/h</span></div>
@@ -2313,10 +2313,10 @@ class RollingRuns{
         if(a.confirmed&&a.endUs!==null&&r.gpsUtcUs-a.endUs>=80000){this.save({...a,status:'accepted',reason:'Uncorrected GPS estimate',seconds:(a.endUs-a.startUs)/1e6});this.attempt=null;this.status='Interval saved in GPS evidence'}
     }
 }
-const runIntervals=[{label:'45-70 mph',lo:45*.44704,hi:70*.44704},{label:'30-60 mph',lo:30*.44704,hi:60*.44704},{label:'50-100 km/h',lo:50/3.6,hi:100/3.6}];
+const runIntervals=[{label:'45-70 mph',family:'overtaking',unit:'mph',lo:45*.44704,hi:70*.44704},{label:'30-60 mph',family:'lower',unit:'mph',lo:30*.44704,hi:60*.44704},{label:'50-100 km/h',family:'lower',unit:'km/h',lo:50/3.6,hi:100/3.6},{label:'80-120 km/h',family:'overtaking',unit:'km/h',lo:80/3.6,hi:120/3.6}];
 const runDetectors=runIntervals.map(interval=>new RollingRuns(interval));
 const rollingRuns=runDetectors[0];
-let selectedRunDetector=rollingRuns;
+let selectedRunFamily='overtaking',selectedRunDetector=rollingRuns;
 function resetPerformanceRuns(){runDetectors.forEach(d=>d.reset());renderPerformanceRuns()}
 function updatePerformanceRuns(rows){for(const row of rows)for(const detector of runDetectors)detector.update(row);renderPerformanceRuns()}
 function renderPerformanceRuns(){
@@ -2336,6 +2336,34 @@ function runsToCSV(rows){
     return header+'\n'+detector.results.map(r=>[r.interval,r.status,r.reason,r.seconds??'',r.startUs,r.endUs??'',r.startSeq,r.endSeq??'',r.boot,r.date,r.synthetic].join(',')).join('\n')+'\n';
 }
 // End receiver-time rolling intervals.
+
+// Runs interval disclosure: units choose a purpose counterpart, never convert a result.
+function closeRunChooser(returnFocus=false){
+    const wasOpen=!$('run-options').hidden;$('run-options').hidden=true;$('run-interval').setAttribute('aria-expanded','false');
+    if(wasOpen&&returnFocus)$('run-interval').focus({preventScroll:true});
+}
+function renderRunChooser(){
+    const display=interval=>interval.label.replace('-','–');
+    $('run-interval').textContent=display(selectedRunDetector.interval);$('run-interval').setAttribute('aria-label','Run interval: '+display(selectedRunDetector.interval));
+    for(const family of ['lower','overtaking']){
+        const interval=runIntervals.find(i=>i.family===family&&i.unit===speedUnit),button=$('run-'+family);
+        button.textContent=display(interval);button.setAttribute('aria-pressed',String(family===selectedRunFamily));
+    }
+}
+function syncRunUnits(){
+    selectedRunDetector=runDetectors.find(d=>d.interval.family===selectedRunFamily&&d.interval.unit===speedUnit);
+    renderRunChooser();renderPerformanceRuns();
+}
+$('run-interval').onclick=()=>{
+    if(!$('run-options').hidden){closeRunChooser(true);return}
+    $('run-options').hidden=false;$('run-interval').setAttribute('aria-expanded','true');
+    const button=$('run-'+selectedRunFamily);button.focus({preventScroll:true});$('run-options').scrollTop=button.offsetTop;
+};
+for(const family of ['lower','overtaking'])$('run-'+family).onclick=()=>{selectedRunFamily=family;syncRunUnits();closeRunChooser(true)};
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!$('run-options').hidden){event.preventDefault();closeRunChooser(true)}});
+document.addEventListener('pointerdown',event=>{if(!$('run-chooser').contains(event.target))closeRunChooser(false)});
+document.addEventListener('focusin',event=>{if(!$('run-chooser').contains(event.target))closeRunChooser(false)});
+// End Runs interval disclosure.
 
 // State
 let cnt=0,lastSeq=0;
@@ -2370,6 +2398,7 @@ let clusterInstrument='speed';
 function selectClusterInstrument(name){
     if(!['speed','forces','peaks','runs'].includes(name))return;
     clusterInstrument=name;
+    if(name!=='runs'&&typeof closeRunChooser==='function')closeRunChooser(false);
     $('instrument-reveal').textContent=({speed:'Speed',forces:'G-meter',peaks:'Peaks',runs:'Runs'})[name]+' ···';
     document.body.classList.remove('instrument-picker');
     $('instrument-reveal').setAttribute('aria-expanded','false');
@@ -2405,6 +2434,7 @@ function renderSpeedUnits(){
     $('menu-units').textContent='Speed units: '+speedUnit;
     $('speed').textContent=speed_ema<1?0:speedForDisplay(speed_ema);
     $('speed-maximum').textContent=maximumFreshSpeed===null?'—':speedForDisplay(maximumFreshSpeed);
+    if(typeof syncRunUnits==='function')syncRunUnits();
 }
 $('menu-units').onclick=()=>{speedUnit=speedUnit==='mph'?'km/h':'mph';try{localStorage.setItem('blackbox-speed-unit',speedUnit)}catch{}renderSpeedUnits()};
 renderSpeedUnits();
@@ -3247,6 +3277,7 @@ const clusterMedia=matchMedia('(orientation: landscape) and (min-width:600px) an
 function syncDrivingLayout(){
     const cluster=clusterMedia.matches&&!clusterSuppressed&&!document.body.classList.contains('analysis-view');
     const driving=manualDrive||cluster;
+    if(!cluster&&typeof closeRunChooser==='function')closeRunChooser(false);
     document.body.classList.toggle('cluster-view',cluster);document.body.classList.toggle('drive-view',driving);
     $('drive-mode').setAttribute('aria-pressed',String(driving));$('drive-mode').textContent=cluster?'Dashboard':driving?'Exit drive view':'Drive view';
     requestAnimationFrame(resize);
@@ -3267,7 +3298,6 @@ syncDrivingLayout();
 $('expand-g').onclick=()=>{const expanded=$('g-card').classList.toggle('expanded-g');$('expand-g').setAttribute('aria-expanded',String(expanded));$('expand-g').textContent=expanded?'Compact G-meter':'Expand G-meter';requestAnimationFrame(resize)};
 $('quick-tracks').onclick=openTrackModal;
 $('quick-record').onclick=()=>$('menu-rec').click();
-$('run-interval').onchange=()=>{selectedRunDetector=runDetectors[Number($('run-interval').value)]||runDetectors[0];renderPerformanceRuns()};
 $('run-record').onclick=()=>$('menu-rec').click();
 $('quick-data').onclick=openDataModal;
 
