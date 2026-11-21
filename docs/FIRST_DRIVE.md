@@ -14,7 +14,7 @@ Start with an ordinary drive after the bench checks. The aim is to establish tha
 
 1. Wait for fresh GPS. Capture Diagnostics showing delivered GPS/IMU rates and satellite information. A 25 Hz firmware target is not a delivered-rate result.
 2. Press **Record session** and confirm REC. Record roughly two minutes stationary, giving us a baseline for speed/forces and receiver cadence.
-3. Check that data is saving. Do not clear an unfinished-recording notice by deleting storage; Saved data contains the retained chunks.
+3. With no selected track, the Drive panel shows recording duration and partial GPS observed distance. Distance starts unavailable until qualified receiver intervals arrive; it does not guess missing spans. Check that data is saving. Do not clear an unfinished-recording notice by deleting storage; Saved data contains the retained chunks.
 
 ## During the ordinary drive
 
@@ -26,7 +26,7 @@ Recording a route and timing a stage are separate operations. For an initial lon
 
 ## Parked at the end
 
-Record another short stationary segment. Stop recording, wait for saving, then open **Saved data**:
+Record another short stationary segment. Stop recording: Drive duration and distance freeze immediately, while final saving may still finish. Wait for saving, then open **Saved data**:
 
 - Export the recording's **Session CSV** and **GPS CSV**.
 - On **v0.0.4-rc.11 and later**, expand **Recording details** and choose **Download details JSON** for the recording. Keep this companion file with the CSVs and backup; rc.10 does not provide this capture/export. Pending or unavailable details do not prevent recording.

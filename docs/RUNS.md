@@ -38,7 +38,7 @@ CSV interval names retain their literal fixed thresholds for all four detectors,
 
 The demo starts with a clearly labelled saved rolling example: two accepted attempts and a third rejected by a deliberate six-event GPS gap for each of the four presets. Its Last/Best values come from the same GPS evidence available in Saved data, not a separately invented result. Starting your own recording resets those example results.
 
-In the website demo, open **Menu → Simulate rolling interval**, then record a session and select **Runs** in landscape. This explicitly changes the synthetic data source to a straight-line acceleration/deceleration scenario and disarms circuit timing. The 2 m/s² acceleration produces an interpolated 45–70 interval of 5.588 s (displayed as 5.59 s); 30–60 mph takes 6.7056 s and 50–100 km/h takes 6.9444 s and 80–120 km/h takes 5.5556 s. The menu can return to the textured circuit scenario. **SIM** remains visible; these are not measured driving results.
+In the website demo, open **Menu → Simulate rolling interval**, then record a session and select **Runs** in landscape. This explicitly changes the synthetic data source to a straight-line acceleration/deceleration scenario and disarms circuit timing. The 2 m/s² acceleration produces an interpolated 45–70 interval of 5.588 s (displayed as 5.59 s); 30–60 mph takes 6.7056 s, 50–100 km/h takes 6.9444 s, and 80–120 km/h takes 5.5556 s. The menu can return to the textured circuit scenario. **SIM** remains visible; these are not measured driving results.
 
 ## Remaining acceptance
 
