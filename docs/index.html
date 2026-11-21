@@ -10,11 +10,11 @@
     <meta property="og:title" content="Blackbox - Open Source Vehicle Telemetry">
     <meta property="og:description" content="GPS + IMU sensor fusion for vehicle dynamics. Lap timer with delta display. DIY hardware. Rust firmware. Your data.">
     <meta property="og:url" content="https://jctoledo.github.io/blackbox/">
-    <meta property="og:image" content="https://jctoledo.github.io/blackbox/dashboard-cluster-v3.png">
+    <meta property="og:image" content="https://jctoledo.github.io/blackbox/dashboard-cluster-v4.png">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Blackbox — GPS lap timing and open vehicle telemetry">
     <meta name="twitter:description" content="Build an ESP32-C3 instrument for your drive. Rust firmware, GPS + IMU sensing, and a local browser dashboard.">
-    <meta name="twitter:image" content="https://jctoledo.github.io/blackbox/dashboard-cluster-v3.png">
+    <meta name="twitter:image" content="https://jctoledo.github.io/blackbox/dashboard-cluster-v4.png">
     <meta name="robots" content="index,follow,max-image-preview:large">
     <meta name="theme-color" content="#090d12">
     <link rel="sitemap" type="application/xml" href="sitemap.xml">
@@ -123,15 +123,16 @@
     <div class="signal-strip"><span><strong>25 Hz</strong> M9N GPS TARGET</span><span><strong>200 Hz</strong> CONFIGURABLE IMU OUTPUT</span><span>LOCAL DATA</span><span>MIT SOURCE</span></div>
     <section class="section cockpit" id="dashboard" aria-labelledby="cockpit-title">
         <div class="section-inner">
-            <div class="cockpit-heading"><div><span class="eyebrow">THE VIEW FROM YOUR SEAT</span><h2 id="cockpit-title">Your phone.<br>Your instrument panel.</h2></div><p>Turn your phone sideways. Choose Speed, G-meter or Peaks with a tap or swipe. Timing stays in place; Controls brings back the toolbar when you need it.</p></div>
+            <div class="cockpit-heading"><div><span class="eyebrow">THE VIEW FROM YOUR SEAT</span><h2 id="cockpit-title">Your phone.<br>Your instrument panel.</h2></div><p>Turn your phone sideways. Choose Speed, G-meter, Peaks or Runs with a tap or swipe. Timing stays in place; Controls brings back the toolbar when you need it.</p></div>
             <figure class="cluster-stage">
                 <div class="screen-label"><span>01 / LANDSCAPE CLUSTER</span><span>ACTUAL INTERFACE · SIMULATED DATA</span></div>
-                <a class="screen-link" href="dashboard-cluster-v3.png" target="_blank" rel="noopener" aria-label="Open full-size landscape dashboard screenshot"><img src="dashboard-cluster-v3.png" alt="Landscape dashboard with a large speed readout beside elapsed lap time, reference delta and route progress" width="844" height="358" loading="lazy"></a>
-                <figcaption><span>Speed / G-meter / Peaks. One fixed timing panel.</span><a href="dashboard-cluster-v3.png" target="_blank" rel="noopener">View full size ↗</a></figcaption>
+                <a class="screen-link" href="dashboard-cluster-v4.png" target="_blank" rel="noopener" aria-label="Open full-size landscape dashboard screenshot"><img src="dashboard-cluster-v4.png" alt="Landscape dashboard with a large speed readout beside elapsed lap time, reference delta and route progress" width="844" height="390" loading="lazy"></a>
+                <figcaption><span>Speed / G-meter / Peaks / Runs. Choose your instrument.</span><a href="dashboard-cluster-v4.png" target="_blank" rel="noopener">View full size ↗</a></figcaption>
             </figure>
             <div class="instrument-previews">
-                <details><summary>Explore the G-meter view</summary><a class="screen-link" href="dashboard-forces-v3.png" target="_blank" rel="noopener"><img src="dashboard-forces-v3.png" alt="G-meter with a fixed one-g scale, three-second trace and signed force estimates beside lap timing" width="844" height="358" loading="lazy"></a><p>A fixed scale keeps the trace comparable through a turn. Missing data clears the live readings; over-scale forces are marked.</p></details>
-                <details><summary>Explore the Peaks view</summary><a class="screen-link" href="dashboard-peaks-v3.png" target="_blank" rel="noopener"><img src="dashboard-peaks-v3.png" alt="Peak acceleration, braking, left and right half-second force averages beside lap timing" width="844" height="358" loading="lazy"></a><p>Review the strongest half-second averages from this page session. Fresh moving samples qualify; isolated spikes do not become instant records.</p></details>
+                <details><summary>Explore the G-meter view</summary><a class="screen-link" href="dashboard-forces-v4.png" target="_blank" rel="noopener"><img src="dashboard-forces-v4.png" alt="G-meter with a fixed one-g scale, three-second trace and signed force estimates beside lap timing" width="844" height="390" loading="lazy"></a><p>A fixed scale keeps the trace comparable through a turn. Missing data clears the live readings; over-scale forces are marked.</p></details>
+                <details><summary>Explore the Peaks view</summary><a class="screen-link" href="dashboard-peaks-v4.png" target="_blank" rel="noopener"><img src="dashboard-peaks-v4.png" alt="Peak acceleration, braking, left and right half-second force averages beside lap timing" width="844" height="390" loading="lazy"></a><p>Review the strongest half-second averages from this page session. Fresh moving samples qualify; isolated spikes do not become instant records.</p></details>
+                <details><summary>Explore the Runs view</summary><a class="screen-link" href="dashboard-runs-v4.png" target="_blank" rel="noopener"><img src="dashboard-runs-v4.png" alt="Runs instrument showing synthetic receiver-timed 45–70 mph last and best estimates" width="844" height="390" loading="lazy"></a><p>Record receiver timestamps and review rolling 45–70 mph estimates. Export the evidence and rejected attempts. <a href="guides/rolling-runs.html">Timing rules and limits →</a></p></details>
             </div>
             <div class="cockpit-details">
                 <article><span class="detail-number">01</span><h3>Time comes first.</h3><p>Elapsed time stays prominent. Best and last laps give it context.</p></article>
@@ -139,8 +140,8 @@
                 <article><span class="detail-number">03</span><h3>Know where you stand.</h3><p>Route progress, connection and recording status share the screen. No digging through menus to find them.</p></article>
             </div>
             <div class="portrait-showcase">
-                <figure class="portrait-stage"><a class="screen-link" href="dashboard-portrait-v3.png" target="_blank" rel="noopener" aria-label="Open full-size portrait dashboard screenshot"><img src="dashboard-portrait-v3.png" alt="Portrait Blackbox dashboard showing track and recording controls above lap timing and speed" width="390" height="759" loading="lazy"></a><figcaption>02 / PORTRAIT DASHBOARD</figcaption></figure>
-                <div class="portrait-copy"><span class="eyebrow">PARK. REVIEW. GO AGAIN.</span><h3>Everything else,<br>within reach.</h3><p>Choose a circuit or stage. Start a recording. Bring back a saved session. Portrait keeps your setup controls close without losing the timing display.</p><ul><li><strong>Your session, saved locally.</strong> Export session and GPS timestamp CSVs, then download a backup of recordings and tracks.</li><li><strong>More detail when you want it.</strong> Open Analysis to inspect lateral and longitudinal forces.</li><li><strong>A place on your dashboard.</strong> Use Full screen where supported, or Phone setup for Android and iPhone Home Screen guidance.</li></ul><a class="btn btn-primary" href="demo.html">Try the dashboard ↗</a><p class="capture-note">Real dashboard captures with synthetic demo data; demo controls cropped out. The device includes the same interface fonts. Timing and recording continue when you rotate.</p></div>
+                <figure class="portrait-stage"><a class="screen-link" href="dashboard-portrait-v4.png" target="_blank" rel="noopener" aria-label="Open full-size portrait dashboard screenshot"><img src="dashboard-portrait-v4.png" alt="Portrait Blackbox dashboard showing track and recording controls above lap timing and speed" width="390" height="844" loading="lazy"></a><figcaption>02 / PORTRAIT DASHBOARD</figcaption></figure>
+                <div class="portrait-copy"><span class="eyebrow">PARK. REVIEW. GO AGAIN.</span><h3>Everything else,<br>within reach.</h3><p>Choose a circuit or stage. Start a recording. Bring back a saved session. Portrait keeps your setup controls close without losing the timing display.</p><ul><li><strong>Your session, saved locally.</strong> Export session and GPS timestamp CSVs, then download a backup of recordings and tracks.</li><li><strong>More detail when you want it.</strong> Open Analysis to inspect lateral and longitudinal forces.</li><li><strong>A place on your dashboard.</strong> Use Full screen where supported, or Phone setup for Android and iPhone Home Screen guidance.</li></ul><a class="btn btn-primary" href="demo.html">Try the dashboard ↗</a><p class="capture-note">Actual dashboard captures with synthetic demo data; no stretched screens or replacement fonts. The device includes the same interface fonts. Timing and recording continue when you rotate.</p></div>
             </div>
         </div>
     </section>
@@ -304,7 +305,7 @@
             <a href="guides/lap-timer.html">Lap Timer Guide</a>
             <a href="guides/sensor-fusion.html">Sensor Fusion Guide</a>
             <a href="guides/engineering-review.html">How it works</a>
-            <a href="guides/hardware-validation.html">Hardware checklist</a><a href="guides/faq.html">FAQ</a><a href="guides/gps-logging.html">GPS logging</a><a href="guides/maths-and-rates.html">Maths &amp; rates</a><a href="guides/mount-alignment.html">Align sensor to car</a><a href="guides/comparison.html">Build or buy</a><a href="demo.html">Live demo</a><a href="llms.txt">Project index</a>
+            <a href="guides/hardware-validation.html">Hardware checklist</a><a href="guides/faq.html">FAQ</a><a href="guides/gps-logging.html">GPS logging</a><a href="guides/maths-and-rates.html">Maths &amp; rates</a><a href="guides/mount-alignment.html">Align sensor to car</a><a href="guides/rolling-runs.html">Rolling intervals</a><a href="guides/comparison.html">Build or buy</a><a href="demo.html">Live demo</a><a href="llms.txt">Project index</a>
             <a href="https://github.com/jctoledo/blackbox/issues">Issues</a>
         </div>
         <details class="motion-preferences"><summary>Display preferences</summary><button class="motion-toggle" id="motion-toggle" aria-pressed="false" aria-controls="hero-video">Pause background</button></details><p>Code under MIT License</p>

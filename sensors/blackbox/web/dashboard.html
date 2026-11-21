@@ -382,8 +382,9 @@ body:not(.analysis-view) .bbApp .bbGTop{display:flex;width:100%;padding:22px 24p
 body:not(.analysis-view) .bbGTopRight{display:block}
 .drive-view #analysis-mode{display:none}
 @media(max-width:600px){body:not(.drive-view) .bbQuickActions{display:grid;grid-template-columns:repeat(6,1fr)}body:not(.drive-view) .bbQuickActions button{grid-column:span 2;margin:0;padding:10px 5px}body:not(.drive-view) #analysis-mode,body:not(.drive-view) #drive-mode{grid-column:span 3}}
+.bbRunAction{min-height:44px;margin:0 18px 10px;border:1px solid var(--divider);background:transparent;border-radius:6px;color:var(--text);font:600 11px Inter,sans-serif;cursor:pointer}.bbRunTitle{font:500 34px var(--mono);padding:16px 18px 0}.bbRunTitle small{font-size:12px;color:var(--text-secondary)}.bbClusterRuns p{font:10px/1.4 var(--mono);color:var(--text-secondary);padding:0 18px 10px}body.cluster-view.cluster-runs .bbClusterRuns{display:flex;flex-direction:column;flex:1;min-height:0}.bbClusterRuns .bbPeakGrid{padding-top:8px;padding-bottom:8px}.bbClusterRuns dd{font-size:24px}
 /* Landscape cluster: fixed timing, selectable instrument, aligned footer rails. */
-.bbElapsedLabel,.bbClusterRecording,.bbClusterTabs,.bbClusterPeaks,.bbClusterHeader{display:none}
+.bbElapsedLabel,.bbClusterRecording,.bbClusterTabs,.bbClusterPeaks,.bbClusterRuns,.bbClusterHeader{display:none}
 body.cluster-view #view-dashboard{position:relative}
 body.cluster-view .bbTopbar{max-width:none;padding:4px max(14px,env(safe-area-inset-right)) 4px max(14px,env(safe-area-inset-left));height:52px;min-height:52px;flex-wrap:nowrap}
 body.cluster-view .bbTopRight{margin-right:108px;gap:10px}body.cluster-view .bbDiag,body.cluster-view .bbKebab,body.cluster-view .bbModeLabel,body.cluster-view .bbModeIcon,body.cluster-view .bbRecordingStatus{display:none}
@@ -404,7 +405,7 @@ body.cluster-view .bbLapMeta{position:static!important;grid-column:1;grid-row:1;
 body.cluster-view .bbElapsedLabel{grid-row:1;align-self:start}
 
 body.cluster-view .bbClusterTabs{display:flex;flex:0 0 44px;border-bottom:1px solid var(--divider);padding:0 6px;gap:2px}
-.bbClusterTabs button{flex:1;min-width:0;border:0;border-bottom:2px solid transparent;background:none;color:var(--text-tertiary);font:600 11px Inter,sans-serif;cursor:pointer;padding:0 6px}
+.bbClusterTabs button{white-space:nowrap;flex:1;min-width:0;border:0;border-bottom:2px solid transparent;background:none;color:var(--text-tertiary);font:600 10px Inter,sans-serif;cursor:pointer;padding:0 3px}
 .bbClusterTabs button[aria-pressed="true"]{border-bottom-color:var(--ok);color:var(--text)}
 body.cluster-view .bbApp .bbGTop{flex:1;height:auto;min-height:0;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) 52px;justify-content:stretch;align-items:stretch;padding:0;width:100%}
 body.cluster-view .bbGTopLeft{display:flex;flex-direction:column;padding:12px 18px;min-height:0}body.cluster-view .bbSpeedLine{margin:auto 0;align-items:baseline;gap:4px}
@@ -423,7 +424,7 @@ body.cluster-view .bbLapProgress{flex:none;padding:0 18px 8px;font:10px var(--mo
 body.cluster-view .bbLapHistory{flex:0 0 52px;height:52px;padding:7px 10px;margin:0;border-top:1px solid var(--divider);align-items:center}body.cluster-view .bbLapHistLabel{font:9px var(--mono);letter-spacing:.06em}body.cluster-view .bbLapHistValue{font:500 18px/1.3 var(--mono);margin-top:3px}
 body.cluster-view .bbLapResult,body.cluster-view .bbStartLineIndicator,body.cluster-view .bbFinishLineIndicator{position:absolute;bottom:52px;left:0;right:0;z-index:2;padding:7px 12px;font-size:12px;background:var(--surface)}body.cluster-view .bbLapResult{background:var(--ok)}
 body.cluster-view .bbLapCard.inactive{padding:0}body.cluster-view .bbLapSetup{padding:18px;flex:1;flex-direction:column;justify-content:center;align-items:flex-start;gap:14px}body.cluster-view .bbLapSetupText{font-size:18px}
-body.cluster-view.cluster-forces .bbApp .bbGTop,body.cluster-view.cluster-peaks .bbApp .bbGTop{display:none!important}
+body.cluster-view.cluster-forces .bbApp .bbGTop,body.cluster-view.cluster-peaks .bbApp .bbGTop,body.cluster-view.cluster-runs .bbApp .bbGTop{display:none!important}
 body.cluster-view.cluster-forces .bbApp .bbGPlotWrap{display:flex!important;position:relative;flex:1;min-height:0;width:100%;padding:6px;justify-content:center;align-items:center}
 body.cluster-view.cluster-forces .bbApp .bbGPlotFrame{height:100%;max-height:170px;width:auto;aspect-ratio:1;max-width:100%;margin:0}
 body.cluster-view .bbGExpand,body.cluster-view .bbPlotMeta{display:none!important}body.cluster-view .bbAxis{font-size:9px}
@@ -510,8 +511,8 @@ body.cluster-view .bbSpeed.peak{color:var(--text);text-shadow:none}
         </div>
     </section>
     <section class="bbCard bbGCard" id="g-card">
-        <div class="bbClusterTabs" role="group" aria-label="Cluster instrument"><button id="cluster-speed" aria-pressed="true">Speed</button><button id="cluster-forces" aria-pressed="false">G-meter</button><button id="cluster-peaks" aria-pressed="false">Peaks</button></div>
-        <div class="bbClusterPeaks"><dl class="bbPeakGrid"><div><dt>ACCEL</dt><dd><span id="effort-accel">—</span><small> g</small></dd></div><div><dt>BRAKING</dt><dd><span id="effort-brake">—</span><small> g</small></dd></div><div><dt>LEFT</dt><dd><span id="effort-left">—</span><small> g</small></dd></div><div><dt>RIGHT</dt><dd><span id="effort-right">—</span><small> g</small></dd></div></dl><div class="bbPeakNote">Strongest 0.5 s averages<br>Moving samples · this page session</div></div>
+        <div class="bbClusterTabs" role="group" aria-label="Cluster instrument"><button id="cluster-speed" aria-pressed="true">Speed</button><button id="cluster-forces" aria-pressed="false">G-meter</button><button id="cluster-peaks" aria-pressed="false">Peaks</button><button id="cluster-runs" aria-pressed="false">Runs</button></div>
+        <div class="bbClusterRuns"><div class="bbRunTitle">45–70 <small>mph</small></div><dl class="bbPeakGrid"><div><dt>LAST</dt><dd id="run-last">—</dd></div><div><dt>BEST</dt><dd id="run-best">—</dd></div></dl><p id="run-status">Record to collect receiver timestamps</p><button class="bbRunAction" id="run-record">Record session</button><div class="bbPeakNote">GPS estimate · uncorrected<br>No distance rollout</div></div><div class="bbClusterPeaks"><dl class="bbPeakGrid"><div><dt>ACCEL</dt><dd><span id="effort-accel">—</span><small> g</small></dd></div><div><dt>BRAKING</dt><dd><span id="effort-brake">—</span><small> g</small></dd></div><div><dt>LEFT</dt><dd><span id="effort-left">—</span><small> g</small></dd></div><div><dt>RIGHT</dt><dd><span id="effort-right">—</span><small> g</small></dd></div></dl><div class="bbPeakNote">Strongest 0.5 s averages<br>Moving samples · this page session</div></div>
         <div class="bbGTop">
             <div class="bbGTopLeft">
                 <div class="bbInstrumentLabel">Speed</div><div class="bbSpeedLine"><span class="bbSpeed bbNum" id="speed">0</span><span class="bbUnit">km/h</span></div>
@@ -909,7 +910,7 @@ async function startRecording(){
         if(!db)await openDB();
         await saveChunk();
         const started=Date.now(),id=await createRecordingSession(started);
-        gpsCursor=null;gpsLogStatus='Waiting for GPS timestamp log…';sessionId=id;sessionStart=started;chunkIndex=0;lastSaveTime=Date.now();rec=true;recordingError='';lastSaveTime=0;
+        if(typeof resetPerformanceRuns==='function')resetPerformanceRuns();gpsCursor=null;gpsLogStatus='Waiting for GPS timestamp log…';sessionId=id;sessionStart=started;chunkIndex=0;lastSaveTime=Date.now();rec=true;recordingError='';lastSaveTime=0;
     }catch(e){recordingError='Storage error — recording not started';console.error(e)}
     finally{recordingBusy=false;updateRecUI()}
 }
@@ -977,7 +978,7 @@ async function collectGpsLog(){
             if(!rec||recording!==sessionId)return;
             const result=gpsRows(batch,gpsCursor,Date.now());
             if(chunkBuffer.length+result.rows.length>MAX_PENDING_SAMPLES){rec=false;recordingError='Recording stopped: too many unsaved samples. Keep this tab open and export.';return}
-            chunkBuffer.push(...result.rows);gpsCursor=result.cursor;
+            chunkBuffer.push(...result.rows);gpsCursor=result.cursor;if(typeof updatePerformanceRuns==='function')updatePerformanceRuns(result.rows);
             gpsLogStatus=batch.events.length?'GPS timestamps captured with this recording. Export GPS CSV from Saved data.':'GPS log connected; waiting for receiver messages.';
             if(chunkBuffer.length&&Date.now()-lastSaveTime>=CHUNK_INTERVAL&&!chunkWrite)await saveChunk();
         }catch(error){gpsLogStatus='GPS timestamp log unavailable. Dashboard recording continues; check connection and firmware.';console.warn(error)}
@@ -991,8 +992,9 @@ function gpsSamplesToCSV(samples){
 }
 
 function updateRecUI(){
+    if(typeof renderPerformanceRuns==='function')renderPerformanceRuns();
     $('gps-log-status').textContent=gpsLogStatus;
-    const clusterRecording=$('cluster-recording');clusterRecording.textContent=rec?'● REC':'REC OFF';clusterRecording.classList.toggle('recording',rec);
+    const clusterRecording=$('cluster-recording');clusterRecording.textContent=rec?'● REC':'REC OFF';clusterRecording.classList.toggle('recording',rec);$('cluster-rec').textContent=clusterRecording.textContent;$('cluster-rec').classList.toggle('recording',rec);
     const dot=$('recDot'),txt=$('recTxt'),btn=$('menu-rec'),dbtn=$('diag-rec'),stat=$('rec-status');
     if(rec){
         dot.classList.add('rec');txt.textContent='REC';btn.textContent='Stop recording';dbtn.textContent='Stop recording';dbtn.classList.add('recording');
@@ -1083,7 +1085,7 @@ async function deleteSession(targetId){
     });
 }
 
-async function exportSessionById(targetId,gpsOnly=false){
+async function exportSessionById(targetId,gpsOnly=false,runsOnly=false){
     if(!db)await openDB();
     if(chunkWrite){try{await chunkWrite}catch(e){console.warn('Exporting pending samples after storage failure',e)}}
     const pending=targetId===sessionId?chunkBuffer.slice():[];
@@ -1097,9 +1099,9 @@ async function exportSessionById(targetId,gpsOnly=false){
     let allData=[];chunks.forEach(c=>allData=allData.concat(c.data||[]));allData=allData.concat(pending);
     const exported=allData.filter(r=>gpsOnly?r.rowType===1:r.rowType!==1);
     if(!exported.length)throw Error(gpsOnly?'No GPS timestamp evidence in this recording. Use updated firmware and record while connected.':'No dashboard samples in recording');
-    const csv=gpsOnly?gpsSamplesToCSV(exported):samplesToCSV(exported);
+    const csv=runsOnly?runsToCSV(allData):gpsOnly?gpsSamplesToCSV(exported):samplesToCSV(exported);
     const b=new Blob([csv],{type:'text/csv'}),u=URL.createObjectURL(b),a=document.createElement('a');
-    a.href=u;a.download=(gpsOnly?'blackbox_gps_':'blackbox_')+new Date(targetId).toISOString().slice(0,19).replace(/[T:]/g,'-')+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(u),30000);
+    a.href=u;a.download=(runsOnly?'blackbox_runs_':gpsOnly?'blackbox_gps_':'blackbox_')+new Date(targetId).toISOString().slice(0,19).replace(/[T:]/g,'-')+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(u),30000);
     return{session,sampleCount:allData.length};
 }
 
@@ -2138,6 +2140,54 @@ function drawG(){
     }
 }
 
+// Receiver-time rolling intervals. Derived results are reproducible from GPS CSV.
+class RollingRuns{
+    constructor(){this.reset()}
+    reset(){this.previous=null;this.armed=false;this.attempt=null;this.results=[];this.dropped=0;this.status='Waiting for GPS evidence'}
+    save(result){this.results.push(result);if(this.results.length>1000){this.results.shift();this.dropped++}}
+    abort(reason){if(this.attempt)this.save({...this.attempt,status:'rejected',reason,seconds:null});this.attempt=null;this.armed=false;this.status=reason}
+    update(r){
+        if(r.rowType!==1)return;
+        const lo=45*.44704,hi=70*.44704;
+        if(r.gpsActive!==1||r.gpsAccepted!==1||!Number.isFinite(r.sp)||r.sp<0||r.sp>120||!Number.isFinite(r.gpsCourse)||!Number.isSafeInteger(r.gpsUtcUs)||r.gpsUtcUs<0||r.gpsUtcUs>=86401000000||!Number.isSafeInteger(r.gpsSeq)||r.gpsSeq<1||!Number.isInteger(r.gpsBootId)||r.gpsBootId<0||!Number.isInteger(r.gpsDate)||r.gpsDate<=0||!Number.isInteger(r.gpsFractionDigits)||r.gpsFractionDigits<2){this.abort('GPS evidence incomplete');this.previous=null;return}
+        const p=this.previous;
+        if(p&&r.gpsBootId===p.gpsBootId&&r.gpsSeq===p.gpsSeq)return;
+        this.previous=r;
+        if(!p){this.armed=r.sp<lo-.44704;this.status='Waiting for a 45–70 mph interval';return}
+        const dt=(r.gpsUtcUs-p.gpsUtcUs)/1e6;
+        if(r.gpsBootId!==p.gpsBootId||r.gpsDate!==p.gpsDate||r.gpsSeq!==p.gpsSeq+1||r.gpsMissing>0||dt<.02||dt>.3){this.abort('GPS gap or clock boundary');return}
+        if(Math.abs(r.sp-p.sp)/dt>15){this.abort('Implausible speed change');return}
+        if(r.sp<lo-.44704){this.abort('Below start speed');this.armed=true;this.status='Waiting for a 45–70 mph interval'}
+        const crossing=v=>p.gpsUtcUs+(v-p.sp)/(r.sp-p.sp)*(r.gpsUtcUs-p.gpsUtcUs);
+        if(!this.attempt&&this.armed&&p.sp<lo&&r.sp>=lo){this.attempt={startUs:crossing(lo),startSeq:p.gpsSeq,endUs:null,endSeq:null,boot:r.gpsBootId,date:r.gpsDate,course:r.gpsCourse,synthetic:r.gpsSynthetic?1:0};this.armed=false}
+        const a=this.attempt;if(!a)return;
+        if(Math.abs(Math.atan2(Math.sin(r.gpsCourse-a.course),Math.cos(r.gpsCourse-a.course)))>Math.PI/12){this.abort('Direction changed');return}
+        if(r.gpsUtcUs-a.startUs>120e6){this.abort('Interval timed out');return}
+        if(r.sp<hi-.15)a.endUs=null;
+        if(a.endUs===null&&p.sp<hi&&r.sp>=hi){a.endUs=crossing(hi);a.endSeq=r.gpsSeq}
+        this.status='Collecting interval · GPS time';
+        if(a.endUs!==null&&r.gpsUtcUs-a.endUs>=80000){this.save({...a,status:'accepted',reason:'Uncorrected GPS estimate',seconds:(a.endUs-a.startUs)/1e6});this.attempt=null;this.status='Interval saved in GPS evidence'}
+    }
+}
+const rollingRuns=new RollingRuns();
+function resetPerformanceRuns(){rollingRuns.reset();renderPerformanceRuns()}
+function updatePerformanceRuns(rows){for(const row of rows)rollingRuns.update(row);renderPerformanceRuns()}
+function renderPerformanceRuns(){
+    const accepted=rollingRuns.results.filter(r=>r.status==='accepted'),last=accepted.at(-1),best=accepted.length?Math.min(...accepted.map(r=>r.seconds)):null;
+    $('run-last').textContent=last?last.seconds.toFixed(2)+' s':'—';$('run-best').textContent=best===null?'—':best.toFixed(2)+' s';
+    $('run-record').textContent=rec?'Stop recording':'Record session';$('run-record').disabled=recordingBusy;
+    $('run-status').textContent=rec?rollingRuns.status:last?'Recording stopped':'Record to collect receiver timestamps';
+}
+function runsToCSV(rows){
+    const detector=new RollingRuns();for(const row of rows)detector.update(row);
+    if(detector.attempt)detector.abort('Recording ended before completion');
+    const header='interval,status,reason,seconds,start_utc_us,end_utc_us,start_seq,end_seq,boot_id,date_ddmmyy,synthetic';
+    if(detector.dropped)throw Error('More than 1000 attempts: export GPS CSV for full evidence instead.');
+    if(!detector.results.length)throw Error('No 45–70 mph attempts found in GPS evidence. No result has been invented.');
+    return header+'\n'+detector.results.map(r=>['45-70 mph',r.status,r.reason,r.seconds??'',r.startUs,r.endUs??'',r.startSeq,r.endSeq??'',r.boot,r.date,r.synthetic].join(',')).join('\n')+'\n';
+}
+// End receiver-time rolling intervals.
+
 // State
 let cnt=0,lastSeq=0;
 let maxL=0,maxR=0,maxA=0,maxB=0,peak=0;
@@ -2169,12 +2219,12 @@ const effortPeaks=new EffortPeaks();
 $('cluster-controls').onclick=()=>{const show=document.body.classList.toggle('cluster-controls');$('cluster-controls').setAttribute('aria-expanded',String(show));$('cluster-controls').textContent=show?'Hide controls':'Controls';requestAnimationFrame(()=>{resize();drawG()})};
 let clusterInstrument='speed';
 function selectClusterInstrument(name){
-    if(!['speed','forces','peaks'].includes(name))return;
+    if(!['speed','forces','peaks','runs'].includes(name))return;
     clusterInstrument=name;
-    for(const mode of ['speed','forces','peaks']){$('cluster-'+mode).setAttribute('aria-pressed',String(mode===name));document.body.classList.toggle('cluster-'+mode,mode===name)}
+    for(const mode of ['speed','forces','peaks','runs']){$('cluster-'+mode).setAttribute('aria-pressed',String(mode===name));document.body.classList.toggle('cluster-'+mode,mode===name)}
     requestAnimationFrame(()=>{resize();drawG()});
 }
-for(const mode of ['speed','forces','peaks'])$('cluster-'+mode).onclick=()=>selectClusterInstrument(mode);
+for(const mode of ['speed','forces','peaks','runs'])$('cluster-'+mode).onclick=()=>selectClusterInstrument(mode);
 let clusterSwipe=null;
 $('g-card').addEventListener('touchstart',event=>{
     if(!document.body.classList.contains('cluster-view')||event.touches.length!==1||event.target.closest('button'))return;
@@ -2185,7 +2235,7 @@ $('g-card').addEventListener('touchend',event=>{
     const start=clusterSwipe;clusterSwipe=null;if(!start||!event.changedTouches.length)return;
     const t=event.changedTouches[0],dx=t.clientX-start.x,dy=t.clientY-start.y;
     if(Math.abs(dx)<60||Math.abs(dx)<1.5*Math.abs(dy)||performance.now()-start.at>800)return;
-    const modes=['speed','forces','peaks'];selectClusterInstrument(modes[(modes.indexOf(clusterInstrument)+(dx<0?1:2))%3]);
+    const modes=['speed','forces','peaks','runs'];selectClusterInstrument(modes[(modes.indexOf(clusterInstrument)+(dx<0?1:3))%4]);
 },{passive:true});
 // End selectable cluster instrument.
 
@@ -2765,6 +2815,7 @@ async function renderSessionList(){
                 '<div class=\"bbSessionActions\">'+
                     '<button class=\"bbSessionBtn\" data-action=\"export\">Session CSV</button>'+
                     '<button class=\"bbSessionBtn\" data-action=\"gps-export\">GPS CSV</button>'+
+                    '<button class=\"bbSessionBtn\" data-action=\"runs-export\">Runs CSV</button>'+
                     '<button class=\"bbSessionBtn danger\" data-action=\"delete\"'+((s.sessionId===sessionId&&(rec||chunkWrite||chunkBuffer.length))?' disabled':'')+'>Delete</button>'+
                 '</div>'+
             '</div>';
@@ -2803,9 +2854,9 @@ async function renderTrackDataList(){
 
 async function handleSessionAction(btn){
     const action=btn.dataset.action,item=btn.closest('.bbSessionItem'),targetId=parseInt(item.dataset.sessionId,10);
-    if(action==='export'||action==='gps-export'){
+    if(action==='export'||action==='gps-export'||action==='runs-export'){
         const label=btn.textContent;
-        try{btn.textContent='Exporting…';await exportSessionById(targetId,action==='gps-export')}
+        try{btn.textContent='Exporting…';await exportSessionById(targetId,action==='gps-export'||action==='runs-export',action==='runs-export')}
         catch(e){alert('Export failed: '+e.message)}finally{btn.textContent=label}
     }else if(action==='delete'){
         const dateStr=item.querySelector('.bbSessionDate').textContent;
@@ -2936,6 +2987,7 @@ syncDrivingLayout();
 $('expand-g').onclick=()=>{const expanded=$('g-card').classList.toggle('expanded-g');$('expand-g').setAttribute('aria-expanded',String(expanded));$('expand-g').textContent=expanded?'Compact G-meter':'Expand G-meter';requestAnimationFrame(resize)};
 $('quick-tracks').onclick=openTrackModal;
 $('quick-record').onclick=()=>$('menu-rec').click();
+$('run-record').onclick=()=>$('menu-rec').click();
 $('quick-data').onclick=openDataModal;
 
 // Init

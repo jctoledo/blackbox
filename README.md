@@ -147,9 +147,9 @@ Connect to the device's WiFi and open `192.168.71.1` in any browser.
 | Analysis | Show optional force analysis |
 | Drive view / Dashboard | Enter the focused display or return to controls |
 
-Landscape automatically offers Speed, G-meter and sustained Peaks tabs, with timing fixed alongside. Tap Controls for the toolbar; the G-meter uses a selectable fixed scale and clears when data becomes unavailable.
+Landscape automatically offers Speed, G-meter, sustained Peaks and Runs tabs, with timing fixed alongside. Tap Controls for the toolbar; the G-meter uses a selectable fixed scale and clears when data becomes unavailable.
 
-![Landscape cluster with synthetic demo data](docs/dashboard-cluster-v3.png)
+![Landscape cluster with synthetic demo data](docs/dashboard-cluster-v4.png)
 
 
 ---
@@ -487,3 +487,5 @@ Tap **Full screen** on supported Android browsers. On iPhone, use **Menu → Pho
 Timestamp-logging firmware saves receiver UTC and device parse times alongside recordings. In **Saved data**, export both **Session CSV** and **GPS CSV**; the latter reveals receiver cadence, repeated epochs and phone collection gaps. [Capture and analysis guide](docs/GPS_LOGGING.md). It does not establish absolute lap accuracy.
 
 For the implemented equations, rate budgets, force-display semantics and current driveway-calibration limitation, see [Maths and update rates](docs/MATHS_AND_RATES.md).
+
+[Rolling interval estimates](docs/RUNS.md) use receiver timestamps for 45–70 mph, with rejected-attempt evidence in Runs CSV. Standing-start 0–60 and slope correction are not yet implemented.

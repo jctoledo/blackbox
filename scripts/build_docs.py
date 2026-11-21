@@ -8,7 +8,8 @@ from build_demo import main as build_demo
 
 ROOT = Path(__file__).resolve().parents[1]
 BASE = 'https://jctoledo.github.io/blackbox/'
-PAGES = {'MATHS_AND_RATES.md': ('maths-and-rates', 'GPS lap timing maths, G-meter estimates and hardware update rates'),
+PAGES = {'RUNS.md': ('rolling-runs', 'Receiver-timestamped rolling acceleration estimates and evidence'),
+         'MATHS_AND_RATES.md': ('maths-and-rates', 'GPS lap timing maths, G-meter estimates and hardware update rates'),
          'GPS_LOGGING.md': ('gps-logging', 'GPS timestamp logging and drive-data analysis'),
          'CALIBRATION.md': ('mount-alignment', 'Experimental horizontal mount alignment: setup and validation'),
          'COMPARISON.md': ('comparison', 'Blackbox vs paid GPS lap timers: capabilities, costs, and evidence'),
