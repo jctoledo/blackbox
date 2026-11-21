@@ -26,6 +26,10 @@ After reload, the latest persisted recording may appear as **Saved recording** o
 
 If a write fails, capture stops visibly and the unsaved raw tail remains in the current tab with its matching Drive summary. Keep the tab open and download a backup before closing it. An empty-tail backup can retain available summary context for an existing row; context alone never recreates a deleted recording. Browser page-hide writes are best effort and cannot recover observations never received.
 
+## Saved speed and force summary
+
+In **Saved data**, expand **Summary · saved samples** for that recording’s maximum qualified speed and strongest half-second acceleration, braking and left/right force estimates. These use committed ordinary telemetry, independently of Drive distance’s receiver rows. Pending samples are excluded until saved. The summary is recomputed after reload/restore and included in details JSON in SI units; older data lacking quality fields remains unavailable. See [summary calculations and limits](RECORDING_SUMMARY.md).
+
 ## Reproduce and move the evidence
 
 While parked, use **Saved data → Recording details** for duration, known GPS distance/time, exclusion reasons and enrollment fence. Download **GPS CSV** and **Download details JSON**, or a complete restorable backup. GPS CSV alone contains the measurements but lacks the Drive fences and recorded monotonic duration.

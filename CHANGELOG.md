@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Synthetic saved drives include boot-qualified speed/force evidence; new example versions preserve existing browser recordings.
+- Saved recordings offer a reproducible maximum-speed and sustained 0.5-second force summary with quality, continuity and provenance counts. Summary and details JSON use committed raw evidence; pending samples and legacy missing quality do not become invented records.
 - Drive recording panel when no track is selected: readiness, monotonic recording duration, partial receiver-speed GPS distance, explicit coverage/exclusions, frozen Stop summary and historical/interrupted reload state. Track selection changes presentation without changing capture.
 - Atomic raw-chunk/Drive checkpoints, strict reproducible backup validation, recovery-tail context and companion details exports; synthetic Drive preview and operator guide.
 
