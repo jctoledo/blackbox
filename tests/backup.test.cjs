@@ -135,3 +135,11 @@ test('spatial reference geometry survives backup restore and malformed traces ar
  const restored=(await c.readBackupStores(c.trackDb,['reference_laps'])).reference_laps[0];assert.deepEqual(restored.spatial,r.spatial);
  r.spatial.points[5].t=1;value.checksum=c.backupChecksum(value.data);assert.throws(()=>c.validateBackup(value),/spatial reference/);
 });
+test('GPS evidence survives backup and restore alongside ordinary samples',async()=>{
+ const c=context();c.db=await database();c.trackDb=await database(true);const value=fixture(c);
+ const gps={t:12,rowType:1,gpsBootId:7,gpsSeq:20,gpsHostUs:9000000,gpsUtcUs:43200000000,gpsDate:201126,gpsFractionDigits:2,gpsActive:0,gpsAccepted:0,lat:null,lon:null,sp:null,gpsCourse:null,gpsMissing:3,gpsBoundary:0,gpsSynthetic:0};
+ value.data.chunks[0].data.push(gps);value.checksum=c.backupChecksum(value.data);c.validateBackup(value);
+ const plan=c.makeRestorePlan(value,[],'gps-copy',1000);await c.executeRestore(plan,c.db,c.trackDb);
+ const data=await c.readBackupStores(c.db,['sessions','chunks']);assert.deepEqual(data.chunks[0].data.at(-1),gps);
+ const roundtrip=JSON.parse(JSON.stringify(await c.createBackup()));assert.equal(roundtrip.data.chunks[0].data.at(-1).gpsMissing,3);c.validateBackup(roundtrip);
+});

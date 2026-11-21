@@ -20,7 +20,7 @@ Use this checklist for a specific board, wiring revision, GPS receiver, mounting
 2. Outdoors, wait for a fresh fix; record the Diagnostics GPS rate and satellite count. The configured target is 25 Hz, not proof of the actual delivered rate. Photograph the antenna position and IMU orientation.
 3. While parked, select/record the track, arm timing, and press **Record session**. Check the recording indicator before switching to **Drive view**. Keep the dashboard foregrounded; screen lock or browser suspension can interrupt browser recording.
 4. For a normal neighborhood/highway drive, collect a couple of minutes parked outdoors, the ordinary drive, and a short parked segment at the end. No hard braking, weaving, or special maneuvers are needed. Repeated line-crossing validation belongs at a controlled site with an operator/reference. A passenger/operator should note any missed or unexpected crossing and an approximate time. Do not operate the UI while driving.
-5. While parked, stop recording. Open **Saved data**, export the session CSV, and use **Tracks → Export** for the track geometry. Keep a short text note with firmware, GPS model, wiring/mounting, browser/phone, weather/obstructions, and observed problems. Export before clearing site data.
+5. While parked, stop recording. Open **Saved data**, export both Session CSV and GPS CSV (on timestamp-logging firmware), and use **Tracks → Export** for the track geometry. Keep a short text note with firmware, GPS model, wiring/mounting, browser/phone, weather/obstructions, and observed problems. Export before clearing site data.
 6. An independent timer or timestamped crossing video is needed to measure timing error. Without it, the logs can establish internal consistency and investigate failures, but not absolute lap-time accuracy. Share location-containing recordings privately, not in a public GitHub issue.
 
 ## 1. USB installation and recovery — bench
@@ -165,3 +165,11 @@ Keep failures and untested cases visible. Promote a candidate to stable only whe
 - [ ] Compare known aligned, 90° and 180° mounts. Check acceleration/braking and left/right signs after saving; preserve logs and photos. Do not use reverse braking as calibration evidence.
 - [ ] Test stale GPS/IMU and NVS failure on a bench setup; no false success, indefinite collection or lost prior calibration. A successful NVS API call is not a physical power-loss test.
 - [ ] Record rejected attempts, actual receiver cadence, road slope/bank and any sign mismatch. The software tests do not establish alignment-angle accuracy.
+
+## GPS evidence capture
+
+- [ ] Record at least two minutes with M9N outdoors; GPS CSV should show receiver epochs and host parse times. Check the actual cadence with [the timestamp analyzer](GPS_LOGGING.md).
+- [ ] While parked, disconnect the phone for five seconds, reconnect, stop, and export. Sequence loss beyond the 64-event RAM window must appear in `missing_before`.
+- [ ] Power-cycle the device during a disposable recording. The GPS CSV must show a new boot boundary; UTC must not be fabricated during reacquisition.
+- [ ] Reload the phone, export again, then back up and restore as a copy. Check GPS row counts and timestamps match.
+- [ ] Keep the phone foregrounded for the intended drive duration; record any collection gaps, unavailable logger status or storage failure.

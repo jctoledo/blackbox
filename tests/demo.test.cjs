@@ -58,3 +58,7 @@ test('spatial reference matches a complete synthetic circuit through its start/f
  }
  assert.ok(total>400);assert.equal(matched,total);
 });
+test('demo GPS evidence is explicitly synthetic, bounded and uses 40ms receiver epochs',async()=>{
+ const d=demo();const a=await (await d.fetch('/api/gps-log')).json();assert.equal(a.simulated,true);assert.equal(a.events.length,64);
+ assert.equal(a.events[1].utc_us-a.events[0].utc_us,40000);d.advance(1000);const b=await (await d.fetch('/api/gps-log')).json();assert.equal(b.latest_seq-a.latest_seq,25);
+});

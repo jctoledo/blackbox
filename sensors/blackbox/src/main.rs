@@ -6,6 +6,7 @@ mod diagnostics;
 mod filter; // Only compiled for tests - production uses GPS blend instead of Biquad
 mod fusion;
 mod gps;
+mod gps_log;
 mod imu;
 mod mode;
 mod mqtt;
@@ -769,7 +770,7 @@ fn main() {
         }
 
         // Poll GPS and update EKF correction
-        if sensors.poll_gps() {
+        if sensors.poll_gps(telemetry_state.as_deref()) {
             // Count GPS rate only when a NEW valid RMC fix is received
             // (not on every GGA/GSA sentence while last_fix.valid is still true)
             let is_new_fix = sensors.gps_parser.take_new_fix();

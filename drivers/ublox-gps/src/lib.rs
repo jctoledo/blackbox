@@ -145,6 +145,17 @@ pub struct GpsFix {
     pub vdop: f32,
 }
 
+/// Metadata for each checksum-valid RMC sentence, including invalid-status fixes.
+/// UTC is receiver-reported, not a synchronized host clock or accuracy guarantee.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct RmcTiming {
+    pub sequence: u32,
+    pub utc_us: Option<u64>,
+    pub date_ddmmyy: Option<u32>,
+    pub fractional_digits: Option<u8>,
+    pub status_active: bool,
+}
+
 /// GPS reference point for local coordinate conversion
 #[derive(Debug, Clone, Copy, Default)]
 pub struct GpsReference {
@@ -173,6 +184,7 @@ pub struct NmeaParser {
     position_based_speed: f32,
     /// Flag set when a new valid RMC fix is received (cleared by take_new_fix)
     new_fix_available: bool,
+    rmc_timing: RmcTiming,
 }
 
 impl NmeaParser {
@@ -200,6 +212,7 @@ impl NmeaParser {
             last_valid_lon: 0.0,
             position_based_speed: 0.0,
             new_fix_available: false,
+            rmc_timing: RmcTiming::default(),
         }
     }
 
@@ -218,6 +231,7 @@ impl NmeaParser {
             b'\n' => {
                 if self.line_len > 0 {
                     self.parse_line();
+                    self.line_len = 0;
                     true
                 } else {
                     false
@@ -236,6 +250,10 @@ impl NmeaParser {
     /// Get reference to last GPS fix
     pub fn last_fix(&self) -> &GpsFix {
         &self.last_fix
+    }
+
+    pub fn rmc_timing(&self) -> RmcTiming {
+        self.rmc_timing
     }
 
     /// Get reference point (if warmup complete)
@@ -561,6 +579,16 @@ impl NmeaParser {
             fields[i] = field;
             count += 1;
         }
+        let utc = parse_utc(fields[1]);
+        self.rmc_timing = RmcTiming {
+            sequence: self.rmc_timing.sequence.wrapping_add(1),
+            utc_us: utc.map(|(h, m, s, us, _)| {
+                ((h as u64 * 3600 + m as u64 * 60 + s as u64) * 1_000_000) + us as u64
+            }),
+            fractional_digits: utc.map(|(_, _, _, _, digits)| digits),
+            date_ddmmyy: parse_date(fields[9]),
+            status_active: fields[2] == "A",
+        };
         if count < 10 || fields[2] != "A" {
             return;
         }
@@ -684,21 +712,63 @@ fn parse_coordinate(coord_str: &str, dir_str: &str) -> Option<f64> {
     Some(decimal)
 }
 
-/// Parse NMEA time field (hhmmss.ss format)
-#[allow(dead_code)] // Helper function for future use
-fn parse_time(time_str: &str) -> Option<(u8, u8, u8)> {
-    if time_str.len() < 6 || !time_str.is_ascii() {
+/// Parse UTC without floating-point rounding. Retain up to microseconds, truncating
+/// any finer fractional digits; report source precision separately.
+fn parse_utc(value: &str) -> Option<(u8, u8, u8, u32, u8)> {
+    let b = value.as_bytes();
+    if b.len() < 6 || !b[..6].iter().all(u8::is_ascii_digit) {
         return None;
     }
-
-    let hh = time_str[0..2].parse::<u8>().ok()?;
-    let mm = time_str[2..4].parse::<u8>().ok()?;
-    let ss = time_str[4..6].parse::<u8>().ok()?;
-
-    if hh > 23 || mm > 59 || ss > 60 {
+    let hh = value[0..2].parse::<u8>().ok()?;
+    let mm = value[2..4].parse::<u8>().ok()?;
+    let ss = value[4..6].parse::<u8>().ok()?;
+    if hh > 23 || mm > 59 || ss > 60 || (ss == 60 && (hh != 23 || mm != 59)) {
         return None;
     }
-    Some((hh, mm, ss))
+    let fraction = if b.len() == 6 {
+        &b[6..]
+    } else {
+        if b[6] != b'.' || b.len() == 7 || b.len() > 16 || !b[7..].iter().all(u8::is_ascii_digit) {
+            return None;
+        }
+        &b[7..]
+    };
+    let mut us = 0;
+    for i in 0..6 {
+        us = us * 10 + fraction.get(i).map_or(0, |v| (v - b'0') as u32);
+    }
+    Some((hh, mm, ss, us, fraction.len() as u8))
+}
+fn parse_time(value: &str) -> Option<(u8, u8, u8)> {
+    parse_utc(value).map(|(h, m, s, _, _)| (h, m, s))
+}
+/// Preserve ddmmyy as a numeric code, not a guessed Unix epoch/century.
+fn parse_date(value: &str) -> Option<u32> {
+    if value.len() != 6 || !value.as_bytes().iter().all(u8::is_ascii_digit) {
+        return None;
+    }
+    let day = value[0..2].parse::<u8>().ok()?;
+    let month = value[2..4].parse::<usize>().ok()?;
+    let year = value[4..6].parse::<u8>().ok()?;
+    let days = [
+        0,
+        31,
+        if year % 4 == 0 { 29 } else { 28 },
+        31,
+        30,
+        31,
+        30,
+        31,
+        31,
+        30,
+        31,
+        30,
+        31,
+    ];
+    if month == 0 || month > 12 || day == 0 || day > days[month] {
+        return None;
+    }
+    value.parse().ok()
 }
 
 /// Validate NMEA sentence checksum
@@ -899,5 +969,65 @@ mod tests {
             vx
         );
         assert!(vy.abs() < 0.01, "West: north should be ~0, got {}", vy);
+    }
+}
+
+#[cfg(test)]
+mod timestamp_tests {
+    use super::*;
+    fn feed(parser: &mut NmeaParser, body: &str) {
+        let checksum = body.bytes().fold(0u8, |a, b| a ^ b);
+        for b in format!("${body}*{checksum:02X}\r\n").bytes() {
+            parser.feed_byte(b);
+        }
+    }
+    #[test]
+    fn utc_precision_midnight_and_leap_second_are_not_rounded() {
+        assert_eq!(parse_utc("123456.04"), Some((12, 34, 56, 40000, 2)));
+        assert_eq!(parse_utc("235959.9999999"), Some((23, 59, 59, 999999, 7)));
+        assert_eq!(parse_utc("235960.00"), Some((23, 59, 60, 0, 2)));
+        assert_eq!(parse_utc("000000"), Some((0, 0, 0, 0, 0)));
+        for bad in [
+            "123456junk",
+            "123456.",
+            "123456.0x",
+            "123460",
+            "240000",
+            "000000.-1",
+            "１２３４５６",
+        ] {
+            assert_eq!(parse_utc(bad), None, "{bad}");
+        }
+        assert_eq!(parse_date("010126"), Some(10126));
+        assert_eq!(parse_date("290224"), Some(290224));
+        for bad in ["290223", "310426", "000126", "010026", "010126x"] {
+            assert_eq!(parse_date(bad), None);
+        }
+    }
+    #[test]
+    fn rmc_evidence_survives_invalid_status_and_duplicate_epochs() {
+        let mut parser = NmeaParser::with_warmup_fixes(1);
+        let valid = "GNRMC,123456.04,A,3723.2475,N,12158.3416,W,10.0,90.0,201126,,,A";
+        feed(&mut parser, valid);
+        assert!(!parser.last_fix().valid);
+        feed(&mut parser, valid);
+        assert!(parser.last_fix().valid);
+        assert_eq!(parser.rmc_timing().sequence, 2);
+        assert_eq!(parser.rmc_timing().utc_us, Some(45_296_040_000));
+        assert_eq!(parser.rmc_timing().date_ddmmyy, Some(201126));
+        parser.feed_byte(b'\n');
+        assert_eq!(parser.rmc_timing().sequence, 2);
+        feed(&mut parser, "GNRMC,123456.08,V,,,,,,,201126,,,N");
+        assert_eq!(parser.rmc_timing().sequence, 3);
+        assert!(!parser.rmc_timing().status_active);
+        assert!(!parser.last_fix().valid);
+        assert_eq!(parser.rmc_timing().utc_us, Some(45_296_080_000));
+        for b in b"$GNRMC,123457,A,,,,,,,201126*00\n" {
+            parser.feed_byte(*b);
+        }
+        assert_eq!(parser.rmc_timing().sequence, 3);
+        feed(&mut parser, "GNRMC,,V,,,,,,,,,,N");
+        assert_eq!(parser.rmc_timing().utc_us, None);
+        assert_eq!(parser.rmc_timing().date_ddmmyy, None);
     }
 }

@@ -77,6 +77,7 @@ struct TelemetrySnapshot {
 
 /// Shared state for telemetry server
 pub struct TelemetryServerState {
+    gps_log: Mutex<crate::gps_log::GpsLog>,
     mount_command: AtomicU8,
     mount_status: Mutex<String>,
     /// Latest telemetry packet (raw bytes)
@@ -98,6 +99,9 @@ pub struct TelemetryServerState {
 impl TelemetryServerState {
     pub fn new() -> Self {
         Self {
+            gps_log: Mutex::new(crate::gps_log::GpsLog::new(unsafe {
+                esp_idf_svc::sys::esp_random()
+            })),
             mount_command: AtomicU8::new(0),
             mount_status: Mutex::new(String::from("{}")),
             telemetry_data: Mutex::new(TelemetrySnapshot::default()),
@@ -113,6 +117,9 @@ impl TelemetryServerState {
     /// Create with diagnostics state for diagnostics page support
     pub fn with_diagnostics(diagnostics: Arc<DiagnosticsState>) -> Self {
         Self {
+            gps_log: Mutex::new(crate::gps_log::GpsLog::new(unsafe {
+                esp_idf_svc::sys::esp_random()
+            })),
             mount_command: AtomicU8::new(0),
             mount_status: Mutex::new(String::from("{}")),
             telemetry_data: Mutex::new(TelemetrySnapshot::default()),
@@ -194,7 +201,23 @@ impl TelemetryServerState {
     }
 
     /// Store data, sequence and persistent timing metadata atomically.
-    pub fn update_telemetry(&self, data: &[u8], timing: TimingTelemetry) {
+    pub fn record_gps_event(
+        &self,
+        timing: ublox_gps::RmcTiming,
+        fix: &ublox_gps::GpsFix,
+        host_us: u64,
+    ) {
+        if let Ok(mut log) = self.gps_log.lock() {
+            log.push(timing, fix, host_us);
+        }
+    }
+
+    pub fn update_telemetry(&self, data: &[u8], mut timing: TimingTelemetry) {
+        if let Ok(log) = self.gps_log.lock() {
+            let (boot_id, event) = log.latest();
+            timing.gps_boot_id = Some(boot_id);
+            timing.gps_event = event;
+        }
         if let Ok(mut guard) = self.telemetry_data.lock() {
             guard.data.clear();
             guard.data.extend_from_slice(data);
@@ -430,7 +453,7 @@ impl TelemetryServer {
 
         let server_config = Configuration {
             http_port: port,
-            max_uri_handlers: 10,
+            max_uri_handlers: 11,
             max_open_sockets: 8,
             stack_size: 10240,
             ..Default::default()
@@ -459,6 +482,28 @@ impl TelemetryServer {
                     ],
                 )?;
                 response.write_all(html_bytes)?;
+                Ok(())
+            },
+        )?;
+
+        // A small RAM window, fetched once per second while recording. Clone under
+        // the lock, serialize outside it so UART acquisition is not blocked by JSON.
+        let gps_state = state.clone();
+        server.fn_handler(
+            "/api/gps-log",
+            esp_idf_svc::http::Method::Get,
+            move |req| -> Result<(), esp_idf_svc::io::EspIOError> {
+                let snapshot = gps_state.gps_log.lock().ok().map(|log| log.snapshot());
+                let json = serde_json::to_string(&snapshot).unwrap_or_else(|_| "null".into());
+                let mut response = req.into_response(
+                    200,
+                    None,
+                    &[
+                        ("Content-Type", "application/json"),
+                        ("Cache-Control", "no-store"),
+                    ],
+                )?;
+                response.write_all(json.as_bytes())?;
                 Ok(())
             },
         )?;

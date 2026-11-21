@@ -479,3 +479,7 @@ Website background footage is separately licensed and credited in [media provena
 Tap **Full screen** on supported Android browsers. On iPhone, use **Menu → Phone setup** for Safari's Home Screen steps. Back up saved data before changing browsers or launch mode; storage may be separate. The landscape layout follows orientation without changing timing or recording.
 
 **Menu → Mount alignment** offers experimental horizontal mounting calibration with signed GPS braking evidence, candidate review and persistent save while parked. It changes force axes, not timing-line direction. Read the [alignment guide](docs/CALIBRATION.md) and validate signs on your device before relying on the result.
+
+### GPS evidence for a drive
+
+Timestamp-logging firmware saves receiver UTC and device parse times alongside recordings. In **Saved data**, export both **Session CSV** and **GPS CSV**; the latter reveals receiver cadence, repeated epochs and phone collection gaps. [Capture and analysis guide](docs/GPS_LOGGING.md). It does not establish absolute lap accuracy.

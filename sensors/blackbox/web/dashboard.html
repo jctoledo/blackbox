@@ -522,7 +522,7 @@ body:not(.analysis-view) .bbGTopRight{display:block}
         </div>
     </section>
     <div class="bbTelemetryStrip">
-        <span class="bbTItem"><span class="bbNum bbNum--hz" id="hz">0</span> Hz</span>
+        <span class="bbTItem" title="Accepted dashboard samples per second, not GPS receiver rate">UI <span class="bbNum bbNum--hz" id="hz">0</span> Hz</span>
         <span class="bbTItem" title="Estimator position sigma, not measured GPS accuracy">Est. σ <span class="bbNum bbNum--gps" id="gps-acc">--</span>m</span>
         <span class="bbTItem">Turn rate <span class="bbNum" id="yaw">0</span>°/s</span>
     </div>
@@ -603,7 +603,7 @@ body:not(.analysis-view) .bbGTopRight{display:block}
         <div class="bbCardHead">Configuration</div>
         <div class="bbRow"><span class="bbLbl">WiFi Mode</span><span class="bbVal" id="wifi-mode">--</span></div>
         <div class="bbRow"><span class="bbLbl">SSID</span><span class="bbVal" id="wifi-ssid">--</span></div>
-        <div class="bbRow"><span class="bbLbl">Telemetry Rate</span><span class="bbVal" id="telem-hz">--</span></div>
+        <div class="bbRow"><span class="bbLbl">Telemetry target</span><span class="bbVal" id="telem-hz">--</span></div>
         <div class="bbRow"><span class="bbLbl">GPS Model</span><span class="bbVal" id="gps-model">--</span></div>
     </section>
     <section class="bbDiagCard">
@@ -710,6 +710,7 @@ body:not(.analysis-view) .bbGTopRight{display:block}
                 <div class="bbSectionTitle">Backup &amp; restore</div>
                 <p class="bbCreateTrackHint">Save recordings, tracks, reference laps, and history in one file. Keep a copy outside this browser. Stop recording first; track timing may continue.</p>
                 <label for="backup-scope" style="display:block;margin-top:12px;font-size:13px">Backup contents</label><select id="backup-scope" style="width:100%;padding:10px;background:var(--bg);color:var(--text);border:1px solid var(--divider);border-radius:6px"><option value="all">All saved data</option><option value="recordings">Recordings only</option><option value="tracks">Tracks, references &amp; history only</option></select><div style="display:flex;flex-wrap:wrap;gap:8px;margin:12px 0"><button class="bbSessionBtn" id="backup-download">Download backup</button><button class="bbSessionBtn" id="backup-choose">Choose backup</button><button class="bbSessionBtn" id="backup-restore" disabled>Restore as new copies</button></div>
+                <p id="gps-log-status" role="status" style="font-size:13px;color:var(--muted)">GPS evidence is collected while recording.</p>
                 <input type="file" id="backup-file" accept=".json,application/json" hidden>
                 <p id="backup-status" role="status" style="font-size:13px;line-height:1.5;overflow-wrap:anywhere">Restore adds copies; it never replaces existing data. Backup files contain location history. Maximum file size: 100 MiB.</p>
             </div>
@@ -839,6 +840,7 @@ function openDB(){
 // Recording state. Detach each batch before awaiting IndexedDB; only one writer runs.
 let rec=false,sessionId=null,chunkBuffer=[],chunkIndex=0,lastSaveTime=0,sessionStart=0;
 let recoveredSessionCount=0;
+let gpsCursor=null,gpsRequest=null,gpsLogStatus='GPS evidence is collected while recording.';
 let chunkWrite=null,recordingBusy=false,recordingError='';
 function commitStore(store,value){
     return new Promise((resolve,reject)=>{
@@ -866,7 +868,7 @@ async function startRecording(){
         if(!db)await openDB();
         await saveChunk();
         const started=Date.now(),id=await createRecordingSession(started);
-        sessionId=id;sessionStart=started;chunkIndex=0;lastSaveTime=Date.now();rec=true;recordingError='';lastSaveTime=0;
+        gpsCursor=null;gpsLogStatus='Waiting for GPS timestamp log…';sessionId=id;sessionStart=started;chunkIndex=0;lastSaveTime=Date.now();rec=true;recordingError='';lastSaveTime=0;
     }catch(e){recordingError='Storage error — recording not started';console.error(e)}
     finally{recordingBusy=false;updateRecUI()}
 }
@@ -889,7 +891,9 @@ async function saveChunk(){
 }
 async function stopRecording(){
     if(recordingBusy)return;
-    recordingBusy=true;rec=false;updateRecUI();
+    recordingBusy=true;updateRecUI();
+    await collectGpsLog();
+    rec=false;updateRecUI();
     try{
         await saveChunk();
         if(db&&sessionId)await commitStore('sessions',{sessionId,startTime:sessionStart,status:'complete',chunks:chunkIndex});
@@ -897,7 +901,56 @@ async function stopRecording(){
     finally{recordingBusy=false;updateRecUI()}
 }
 
+// GPS evidence rows share the durable recording chunks and backup flow, but
+// export separately so receiver events are never mistaken for dashboard samples.
+function gpsRows(batch,cursor,receivedAt){
+    const integer=(v)=>Number.isSafeInteger(v)&&v>=0;
+    if(!batch||batch.version!==1||typeof batch.simulated!=='boolean'||!integer(batch.boot_id)||batch.boot_id>0xffffffff||batch.capacity!==64||!integer(batch.latest_seq)||!Array.isArray(batch.events)||batch.events.length>64)throw Error('Invalid GPS log');
+    let previous=0;
+    for(const e of batch.events){
+        if(!e||!integer(e.seq)||e.seq===0||e.seq<=previous||e.seq>batch.latest_seq||!integer(e.host_us)||typeof e.active!=='boolean'||typeof e.accepted!=='boolean')throw Error('Invalid GPS event');
+        for(const k of ['utc_us','date_ddmmyy','fractional_digits'])if(e[k]!==null&&!integer(e[k]))throw Error('Invalid GPS clock');
+        if(e.utc_us!==null&&e.utc_us>=86401000000)throw Error('Invalid UTC');
+        for(const k of ['lat','lon','speed_mps','course_rad'])if(e[k]!==null&&!Number.isFinite(e[k]))throw Error('Invalid GPS measurement');
+        previous=e.seq;
+    }
+    if(batch.events.length&&previous!==batch.latest_seq)throw Error('Incomplete GPS snapshot');
+    let next=cursor&&{...cursor},rows=[];
+    for(const e of batch.events){
+        const same=next&&next.boot===batch.boot_id;
+        if(same&&e.seq<=next.seq)continue;
+        rows.push({t:receivedAt,rowType:1,gpsSynthetic:batch.simulated?1:0,gpsBootId:batch.boot_id,gpsSeq:e.seq,gpsHostUs:e.host_us,gpsUtcUs:e.utc_us,gpsDate:e.date_ddmmyy,gpsFractionDigits:e.fractional_digits,gpsActive:e.active?1:0,gpsAccepted:e.accepted?1:0,lat:e.lat,lon:e.lon,sp:e.speed_mps,gpsCourse:e.course_rad,gpsMissing:same?e.seq-next.seq-1:null,gpsBoundary:same?0:next?2:1});
+        next={boot:batch.boot_id,seq:e.seq};
+    }
+    return{rows,cursor:next};
+}
+async function collectGpsLog(){
+    if(gpsRequest)return gpsRequest;
+    if(!rec)return;
+    const recording=sessionId;
+    gpsRequest=(async()=>{
+        try{
+            const response=await requestDevice('/api/gps-log');
+            if(!response.ok)throw Error('GPS log unavailable');
+            const batch=await response.json();
+            if(!rec||recording!==sessionId)return;
+            const result=gpsRows(batch,gpsCursor,Date.now());
+            if(chunkBuffer.length+result.rows.length>MAX_PENDING_SAMPLES){rec=false;recordingError='Recording stopped: too many unsaved samples. Keep this tab open and export.';return}
+            chunkBuffer.push(...result.rows);gpsCursor=result.cursor;
+            gpsLogStatus=batch.events.length?'GPS timestamps captured with this recording. Export GPS CSV from Saved data.':'GPS log connected; waiting for receiver messages.';
+            if(chunkBuffer.length&&Date.now()-lastSaveTime>=CHUNK_INTERVAL&&!chunkWrite)await saveChunk();
+        }catch(error){gpsLogStatus='GPS timestamp log unavailable. Dashboard recording continues; check connection and firmware.';console.warn(error)}
+        finally{updateRecUI()}
+    })();
+    try{await gpsRequest}finally{gpsRequest=null}
+}
+function gpsSamplesToCSV(samples){
+    const keys=['t','gpsBootId','gpsSeq','gpsHostUs','gpsUtcUs','gpsDate','gpsFractionDigits','gpsActive','gpsAccepted','lat','lon','sp','gpsCourse','gpsMissing','gpsBoundary','gpsSynthetic'];
+    return 'browser_received_ms,boot_id,rmc_seq,host_parse_us,receiver_utc_us_of_day,receiver_date_ddmmyy,utc_fractional_digits,rmc_active,fix_accepted,gps_lat,gps_lon,speed_mps,course_rad,missing_before,boundary,synthetic\n'+samples.filter(r=>r.rowType===1).map(r=>keys.map(k=>Number.isFinite(r[k])?r[k]:'').join(',')).join('\n')+'\n';
+}
+
 function updateRecUI(){
+    $('gps-log-status').textContent=gpsLogStatus;
     const clusterRecording=$('cluster-recording');clusterRecording.textContent=rec?'● REC':'REC OFF';clusterRecording.classList.toggle('recording',rec);
     const dot=$('recDot'),txt=$('recTxt'),btn=$('menu-rec'),dbtn=$('diag-rec'),stat=$('rec-status');
     if(rec){
@@ -918,8 +971,8 @@ function updateRecUI(){
 }
 
 function samplesToCSV(samples){
-    const keys=['t', 'sp', 'ax', 'ay', 'wz', 'mo', 'latg', 'lng', 'lat', 'lon', 'gpsOk', 'ekfX', 'ekfY', 'ekfYaw', 'gpsCourse', 'lon_imu', 'lon_gps', 'gps_wt', 'pitch_c', 'pitch_cf', 'roll_c', 'roll_cf', 'tilt_x', 'tilt_y', 'deviceTimeMs', 'lapTimeMs', 'lapCnt', 'lapFlags', 'lastLapMs', 'bestLapMs', 'gpsAgeMs', 'timingRevision'];
-    return 'time,speed,ax,ay,wz,mode,lat_g,lon_g,gps_lat,gps_lon,gps_valid,ekf_x,ekf_y,ekf_yaw,gps_course,lon_imu,lon_gps,gps_weight,pitch_corr,pitch_conf,roll_corr,roll_conf,tilt_x,tilt_y,device_time_ms,lap_time_ms,lap_count,lap_flags,last_lap_ms,best_lap_ms,gps_age_ms,timing_revision\n'+samples.map(r=>keys.map(k=>Number.isFinite(r[k])?r[k]:'').join(',')).join('\n')+'\n';
+    const keys=['t', 'sp', 'ax', 'ay', 'wz', 'mo', 'latg', 'lng', 'lat', 'lon', 'gpsOk', 'ekfX', 'ekfY', 'ekfYaw', 'gpsCourse', 'lon_imu', 'lon_gps', 'gps_wt', 'pitch_c', 'pitch_cf', 'roll_c', 'roll_cf', 'tilt_x', 'tilt_y', 'deviceTimeMs', 'lapTimeMs', 'lapCnt', 'lapFlags', 'lastLapMs', 'bestLapMs', 'gpsAgeMs', 'timingRevision', 'gpsBootId', 'gpsSeq', 'gpsHostUs', 'gpsUtcUs', 'gpsDate', 'gpsFractionDigits'];
+    return 'time,speed,ax,ay,wz,mode,lat_g,lon_g,gps_lat,gps_lon,gps_valid,ekf_x,ekf_y,ekf_yaw,gps_course,lon_imu,lon_gps,gps_weight,pitch_corr,pitch_conf,roll_corr,roll_conf,tilt_x,tilt_y,device_time_ms,lap_time_ms,lap_count,lap_flags,last_lap_ms,best_lap_ms,gps_age_ms,timing_revision,gps_boot_id,gps_rmc_seq,gps_host_parse_us,gps_receiver_utc_us_of_day,gps_receiver_date_ddmmyy,gps_utc_fractional_digits\n'+samples.filter(r=>r.rowType!==1).map(r=>keys.map(k=>Number.isFinite(r[k])?r[k]:'').join(',')).join('\n')+'\n';
 }
 
 async function exportCSV(){
@@ -933,8 +986,9 @@ async function exportCSV(){
 function idbPromise(r){return new Promise((res,rej)=>{r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
 
 function recordingHealth(chunks,state={}){
-    let {samples=0,gpsValid=0,first=Infinity,last=-Infinity,previous=null,maxGapMs=0,gaps=0,clockReversals=0}=state;
+    let {samples=0,gpsValid=0,first=Infinity,last=-Infinity,previous=null,maxGapMs=0,gaps=0,clockReversals=0,gpsEvents=0,gpsMissing=0,gpsRestarts=0}=state;
     for(const chunk of [...chunks].sort((a,b)=>a.chunkIndex-b.chunkIndex))for(const row of chunk.data||[]){
+        if(row.rowType===1){gpsEvents++;gpsMissing+=Number.isFinite(row.gpsMissing)?row.gpsMissing:0;if(row.gpsBoundary===2)gpsRestarts++;continue;}
         samples++;if(row.gpsOk===1)gpsValid++;
         if(Number.isFinite(row.t)){
             first=Math.min(first,row.t);last=Math.max(last,row.t);
@@ -942,7 +996,7 @@ function recordingHealth(chunks,state={}){
             previous=row.t;
         }
     }
-    return{samples,gpsValid,first,last,previous,gpsPercent:samples?Math.round(100*gpsValid/samples):null,durationMs:Number.isFinite(first)&&Number.isFinite(last)?Math.max(0,last-first):0,maxGapMs,gaps,clockReversals};
+    return{samples,gpsValid,first,last,previous,gpsPercent:samples?Math.round(100*gpsValid/samples):null,durationMs:Number.isFinite(first)&&Number.isFinite(last)?Math.max(0,last-first):0,maxGapMs,gaps,clockReversals,gpsEvents,gpsMissing,gpsRestarts};
 }
 function lapConsistency(laps){
     const times=laps.map(l=>l.lapTimeMs).filter(t=>Number.isFinite(t)&&t>0).sort((a,b)=>a-b),n=times.length;
@@ -988,7 +1042,7 @@ async function deleteSession(targetId){
     });
 }
 
-async function exportSessionById(targetId){
+async function exportSessionById(targetId,gpsOnly=false){
     if(!db)await openDB();
     if(chunkWrite){try{await chunkWrite}catch(e){console.warn('Exporting pending samples after storage failure',e)}}
     const pending=targetId===sessionId?chunkBuffer.slice():[];
@@ -1000,9 +1054,11 @@ async function exportSessionById(targetId){
     chunks.sort((a,b)=>a.chunkIndex-b.chunkIndex);
     if(!chunks.length&&!pending.length)throw new Error('No data in recording');
     let allData=[];chunks.forEach(c=>allData=allData.concat(c.data||[]));allData=allData.concat(pending);
-    const csv=samplesToCSV(allData);
+    const exported=allData.filter(r=>gpsOnly?r.rowType===1:r.rowType!==1);
+    if(!exported.length)throw Error(gpsOnly?'No GPS timestamp evidence in this recording. Use updated firmware and record while connected.':'No dashboard samples in recording');
+    const csv=gpsOnly?gpsSamplesToCSV(exported):samplesToCSV(exported);
     const b=new Blob([csv],{type:'text/csv'}),u=URL.createObjectURL(b),a=document.createElement('a');
-    a.href=u;a.download='blackbox_'+new Date(targetId).toISOString().slice(0,19).replace(/[T:]/g,'-')+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(u),30000);
+    a.href=u;a.download=(gpsOnly?'blackbox_gps_':'blackbox_')+new Date(targetId).toISOString().slice(0,19).replace(/[T:]/g,'-')+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(u),30000);
     return{session,sampleCount:allData.length};
 }
 
@@ -2283,7 +2339,7 @@ function process(buf,timing=null){
 
     // Recording
     if(rec){
-        chunkBuffer.push({t:now,deviceTimeMs:d.getUint32(3,true),lapTimeMs,lapCnt,lapFlags,lastLapMs:timing?.last_lap_ms,bestLapMs:timing?.best_lap_ms,gpsAgeMs:timing?.gps_age_ms,timingRevision:timing?.revision,sp,ax,ay,wz,mo,latg,lng,lat,lon,gpsOk,ekfX,ekfY,ekfYaw,gpsCourse,lon_imu:fusion.lon_imu,lon_gps:fusion.lon_gps,gps_wt:fusion.gps_wt,pitch_c:fusion.pitch_c,pitch_cf:fusion.pitch_cf,roll_c:fusion.roll_c,roll_cf:fusion.roll_cf,tilt_x:fusion.tilt_x,tilt_y:fusion.tilt_y});
+        chunkBuffer.push({t:now,deviceTimeMs:d.getUint32(3,true),lapTimeMs,lapCnt,lapFlags,lastLapMs:timing?.last_lap_ms,bestLapMs:timing?.best_lap_ms,gpsAgeMs:timing?.gps_age_ms,timingRevision:timing?.revision,gpsBootId:timing?.gps_boot_id,gpsSeq:timing?.gps_event?.seq,gpsHostUs:timing?.gps_event?.host_us,gpsUtcUs:timing?.gps_event?.utc_us,gpsDate:timing?.gps_event?.date_ddmmyy,gpsFractionDigits:timing?.gps_event?.fractional_digits,sp,ax,ay,wz,mo,latg,lng,lat,lon,gpsOk,ekfX,ekfY,ekfYaw,gpsCourse,lon_imu:fusion.lon_imu,lon_gps:fusion.lon_gps,gps_wt:fusion.gps_wt,pitch_c:fusion.pitch_c,pitch_cf:fusion.pitch_cf,roll_c:fusion.roll_c,roll_cf:fusion.roll_cf,tilt_x:fusion.tilt_x,tilt_y:fusion.tilt_y});
         if(chunkBuffer.length>=MAX_PENDING_SAMPLES){rec=false;recordingError='Recording stopped: too many unsaved samples. Keep this tab open and export.';updateRecUI()}
         else if(now-lastSaveTime>=CHUNK_INTERVAL&&!chunkWrite)saveChunk().catch(console.error);
     }
@@ -2304,6 +2360,7 @@ function markTelemetryUnavailable(label){
     $('connection-notice').textContent=label==='Invalid data'?'Invalid telemetry rejected. Values below are from the last accepted sample.':label==='Offline'?'Connection lost. Showing last received values; reconnect to Blackbox Wi-Fi.':'Telemetry paused. Values below are not live.';
 }
 async function poll(){
+    const started=performance.now();
     try{
         const r=await requestDevice('/api/telemetry');if(!r.ok)throw new Error('Telemetry unavailable');
         const j=await r.json();
@@ -2321,7 +2378,7 @@ async function poll(){
             $('liveDot').classList.add('on');$('stxt').textContent='LIVE';
         }
         if(!lastTelemetryAt||Date.now()-lastTelemetryAt>1500)markTelemetryUnavailable('No fresh data');
-        setTimeout(poll,33);
+        setTimeout(poll,Math.max(0,33-(performance.now()-started)));
     }catch(e){markTelemetryUnavailable('Offline');setTimeout(poll,500)}
 }
 
@@ -2614,11 +2671,12 @@ async function renderSessionList(){
                 '<div class=\"bbSessionInfo\">'+
                     '<div class=\"bbSessionDate\">'+formatSessionDate(s.startTime)+'</div>'+
                     '<div class=\"bbSessionMeta\"><span>'+s.chunkCount+' chunk'+(s.chunkCount!==1?'s':'')+'</span><span>'+formatBytes(s.estimatedBytes)+'</span><span>'+formatSessionDuration(s.durationMs)+'</span></div>'+
-                    '<div class=\"bbSessionHealth\">'+s.sampleCount+' samples · Received samples with GPS fix: '+(s.health.gpsPercent===null?'—':s.health.gpsPercent+'%')+'<br>Largest sample gap: '+(s.health.maxGapMs/1000).toFixed(2)+'s · '+s.health.gaps+' over 1.5s'+(s.health.clockReversals?' · Clock changed':'')+'</div>'+
+                    '<div class=\"bbSessionHealth\">'+s.sampleCount+' samples · Received samples with GPS fix: '+(s.health.gpsPercent===null?'—':s.health.gpsPercent+'%')+'<br>Largest sample gap: '+(s.health.maxGapMs/1000).toFixed(2)+'s · '+s.health.gaps+' over 1.5s'+(s.health.clockReversals?' · Clock changed':'')+'<br>'+(s.health.gpsEvents?'GPS evidence: '+s.health.gpsEvents+' events · '+s.health.gpsMissing+' missing · '+s.health.gpsRestarts+' device restarts':'GPS evidence unavailable in this recording')+'</div>'+
                     '<div class=\"bbSessionStatus '+statusCls+'\">'+statusLbl+'</div>'+
                 '</div>'+
                 '<div class=\"bbSessionActions\">'+
-                    '<button class=\"bbSessionBtn\" data-action=\"export\">Export</button>'+
+                    '<button class=\"bbSessionBtn\" data-action=\"export\">Session CSV</button>'+
+                    '<button class=\"bbSessionBtn\" data-action=\"gps-export\">GPS CSV</button>'+
                     '<button class=\"bbSessionBtn danger\" data-action=\"delete\"'+((s.sessionId===sessionId&&(rec||chunkWrite||chunkBuffer.length))?' disabled':'')+'>Delete</button>'+
                 '</div>'+
             '</div>';
@@ -2657,9 +2715,10 @@ async function renderTrackDataList(){
 
 async function handleSessionAction(btn){
     const action=btn.dataset.action,item=btn.closest('.bbSessionItem'),targetId=parseInt(item.dataset.sessionId,10);
-    if(action==='export'){
-        try{btn.textContent='Exporting...';await exportSessionById(targetId);btn.textContent='Export'}
-        catch(e){alert('Export failed: '+e.message);btn.textContent='Export'}
+    if(action==='export'||action==='gps-export'){
+        const label=btn.textContent;
+        try{btn.textContent='Exporting…';await exportSessionById(targetId,action==='gps-export')}
+        catch(e){alert('Export failed: '+e.message)}finally{btn.textContent=label}
     }else if(action==='delete'){
         const dateStr=item.querySelector('.bbSessionDate').textContent;
         if(!confirm('Delete recording from '+dateStr+'?\\n\\nThis cannot be undone.'))return;
@@ -2792,8 +2851,10 @@ $('quick-record').onclick=()=>$('menu-rec').click();
 $('quick-data').onclick=openDataModal;
 
 // Init
+let lastRateUpdateAt=performance.now();
 setInterval(()=>{
-    $('hz').textContent=cnt;cnt=0;
+    const rateNow=performance.now(),elapsed=rateNow-lastRateUpdateAt;
+    $('hz').textContent=elapsed>0?(cnt*1000/elapsed).toFixed(1):'0';cnt=0;lastRateUpdateAt=rateNow;
     $('session-time').textContent=fmtTime(Date.now()-displaySessionStart);
     if(lastGpsState){$('gpsDot').classList.add('on');$('gpsHz').textContent='GPS '+Math.round(fusion.gps_rate)}
     else{$('gpsDot').classList.remove('on');$('gpsHz').textContent='GPS --'}
@@ -2802,6 +2863,7 @@ setInterval(()=>{
 },1000);
 
 setInterval(updateDiag,1000);
+setInterval(()=>{if(rec)collectGpsLog()},1000);
 
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&chunkBuffer.length)saveChunk().catch(console.error)});
 window.addEventListener('pagehide',()=>{if(chunkBuffer.length)saveChunk().catch(console.error)});

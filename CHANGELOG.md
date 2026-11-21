@@ -14,6 +14,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Obsolete documentation files (RELEASE.md, IMPLEMENTATION_SUMMARY.md, release-notes.md)
 
+## [0.0.4-rc.7] - 2026-11-20
+
+Release candidate for weekend data collection; hardware timing accuracy remains unmeasured. Includes rc.6.
+
+### Added
+- Bounded, per-RMC GPS timestamp evidence: receiver fractional UTC/date, device parse time, per-boot sequence, invalid fixes and explicit capture gaps.
+- Separate GPS CSV in Saved data, with deduplication, restart boundaries, backup/restore preservation and a final fetch before stopping. Ordinary Session CSV also carries the latest GPS timestamp snapshot.
+- Offline timestamp analyzer and collection guide; synthetic demo GPS logs are explicitly labelled.
+
+### Fixed
+- Dashboard polling subtracts request/processing time from its 33 ms interval instead of adding another 33 ms; the measured UI receive rate is labelled separately from the firmware telemetry target.
+- RMC fractional time is retained without floating-point rounding; malformed UTC fields are rejected and repeated newlines cannot parse a sentence twice.
+- Website dashboard showcase uses versioned, correctly proportioned captures with the landscape cluster first and full-size links.
+
+### Limits
+- Host timestamps mark completed sentence parsing, not PPS or an antenna measurement instant. The RAM window holds 64 events; longer phone disconnects lose events and are reported. No change to lap-crossing timestamps or physical accuracy claims.
+
 ## [0.0.4-rc.6] - 2026-11-20
 
 Release candidate; physical mount, phone and USB acceptance remains required. Includes rc.5.

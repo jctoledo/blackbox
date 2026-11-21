@@ -248,7 +248,7 @@ impl SensorManager {
     /// Poll GPS and return true if new fix available
     ///
     /// Reads all available bytes from UART buffer to prevent overflow.
-    pub fn poll_gps(&mut self) -> bool {
+    pub fn poll_gps(&mut self, server: Option<&TelemetryServerState>) -> bool {
         let mut buf = [0u8; 64];
         let mut new_fix = false;
 
@@ -257,8 +257,16 @@ impl SensorManager {
                 break;
             }
             for &byte in buf.iter().take(n) {
+                let before = self.gps_parser.rmc_timing().sequence;
                 if self.gps_parser.feed_byte(byte) {
                     new_fix = true;
+                    let timing = self.gps_parser.rmc_timing();
+                    if timing.sequence != before {
+                        let host_us = unsafe { esp_idf_svc::sys::esp_timer_get_time() as u64 };
+                        if let Some(server) = server {
+                            server.record_gps_event(timing, self.gps_parser.last_fix(), host_us);
+                        }
+                    }
                 }
             }
         }
@@ -495,6 +503,8 @@ impl TelemetryPublisher {
                 lon: fix.lon,
                 gps_valid: sensors.gps_is_fresh(now_ms),
                 gps_age_ms: sensors.gps_age_ms(now_ms),
+                gps_boot_id: None,
+                gps_event: None,
             };
             http_state.update_telemetry(bytes, status);
             sent = true;
