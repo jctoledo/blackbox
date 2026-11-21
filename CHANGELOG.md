@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Rolling interval estimates preserve synthetic provenance from eligibility lead-in and both start endpoints, and reject direction changes across the interpolated start (#101). Real-drive accuracy validation remains pending.
+- Compact landscape cards respond to space left by warning rows and expanded Controls, keeping timing state and instruments separate from their footers.
 - Preserve the completed point-to-point tracker until its reference is saved when firmware returns directly to the armed state.
 - Keep newly armed laps eligible for reference capture after a late old-track response, while rejecting interrupted active laps; clear maneuver state when receipt freshness expires.
 - Hide maneuver labels without fresh GPS/IMU force evidence while retaining valid GPS speed and timing. Label raw body-Z gyro data as Sensor Z rate.

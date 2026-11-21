@@ -38,6 +38,13 @@ test('invalid IMU evidence hides maneuver while fresh GPS speed and timing still
  vm.runInContext('lastTelemetryAt=0',c);now=301;c.checkTelemetryFreshness();assert.equal(c.$('maneuver').textContent,'—');assert.equal(c.$('maneuver').style.color,'gray');
  c.$('maneuver').textContent='BRAKING + CORNERING';c.$('maneuver').style.color='red';now=1501;c.checkTelemetryFreshness();assert.equal(c.$('maneuver').textContent,'—');assert.equal(c.$('maneuver').style.color,'gray');
  c.process(bytes.buffer,{gps_valid:true,gps_age_ms:0,imu_age_ms:0,lat:37,lon:-122});assert.equal(c.$('maneuver').textContent,'BRAKING + CORNERING');assert.equal(c.$('maneuver').style.color,'red');assert.equal(timingUpdates,5);
+ // Packet byte 51 is km/h: 2.8–3.3 m/s physical speed is encoded as 10.08–11.88 km/h.
+ vm.runInContext(slice('class EffortPeaks{', 'const effortPeaks=')+';this.Peaks=EffortPeaks;',c);
+ for(const [initial,change,qualifies] of [[2.8,.5,true],[2.4,.2,false]]){
+  c.effortPeaks=new c.Peaks();d.setFloat32(7,-1,true);
+  for(let t=0;t<=500;t+=50){d.setUint32(3,t,true);d.setFloat32(51,(initial+change*t/500)*3.6,true);d.setUint16(80,bytes.slice(0,80).reduce((sum,b)=>(sum+b)&65535,0),true);c.process(bytes.buffer,{gps_valid:true,gps_age_ms:0,imu_age_ms:0,lat:37,lon:-122})}
+  if(qualifies)assert.ok(Math.abs(c.effortPeaks.accel-1/9.81)<1e-8);else assert.equal(c.effortPeaks.accel,null);
+ }
 });
 
 function timingFixture(){
