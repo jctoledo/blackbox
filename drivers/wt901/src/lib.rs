@@ -322,6 +322,53 @@ impl ImuCalibrator {
         }
     }
 
+    /// Collect a stationary residual after projecting gravity from fresh AHRS attitude.
+    /// This is a single-pose bias estimate, not an independent attitude calibration.
+    /// A rejected sample resets collection so interrupted motion cannot accumulate.
+    pub fn add_stationary_sample(
+        &mut self,
+        data: &ImuData,
+        attitude_age_us: u64,
+        gyro_age_us: u64,
+    ) -> bool {
+        let values = [
+            data.ax, data.ay, data.az, data.wx, data.wy, data.wz, data.roll, data.pitch,
+        ];
+        let norm = (data.ax * data.ax + data.ay * data.ay + data.az * data.az).sqrt();
+        let gyro = (data.wx * data.wx + data.wy * data.wy + data.wz * data.wz).sqrt();
+        if !values.iter().all(|v| v.is_finite())
+            || attitude_age_us > 200_000
+            || gyro_age_us > 200_000
+            || (norm - G).abs() > 1.0
+            || gyro > 0.03
+            || data.roll.abs() > 20.0
+            || data.pitch.abs() > 20.0
+        {
+            self.reset();
+            return false;
+        }
+        let (sr, cr) = data.roll.to_radians().sin_cos();
+        let (sp, cp) = data.pitch.to_radians().sin_cos();
+        let residual = [
+            data.ax + sp * G,
+            data.ay - sr * cp * G,
+            data.az - cr * cp * G,
+        ];
+        if residual.iter().any(|v| v.abs() > 0.6) {
+            self.reset();
+            return false;
+        }
+        // add_sample/compute_bias retain their legacy level-frame contract.
+        self.add_sample(residual[0], residual[1], residual[2] + G);
+        true
+    }
+
+    pub fn reset(&mut self) {
+        self.samples_ax.clear();
+        self.samples_ay.clear();
+        self.samples_az.clear();
+    }
+
     /// Check if calibration is complete
     pub fn is_complete(&self) -> bool {
         self.samples_ax.len() >= self.target_samples
@@ -337,19 +384,33 @@ impl ImuCalibrator {
     /// Returns `None` if calibration is not complete.
     /// Assumes the sensor is stationary and level (gravity on Z-axis).
     pub fn compute_bias(&self) -> Option<ImuBias> {
-        if !self.is_complete() {
+        if !self.is_complete() || self.target_samples == 0 {
             return None;
         }
 
         let n = self.samples_ax.len() as f32;
-        let sum_ax: f32 = self.samples_ax.iter().sum();
-        let sum_ay: f32 = self.samples_ay.iter().sum();
-        let sum_az: f32 = self.samples_az.iter().sum();
+        let mean = |samples: &[f32]| {
+            (samples.iter().map(|v| f64::from(*v)).sum::<f64>() / f64::from(n)) as f32
+        };
+        let mean_ax = mean(&self.samples_ax);
+        let mean_ay = mean(&self.samples_ay);
+        let mean_az = mean(&self.samples_az);
 
+        // Reject vibration/movement rather than averaging it into a calibration.
+        for (samples, mean) in [
+            (&self.samples_ax, mean_ax),
+            (&self.samples_ay, mean_ay),
+            (&self.samples_az, mean_az),
+        ] {
+            let variance = samples.iter().map(|v| (v - mean).powi(2)).sum::<f32>() / n;
+            if !variance.is_finite() || variance > 0.15 * 0.15 {
+                return None;
+            }
+        }
         Some(ImuBias {
-            ax: sum_ax / n,
-            ay: sum_ay / n,
-            az: sum_az / n - G, // Remove gravity from Z axis
+            ax: mean_ax,
+            ay: mean_ay,
+            az: mean_az - G, // Remove gravity from Z axis
         })
     }
 }
@@ -401,5 +462,67 @@ mod tests {
         assert!((bias.ax - 0.1).abs() < 0.01);
         assert!((bias.ay - 0.2).abs() < 0.01);
         assert!((bias.az - 0.3).abs() < 0.01);
+    }
+    fn stationary(roll: f32, pitch: f32) -> ImuData {
+        let (sr, cr) = roll.to_radians().sin_cos();
+        let (sp, cp) = pitch.to_radians().sin_cos();
+        ImuData {
+            ax: -sp * G + 0.1,
+            ay: sr * cp * G - 0.12,
+            az: cr * cp * G + 0.08,
+            roll,
+            pitch,
+            ..ImuData::default()
+        }
+    }
+
+    #[test]
+    fn incline_does_not_become_bias() {
+        for (roll, pitch) in [(0.0, 0.0), (0.0, 3.0), (-4.0, 7.0), (8.0, -6.0)] {
+            let mut c = ImuCalibrator::new(150);
+            for _ in 0..150 {
+                assert!(c.add_stationary_sample(&stationary(roll, pitch), 30_000, 20_000));
+            }
+            let b = c.compute_bias().unwrap();
+            assert!((b.ax - 0.1).abs() < 1e-5);
+            assert!((b.ay + 0.12).abs() < 1e-5);
+            assert!((b.az - 0.08).abs() < 1e-5);
+        }
+    }
+
+    #[test]
+    fn motion_staleness_and_unknown_attitude_reset_collection() {
+        let clean = stationary(0.0, 3.0);
+        for bad in [
+            ImuData { wx: 0.1, ..clean },
+            ImuData {
+                ax: f32::NAN,
+                ..clean
+            },
+            stationary(30.0, 0.0),
+            ImuData { az: 13.0, ..clean },
+        ] {
+            let mut c = ImuCalibrator::new(3);
+            assert!(c.add_stationary_sample(&clean, 0, 0));
+            assert!(!c.add_stationary_sample(&bad, 0, 0));
+            assert_eq!(c.progress(), 0.0);
+        }
+        for ages in [(200_001, 0), (0, 200_001), (u64::MAX, u64::MAX)] {
+            let mut c = ImuCalibrator::new(3);
+            c.add_stationary_sample(&clean, 0, 0);
+            assert!(!c.add_stationary_sample(&clean, ages.0, ages.1));
+            assert_eq!(c.progress(), 0.0);
+        }
+    }
+
+    #[test]
+    fn vibration_does_not_produce_a_successful_bias() {
+        let mut c = ImuCalibrator::new(100);
+        for i in 0..100 {
+            let mut d = stationary(0.0, 0.0);
+            d.ax = if i % 2 == 0 { 0.3 } else { -0.3 };
+            assert!(c.add_stationary_sample(&d, 0, 0));
+        }
+        assert!(c.compute_bias().is_none());
     }
 }

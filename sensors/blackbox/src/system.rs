@@ -116,7 +116,7 @@ impl SensorManager {
         self.get_velocity(ekf).2
     }
 
-    /// Calibrate IMU (must be stationary)
+    /// Calibrate stationary bias using fresh AHRS gravity projection.
     pub fn calibrate_imu(
         &mut self,
         led: &mut RgbLed,
@@ -141,6 +141,7 @@ impl SensorManager {
         let mut calibrator = ImuCalibrator::new(CALIB_SAMPLES);
         let mut buf = [0u8; 1];
         let mut last_progress = 0;
+        let mut last_sample_us = 0u64;
 
         // Keep LED on during calibration (solid yellow)
         led.yellow().ok();
@@ -154,9 +155,33 @@ impl SensorManager {
             if self.imu_uart.read(&mut buf, 0).unwrap_or(0) > 0 {
                 let timestamp_us = unsafe { esp_idf_svc::sys::esp_timer_get_time() as u64 };
                 if let Some(packet_type) = self.imu_parser.feed_byte(buf[0], timestamp_us) {
+                    if packet_type == PacketType::Gyro {
+                        self.last_gyro_us = timestamp_us;
+                    }
+                    if packet_type == PacketType::Angle {
+                        self.last_angle_us = timestamp_us;
+                    }
                     if packet_type == PacketType::Accel {
+                        // Bound collection to 100 Hz: at least ~1.5 s of stillness.
+                        if timestamp_us.saturating_sub(last_sample_us) < 10_000 {
+                            continue;
+                        }
+                        last_sample_us = timestamp_us;
                         let data = self.imu_parser.data();
-                        calibrator.add_sample(data.ax, data.ay, data.az);
+                        let angle_age = if self.last_angle_us == 0 {
+                            u64::MAX
+                        } else {
+                            timestamp_us.saturating_sub(self.last_angle_us)
+                        };
+                        let gyro_age = if self.last_gyro_us == 0 {
+                            u64::MAX
+                        } else {
+                            timestamp_us.saturating_sub(self.last_gyro_us)
+                        };
+                        if !calibrator.add_stationary_sample(data, angle_age, gyro_age) {
+                            last_progress = 0;
+                            continue;
+                        }
 
                         let progress = (calibrator.progress() * 100.0) as u32;
                         if progress > last_progress && progress.is_multiple_of(10) {
