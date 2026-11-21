@@ -127,3 +127,13 @@ Keep failures and untested cases visible. Promote a candidate to stable only whe
 - [ ] In a disposable browser profile, simulate quota failure. Recording must stop visibly, pending samples must remain exportable, and no success should be shown before transaction completion.
 - [ ] Suspend/lock the phone and restore it; inspect recorded gaps and do not assume background capture. Confirm the same browser/origin is used when recovering.
 - [ ] Compare exported row counts/timestamps and GPS-valid fractions to the saved-session health summary. Bad/missing data is not a zero measurement.
+
+
+## Backup and restore — browser acceptance
+
+- [ ] Stop session/route recording. Download a full backup and verify the file exists outside browser storage.
+- [ ] In a separate browser profile, choose the file, review counts, and restore copies. Check recording row counts/values, track geometry, reference delta, and lap history.
+- [ ] Reload that profile and export a restored recording. Keep the original backup until content is verified.
+- [ ] Restore into a profile containing disposable existing data; confirm the existing data remains and restored items have separate IDs.
+- [ ] In a disposable profile, exercise transaction failure. Check partial-result messaging and retry only the remaining group while the tab stays open.
+- [ ] Keep location-containing backups private. Do not clear the only existing copy to test recovery.

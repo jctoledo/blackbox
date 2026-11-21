@@ -197,13 +197,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
 .bbActionBtn:disabled{opacity:0.4;cursor:not-allowed}
 .bbTrackList{border-radius:12px;overflow:hidden;background:var(--bg)}
 .bbTrackEmpty{padding:20px;text-align:center;color:var(--text-tertiary);font-size:13px}
-.bbTrackItem{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--divider)}
+.bbTrackItem{display:flex;flex-direction:column;align-items:stretch;gap:12px;padding:16px;border-bottom:1px solid var(--divider)}
 .bbTrackItem:last-child{border-bottom:none}
 .bbTrackInfo{flex:1;min-width:0}
-.bbTrackName{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bbTrackName{font-size:17px;font-weight:600;line-height:1.4;white-space:normal;overflow-wrap:anywhere}
 .bbTrackMeta{font-size:11px;color:var(--text-tertiary);margin-top:2px}
 .bbTrackMeta span{margin-right:10px}
-.bbTrackActions{display:flex;gap:8px;margin-left:10px}
+.bbTrackActions{display:flex;flex-wrap:wrap;gap:8px;margin:0}.bbTrackActions .bbTrackBtn.primary{flex:1}
 .bbTrackBtn{background:var(--surface);border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer;font-family:inherit}
 .bbTrackBtn:active{opacity:0.7}
 .bbTrackBtn.primary{background:var(--ok);color:#fff}
@@ -229,7 +229,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
 .bbHistoryClearBtn:active{opacity:0.7}
 .bbActiveTrack{display:flex;align-items:center;gap:12px;background:rgba(52,199,89,0.1);border:1px solid rgba(52,199,89,0.2);border-radius:12px;padding:12px 14px;margin-bottom:16px}
 .bbActiveTrackInfo{flex:1;min-width:0}
-.bbActiveTrackName{font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bbActiveTrackName{font-size:15px;font-weight:600;line-height:1.4;white-space:normal;overflow-wrap:anywhere}
 .bbActiveTrackMeta{font-size:12px;color:var(--text-secondary);margin-top:2px}
 .bbActiveTrackClear{width:28px;height:28px;border-radius:50%;border:none;background:rgba(128,128,128,0.12);color:var(--text-tertiary);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .bbStorageOverview{background:var(--bg);border-radius:12px;padding:16px;margin-bottom:16px}
@@ -242,11 +242,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
 .bbStorageItemValue{font-size:14px;font-weight:600;margin-top:2px}
 .bbSectionCount{font-size:12px;font-weight:normal;color:var(--text-tertiary)}
 .bbTrackDataList{border-radius:12px;overflow:hidden;background:var(--bg);max-height:250px;overflow-y:auto}
-.bbTrackDataItem{padding:14px 16px;border-bottom:1px solid var(--divider);display:flex;justify-content:space-between;align-items:center;gap:12px}
+.bbTrackDataItem{padding:16px;border-bottom:1px solid var(--divider);display:flex;flex-direction:column;align-items:stretch;gap:12px}
 .bbTrackDataItem:last-child{border-bottom:none}
 .bbTrackDataInfo{flex:1;min-width:0}
-.bbTrackDataName{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.bbTrackDataMeta{font-size:11px;color:var(--text-tertiary);margin-top:3px;display:flex;gap:8px}
+.bbTrackDataName{font-size:17px;font-weight:600;line-height:1.4;white-space:normal;overflow-wrap:anywhere}
+.bbTrackDataMeta{font-size:13px;color:var(--text-secondary);margin-top:6px;display:flex;flex-wrap:wrap;gap:4px 12px}
 .bbTrackDataRef{margin-top:6px;font-size:12px}
 .bbTrackDataRef.has-ref{color:var(--ok);font-weight:500}
 .bbTrackDataRef.no-ref{color:var(--text-tertiary);font-style:italic}
@@ -646,6 +646,13 @@ body:not(.analysis-view) .bbGTopRight{display:block}
             <button class="bbModalClose" id="data-modal-close" aria-label="Close saved data">&times;</button>
         </div>
         <div class="bbModalBody">
+            <div class="bbModalSection">
+                <div class="bbSectionTitle">Backup &amp; restore</div>
+                <p class="bbCreateTrackHint">Save recordings, tracks, reference laps, and history in one file. Keep a copy outside this browser. Stop recording first; track timing may continue.</p>
+                <label for="backup-scope" style="display:block;margin-top:12px;font-size:13px">Backup contents</label><select id="backup-scope" style="width:100%;padding:10px;background:var(--bg);color:var(--text);border:1px solid var(--divider);border-radius:6px"><option value="all">All saved data</option><option value="recordings">Recordings only</option><option value="tracks">Tracks, references &amp; history only</option></select><div style="display:flex;flex-wrap:wrap;gap:8px;margin:12px 0"><button class="bbSessionBtn" id="backup-download">Download backup</button><button class="bbSessionBtn" id="backup-choose">Choose backup</button><button class="bbSessionBtn" id="backup-restore" disabled>Restore as new copies</button></div>
+                <input type="file" id="backup-file" accept=".json,application/json" hidden>
+                <p id="backup-status" role="status" style="font-size:13px;line-height:1.5;overflow-wrap:anywhere">Restore adds copies; it never replaces existing data. Backup files contain location history. Maximum file size: 100 MiB.</p>
+            </div>
             <div class="bbStorageOverview">
                 <div class="bbStorageTotal"><div class="bbStorageLabel">Estimated data size</div><div class="bbStorageValue" id="data-total-size">—</div></div>
                 <div class="bbStorageBreakdown"><div class="bbStorageItem"><span class="bbStorageItemLabel">Recordings</span><span class="bbStorageItemValue" id="data-rec-size">—</span></div><div class="bbStorageItem"><span class="bbStorageItemLabel">Tracks</span><span class="bbStorageItemValue" id="data-track-size">—</span></div></div>
@@ -781,15 +788,25 @@ function commitStore(store,value){
         tx.objectStore(store).put(value);
     });
 }
+function createRecordingSession(startTime){
+    return new Promise((resolve,reject)=>{
+        const tx=db.transaction('sessions','readwrite'),store=tx.objectStore('sessions');let id;
+        tx.oncomplete=()=>resolve(id);tx.onerror=tx.onabort=()=>reject(tx.error||new Error('Could not create recording'));
+        const request=store.openKeyCursor(null,'prev');request.onsuccess=()=>{
+            id=Math.max(startTime,Number(request.result?.key||0)+1);
+            if(!Number.isSafeInteger(id)){tx.abort();return}
+            store.add({sessionId:id,startTime,status:'active'});
+        };
+    });
+}
 async function startRecording(){
     if(recordingBusy||rec)return;
     recordingBusy=true;
     try{
         if(!db)await openDB();
         await saveChunk();
-        const id=Math.max(Date.now(),(sessionId||0)+1);
-        await commitStore('sessions',{sessionId:id,startTime:id,status:'active'});
-        sessionId=id;sessionStart=id;chunkIndex=0;lastSaveTime=Date.now();rec=true;recordingError='';lastSaveTime=0;
+        const started=Date.now(),id=await createRecordingSession(started);
+        sessionId=id;sessionStart=started;chunkIndex=0;lastSaveTime=Date.now();rec=true;recordingError='';lastSaveTime=0;
     }catch(e){recordingError='Storage error — recording not started';console.error(e)}
     finally{recordingBusy=false;updateRecUI()}
 }
@@ -2274,6 +2291,167 @@ $('btn-clear-track').onclick=clearActiveTrack;
 $('btn-export-all').onclick=exportAllTracks;
 $('menu-clear').onclick=()=>{$('menu-overlay').classList.remove('open');resetState()};
 
+// Versioned backup / restore. Existing keys are never overwritten.
+const BACKUP_FORMAT='blackbox-backup',BACKUP_VERSION=1,BACKUP_MAX_BYTES=100*1024*1024;
+let backupBusy=false,backupPreview=null,restorePlan=null;
+function backupCheck(condition,message){if(!condition)throw new Error('Invalid backup: '+message)}
+const BACKUP_CRC_TABLE=Uint32Array.from({length:256},(_,n)=>{for(let bit=0;bit<8;bit++)n=(n>>>1)^((n&1)?0xedb88320:0);return n>>>0});
+function backupChecksum(data){
+    // CRC detects accidental file damage; it is not an authenticity signature.
+    const text=JSON.stringify(data);backupCheck(typeof text==='string','missing data');let crc=0xffffffff;
+    for(let i=0;i<text.length;i++){const code=text.charCodeAt(i);crc=(crc>>>8)^BACKUP_CRC_TABLE[(crc^(code&255))&255];crc=(crc>>>8)^BACKUP_CRC_TABLE[(crc^(code>>>8))&255]}
+    return 'crc32-utf16le:'+((crc^0xffffffff)>>>0).toString(16).padStart(8,'0');
+}
+function validateBackup(value){
+    backupCheck(value&&value.format===BACKUP_FORMAT&&value.version===BACKUP_VERSION,'unsupported format or version');
+    const data=value.data;
+    backupCheck(typeof value.checksum==='string'&&value.checksum===backupChecksum(data),'checksum mismatch; file may be damaged');
+    backupCheck(data&&['sessions','chunks','tracks','references','history'].every(k=>Array.isArray(data[k])),'missing data collections');
+    const finite=n=>typeof n==='number'&&Number.isFinite(n),integer=n=>Number.isSafeInteger(n)&&n>=0;
+    const unique=(rows,key)=>{const seen=new Set();for(const r of rows){backupCheck(r&&typeof r==='object'&&!Array.isArray(r),'invalid record');const id=r[key];backupCheck((typeof id==='string'&&id.length>0&&id.length<=256)||integer(id),'invalid '+key);backupCheck(!seen.has(id),'duplicate '+key);seen.add(id)}return seen};
+    const sessions=unique(data.sessions,'sessionId'),tracks=unique(data.tracks,'id');unique(data.references,'id');unique(data.history,'id');
+    for(const s of data.sessions)backupCheck(integer(s.sessionId)&&finite(s.startTime)&&s.startTime>=0,'invalid session timestamp');
+    const chunks=new Set();let sampleCount=0;
+    for(const c of data.chunks){
+        backupCheck(c&&sessions.has(c.sessionId)&&integer(c.chunkIndex)&&Array.isArray(c.data),'invalid recording chunk');
+        const key=c.sessionId+':'+c.chunkIndex;backupCheck(!chunks.has(key),'duplicate recording chunk');chunks.add(key);
+        for(const row of c.data){backupCheck(row&&typeof row==='object'&&!Array.isArray(row)&&finite(row.t),'invalid sample timestamp');for(const [key,n] of Object.entries(row))backupCheck(!['__proto__','constructor','prototype'].includes(key)&&(n===null||finite(n)),'invalid sample value')}
+        sampleCount+=c.data.length;
+    }
+    const coordinate=n=>finite(n)&&Math.abs(n)<=20000000;
+    const line=l=>l&&Array.isArray(l.p1)&&Array.isArray(l.p2)&&l.p1.length===2&&l.p2.length===2&&[...l.p1,...l.p2].every(coordinate)&&finite(l.direction)&&Math.abs(l.direction)<=2*Math.PI&&Math.hypot(l.p1[0]-l.p2[0],l.p1[1]-l.p2[1])>0;
+    for(const t of data.tracks){
+        backupCheck(typeof t.id==='string'&&typeof t.name==='string'&&t.name.length<=1000&&['loop','point_to_point'].includes(t.type),'invalid track');
+        backupCheck(line(t.startLine)&&(t.type!=='point_to_point'||line(t.finishLine)),'invalid timing line');
+        backupCheck(t.gpsOrigin&&finite(t.gpsOrigin.lat)&&Math.abs(t.gpsOrigin.lat)<90&&finite(t.gpsOrigin.lon)&&Math.abs(t.gpsOrigin.lon)<=180,'invalid track origin');
+        backupCheck(Array.isArray(t.centerline)&&t.centerline.every(p=>p&&coordinate(p.x)&&coordinate(p.y)),'invalid track path');
+        backupCheck((t.pathLength==null||(finite(t.pathLength)&&t.pathLength>=0))&&(t.corners==null||integer(t.corners)),'invalid track statistics');
+        backupCheck((t.bestLapMs==null||(finite(t.bestLapMs)&&t.bestLapMs>0))&&(t.lapCount==null||integer(t.lapCount)),'invalid track results');
+    }
+    const refTracks=new Set();
+    for(const r of data.references){
+        backupCheck(tracks.has(r.trackId)&&!refTracks.has(r.trackId),'orphan or duplicate reference');refTracks.add(r.trackId);
+        backupCheck(r.sampleEncoding==='distance_metres_elapsed_ms_f32_pairs'&&Array.isArray(r.samples)&&r.samples.length>=4&&r.samples.length%2===0&&r.sampleCount===r.samples.length/2,'invalid reference encoding');
+        backupCheck(finite(r.lapTimeMs)&&r.lapTimeMs>0&&finite(r.totalDistance)&&r.totalDistance>0,'invalid reference totals');
+        for(let i=0;i<r.samples.length;i+=2){const d=r.samples[i],t=r.samples[i+1];backupCheck(finite(d)&&finite(t)&&d>=0&&t>=0&&Number.isFinite(Math.fround(d))&&Number.isFinite(Math.fround(t))&&(!i||(d>=r.samples[i-2]&&t>r.samples[i-1])),'unordered reference samples')}
+        backupCheck(r.samples[r.samples.length-2]<=r.totalDistance+1&&r.samples[r.samples.length-1]<=r.lapTimeMs+1000,'reference exceeds totals');
+    }
+    for(const lap of data.history)backupCheck(tracks.has(lap.trackId)&&typeof lap.sessionId==='string'&&finite(lap.timestamp)&&finite(lap.sessionStart)&&finite(lap.lapTimeMs)&&lap.lapTimeMs>0&&integer(lap.lapNumber),'invalid lap history');
+    return{value,sampleCount,recordings:data.sessions.length,tracks:data.tracks.length,references:data.references.length,laps:data.history.length};
+}
+function normalizeBackup(value){
+    if(value?.format===BACKUP_FORMAT)return value;
+    if(value?.version!==2)throw new Error('Choose a Blackbox backup or version 2 track JSON export. CSV files cannot be restored.');
+    const entries=value.track?[value]:value.tracks;
+    backupCheck(Array.isArray(entries),'unsupported track export');
+    const data={sessions:[],chunks:[],tracks:[],references:[],history:[]};
+    for(const entry of entries){
+        backupCheck(entry&&entry.track,'missing exported track');data.tracks.push(entry.track);
+        if(entry.referenceLap)data.references.push(entry.referenceLap);
+        if(entry.lapHistory){backupCheck(Array.isArray(entry.lapHistory.sessions),'invalid exported history');for(const session of entry.lapHistory.sessions){backupCheck(Array.isArray(session.laps),'invalid exported laps');data.history.push(...session.laps)}}
+    }
+    return{format:BACKUP_FORMAT,version:BACKUP_VERSION,createdAt:value.exportedAt,legacyImport:true,data,checksum:backupChecksum(data)};
+}
+function readBackupStores(database,names){
+    return new Promise((resolve,reject)=>{
+        const tx=database.transaction(names,'readonly'),result={};
+        tx.oncomplete=()=>resolve(result);tx.onerror=tx.onabort=()=>reject(tx.error||new Error('Could not read saved data'));
+        for(const name of names){const request=tx.objectStore(name).getAll();request.onsuccess=()=>{result[name]=request.result}}
+    });
+}
+function backupIdle(){
+    if(rec||recordingBusy||chunkWrite||trackRecorder?.recording)throw new Error('Stop session and route recording, and wait for any save to finish before backing up or restoring. Track timing may continue.');
+}
+function readRecordingBackup(scope){
+    if(scope==='tracks')return Promise.resolve({sessions:[],chunks:[]});
+    if(scope==='all'||scope==='recordings')return readBackupStores(db,['sessions','chunks']);
+    const id=Number(scope);if(!Number.isSafeInteger(id)||id<0)throw new Error('Choose valid backup contents.');
+    return new Promise((resolve,reject)=>{
+        const tx=db.transaction(['sessions','chunks'],'readonly'),result={sessions:[],chunks:[]};
+        tx.oncomplete=()=>resolve(result);tx.onerror=tx.onabort=()=>reject(tx.error||new Error('Could not read recording'));
+        const session=tx.objectStore('sessions').get(id),chunks=tx.objectStore('chunks').index('sessionId').getAll(id);
+        session.onsuccess=()=>{if(session.result)result.sessions=[session.result]};chunks.onsuccess=()=>{result.chunks=chunks.result};
+    });
+}
+async function createBackup(scope='all'){
+    backupIdle();
+    // A visibility-change save may detach the buffer while database reads wait.
+    // Snapshot the tail first, then deduplicate it against committed chunk keys.
+    const tail={sessionId,sessionStart,chunkIndex,data:chunkBuffer.slice()};
+    if(!db)await openDB();if(!trackDb)await openTrackDB();
+    const [recording,track]=await Promise.all([readRecordingBackup(scope),(scope==='all'||scope==='tracks')?readBackupStores(trackDb,['tracks','reference_laps','lap_history']):Promise.resolve({tracks:[],reference_laps:[],lap_history:[]})]);
+    // Include the unsaved tail even when storage is full; export must not require a write.
+    if(tail.data.length&&(scope==='all'||scope==='recordings'||Number(scope)===tail.sessionId)&&!recording.chunks.some(c=>c.sessionId===tail.sessionId&&c.chunkIndex===tail.chunkIndex)){
+        if(!recording.sessions.some(s=>s.sessionId===tail.sessionId))recording.sessions.push({sessionId:tail.sessionId,startTime:tail.sessionStart,status:'active'});
+        recording.chunks.push({sessionId:tail.sessionId,chunkIndex:tail.chunkIndex,data:tail.data,timestamp:Date.now()});
+    }
+    const value={format:BACKUP_FORMAT,version:BACKUP_VERSION,createdAt:new Date().toISOString(),data:{sessions:recording.sessions,chunks:recording.chunks,tracks:track.tracks,references:track.reference_laps.map(portableReference),history:track.lap_history}};
+    value.checksum=backupChecksum(value.data);validateBackup(value);return value;
+}
+function makeRestorePlan(value,existingSessions,token,now){
+    const summary=validateBackup(value),data=value.data,used=new Set(existingSessions.map(s=>s.sessionId)),ids=new Map();let next=existingSessions.reduce((highest,s)=>Math.max(highest,s.sessionId),now);
+    for(const session of data.sessions){do{next++}while(used.has(next));backupCheck(Number.isSafeInteger(next),'session ID capacity exceeded');ids.set(session.sessionId,next);used.add(next)}
+    const trackIds=new Map(data.tracks.map((t,i)=>[t.id,'restore_'+token+'_'+i]));
+    return{summary,recordingsDone:false,tracksDone:false,
+        sessions:data.sessions.map(s=>({...s,sessionId:ids.get(s.sessionId),status:'complete',restoredFrom:s.sessionId,restoredAt:now})),
+        chunks:data.chunks.map(c=>({...c,sessionId:ids.get(c.sessionId)})),
+        tracks:data.tracks.map(t=>({...t,id:trackIds.get(t.id),name:t.name+' (restored)',modified:now})),
+        references:data.references.map((r,i)=>({...r,id:'restore_ref_'+token+'_'+i,trackId:trackIds.get(r.trackId),samples:new Float32Array(r.samples).buffer})),
+        history:data.history.map((l,i)=>({...l,id:'restore_lap_'+token+'_'+i,trackId:trackIds.get(l.trackId),sessionId:'restore_session_'+token+'_'+l.sessionId}))};
+}
+function addBackupStores(database,collections){
+    return new Promise((resolve,reject)=>{
+        const tx=database.transaction(Object.keys(collections),'readwrite');
+        tx.oncomplete=resolve;tx.onerror=tx.onabort=()=>reject(tx.error||new Error('Restore transaction failed'));
+        try{for(const [name,rows] of Object.entries(collections))for(const row of rows)tx.objectStore(name).add(row)}catch(error){tx.abort();reject(error)}
+    });
+}
+async function executeRestore(plan,recordingDb,tracksDb){
+    // IndexedDB cannot atomically commit across these two existing databases.
+    // Each group is atomic; retry skips a group only after its commit succeeded.
+    if(!plan.recordingsDone){await addBackupStores(recordingDb,{sessions:plan.sessions,chunks:plan.chunks});plan.recordingsDone=true}
+    if(!plan.tracksDone){await addBackupStores(tracksDb,{tracks:plan.tracks,reference_laps:plan.references,lap_history:plan.history});plan.tracksDone=true}
+}
+async function backupAction(action){
+    if(backupBusy)return;backupBusy=true;
+    const buttons=Array.from(document.querySelectorAll('button,select')).map(button=>[button,button.disabled]);buttons.forEach(([button])=>{button.disabled=true});
+    try{await action()}catch(error){$('backup-status').textContent=error.message}finally{backupBusy=false;buttons.forEach(([button,disabled])=>{button.disabled=disabled});$('backup-restore').disabled=!backupPreview||!!restorePlan?.tracksDone}
+}
+async function downloadBackup(){
+    await backupAction(async()=>{
+        $('backup-status').textContent='Preparing backup…';const value=await createBackup($('backup-scope').value),blob=new Blob([JSON.stringify(value)],{type:'application/json'});
+        if(blob.size>BACKUP_MAX_BYTES)throw new Error('This backup exceeds 100 MiB. Choose one recording at a time under Backup contents. For a single recording larger than the limit, keep the browser data and export its CSV; CSV is not a restorable backup.');
+        const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='blackbox-backup-'+new Date().toISOString().replace(/[:.]/g,'-')+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+        $('backup-status').textContent='Backup download requested. Check that the file is saved in Downloads or Files, then copy it somewhere safe. Browser data has not been removed.';
+    });
+}
+async function previewBackup(file){
+    await backupAction(async()=>{
+        backupPreview=null;restorePlan=null;$('backup-restore').textContent='Restore as new copies';
+        if(!file)return;$('backup-status').textContent='Checking backup…';backupIdle();
+        if(file.size>BACKUP_MAX_BYTES)throw new Error('Backup is larger than the supported 100 MiB limit.');
+        let value;try{value=JSON.parse(await file.text())}catch{throw new Error('This file is not valid JSON. Choose a Blackbox backup file, not a CSV export.');}
+        value=normalizeBackup(value);const summary=validateBackup(value);backupPreview=value;
+        $('backup-status').textContent=(value.legacyImport?'Track JSON export (no original checksum). ':'Checksum verified. ')+summary.recordings+' recordings · '+summary.sampleCount+' samples · '+summary.tracks+' tracks · '+summary.references+' references · '+summary.laps+' lap results. Restore adds copies without changing existing data. Importing the same file again creates another copy. Location data is included; nothing is uploaded.';
+    });
+}
+async function restoreBackup(){
+    await backupAction(async()=>{
+        backupIdle();if(!backupPreview)throw new Error('Choose and validate a backup first.');
+        if(!db)await openDB();if(!trackDb)await openTrackDB();
+        if(!restorePlan||!restorePlan.recordingsDone){const existing=await readBackupStores(db,['sessions']);restorePlan=makeRestorePlan(backupPreview,existing.sessions,genUUID(),Date.now())}
+        $('backup-status').textContent='Restoring copies. Keep this tab open…';
+        try{await executeRestore(restorePlan,db,trackDb)}catch(error){
+            $('backup-restore').textContent='Retry remaining data';
+            throw new Error((restorePlan.recordingsDone?'Recordings committed; tracks were not restored. ':'No restore data committed. ')+'Existing data is unchanged. Free browser storage if needed, keep this tab open, and retry remaining data. '+error.message);
+        }
+        const summary=restorePlan.summary;
+        $('backup-status').textContent='Restore complete: '+summary.recordings+' recordings and '+summary.tracks+' tracks added. References and lap history are included. Restored recordings are stopped and restored tracks are not armed. Keep the backup file.';
+        await renderDataModal();await renderTrackList();
+    });
+}
+// End backup / restore
+
 // Data Modal
 function openDataModal(){revealModal('data-modal','data-modal-close');renderDataModal()}
 function closeDataModal(){hideModal('data-modal')}
@@ -2284,6 +2462,9 @@ async function renderDataModal(){
     $('data-rec-size').textContent=formatBytes(combined.recordingsBytes);
     $('data-track-size').textContent=formatBytes(combined.tracksBytes);
     $('data-rec-count').textContent='('+combined.sessionCount+')';
+    const scope=$('backup-scope'),selected=scope.value,sessions=await getAllSessions();
+    scope.innerHTML='<option value="all">All saved data</option><option value="recordings">Recordings only</option><option value="tracks">Tracks, references &amp; history only</option>'+sessions.map(s=>'<option value="'+s.sessionId+'">Recording '+escHtml(formatSessionDate(s.startTime))+' · '+s.sampleCount+' samples</option>').join('');
+    if(Array.from(scope.options).some(option=>option.value===selected))scope.value=selected;
     $('data-track-count').textContent='('+combined.trackCount+')';
     await renderSessionList();
     await renderTrackDataList()
@@ -2375,6 +2556,10 @@ async function handleTrackDataAction(btn){
 }
 
 $('menu-data').onclick=()=>{$('menu-overlay').classList.remove('open');openDataModal()};
+$('backup-download').onclick=downloadBackup;
+$('backup-choose').onclick=()=>$('backup-file').click();
+$('backup-file').onchange=event=>{const file=event.target.files[0];event.target.value='';previewBackup(file)};
+$('backup-restore').onclick=restoreBackup;
 $('data-modal-close').onclick=closeDataModal;
 $('data-modal').onclick=e=>{if(e.target===$('data-modal'))closeDataModal()};
 $('btn-clear-all-recordings').onclick=async()=>{

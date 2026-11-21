@@ -14,6 +14,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Obsolete documentation files (RELEASE.md, IMPLEMENTATION_SUMMARY.md, release-notes.md)
 
+## [0.0.4-rc.4] - 2026-11-20
+
+Release candidate; physical USB/drive acceptance remains required. Includes rc.3.
+
+### Added
+- Full JSON backup download and validated restore-as-copies for recordings, tracks, reference traces, and lap history.
+- Integrity checksum, preview counts, selective recording/track backups, and version 2 track-export import.
+- Atomic per-database restore with explicit partial-result reporting and retry of the remaining group.
+- IndexedDB integration coverage for round trips, aborts, collisions, recovery, and concurrent session allocation.
+
+### Fixed
+- Saved track names use full-width, wrapping headings above their controls in both track panels, including on desktop and for restored copies.
+- New recordings allocate IDs above existing sessions within one transaction, preventing imported timestamp IDs or concurrent starts from overwriting recordings.
+
 ## [0.0.4-rc.3] - 2026-11-19
 
 Follow-up release candidate; hardware acceptance is still required. Includes all rc.2 changes.

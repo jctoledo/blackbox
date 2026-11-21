@@ -88,6 +88,7 @@ Use the expanded [hardware checklist and results record](HARDWARE_VALIDATION.md)
 ```sh
 cargo test --locked -p sensor-fusion -p wt901 -p ublox-gps -p blackbox-host-tests
 cargo check -p ublox-gps --no-default-features
+npm ci --ignore-scripts
 node --test tests/*.test.cjs
 cargo run --quiet -p blackbox-host-tests --example packet_fixture > /tmp/telemetry-v4.hex
 diff tests/fixtures/telemetry-v4.hex /tmp/telemetry-v4.hex
@@ -136,3 +137,10 @@ The primary dashboard no longer shows a G-meter. Optional Analysis exposes force
 The public demo integrates distance over a smooth synthetic circuit with speed limited by curvature, varying sector pace, and a seeded reference. Packet position/velocity consistency, bounded acceleration, monotonic reference samples, lap-result timing, and connection loss are regression-tested. The synthetic source does not execute the firmware crossing detector and rejects stage configuration rather than pretending to validate it. No real driving data or location history is used.
 
 The website uses a small decorative SVG telemetry animation instead of a downloaded looping video. It has a pause control, stops offscreen/in a hidden tab, and respects reduced-motion preferences. The illustration remains explicitly labeled; it is not a preview of implemented spatial coaching.
+
+
+## Backup and restore acceptance
+
+Version 1 full backups serialize both IndexedDB databases, including pending unsaved recording rows and portable reference arrays. CRC32 over the JSON data detects accidental corruption; strict schema and relationship checks run before importing. Restore creates new identifiers and uses `add`, never `put`, so a collision aborts rather than overwriting existing records. Each database group commits atomically; a retained retry plan skips the recording group after commit if the track group fails. This is explicitly not an all-or-nothing transaction across two databases. Reloading discards the retry plan; repeated fresh imports intentionally produce copies.
+
+New recording sessions allocate their IDs within a serialized IndexedDB transaction above existing keys, preventing restored/future timestamp IDs or concurrent tabs from being overwritten. Integration tests use a pinned host-only IndexedDB implementation and cover full round trips, references/history, corrupt files, invalid geometry, abort rollback, collision preservation, partial retry, pending-tail export, selective backups, version 2 track exports, and concurrent new-session allocation. Browser acceptance additionally checks real download/file selection/restore/reload. Backups remain manual, unencrypted files with a 100 MiB per-file limit; the app cannot guarantee against loss without a copy outside browser storage.

@@ -175,11 +175,15 @@ Record tracks anywhere and get real-time lap timing with delta display.
 | Circuit & Stage | Loop tracks or point-to-point routes |
 | Session History | All lap times saved and grouped by date |
 | Track Auto-Detection | Notifies you when near a saved track |
-| Data Management | View storage, export CSV, delete sessions |
+| Data Management | Download full backups, restore new copies, export CSV, manage sessions |
 
 See the [full documentation](docs/LAP_TIMER.md) for details on recording, delta calculation, and troubleshooting.
 
 ---
+
+### Keep a backup outside the browser
+
+Stop recording, then open **Saved data → Download backup**. Save the JSON file in Files/Downloads and copy it somewhere safe. To recover on another browser, choose **Saved data → Choose backup → Restore as new copies**. Recordings, tracks, reference traces, and lap history are included; existing data is preserved. Files include location history and are not encrypted. See the [backup/restore guide and limits](docs/FAQ.md#how-do-i-back-up-and-restore-everything).
 
 ## Calibration
 
