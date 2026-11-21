@@ -77,6 +77,23 @@ impl SensorManager {
         }
     }
 
+    pub fn angular_rates(&self, now_ms: u32) -> Option<sensor_fusion::transforms::AngularRates> {
+        crate::imu_evidence::angular_rates(
+            self.imu_parser.data(),
+            now_ms,
+            [self.last_gyro_us, self.last_angle_us],
+        )
+    }
+
+    pub fn motion_evidence(&self, now_ms: u32) -> Option<crate::imu_evidence::MotionEvidence> {
+        crate::imu_evidence::motion_evidence(
+            self.imu_parser.data(),
+            self.imu_parser.get_accel_corrected(),
+            now_ms,
+            [self.last_imu_us, self.last_gyro_us, self.last_angle_us],
+        )
+    }
+
     pub fn record_gps_fix(&mut self, now_ms: u32) {
         self.last_gps_fix_ms = Some(now_ms);
     }
@@ -265,6 +282,15 @@ impl SensorManager {
             }
         }
 
+        // Interrupted or moving IMU evidence cannot reuse earlier parked fixes on recovery.
+        // poll_imu runs even when no packets arrived, so stale gaps clear the count.
+        if !self
+            .motion_evidence((now_us / 1000) as u32)
+            .is_some_and(|e| e.stationary_candidate(self.gps_parser.last_fix().speed))
+        {
+            self.stationary_count = 0;
+        }
+
         // Return result with packet count if we processed any Accel packets
         if accel_count > 0 {
             result.map(|(dt, ts)| (dt, ts, accel_count))
@@ -311,14 +337,11 @@ impl SensorManager {
     }
 
     /// Update once per new GPS fix; repeated telemetry polls are not new evidence.
-    pub fn update_stationary(&mut self, ax: f32, ay: f32, wz: f32, now_ms: u32) -> bool {
+    pub fn update_stationary(&mut self, now_ms: u32) -> bool {
         let stationary = self.gps_is_fresh(now_ms)
-            && sensor_fusion::stationary::stationary_candidate(
-                ax,
-                ay,
-                wz,
-                self.gps_parser.last_fix().speed,
-            );
+            && self.motion_evidence(now_ms).is_some_and(|evidence| {
+                evidence.stationary_candidate(self.gps_parser.last_fix().speed)
+            });
         self.stationary_count = if stationary {
             self.stationary_count.saturating_add(1)
         } else {
@@ -328,7 +351,11 @@ impl SensorManager {
     }
 
     pub fn is_stationary(&self, now_ms: u32) -> bool {
-        self.gps_is_fresh(now_ms) && self.stationary_count >= 5
+        self.gps_is_fresh(now_ms)
+            && self.stationary_count >= 5
+            && self
+                .motion_evidence(now_ms)
+                .is_some_and(|e| e.stationary_candidate(self.gps_parser.last_fix().speed))
     }
 }
 
@@ -540,14 +567,8 @@ impl TelemetryPublisher {
                 lon: fix.lon,
                 gps_valid: sensors.gps_is_fresh(now_ms),
                 gps_age_ms: sensors.gps_age_ms(now_ms),
-                imu_age_ms: crate::telemetry_http::imu_packet_age_ms(
-                    now_ms,
-                    [
-                        sensors.last_imu_us,
-                        sensors.last_gyro_us,
-                        sensors.last_angle_us,
-                    ],
-                ),
+                // Invalid IMU evidence hides forces without blocking healthy GPS/timing.
+                imu_age_ms: sensors.motion_evidence(now_ms).map(|e| e.age_ms),
                 gps_boot_id: None,
                 gps_event: None,
             };

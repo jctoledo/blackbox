@@ -13,7 +13,7 @@ Blackbox combines GPS and a WT901 IMU for vehicle telemetry. It has two related 
 | WT901 roll/pitch/yaw parser output | Degrees; gyro output rad/s; acceleration m/s² |
 | Vehicle acceleration | Forward/left positive; divide by 9.80665 for g |
 
-Convert compass course to mathematical yaw with `π/2 − course` only at the relevant boundary. Recorded timing-line bearings already use `atan2(y,x)` and must not be converted again. An arbitrary sensor mounting/yaw offset is not automatically validated by this convention table; bench/drive checks must establish axis signs and mounting alignment. Experimental [Align sensor to car](CALIBRATION.md) provides an explicitly reviewed horizontal offset for force projection. It leaves the EKF device-heading basis and GPS timing path unchanged.
+Convert compass course to mathematical yaw with `π/2 − course` only at the relevant boundary. Recorded timing-line bearings already use `atan2(y,x)` and must not be converted again. The normal setup is upright, parallel to the car floor and nearly level on level ground. Non-horizontal mounting remains R&D requiring physical validation. An arbitrary sensor mounting/yaw offset is not automatically validated by this convention table; bench/drive checks must establish axis signs and mounting alignment. Experimental [Align sensor to car](CALIBRATION.md) provides an explicitly reviewed horizontal offset for force projection. It leaves the EKF device-heading basis and GPS timing path unchanged.
 
 `remove_gravity` subtracts the body-frame vector `g × [−sin(pitch), sin(roll)cos(pitch), cos(roll)cos(pitch)]`. `body_to_earth` applies `Rz(yaw) Ry(pitch) Rx(roll)`. `earth_to_car` applies the inverse horizontal yaw rotation. The full gravity-free body vector, including z, belongs in that transform.
 
@@ -27,8 +27,24 @@ The state is `[x, y, ψ, vx, vy, bax, bay]`; position, velocity and learned resi
 a = measured_earth_acceleration − learned_earth_bias
 position_new = position_old + velocity_old × dt + ½ × a × dt²
 velocity_new = velocity_old + a × dt
-yaw_new = wrap(yaw_old + yaw_rate × dt)
+yaw_new = wrap(yaw_old + euler_heading_rate × dt)
 ```
+
+The application derives two distinct angular quantities from fresh roll/pitch and all
+three body gyro axes. With roll φ, pitch θ and body rates (p,q,r):
+
+```
+euler_heading_rate = (q sinφ + r cosφ) / cosθ
+earth_vertical_rate = −p sinθ + q sinφ cosθ + r cosφ cosθ
+```
+
+The first advances the EKF Euler yaw. Prediction is skipped when `|cosθ| < 0.1`,
+when attitude/gyro evidence is invalid or older than 200 ms, or when acceleration
+is invalid/stale; no zero heading rate is fabricated. The cosine guard bounds
+numerical conditioning, not a validated mounting tolerance. The second supplies
+the existing approximate planar force, mode and mounting-straightness paths.
+They are not interchangeable during general roll/pitch motion. Telemetry v4 `wz`
+remains raw sensor-body Z rate for compatibility.
 
 Measured lateral acceleration already produces curved motion. The current code does not switch between CTRA and CA models or add another centripetal acceleration. GPS updates correct position/velocity; stationary updates constrain velocity and learn biases. The separate orientation-correction/display path does not retroactively correct every EKF input.
 
@@ -51,7 +67,7 @@ The position diagnostic combines diagonal variance, accepted-update residual sta
 
 ## Acceleration and orientation correction
 
-`GpsAcceleration` differentiates scalar GPS speed using the application sample interval, filters the result, and expires stale data. Differentiation amplifies noise; it is a reference signal, not ground truth. `speed × corrected yaw_rate` estimates lateral acceleration under approximately planar motion, aligned gyro axes and limited sideslip. Banking, slip, vibration and mounting errors violate those assumptions.
+`GpsAcceleration` differentiates scalar GPS speed using the application sample interval, filters the result, and expires stale data. Differentiation amplifies noise; it is a reference signal, not ground truth. `speed × bias-corrected earth_vertical_rate` estimates lateral acceleration under approximately planar motion and limited sideslip. Banking, slip, vibration and mounting errors violate those assumptions.
 
 When an offset is saved, force projection rotates into vehicle axes and learning residuals rotate back into device pitch/roll axes. Saving/clearing resets learned force-fusion corrections.
 
@@ -61,7 +77,16 @@ The filter attenuates vibration; it cannot eliminate arbitrary vibration or dist
 
 ## Stationary detection and rates
 
-The candidate check requires finite data, each horizontal acceleration below 0.18 g, yaw rate below 12°/s and GPS speed below 3.5 km/h. The application also requires fresh GPS and five consecutive candidate fixes. Very slow motion and vibration remain hardware validation cases. ZUPT constrains velocity; it does not establish absolute position truth.
+The application removes predicted gravity before stationary gating. It requires
+finite three-axis linear-acceleration magnitude below 0.18 g, three-axis angular
+speed below 12°/s and GPS speed below 3.5 km/h. Norms make the evidence invariant
+to sensor mounting rotation and reject horizontal-axis rotation and vertical
+acceleration too. The application also requires fresh GPS, acceleration/gyro/attitude
+packets no older than 200 ms and five consecutive candidate fixes. Invalid/stale
+or moving IMU evidence interrupts that collection. Very slow motion and vibration remain hardware validation cases. Missing/invalid
+IMU evidence pauses force learning and preserves the last finite packet values;
+HTTP `imu_age_ms: null` marks forces unavailable while GPS timing continues.
+Legacy v4/UDP alone has no equivalent force-validity metadata. ZUPT constrains velocity; it does not establish absolute position truth.
 
 M9N builds target 25 Hz GPS, 6M builds 5 Hz. WT901 output can be configured up to 200 Hz; UART packet counts, processed estimator steps and the roughly 33 ms telemetry cadence are different rates. GPS crossings currently use host receive times, not receiver epoch/PPS synchronization. Serial buffering, receiver latency and browser sampling therefore remain in the error budget.
 

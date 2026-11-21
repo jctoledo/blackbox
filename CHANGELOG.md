@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Tilt-consistent IMU evidence: Euler heading prediction and approximate planar forces use distinct three-axis gyro transforms; stationary gating removes gravity and checks full linear/angular motion. Invalid or stale IMU evidence pauses learning and marks HTTP forces unavailable without stopping healthy GPS timing. Raw v4 body-Z gyro semantics are unchanged. Physical mounting/slope accuracy remains unvalidated (#104, #73, #21).
+
 ### Changed
 - Renamed `neo6m` driver to `ublox-gps` to reflect support for multiple u-blox GPS modules (NEO-6M, NEO-M9N, etc.)
 - Updated driver documentation with UBX protocol examples and dynamic platform models

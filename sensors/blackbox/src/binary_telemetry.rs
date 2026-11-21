@@ -27,7 +27,7 @@ pub struct TelemetryPacket {
     pub ax: f32, // m/s²
     pub ay: f32,
     pub az: f32,
-    pub wz: f32,   // rad/s
+    pub wz: f32,   // Raw sensor-body Z angular velocity (rad/s), NOT Euler yaw rate
     pub roll: f32, // radians
     pub pitch: f32,
 
