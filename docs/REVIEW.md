@@ -109,7 +109,7 @@ Position-matched delta replaces accumulated-distance comparison for new referenc
 
 A session-best firmware flag resets on arming. It must not overwrite a faster browser reference from a prior session: regression coverage now preserves the saved reference and separately chooses the fastest usable distance trace. Track names/IDs are escaped in list markup, and reference deletion waits for commit before clearing the displayed reference.
 
-CSV recordings now retain browser epoch milliseconds (`time`), device uptime milliseconds (`device_time_ms`), current and completed lap times/count/flags, GPS age, and configuration revision. These are sampled browser observations, not a complete receiver/raw-IMU log. Offline periods leave gaps, and intervening lap events can be absent. Missing numeric fields export as empty cells instead of invented zeros. CSV row timestamps determine session duration; data gaps are included in that elapsed span.
+CSV recordings now retain browser epoch milliseconds (`time`), device uptime milliseconds (`device_time_ms`), current and completed lap times/count/flags, GPS age, and configuration revision. These are sampled browser observations, not a complete receiver/raw-IMU log. Offline periods leave gaps, and intervening lap events can be absent. Missing numeric fields export as empty cells instead of invented zeros. CSV row timestamps describe the received-sample span, including gaps; they are not the new Drive recording duration. Drive stores monotonic browser elapsed checkpoints, freezes at Stop and labels interrupted checkpoint lower bounds separately.
 
 ### Product usefulness assessment
 
@@ -132,7 +132,7 @@ Stage validation now includes a deterministic 20-mile replay and a missing-GPS f
 
 ## Copy, demo data, and motion review
 
-The primary dashboard no longer shows a G-meter. Optional Analysis exposes forces while parked; Drive view remains focused on timing and speed. This separation leaves room for future post-drive analysis without adding unimplemented controls. Copy now distinguishes a captured route from a committed save, a session recording from route creation, and estimator confidence from physical GPS accuracy. Heuristic turn counts are labeled estimated. The turn-rate readout now states degrees per second rather than implying heading.
+The default portrait dashboard keeps the G-meter hidden; landscape offers it as a selectable instrument. Optional Analysis exposes forces while parked; Drive view remains focused on timing and speed. This separation leaves room for future post-drive analysis without adding unimplemented controls. Copy now distinguishes a captured route from a committed save, a session recording from route creation, and estimator confidence from physical GPS accuracy. Heuristic turn counts are labeled estimated. The turn-rate readout now states degrees per second rather than implying heading.
 
 The public demo integrates distance over a smooth synthetic circuit with speed limited by curvature, varying sector pace, and a seeded reference. Packet position/velocity consistency, bounded acceleration, monotonic reference samples, lap-result timing, and connection loss are regression-tested. The synthetic source does not execute the firmware crossing detector and rejects stage configuration rather than pretending to validate it. No real driving data or location history is used.
 

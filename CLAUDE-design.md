@@ -8,7 +8,7 @@ Edit `sensors/blackbox/web/dashboard.html`. `scripts/build_demo.py` generates th
 
 - Normal portrait: timing first, speed second, explicit Tracks / Record session / Saved data controls.
 - Drive view: hides editing controls and force analysis while retaining status and warnings.
-- Landscape cluster: automatically activates on landscape viewports at least 600 px wide and no more than 600 px high, unless Analysis or the explicit Dashboard escape is selected. Speed occupies the left panel; timing/reference occupies the right. Orientation never starts or stops recording/timing.
+- Landscape cluster: automatically activates on landscape viewports at least 600 px wide and no more than 600 px high, unless Analysis or the explicit Dashboard escape is selected. A selectable instrument occupies the left panel; timing/reference occupies the right when a track is selected. With no track, the right panel shows recording-backed Drive readiness, duration, partial GPS distance and health; see `docs/DRIVE.md` for ownership, clocks and recovery. Orientation never starts or stops recording/timing.
 - Analysis: optional force visualization for parked review; not the default driving view.
 
 ## Typography and styling
