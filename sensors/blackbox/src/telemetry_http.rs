@@ -12,8 +12,21 @@ pub struct TimingTelemetry {
     pub lon: f64,
     pub gps_valid: bool,
     pub gps_age_ms: Option<u32>,
+    pub imu_age_ms: Option<u32>,
     pub gps_boot_id: Option<u32>,
     pub gps_event: Option<crate::gps_log::GpsEvent>,
+}
+
+/// Age of the oldest required IMU packet, using wrapping device milliseconds.
+/// No packet is fresh merely because the HTTP transport is still publishing.
+pub fn imu_packet_age_ms(now_ms: u32, packets_us: [u64; 3]) -> Option<u32> {
+    if packets_us.contains(&0) {
+        return None;
+    }
+    packets_us
+        .iter()
+        .map(|t| now_ms.wrapping_sub((t / 1000) as u32))
+        .max()
 }
 
 /// serde_json encodes non-finite sensor values as null and escapes text fields.
@@ -95,5 +108,21 @@ mod tests {
         assert_eq!(value["wifi"]["ssid"], d.wifi_status.ssid);
         assert!(value["fusion"]["gps_accel"].is_null());
         assert!(value["ekf"]["pos_sigma"].is_null());
+    }
+    #[test]
+    fn imu_age_requires_every_packet_and_handles_clock_wrap() {
+        assert_eq!(
+            imu_packet_age_ms(1000, [990_000, 900_000, 950_000]),
+            Some(100)
+        );
+        assert_eq!(imu_packet_age_ms(1000, [990_000, 0, 950_000]), None);
+        assert_eq!(imu_packet_age_ms(10, [0xfffffff0u64 * 1000; 3]), Some(26));
+        let status = TimingTelemetry {
+            imu_age_ms: Some(321),
+            ..Default::default()
+        };
+        let json: serde_json::Value =
+            serde_json::from_str(&telemetry_json(1, "AA==", &status, None)).unwrap();
+        assert_eq!(json["timing"]["imu_age_ms"], 321);
     }
 }

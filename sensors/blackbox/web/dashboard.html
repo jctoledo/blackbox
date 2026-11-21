@@ -647,7 +647,7 @@ body.cluster-view .bbSpeed.peak{color:var(--text);text-shadow:none}
 <div class="bbMenuOverlay" id="menu-overlay">
     <div class="bbMenuPanel">
         <button class="bbMenuItem" id="menu-app">Phone setup</button>
-        <button class="bbMenuItem" id="menu-mount">Mount alignment</button>
+        <button class="bbMenuItem" id="menu-mount">Align sensor to car</button>
         <button class="bbMenuItem" id="menu-data">Data</button>
         <button class="bbMenuItem" id="menu-rec">Record session</button>
         <button class="bbMenuItem" id="menu-export">Export CSV</button>
@@ -663,15 +663,29 @@ body.cluster-view .bbSpeed.peak{color:var(--text);text-shadow:none}
  <h3>Keep your saved data</h3><p>Download a full backup before switching browsers or Home Screen launch. Storage may be separate. If data is missing, restore the backup there as copies. Keep the same device address.</p>
  <button class="bbDisplayButton" id="phone-backup">Open saved data &amp; backup</button><p>Stay on Blackbox Wi-Fi. Home Screen setup does not provide offline telemetry or guarantee background recording.</p></div></div>
 </div>
-<div class="bbModal" id="mount-modal" role="dialog" aria-modal="true" aria-label="Mount alignment">
- <div class="bbModalContent"><div class="bbModalHeader"><span class="bbModalTitle">Mount alignment</span><button class="bbModalClose" id="mount-close" aria-label="Close mount alignment">×</button></div>
- <div class="bbModalBody bbSetupText"><p><strong>Experimental · horizontal mounting.</strong> Secure the device nearly level. This learns the forward axis for force display, not timing-line direction or GPS heading.</p>
- <p>Start while parked with a fresh GPS fix. At a controlled site, drive <strong>forward</strong> and brake steadily in a straight line. Do not use reverse motion or operate the screen while moving. A result stays a candidate until you park and save it.</p>
+<div class="bbModal" id="mount-modal" role="dialog" aria-modal="true" aria-label="Align sensor to car">
+ <div class="bbModalContent"><div class="bbModalHeader"><span class="bbModalTitle">Align sensor to car</span><button class="bbModalClose" id="mount-close" aria-label="Close sensor alignment">×</button></div>
+ <div class="bbModalBody bbSetupText"><p><strong>Teach Blackbox which way the car faces.</strong> If the sensor is mounted rotated left or right, this sets the direction used for acceleration, braking and left/right force readings.</p>
+ <figure style="margin:16px 0"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 210" style="width:100%;height:auto;display:block" role="img" aria-labelledby="alignment-title alignment-desc">
+<title id="alignment-title">Align the sensor's forward direction with the car</title>
+<desc id="alignment-desc">Top view. The car points up. The sensor is mounted rotated to the right. Alignment learns the angle between the car-forward and sensor-forward arrows.</desc>
+<defs><marker id="car-arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0 0L8 4L0 8" fill="#d7ff45"/></marker><marker id="sensor-arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0 0L8 4L0 8" fill="#64d3e3"/></marker></defs>
+<rect width="360" height="210" rx="12" fill="#101820"/>
+<g fill="none" stroke="#687b89" stroke-width="1.5"><rect x="132" y="22" width="96" height="169" rx="31"/><path d="M142 67Q180 52 218 67M142 150Q180 160 218 150"/><path d="M127 59v25m106-25v25m-106 57v25m106-25v25" stroke-width="5"/></g>
+<g transform="rotate(28 180 120)"><rect x="162" y="99" width="36" height="43" rx="4" fill="#203742" stroke="#64d3e3"/><path d="M180 120V40" stroke="#64d3e3" stroke-width="2.5" marker-end="url(#sensor-arrow)"/></g>
+<path d="M180 120V28" stroke="#d7ff45" stroke-width="2.5" marker-end="url(#car-arrow)"/>
+<path d="M180 76A44 44 0 0 1 201 81" fill="none" stroke="#edf3f8" stroke-width="2"/>
+<g font-family="system-ui,sans-serif" font-size="13" fill="#edf3f8"><text x="18" y="38" fill="#d7ff45">Car forward</text><text x="249" y="51" fill="#64d3e3">Sensor</text><text x="249" y="68" fill="#64d3e3">forward</text><text x="18" y="180">TOP VIEW</text><text x="249" y="122">Learn this</text><text x="249" y="139">rotation</text></g>
+<path d="M102 35L173 31M243 65L221 58M243 118L201 82" stroke="#8496a4" stroke-width="1" fill="none"/>
+</svg>
+<figcaption style="font-size:12px;line-height:1.5;margin-top:8px">Alignment learns the rotation between the sensor and the car. This is a top view, not a slope adjustment.</figcaption></figure>
+ <ol style="padding-left:22px"><li>Secure the sensor nearly level. Park outdoors and wait for GPS.</li><li>Tap <strong>Start alignment</strong> while parked.</li><li>At a controlled site, drive <strong>forward</strong>, then brake steadily in a straight line. Leave the screen alone while moving.</li><li>Park again. When a proposed alignment is ready, tap <strong>Use this alignment</strong>.</li></ol>
+ <p style="font-size:12px">This does not align GPS or point the car north. Startup bias calibration is a separate stationary step. Do not collect this alignment while reversing.</p>
  <div class="bbSetupStatus" id="mount-message" role="status">Connecting to device…</div>
- <div class="bbRow"><span>Saved offset</span><span class="bbNum" id="mount-saved">—</span></div>
- <div class="bbRow"><span>Candidate</span><span class="bbNum" id="mount-candidate">—</span></div>
- <div class="bbSetupActions"><button id="mount-start" disabled>Start alignment</button><button id="mount-cancel" disabled>Cancel attempt</button><button id="mount-save" disabled>Save candidate</button><button id="mount-clear" disabled>Clear saved offset</button></div>
- <p>After saving, verify forward acceleration, braking and left/right force signs. Remounting requires a new alignment. GPS outliers, road slope and sensor latency still require field validation.</p></div></div>
+ <div class="bbRow"><span>Saved alignment</span><span class="bbNum" id="mount-saved">—</span></div>
+ <div class="bbRow"><span>Proposed alignment</span><span class="bbNum" id="mount-candidate">—</span></div>
+ <div class="bbSetupActions"><button id="mount-start" disabled>Start alignment</button><button id="mount-cancel" disabled>Cancel attempt</button><button id="mount-save" disabled>Use this alignment</button><button id="mount-clear" disabled>Reset alignment</button></div>
+ <p>Experimental: after saving, check that gentle acceleration, braking and turns appear in the correct direction. Repeat after rotating or remounting the sensor. This does not compensate for road slope.</p></div></div>
 </div>
 
 <div class="bbModal" id="track-modal" role="dialog" aria-modal="true" aria-label="Tracks">
@@ -998,8 +1012,8 @@ function updateRecUI(){
 }
 
 function samplesToCSV(samples){
-    const keys=['t', 'sp', 'ax', 'ay', 'wz', 'mo', 'latg', 'lng', 'lat', 'lon', 'gpsOk', 'ekfX', 'ekfY', 'ekfYaw', 'gpsCourse', 'lon_imu', 'lon_gps', 'gps_wt', 'pitch_c', 'pitch_cf', 'roll_c', 'roll_cf', 'tilt_x', 'tilt_y', 'deviceTimeMs', 'lapTimeMs', 'lapCnt', 'lapFlags', 'lastLapMs', 'bestLapMs', 'gpsAgeMs', 'timingRevision', 'gpsBootId', 'gpsSeq', 'gpsHostUs', 'gpsUtcUs', 'gpsDate', 'gpsFractionDigits'];
-    return 'time,speed,ax,ay,wz,mode,lat_g,lon_g,gps_lat,gps_lon,gps_valid,ekf_x,ekf_y,ekf_yaw,gps_course,lon_imu,lon_gps,gps_weight,pitch_corr,pitch_conf,roll_corr,roll_conf,tilt_x,tilt_y,device_time_ms,lap_time_ms,lap_count,lap_flags,last_lap_ms,best_lap_ms,gps_age_ms,timing_revision,gps_boot_id,gps_rmc_seq,gps_host_parse_us,gps_receiver_utc_us_of_day,gps_receiver_date_ddmmyy,gps_utc_fractional_digits\n'+samples.filter(r=>r.rowType!==1).map(r=>keys.map(k=>Number.isFinite(r[k])?r[k]:'').join(',')).join('\n')+'\n';
+    const keys=['t', 'sp', 'ax', 'ay', 'wz', 'mo', 'latg', 'lng', 'lat', 'lon', 'gpsOk', 'ekfX', 'ekfY', 'ekfYaw', 'gpsCourse', 'lon_imu', 'lon_gps', 'gps_wt', 'pitch_c', 'pitch_cf', 'roll_c', 'roll_cf', 'tilt_x', 'tilt_y', 'deviceTimeMs', 'lapTimeMs', 'lapCnt', 'lapFlags', 'lastLapMs', 'bestLapMs', 'gpsAgeMs', 'imuAgeMs', 'timingRevision', 'gpsBootId', 'gpsSeq', 'gpsHostUs', 'gpsUtcUs', 'gpsDate', 'gpsFractionDigits'];
+    return 'time,speed,ax,ay,wz,mode,lat_g,lon_g,gps_lat,gps_lon,gps_valid,ekf_x,ekf_y,ekf_yaw,gps_course,lon_imu,lon_gps,gps_weight,pitch_corr,pitch_conf,roll_corr,roll_conf,tilt_x,tilt_y,device_time_ms,lap_time_ms,lap_count,lap_flags,last_lap_ms,best_lap_ms,gps_age_ms,imu_age_ms,timing_revision,gps_boot_id,gps_rmc_seq,gps_host_parse_us,gps_receiver_utc_us_of_day,gps_receiver_date_ddmmyy,gps_utc_fractional_digits\n'+samples.filter(r=>r.rowType!==1).map(r=>keys.map(k=>Number.isFinite(r[k])?r[k]:'').join(',')).join('\n')+'\n';
 }
 
 async function exportCSV(){
@@ -2051,7 +2065,7 @@ resize();window.addEventListener('resize',resize);
 // Fixed scale avoids making identical forces look different during a maneuver.
 $('range-val').onclick=()=>{currentScale=SCALE_STEPS[(SCALE_STEPS.indexOf(currentScale)+1)%SCALE_STEPS.length];$('range-val').textContent='Scale '+currentScale.toFixed(1)+' g';drawG()};
 function forcePoint(x,y,scale){const mag=Math.hypot(x,y),factor=mag>scale?scale/mag:1;return{x:x*factor/scale,y:y*factor/scale,clipped:mag>scale}}
-function forcesUsable(gps,age){return gps===1&&Number.isFinite(age)&&age>=0&&age<=300}
+function forcesUsable(gps,age,imuAge){return gps===1&&Number.isFinite(age)&&age>=0&&age<=300&&Number.isFinite(imuAge)&&imuAge>=0&&imuAge<=200}
 function clearForces(label){trail=[];emaGx=emaGy=0;lastT=0;effortPeaks.update(0,0,false);$('force-status').textContent=label;$('lat-g').textContent=$('lon-g').textContent='—';drawG()}
 
 function hexToRgba(hex,a){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return`rgba(${r},${g},${b},${a})`}
@@ -2384,23 +2398,25 @@ function process(buf,timing=null){
     el.textContent=MODES[mo]||'IDLE';
     el.style.color=MODE_COLORS[mo]||MODE_COLORS[0];
 
-    effortPeaks.update(d.getUint32(3,true),lng,forcesUsable(gpsOk,timing?.gps_age_ms)&&sp>=10,latg);
+    effortPeaks.update(d.getUint32(3,true),lng,forcesUsable(gpsOk,timing?.gps_age_ms,timing?.imu_age_ms)&&sp>=10,latg);
     $('effort-accel').textContent=effortPeaks.accel===null?'—':effortPeaks.accel.toFixed(2);$('effort-brake').textContent=effortPeaks.brake===null?'—':effortPeaks.brake.toFixed(2);
     $('effort-left').textContent=effortPeaks.left===null?'—':effortPeaks.left.toFixed(2);$('effort-right').textContent=effortPeaks.right===null?'—':effortPeaks.right.toFixed(2);
     updateReadouts(gx,gy);
     $('yaw').textContent=Math.round(yawDeg);
 
+    if(forcesUsable(gpsOk,timing?.gps_age_ms,timing?.imu_age_ms)){
     if(latg<0&&Math.abs(latg)>maxL){maxL=Math.abs(latg);$('max-l').textContent=maxL.toFixed(2)+'g'}
     if(latg>0&&latg>maxR){maxR=latg;$('max-r').textContent=maxR.toFixed(2)+'g'}
     if(lng>0&&lng>maxA){maxA=lng;$('max-a').textContent=maxA.toFixed(2)+'g'}
     if(lng<0&&Math.abs(lng)>maxB){maxB=Math.abs(lng);$('max-b').textContent=maxB.toFixed(2)+'g'}
+    }
 
     // Vehicle acceleration convention: right = positive lateral, accel = positive
     // longitudinal; braking is drawn upward, matching the plot's text labels.
-    if(forcesUsable(gpsOk,timing?.gps_age_ms)){
+    if(forcesUsable(gpsOk,timing?.gps_age_ms,timing?.imu_age_ms)){
         trail.push({x:gx,y:-gy,t:now});trail=trail.filter(p=>now-p.t<TRAIL_DURATION_MS);
         $('force-status').textContent=Math.hypot(gx,gy)>currentScale?'Over scale · tap scale':'3 s trail · est. g';
-    }else clearForces('Waiting for fresh GPS');
+    }else clearForces(gpsOk!==1||!Number.isFinite(timing?.gps_age_ms)||timing.gps_age_ms>300?'Waiting for fresh GPS':!Number.isFinite(timing?.imu_age_ms)?'IMU freshness unavailable':'Waiting for fresh IMU');
 
     lastGpsState=gpsOk;
     updateLapTimer(lapTimeMs,lapCnt,lapFlags,timing);
@@ -2409,7 +2425,7 @@ function process(buf,timing=null){
 
     // Recording
     if(rec){
-        chunkBuffer.push({t:now,deviceTimeMs:d.getUint32(3,true),lapTimeMs,lapCnt,lapFlags,lastLapMs:timing?.last_lap_ms,bestLapMs:timing?.best_lap_ms,gpsAgeMs:timing?.gps_age_ms,timingRevision:timing?.revision,gpsBootId:timing?.gps_boot_id,gpsSeq:timing?.gps_event?.seq,gpsHostUs:timing?.gps_event?.host_us,gpsUtcUs:timing?.gps_event?.utc_us,gpsDate:timing?.gps_event?.date_ddmmyy,gpsFractionDigits:timing?.gps_event?.fractional_digits,sp,ax,ay,wz,mo,latg,lng,lat,lon,gpsOk,ekfX,ekfY,ekfYaw,gpsCourse,lon_imu:fusion.lon_imu,lon_gps:fusion.lon_gps,gps_wt:fusion.gps_wt,pitch_c:fusion.pitch_c,pitch_cf:fusion.pitch_cf,roll_c:fusion.roll_c,roll_cf:fusion.roll_cf,tilt_x:fusion.tilt_x,tilt_y:fusion.tilt_y});
+        chunkBuffer.push({t:now,deviceTimeMs:d.getUint32(3,true),lapTimeMs,lapCnt,lapFlags,lastLapMs:timing?.last_lap_ms,bestLapMs:timing?.best_lap_ms,gpsAgeMs:timing?.gps_age_ms,imuAgeMs:timing?.imu_age_ms,timingRevision:timing?.revision,gpsBootId:timing?.gps_boot_id,gpsSeq:timing?.gps_event?.seq,gpsHostUs:timing?.gps_event?.host_us,gpsUtcUs:timing?.gps_event?.utc_us,gpsDate:timing?.gps_event?.date_ddmmyy,gpsFractionDigits:timing?.gps_event?.fractional_digits,sp,ax,ay,wz,mo,latg,lng,lat,lon,gpsOk,ekfX,ekfY,ekfYaw,gpsCourse,lon_imu:fusion.lon_imu,lon_gps:fusion.lon_gps,gps_wt:fusion.gps_wt,pitch_c:fusion.pitch_c,pitch_cf:fusion.pitch_cf,roll_c:fusion.roll_c,roll_cf:fusion.roll_cf,tilt_x:fusion.tilt_x,tilt_y:fusion.tilt_y});
         if(chunkBuffer.length>=MAX_PENDING_SAMPLES){rec=false;recordingError='Recording stopped: too many unsaved samples. Keep this tab open and export.';updateRecUI()}
         else if(now-lastSaveTime>=CHUNK_INTERVAL&&!chunkWrite)saveChunk().catch(console.error);
     }

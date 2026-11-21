@@ -147,7 +147,7 @@ impl MountCalibrator {
         Self {
             status: CalibrationStatus {
                 state: "idle",
-                message: "Park to start. Horizontal mounting only; field validation required.",
+                message: "Park with the sensor secured nearly level, then start alignment.",
                 saved,
                 candidate_degrees: None,
                 samples: 0,
@@ -214,7 +214,7 @@ impl MountCalibrator {
         self.status.candidate_degrees = None;
         self.status.state = "saved";
         self.status.message = if clear {
-            "Mount offset cleared."
+            "Saved sensor-to-car alignment reset."
         } else {
             "Saved. Verify acceleration/braking and left/right signs before relying on forces."
         };
@@ -279,7 +279,7 @@ impl MountCalibrator {
         }
         if self.status.state == "waiting" {
             self.status.state = "collecting";
-            self.status.message = "Collecting signed braking evidence…";
+            self.status.message = "Learning the car’s forward direction from braking…";
             self.first_brake_ms = s.at_ms;
             self.course = s.course_rad;
             self.status.samples = 0;
@@ -314,7 +314,7 @@ impl MountCalibrator {
         self.candidate = MountCalibration::from_offset(wrap(mean + PI));
         self.status.candidate_degrees = self.candidate.map(|c| c.yaw_offset.to_degrees());
         self.status.state = "review";
-        self.status.message="Candidate ready. Park, review, then save. Forward travel and level mounting must be confirmed by the operator.";
+        self.status.message="Alignment ready to review. Park, then choose Use this alignment. Only use a result collected while driving forward.";
     }
 }
 

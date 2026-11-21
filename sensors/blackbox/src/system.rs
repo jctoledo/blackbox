@@ -503,6 +503,14 @@ impl TelemetryPublisher {
                 lon: fix.lon,
                 gps_valid: sensors.gps_is_fresh(now_ms),
                 gps_age_ms: sensors.gps_age_ms(now_ms),
+                imu_age_ms: crate::telemetry_http::imu_packet_age_ms(
+                    now_ms,
+                    [
+                        sensors.last_imu_us,
+                        sensors.last_gyro_us,
+                        sensors.last_angle_us,
+                    ],
+                ),
                 gps_boot_id: None,
                 gps_event: None,
             };

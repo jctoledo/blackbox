@@ -41,7 +41,7 @@ test('left and right sustained peaks keep independent signs',()=>{
 test('force scale preserves direction and marks clipping without dropping the dot offscreen',()=>{
  const c={Math,Number};vm.createContext(c);vm.runInContext(html.slice(html.indexOf('function forcePoint('),html.indexOf('function clearForces(')),c);
  const p=c.forcePoint(3,-4,1);assert.equal(p.clipped,true);assert.ok(Math.abs(Math.hypot(p.x,p.y)-1)<1e-10);assert.ok(p.x>0&&p.y<0);
- assert.equal(c.forcesUsable(1,40),true);for(const age of [null,undefined,-1,301,NaN])assert.equal(c.forcesUsable(1,age),false);assert.equal(c.forcesUsable(0,40),false);
+ assert.equal(c.forcesUsable(1,40,20),true);for(const age of [null,undefined,-1,301,NaN])assert.equal(c.forcesUsable(1,age,20),false);assert.equal(c.forcesUsable(0,40,20),false);for(const age of [null,undefined,-1,201,NaN])assert.equal(c.forcesUsable(1,40,age),false);
 });
 test('force plot, readouts and peaks share right-positive / acceleration-positive packet convention',()=>{
  const c={Math,Number,Date:{now:()=>1000},forcesUsable:()=>true,gpsOk:1,timing:{gps_age_ms:0},gx:.4,gy:.3,now:1000,trail:[],TRAIL_DURATION_MS:3000,currentScale:1,$:()=>({textContent:''}),clearForces:()=>assert.fail('fresh packet cleared')};vm.createContext(c);

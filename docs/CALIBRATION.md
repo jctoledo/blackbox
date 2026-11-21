@@ -1,13 +1,21 @@
-# Horizontal mount alignment (experimental)
+# Align sensor to car (experimental)
 
 Mount alignment learns the vehicle's forward axis relative to a nearly level device. It changes force projection and the associated orientation-feedback axes. It does not change GPS coordinates, timing-line direction, or the EKF's device-heading basis. This is a software-tested candidate workflow; physical alignment accuracy is not established.
+
+## What is being aligned?
+
+Blackbox needs to know **the car’s forward direction relative to the mounted sensor**. If the sensor is rotated left or right on its mounting surface, its own X/Y axes do not automatically mean car-forward and car-right. Alignment teaches the software that rotation so acceleration, braking and left/right forces use the car’s frame.
+
+![Top view of the sensor rotated relative to the car](assets/sensor-alignment.svg)
+
+This is horizontal rotation, viewed from above. It does not point the GPS north, set a timing line, level the sensor, or compensate for a sloping road. Startup accelerometer-bias calibration is a separate stationary step.
 
 ## Use it
 
 1. Park on level ground and secure the sensor level; boot motionless for the separate IMU bias calibration. Wait outdoors for fresh GPS and a stationary indication.
-2. Open the dashboard menu → **Mount alignment**. Start while parked. The device must have writable NVS storage.
+2. Open the dashboard menu → **Align sensor to car**. Start while parked. The device must have writable NVS storage.
 3. At a controlled site, drive **forward**, then brake steadily in a straight line. Do not interact with the phone while moving. The screen does not tell the driver when to perform a sudden maneuver.
-4. Park and review the candidate. **Save candidate** writes it before activating it. A failed write leaves the previous offset active and permits retry. **Cancel attempt** discards the candidate. **Clear saved offset** restores the default axis assumption while parked.
+4. Park and review the candidate. **Use this alignment** writes it before activating it. A failed write leaves the previous offset active and permits retry. **Cancel attempt** discards the candidate. **Reset alignment** restores the default axis assumption while parked.
 5. Verify acceleration/braking and left/right force signs against known motion. Repeat after remounting. Keep recordings and mounting photos for review.
 
 The operator must establish forward travel. Scalar GPS speed and a brake vector cannot independently distinguish braking while reversing: that can yield a 180° error. Slopes, banking, sensor latency, AHRS errors and valid-looking GPS outliers remain field-test cases. The current collection gate rejects more than 10° measured roll/pitch; this is a heuristic, not slope compensation.

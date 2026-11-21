@@ -40,6 +40,7 @@ Use this checklist for a specific board, wiring revision, GPS receiver, mounting
 - [ ] Test missing IMU at startup using power-off rewiring. Calibration must exit with a visible/logged failure rather than hang indefinitely.
 - [ ] Outdoors, wait for valid GPS and warmup. Record accepted fix rate, IMU packet rate, loop rate, and actual receiver configuration. Distinguish received packets from estimator updates.
 - [ ] Remove valid GPS reception by a controlled method. Within the firmware freshness window (currently 1.5 seconds without a new valid fix), the GPS status must stop implying a fresh fix. Restore reception and confirm recovery.
+- [ ] With controlled sensor-output configuration, interrupt gyro or angle packets while GPS and telemetry continue. G-meter/readouts must become unavailable and peaks must stop accumulating; verify IMU age in Session CSV. Do not disconnect live wiring.
 - [ ] Simulate Wi-Fi loss and a stalled connection. The browser must show stale/offline status rather than LIVE; reconnect without reloading if possible.
 - [ ] Power-cycle the device with a track selected. The UI must require re-arming when firmware timing state resets.
 
