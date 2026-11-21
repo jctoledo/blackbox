@@ -19,7 +19,7 @@ const N: usize = 7; // State dimension
 const CHI2_GATE_POSITION: f32 = 16.0; // ~4 sigma - reject extreme outliers only
 const CHI2_GATE_YAW: f32 = 12.0; // ~3.5 sigma - account for magnetic interference
                                  // Note: Velocity gating was removed because it caused runaway filter divergence.
-                                 // GPS velocity is derived from Doppler shift and is very reliable - no gating needed.
+                                 // Finite GPS velocity remains available for recovery; receiver validity is checked upstream.
 
 /// EKF tuning configuration
 /// Allows runtime adjustment of filter parameters (Open/Closed Principle)
@@ -28,7 +28,7 @@ pub struct EkfConfig {
     // Process noise parameters
     pub q_acc: f32,  // (m/s²)² - Acceleration process noise
     pub q_gyro: f32, // (rad/s)² - Gyro process noise
-    pub q_bias: f32, // (m/s²)² - Bias evolution noise
+    pub q_bias: f32, // (m/s²)²/s - Bias variance growth rate
 
     // Measurement noise parameters
     pub r_pos: f32, // (m)² - GPS position measurement noise
@@ -59,7 +59,7 @@ pub enum UpdateResult {
 }
 
 /// Minimum position sigma floor (meters)
-/// EKF can't know position better than GPS accuracy (~2-3m for M9N)
+/// Heuristic diagnostic floor, not a receiver accuracy specification.
 const POS_SIGMA_FLOOR: f32 = 2.5;
 
 /// EKF state and covariance
@@ -219,7 +219,7 @@ impl Ekf {
     /// 1. Starts with sqrt(P[0] + P[1]) as base
     /// 2. Inflates based on NIS average (if significantly above expected)
     /// 3. Inflates based on GPS discrepancy
-    /// 4. Applies minimum floor (GPS can't be more accurate than ~2-3m)
+    /// 4. Applies a heuristic floor, not a physical lower bound on GPS accuracy.
     pub fn get_effective_pos_sigma(&self) -> f32 {
         // Base sigma from covariance
         let base_sigma = (self.p[0] + self.p[1]).sqrt();
@@ -245,7 +245,7 @@ impl Ekf {
         // Combine inflations (multiplicative)
         let inflated_sigma = base_sigma * nis_inflation * discrepancy_inflation;
 
-        // Apply floor: EKF can't know position better than GPS (~2-3m for M9N)
+        // Apply the diagnostic floor; this is not a calibrated position error bound.
         inflated_sigma.max(POS_SIGMA_FLOOR)
     }
 
@@ -292,6 +292,10 @@ impl Ekf {
     /// * `z_yaw` - Yaw measurement in radians
     /// * `r_yaw_factor` - Multiplier for measurement noise (>1 = less trust)
     pub fn update_yaw_soft(&mut self, z_yaw: f32, r_yaw_factor: f32) -> UpdateResult {
+        if !z_yaw.is_finite() || !r_yaw_factor.is_finite() || r_yaw_factor <= 0.0 {
+            self.rejected_yaw += 1;
+            return UpdateResult::Rejected;
+        }
         // Wrap innovation to [-π, π]
         let dy = wrap_angle(z_yaw - self.x[2]);
 
@@ -366,16 +370,18 @@ impl Ekf {
         self.x[4] = vy;
         // Biases remain constant (self.x[5] and self.x[6] unchanged)
 
-        // Update covariance (diagonal approximation)
-        let qx = 0.25 * self.config.q_acc * dt * dt;
-        let qv = self.config.q_acc * dt * dt;
-        self.p[0] += qx;
-        self.p[1] += qx;
-        self.p[2] += self.config.q_gyro * dt * dt;
-        self.p[3] += qv;
-        self.p[4] += qv;
-        self.p[5] += self.config.q_bias * dt + 1e-6;
-        self.p[6] += self.config.q_bias * dt + 1e-6;
+        // Propagate the diagonal of F P Fᵀ + Q. Off-diagonal correlations
+        // are discarded: these variances remain approximate diagnostics.
+        // q_acc is per-step acceleration variance; position scales with dt^4.
+        let dt2 = dt * dt;
+        let dt4 = dt2 * dt2;
+        self.p[0] += self.p[3] * dt2 + 0.25 * (self.p[5] + self.config.q_acc) * dt4;
+        self.p[1] += self.p[4] * dt2 + 0.25 * (self.p[6] + self.config.q_acc) * dt4;
+        self.p[2] += self.config.q_gyro * dt2;
+        self.p[3] += (self.p[5] + self.config.q_acc) * dt2;
+        self.p[4] += (self.p[6] + self.config.q_acc) * dt2;
+        self.p[5] += self.config.q_bias * dt;
+        self.p[6] += self.config.q_bias * dt;
     }
 
     /// Update with GPS position measurement
@@ -385,6 +391,10 @@ impl Ekf {
     ///
     /// Returns UpdateResult::Accepted if measurement was used, Rejected if gated.
     pub fn update_position(&mut self, z_x: f32, z_y: f32) -> UpdateResult {
+        if !z_x.is_finite() || !z_y.is_finite() {
+            self.rejected_position += 1;
+            return UpdateResult::Rejected;
+        }
         // Compute innovations (measurement residuals)
         let y_x = z_x - self.x[0];
         let y_y = z_y - self.x[1];
@@ -406,7 +416,8 @@ impl Ekf {
         }
 
         // Issue 3: Track normalized innovation squared (NIS) for uncertainty estimation
-        // NIS = innovation² / S, should average ~1.0 if filter is consistent
+        // The 2D sum should average ~2.0 for a consistent untruncated model.
+        // Accepted-only statistics are biased by gating.
         // High NIS average indicates model/measurement mismatch
         self.nis_position_sum += mahal_sq;
         self.nis_position_count += 1;
@@ -431,14 +442,18 @@ impl Ekf {
 
     /// Update with GPS velocity measurement
     ///
-    /// GPS velocity is always accepted (no innovation gating).
-    /// Unlike position (which can have multipath errors) or yaw (magnetic interference),
-    /// GPS velocity is derived from Doppler shift and is very reliable.
+    /// Finite GPS velocity is accepted without innovation gating. Receiver validity
+    /// and physical speed bounds must be checked by the caller; Doppler is not
+    /// immune to bad data.
     ///
     /// Innovation gating on velocity was removed because it caused runaway filter
     /// divergence: once IMU integration error caused velocity to drift past the gate
     /// threshold, ALL subsequent GPS updates were rejected, making recovery impossible.
     pub fn update_velocity(&mut self, z_vx: f32, z_vy: f32) {
+        if !z_vx.is_finite() || !z_vy.is_finite() {
+            self.rejected_velocity += 1;
+            return;
+        }
         // VX update
         let s_x = self.p[3] + self.config.r_vel;
         let k_x = self.p[3] / s_x;
@@ -459,6 +474,9 @@ impl Ekf {
     /// GPS speed is always accepted (no innovation gating) for the same reason
     /// as velocity: gating caused runaway filter divergence.
     pub fn update_speed(&mut self, z_speed: f32) {
+        if !z_speed.is_finite() || z_speed < 0.0 {
+            return;
+        }
         let r_spd = if z_speed < 0.3 { 0.20 } else { 0.04 }; // Adaptive R
 
         let v_est = self.speed().max(0.05); // Avoid division by zero
@@ -491,6 +509,10 @@ impl Ekf {
     ///
     /// Returns UpdateResult::Accepted if measurement was used, Rejected if gated.
     pub fn update_yaw(&mut self, z_yaw: f32) -> UpdateResult {
+        if !z_yaw.is_finite() {
+            self.rejected_yaw += 1;
+            return UpdateResult::Rejected;
+        }
         // Wrap innovation to [-π, π]
         let dy = wrap_angle(z_yaw - self.x[2]);
 
@@ -518,6 +540,9 @@ impl Ekf {
 
     /// Update accelerometer biases when stationary
     pub fn update_bias(&mut self, z_ax: f32, z_ay: f32) {
+        if !z_ax.is_finite() || !z_ay.is_finite() {
+            return;
+        }
         const R_BIAS: f32 = 0.05 * 0.05; // (0.05 m/s²)²
 
         // BAX update

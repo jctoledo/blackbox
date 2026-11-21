@@ -145,3 +145,11 @@ Keep failures and untested cases visible. Promote a candidate to stable only whe
 - [ ] Check a stationary pause: delta hides, then resumes locally when fresh positions and direction return. Test GPS loss separately: do not expect uninterrupted comparison or automatic recovery.
 - [ ] At nearby parallel/crossed sections, verify ambiguous matches are hidden rather than jumping along the route. Check start/finish seam behavior and repeated stage starts.
 - [ ] Record phone/browser, GPS installation, reference time, and observed failures. The matching gates are heuristics; independently timed crossings remain necessary to establish physical timing error.
+
+## Landscape cluster and offline fonts
+
+- [ ] While parked, start recording and rotate portrait → landscape → portrait. Timing and recording must continue, and controls must return in portrait.
+- [ ] In landscape, use Dashboard to return to setup. Check speed, elapsed time, reference, recording and connection states in both orientations.
+- [ ] Disconnect the phone from internet while staying on Blackbox Wi-Fi. Confirm the instrument fonts load from the device page.
+- [ ] Check long stage times, daylight glare, mounting distance, light/dark themes and browser bars/notches. A browser viewport test cannot establish in-car readability.
+- [ ] Test connection loss: stale values must be visibly identified and delta hidden. Stop while parked, export CSV and download a full backup.

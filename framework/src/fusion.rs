@@ -7,8 +7,8 @@
 //! 4. Dynamic tilt offset learning (ZUPT enhancement)
 //! 5. GPS heading-based yaw rate calibration
 //!
-//! The goal is to provide clean, drift-free acceleration for mode detection
-//! that works regardless of device mounting angle.
+//! The goal is responsive acceleration estimates for mode detection. Mounting,
+//! timing alignment and physical accuracy require validation.
 //!
 //! ## Key Innovation: GPS-Corrected Orientation
 //!
@@ -16,12 +16,12 @@
 //! forward acceleration, it reports false pitch. This corrupts gravity removal
 //! and produces wrong earth-frame acceleration.
 //!
-//! Solution: Use GPS velocity (ground truth) to learn orientation corrections.
+//! Solution: Use GPS velocity as a noisy reference to learn orientation corrections.
 //! - Compare IMU-predicted accel with GPS-derived accel
 //! - The difference reveals orientation error: pitch_error ≈ (ax_imu - ax_gps) / G
 //! - Apply corrections BEFORE gravity removal
 //!
-//! This enables accurate 200 Hz IMU data instead of being limited to GPS rate.
+//! Sensor output and processing cadence differ; correction is not an accuracy guarantee.
 //!
 //! ## Vibration Filtering
 //!
@@ -40,7 +40,7 @@ const G: f32 = 9.80665;
 /// acceleration, it reports wrong pitch/roll, which corrupts gravity removal.
 ///
 /// This corrector compares IMU-derived acceleration (using AHRS angles) with
-/// GPS-derived acceleration (ground truth) to learn orientation corrections.
+/// GPS-derived acceleration (noisy reference) to learn orientation corrections.
 ///
 /// ## How it works
 /// 1. Compute IMU acceleration using AHRS + current correction
@@ -127,7 +127,13 @@ impl OrientationCorrector {
         dt: f32,
     ) {
         // Only learn when conditions are good
-        if speed < self.min_speed || !is_gps_fresh {
+        if speed < self.min_speed
+            || !is_gps_fresh
+            || ![lon_imu, lon_gps, lat_imu, lat_gps, speed, dt]
+                .iter()
+                .all(|v| v.is_finite())
+            || dt <= 0.0
+        {
             self.cruise_time = 0.0; // Reset cruise accumulator
             self.cruise_bias_sum = 0.0;
             self.cruise_bias_count = 0;
@@ -171,8 +177,8 @@ impl OrientationCorrector {
             if self.cruise_time >= 2.0 && self.cruise_bias_count > 30 {
                 let measured_bias = self.cruise_bias_sum / self.cruise_bias_count as f32;
 
-                // EMA update for cruise bias (slower alpha for stability)
-                self.cruise_bias = 0.9 * self.cruise_bias + 0.1 * measured_bias;
+                // Accumulate the residual with a slow learning gain.
+                self.cruise_bias += 0.1 * measured_bias;
                 // Clamp cruise bias to reasonable range (±1.5 m/s² = ±0.15g)
                 self.cruise_bias = self.cruise_bias.clamp(-1.5, 1.5);
 
@@ -301,7 +307,7 @@ impl Default for FusionConfig {
     /// - Foundation for future granular detection (soft/medium/hard accel)
     ///
     /// The OrientationCorrector learns pitch/roll errors by comparing IMU-predicted
-    /// acceleration with GPS-derived acceleration (ground truth).
+    /// acceleration with GPS-derived acceleration (noisy reference).
     ///
     /// GPS weight fields control blending between corrected IMU and GPS acceleration
     /// for robustness during correction learning phase.

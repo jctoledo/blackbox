@@ -25,6 +25,7 @@ jobs:
           cache: npm
       - name: Host regression tests
         run: |
+          python3 scripts/embed_dashboard_fonts.py --check
           rustup component add rustfmt --toolchain stable
           cargo +stable fmt --all -- --check
           cargo +stable test --locked -p sensor-fusion -p wt901 -p ublox-gps -p blackbox-host-tests

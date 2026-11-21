@@ -60,26 +60,6 @@ Violations may result in:
 - [Testing](#testing)
 - [Community](#community)
 
-## Code of Conduct
-
-### Our Pledge
-
-We're committed to providing a welcoming and inspiring community for everyone. We expect all participants to:
-
-- **Be respectful** - Different skill levels, opinions, and experiences make us stronger
-- **Be constructive** - Provide helpful feedback and focus on solutions
-- **Be collaborative** - We're building something together
-- **Be patient** - Everyone was a beginner once
-
-### Unacceptable Behavior
-
-- Harassment, discrimination, or intimidation of any kind
-- Trolling, insulting comments, or personal attacks
-- Publishing others' private information
-- Any conduct that would be inappropriate in a professional setting
-
-If you experience or witness unacceptable behavior, please report it by opening an issue or contacting the maintainers.
-
 ## Getting Started
 
 1. **Fork the repository** on GitHub
@@ -185,68 +165,38 @@ Documentation is just as important as code! Help us by:
 
 ## Development Setup
 
-### Prerequisites
+### Maintained workflow
+
+Use the root README for the ESP-IDF prerequisites. All project compilation, automated tests, documentation generation and media encoding run on lat. A maintainer reviews branch code and dispatches `.github/workflows/ci.yml` on `blackbox-lat`; fork pull requests must not automatically run on this persistent runner.
+
+Host checks (repository root, on lat):
 
 ```bash
-# Install Rust
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
-# Install ESP toolchain
-cargo install cargo-espflash espflash ldproxy
-
-# Install Python dependencies (for telemetry receivers)
-pip3 install -r sensors/blackbox/tools/python/requirements.txt
+cargo +stable fmt --all -- --check
+cargo +stable test --locked -p sensor-fusion -p wt901 -p ublox-gps -p blackbox-host-tests
+cargo +stable check --locked -p ublox-gps --no-default-features
+npm ci --ignore-scripts
+node --test tests/*.test.cjs
+python3 -m unittest discover -s tests -p 'test_*.py'
+python3 scripts/embed_dashboard_fonts.py --check
 ```
 
-### Building the Project
-
-This is a Cargo workspace. Build commands from the repository root:
+Firmware checks (from `sensors/blackbox`, on lat):
 
 ```bash
-# Check all workspace members compile
-cargo check
-
-# Build entire workspace (framework + drivers + blackbox)
-cargo build
-
-# Build specific package
-cargo build -p blackbox
-cargo build -p wt901
-cargo build -p ublox-gps
-
-# Build release binary for ESP32
-cd sensors/blackbox
-cargo build --release
-
-# Flash to ESP32 (will auto-detect port)
-cargo espflash flash --release --monitor
+GPS_MODEL=m9n GPS_RATE=25 cargo +nightly-2025-10-18 clippy --release --locked -- -D warnings
+GPS_MODEL=m9n GPS_RATE=25 cargo +nightly-2025-10-18 build --release --locked
+GPS_MODEL=6m GPS_RATE=5 cargo +nightly-2025-10-18 build --release --locked
 ```
 
-### Testing Locally
-
-```bash
-# Run Rust tests (workspace-wide)
-cargo test
-
-# Format code (uses shared .rustfmt.toml)
-cargo fmt
-
-# Run linter (uses shared clippy.toml)
-cargo clippy -- -D warnings
-
-# Test Python syntax
-python3 -m py_compile sensors/blackbox/tools/python/*.py
-
-# Test telemetry receiver
-python3 sensors/blackbox/tools/python/tcp_telemetry_receiver.py
-```
+CI also validates Python tools, cross-language packet fixtures, both GPS variants with Clippy, generated guides and Pages packaging. Python tools live in `tools/python/`. The production UI is `sensors/blackbox/web/dashboard.html`; the demo is generated from it, not ported from the historical dashboard simulator.
 
 ## Pull Request Process
 
 ### Before Submitting
 
-- [ ] Code compiles without warnings (`cargo build`)
-- [ ] Tests pass (`cargo test` if applicable)
+- [ ] Relevant host/firmware targets compile without warnings on lat
+- [ ] Relevant host, browser-logic and protocol tests pass on lat
 - [ ] Code is formatted (`cargo fmt`)
 - [ ] Clippy linter passes (`cargo clippy`)
 - [ ] Documentation updated (README, CLAUDE.md if needed)
@@ -270,7 +220,7 @@ python3 sensors/blackbox/tools/python/tcp_telemetry_receiver.py
 
 ### What Happens Next
 
-- A maintainer will review your PR (usually within a week)
+- A maintainer will review your PR (as maintainer availability allows)
 - They may request changes or ask questions
 - Once approved, your PR will be merged!
 - Your contribution will be credited in release notes
@@ -389,8 +339,8 @@ Contributors are recognized in:
 
 Don't hesitate to ask questions:
 - Check existing documentation:
-  - [SENSOR_DRIVERS.md](SENSOR_DRIVERS.md) - Driver crates architecture
-  - [WORKSPACE_STRUCTURE.md](WORKSPACE_STRUCTURE.md) - Cargo workspace organization
+  - [Driver crates](drivers/) - Current sensor parser implementations
+  - [Framework guide](framework/README.md) - Current integration boundaries
   - [CLAUDE.md](CLAUDE.md) - Architecture overview
 - Open a GitHub issue with the `question` label
 - Comment on relevant PRs or issues

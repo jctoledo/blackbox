@@ -91,7 +91,7 @@ No. Position-matched references provide a foundation, but do not identify or lea
 
 ## Which display should I use?
 
-Set up the track and recording while parked. Drive view emphasizes lap time, delta, speed, and last/best results while hiding track editing and the G-meter. Exit drive view to access setup and saved data. The standard dashboard also keeps the G-meter out of the way. Open Analysis while parked to inspect forces, and use Expand G-meter for a larger plot. A completed lap briefly shows its exact recorded result for five seconds. Drive view does not start recording automatically or keep a phone awake.
+Set up the track and recording while parked. Drive view emphasizes lap time, delta, speed, and last/best results while hiding track editing and the G-meter. Rotate the phone to landscape for the automatic speed-and-timing cluster (at least 600 px wide, no more than 600 px high). Tap Dashboard to access setup and saved data; rotating back to portrait restores the ordinary layout. Orientation never starts or stops recording/timing. Inter and JetBrains Mono are bundled into the device page, so the demo and in-car instrument share fonts without internet access. The standard dashboard also keeps the G-meter out of the way. Open Analysis while parked to inspect forces, and use Expand G-meter for a larger plot. A completed lap briefly shows its exact recorded result for five seconds. Drive view does not start recording automatically or keep a phone awake.
 
 ## Can I see whether my pace is becoming more consistent?
 

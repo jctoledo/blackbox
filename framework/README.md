@@ -1,239 +1,35 @@
 # Sensor Fusion Framework
 
-A modular, extensible Rust framework for building custom sensor fusion systems. Build inspectable telemetry experiments with reusable sensor interfaces and coordinate transforms. The Blackbox application supplies a concrete vehicle project, regression tests, and a documented field-validation path.
+Reusable Rust components for Blackbox telemetry: sensor interfaces, coordinate transforms, a seven-state estimator, GPS/IMU acceleration blending, stationary gating, and circuit/stage timing.
 
-## Features
-
-- **🔌 Plugin Architecture** - Add sensors without modifying existing code
-- **📊 Sensor Fusion** - Extended Kalman Filter (7-state: position, velocity, yaw, biases)
-- **🔄 Coordinate Transforms** - Body ↔ Earth ↔ Vehicle frame conversions
-- **🚫 No-std Compatible** - Works on embedded systems without operating system
-- **🌐 Distributed Support** - MQTT-based multi-board sensor networks (optional)
-- **🎯 Hardware Agnostic** - Abstract sensor interfaces work with any hardware
-
-## What It Does
-
-The framework handles the hard parts of building a telemetry system:
-
-1. **Sensor Abstraction** - Define hardware-independent sensor interfaces
-2. **Plugin System** - Register and poll multiple sensors without coupling
-3. **Sensor Fusion** - Combine noisy sensor data into accurate state estimates
-4. **Coordinate Math** - Transform accelerations between body/earth/vehicle frames
-
-You focus on your specific sensors and application - the framework handles the fusion logic.
-
-## Example Usage
+## Use the estimator
 
 ```rust
-use sensor_fusion::sensor_framework::{SensorRegistry, Sensor};
 use sensor_fusion::ekf::Ekf;
-use sensor_fusion::transforms::{body_to_earth, remove_gravity};
-
-// Create sensor registry
-let mut registry = SensorRegistry::new();
-
-// Add your sensors (implement Sensor trait)
-registry.register(Box::new(MyImuSensor::new()))?;
-registry.register(Box::new(MyGpsSensor::new()))?;
-
-// Create Extended Kalman Filter
 let mut ekf = Ekf::new();
-
-// Main fusion loop
-loop {
-    // Poll all sensors
-    let readings = registry.poll_all();
-
-    // Process IMU reading
-    if let Some(imu_reading) = readings.get_imu() {
-        // Remove gravity from acceleration
-        let (ax_b, ay_b, az_b) = remove_gravity(
-            imu_reading.ax, imu_reading.ay, imu_reading.az,
-            imu_reading.roll, imu_reading.pitch
-        );
-
-        // Transform to earth frame
-        let (ax_e, ay_e) = body_to_earth(
-            ax_b, ay_b, az_b,
-            imu_reading.roll, imu_reading.pitch, ekf.yaw()
-        );
-
-        // EKF prediction step
-        ekf.predict(ax_e, ay_e, imu_reading.wz, dt);
-    }
-
-    // Process GPS reading
-    if let Some(gps_reading) = readings.get_gps() {
-        ekf.update_position(gps_reading.x, gps_reading.y);
-        ekf.update_velocity(gps_reading.vx, gps_reading.vy);
-    }
-
-    // Get fused state estimate
-    let (x, y) = ekf.position();
-    let (vx, vy) = ekf.velocity();
-    let yaw = ekf.yaw();
-
-    // Stream telemetry, log to SD card, etc.
-}
+// Earth-frame acceleration in m/s², yaw rate in rad/s, interval in seconds.
+ekf.predict(0.5, 0.0, 0.0, 0.033);
+ekf.update_position(1.0, 2.0); // local east/north metres
+// Check receiver validity and physical bounds before supplying measurements.
+ekf.update_velocity(3.0, 0.0);
+let position = ekf.position();
 ```
 
-## Modules
+State: `[east, north, yaw, velocity_east, velocity_north, bias_east, bias_north]`.
+The estimator integrates earth-frame acceleration, including measured turning acceleration. Its covariance retains only diagonal entries; it is not a full covariance navigation EKF. Biases are learned while stationary. Timing uses fresh GPS fixes directly, independently of the estimator position.
 
-### `sensor_framework`
-Core plugin architecture. Define sensor traits and register implementations:
+## Modules and integration
 
-```rust
-pub trait Sensor {
-    fn capabilities(&self) -> SensorCapabilities;
-    fn poll(&mut self) -> Option<SensorReading>;
-}
+- `ekf`: prediction, measurement updates, stationary constraints, diagnostic variance.
+- `transforms`: gravity removal, body/earth/vehicle rotations, local geographic projection.
+- `fusion`: filtered GPS speed derivative, orientation corrections, acceleration blending.
+- `lap_timer`: finite directional timing lines, interpolated crossings, circuit/stage states.
+- `sensor_framework`: sensor registry and typed readings. `poll_all()` returns a vector; match each reading's data rather than calling nonexistent `get_imu()`/`get_gps()` helpers.
+- `stationary`, `velocity`, `mode`, `filter`: supporting processing.
 
-let mut registry = SensorRegistry::new();
-registry.register(Box::new(MySensor::new()))?;
-```
+Use a path dependency: `sensor-fusion = { path = "../../framework" }`.
+The crate currently uses `std`, including its registry and allocation. A bare-metal `no_std` port is not supplied. Optional `esp32` and `mqtt` features are declared in [Cargo.toml](Cargo.toml); inspect the application for concrete transport integration. No crates.io publication or measured execution-time/memory budget is asserted here.
 
-### `ekf`
-Extended Kalman Filter for sensor fusion:
+[Blackbox firmware](../sensors/blackbox/README.md) is the maintained integration example. Run host checks and embedded builds using [the contribution workflow](../CONTRIBUTING.md). See [sensor fusion mathematics](../docs/SENSOR_FUSION.md), [timing](../docs/LAP_TIMER.md), and [physical validation](../docs/HARDWARE_VALIDATION.md).
 
-```rust
-let mut ekf = Ekf::new();
-ekf.predict(ax_earth, ay_earth, wz, dt);  // IMU prediction
-ekf.update_position(x, y);                // GPS update
-ekf.update_velocity(vx, vy);              // GPS velocity
-ekf.zupt();                               // Zero-velocity update when stopped
-```
-
-**State vector (7D):**
-- Position: `x, y` (m)
-- Velocity: `vx, vy` (m/s)
-- Yaw angle: `ψ` (rad)
-- Accelerometer biases: `bax, bay` (m/s²)
-
-### `transforms`
-Coordinate frame transformations for vehicle dynamics:
-
-```rust
-// Remove gravity component from IMU reading
-let (ax_body, ay_body, az_body) = remove_gravity(
-    ax_measured, ay_measured, az_measured,
-    roll, pitch
-);
-
-// Transform body frame → earth frame (horizontal plane)
-let (ax_earth, ay_earth) = body_to_earth(
-    ax_body, ay_body, az_body,
-    roll, pitch, yaw
-);
-
-// Transform earth frame → vehicle frame (car-centric)
-let (ax_lon, ay_lat) = earth_to_car(ax_earth, ay_earth, yaw);
-
-// GPS coordinate conversions
-let (east_m, north_m) = gps_to_local(lat, lon, ref_lat, ref_lon);
-```
-
-### `sensors`
-Basic sensor trait definitions (IMU, GPS, generic sensors).
-
-## Architecture
-
-```text
-┌─────────────────────────────────────────┐
-│  Your Application (sensors/your-app/)   │
-│  • Hardware drivers                     │
-│  • Application logic                    │
-│  • Telemetry output                     │
-└──────────────┬──────────────────────────┘
-               │ uses
-               ▼
-┌─────────────────────────────────────────┐
-│  Sensor Fusion Framework                │
-│  ┌─────────────────────────────────┐    │
-│  │ sensor_framework (Plugin API)   │    │
-│  ├─────────────────────────────────┤    │
-│  │ ekf (Sensor Fusion)             │    │
-│  ├─────────────────────────────────┤    │
-│  │ transforms (Coordinate Math)    │    │
-│  ├─────────────────────────────────┤    │
-│  │ velocity (Speed Estimation)     │    │
-│  └─────────────────────────────────┘    │
-└─────────────────────────────────────────┘
-```
-
-## Use Cases
-
-- **Track Day Data Logging** - Record lap times, g-forces, racing lines
-- **Vehicle Dynamics Research** - Suspension, brake, aero tuning data
-- **Fleet Monitoring** - Driver behavior and vehicle health tracking
-- **Autonomous Vehicles** - Sensor fusion for localization/navigation
-- **Racing Series** - Custom telemetry for spec racing classes
-- **Educational Projects** - Learn sensor fusion and embedded Rust
-
-## Installation
-
-Add to your `Cargo.toml`:
-
-```toml
-[dependencies]
-sensor-fusion = { path = "../path/to/framework" }
-
-# Or from crates.io (when published):
-# sensor-fusion = "0.1"
-```
-
-## Features
-
-The framework supports optional features:
-
-```toml
-[dependencies]
-sensor-fusion = { version = "0.1", features = ["esp32", "mqtt"] }
-```
-
-- `esp32` - ESP32-specific HAL support
-- `mqtt` - MQTT distributed sensor support
-
-## Examples
-
-See the `sensors/blackbox/` directory for a complete working example:
-- ESP32-C3 firmware
-- WT901 IMU + NEO-6M GPS
-- Binary v4 telemetry with configurable output cadence
-- MQTT status messages
-- Driving mode classification
-
-## Performance
-
-- **EKF update**: <500µs per prediction step (200 Hz capable on ESP32)
-- **Memory footprint**: ~10KB framework overhead
-- **Coordinate transforms**: <50µs per transformation
-- **Sensor polling**: 200+ Hz (hardware-limited)
-
-## Design Principles
-
-1. **SOLID Principles** - Maintainable, testable, extensible code
-2. **Dependency Inversion** - Framework depends on abstractions, not implementations
-3. **Open/Closed** - Open for extension (new sensors), closed for modification
-4. **Single Responsibility** - Each module has one clear purpose
-5. **Hardware Agnostic** - Works with any sensor via trait implementations
-
-## Contributing
-
-Contributions welcome! This framework is designed to support the entire motorsport and automotive community. See `CONTRIBUTING.md` in the repository root.
-
-## License
-
-MIT License - Use it, modify it, sell it, race with it. See `LICENSE` for details.
-
-## Related Projects
-
-- **Blackbox** - ESP32-based telemetry system using this framework
-- **wt901 driver** - Standalone WT901 IMU driver crate
-- **ublox-gps driver** - u-blox GPS driver crate (NEO-6M, NEO-M9N, etc.)
-
-## Documentation
-
-- [API Documentation](https://docs.rs/sensor-fusion) (when published)
-- [Sensor Toolkit Guide](../docs/SENSOR_TOOLKIT_GUIDE.md)
-- [Architecture Guide](../docs/ARCHITECTURE.md)
-- [Workspace Structure](../WORKSPACE_STRUCTURE.md)
+MIT license; see the repository LICENSE.

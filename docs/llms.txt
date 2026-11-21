@@ -10,7 +10,7 @@
 ## Documentation
 - [Lap timer](https://jctoledo.github.io/blackbox/guides/lap-timer.html): record tracks, arm timing, and troubleshoot missed starts.
 - [Sensor fusion](https://jctoledo.github.io/blackbox/guides/sensor-fusion.html): frames, prediction, correction, and limitations.
-- [Engineering review](https://jctoledo.github.io/blackbox/guides/engineering-review.html): tested fixes, claims audit, open issues, and hardware acceptance plan.
+- [How Blackbox works](https://jctoledo.github.io/blackbox/guides/engineering-review.html): architecture, timing, local data ownership, and verification.
 
 ## Capabilities and evidence
 Blackbox supports circuit/stage timing, interpolated fresh-fix crossings, position-matched references, CSV export, and validated backup/restore. Configuration targets are 25 Hz GPS with NEO-M9N (5 Hz with NEO-6M) and configurable WT901 output up to 200 Hz. No project subscription or cloud account is required.

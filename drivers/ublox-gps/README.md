@@ -4,14 +4,7 @@ Pure Rust driver for u-blox GPS receivers with NMEA parsing and UBX protocol sup
 
 ## Supported Hardware
 
-| Module | Max Rate | Protocol | Features |
-|--------|----------|----------|----------|
-| NEO-6M | 5 Hz | NMEA only | Budget option, basic accuracy |
-| NEO-7M | 10 Hz | NMEA + UBX | Improved accuracy |
-| NEO-M8N | 10 Hz | NMEA + UBX | Better sensitivity |
-| **NEO-M9N** | **25 Hz** | NMEA + UBX | Automotive mode, best accuracy |
-
-Any NMEA 0183 compatible GPS receiver will work for basic functionality.
+Blackbox supplies NEO-6M (5 Hz target) and NEO-M9N (25 Hz target) configurations. These are configuration targets, not guaranteed received rates or accuracy rankings. The driver parses supported NMEA sentences and generates selected UBX configuration messages; it does not decode a binary UBX navigation solution. Other receiver models require command, baud, sentence and electrical validation.
 
 ## Features
 
@@ -43,8 +36,8 @@ let mut parser = NmeaParser::new();
 loop {
     let byte = uart.read_byte();
 
-    if parser.feed_byte(byte) {
-        // New sentence parsed
+    if parser.feed_byte(byte) && parser.take_new_fix() {
+        // New valid RMC fix, not a repeated GGA/GSA update
         let fix = parser.last_fix();
 
         if fix.valid {
@@ -129,20 +122,7 @@ uart.write(&buffer[..len]);
 
 ## Dynamic Platform Models
 
-The NEO-M9N supports multiple dynamic models optimized for different use cases:
-
-| Model | Use Case | Max Altitude | Max Velocity |
-|-------|----------|--------------|--------------|
-| Portable | General handheld | 12km | 310 m/s |
-| Stationary | Fixed installation | 9km | 10 m/s |
-| Pedestrian | Walking/running | 9km | 30 m/s |
-| **Automotive** | Vehicle telemetry | 9km | 100 m/s |
-| Sea | Marine | 9km | 25 m/s |
-| Airborne1g | Light aircraft | 50km | 100 m/s |
-| Airborne2g | Aerobatic | 50km | 250 m/s |
-| Airborne4g | High-g maneuvers | 50km | 500 m/s |
-
-**Automotive mode** is recommended for vehicle telemetry - it's optimized for road dynamics and provides the best position/velocity accuracy for cars.
+`DynamicModel` enumerates receiver configuration choices. Automotive is the Blackbox setting; verify that your receiver accepts it. It does not guarantee better accuracy in every condition. Consult the specific receiver's integration manual for dynamic-model limits.
 
 ## NMEA Sentences
 
@@ -193,7 +173,7 @@ pub struct GpsFix {
     pub lat: f64,           // Latitude (degrees, + = North)
     pub lon: f64,           // Longitude (degrees, + = East)
     pub speed: f32,         // Ground speed (m/s)
-    pub course: f32,        // Course over ground (radians)
+    pub course: f32,        // Course over ground (radians clockwise from north)
     pub valid: bool,        // Fix validity
     pub hour: u8,           // UTC hour
     pub minute: u8,         // UTC minute
