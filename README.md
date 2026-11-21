@@ -496,6 +496,8 @@ Tap **Full screen** on supported Android browsers. On iPhone, use **Menu → Pho
 
 Timestamp-logging firmware saves receiver UTC and device parse times alongside recordings. In **Saved data**, export both **Session CSV** and **GPS CSV**; the latter reveals receiver cadence, repeated epochs and phone collection gaps. [Capture and analysis guide](docs/GPS_LOGGING.md). It does not establish absolute lap accuracy.
 
+The upcoming **v0.0.4-rc.11** recording-context integration is intended to save one firmware/configuration/calibration snapshot with each new recording, with **Recording details** and **Download details JSON** in Saved data. This is not available in rc.10. Settings describe configuration, not measured delivered rates or the whole trip; keep the flashed image SHA-256 and phone/antenna/mount notes. See [recording context and limits](docs/GPS_LOGGING.md#recording-context-planned-for-v004-rc11).
+
 For the implemented equations, rate budgets, force-display semantics and current driveway-calibration limitation, see [Maths and update rates](docs/MATHS_AND_RATES.md).
 
 [Rolling interval estimates](docs/RUNS.md) use receiver timestamps for 45–70 mph, 30–60 mph and 50–100 km/h, with rejected-attempt evidence in Runs CSV. Standing-start 0–60 and slope correction are not yet implemented.

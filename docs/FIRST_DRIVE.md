@@ -29,11 +29,12 @@ Recording a route and timing a stage are separate operations. For an initial lon
 Record another short stationary segment. Stop recording, wait for saving, then open **Saved data**:
 
 - Export the recording's **Session CSV** and **GPS CSV**.
+- With the upcoming **v0.0.4-rc.11** browser integration, expand **Recording details** and choose **Download details JSON** for the recording. Keep this companion file with the CSVs and backup; rc.10 does not provide this capture/export. Pending or unavailable details do not prevent recording.
 - Export **Runs CSV** if attempts exist. An empty result is not a failed ordinary drive.
 - Download a **full backup**. Export track geometry too if you recorded or used a circuit/stage.
 - Reload the same browser/origin and confirm the recording remains listed. Preserve the backup before trying another browser or phone.
 
-Keep files together in a private folder named with date, receiver and firmware version. Add a short note: phone/OS/browser, antenna/mounting, foreground/background events, reception conditions and anything unexpected. Retain originals; make redacted copies for public reports. CSV/JSON backups contain location history and are not encrypted.
+Keep files together in a private folder named with date, receiver and firmware version. Keep the flashed image SHA-256 and add a short note: phone/OS/browser, antenna/mounting, foreground/background events, reception conditions and anything unexpected. Automatic recording context does not infer these details; its configured rates do not replace the delivered rates in Diagnostics. Retain originals; make redacted copies for public reports. CSV/JSON backups contain location history and are not encrypted.
 
 ## What to photograph
 
