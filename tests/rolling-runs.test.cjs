@@ -9,6 +9,32 @@ test('duplicate epochs cannot shorten a run and non-increasing UTC aborts it',()
 test('a brief finish-threshold spike is not a completed interval',()=>{const c=context(),d=new c.Runs();for(let i=0;i<220;i++){let speed=Math.min(18+i*.08,70*.44704-.2);if(i===180)speed=70*.44704+.01;d.update(row(i,speed))}assert.equal(d.results.some(r=>r.status==='accepted'),false)});
 test('starting above the lower threshold cannot invent the missing start',()=>{const c=context(),d=new c.Runs();for(let i=0;i<150;i++)d.update(row(i,22+i*.08));assert.equal(d.results.length,0)});
 test('synthetic provenance survives a complete estimate',()=>{const c=context(),d=new c.Runs();ramp(d,()=>({gpsSynthetic:1}));assert.equal(d.results[0].synthetic,1)});
+for(const syntheticIndex of [0,26])test('synthetic '+(syntheticIndex?'lower start endpoint':'eligibility lead-in')+' taints the result and CSV',()=>{
+ const c=context(),d=new c.Runs();ramp(d,i=>({gpsSynthetic:i===syntheticIndex?1:0}));
+ assert.equal(d.results.find(r=>r.status==='accepted').synthetic,1);
+ vm.runInContext(html.slice(html.indexOf('function runsToCSV('),html.indexOf('// End receiver-time rolling intervals.')),c);
+ const rows=Array.from({length:220},(_,i)=>row(i,18+i*.08,{gpsSynthetic:i===syntheticIndex?1:0}));
+ const result=c.runsToCSV(rows).trim().split('\n').find(line=>line.startsWith('45-70 mph,accepted,'));assert.equal(result.split(',').at(-1),'1');
+});
+test('direction reversal across interpolated start endpoints rejects the attempt',()=>{
+ const c=context(),d=new c.Runs();ramp(d,i=>i===26?{gpsCourse:1+Math.PI}:{});
+ assert.equal(d.results.some(r=>r.status==='accepted'),false);assert.ok(d.results.some(r=>r.status==='rejected'&&/Direction changed/.test(r.reason)));
+});
+test('rejected attempts retain lead-in provenance and interrupted eligibility does not taint a new lead-in',()=>{
+ const c=context(),rejected=new c.Runs();ramp(rejected,i=>i===0?{gpsSynthetic:1}:i===26?{gpsCourse:1+Math.PI}:{});
+ assert.equal(rejected.results.find(r=>r.status==='rejected').synthetic,1);
+ for(const boundary of [{gpsBootId:8},{gpsSeq:900},{gpsAccepted:0}]){
+  const d=new c.Runs();ramp(d,i=>i===0?{gpsSynthetic:1}:i===1?boundary:{});
+  assert.equal(d.results.find(r=>r.status==='accepted').synthetic,0);
+ }
+});
+test('result retention remains bounded and reset clears synthetic eligibility',()=>{
+ const c=context(),d=new c.Runs();
+ for(let run=0;run<1001;run++)for(let i=0;i<220;i++)d.update(row(run*220+i,18+i*.08));
+ assert.equal(d.results.length,1000);assert.equal(d.dropped,1);assert.ok(d.results.every(r=>r.status==='accepted'));
+ d.reset();d.update(row(0,18,{gpsSynthetic:1}));d.reset();ramp(d);
+ assert.equal(d.results.length,1);assert.equal(d.results[0].synthetic,0);assert.equal(d.dropped,0);
+});
 test('Runs CSV is derived from saved GPS evidence and reports rejected attempts',()=>{
  const c=context();vm.runInContext(html.slice(html.indexOf('function runsToCSV('),html.indexOf('// End receiver-time rolling intervals.')),c);
  const rows=Array.from({length:220},(_,i)=>row(i,18+i*.08,{gpsSynthetic:1}));

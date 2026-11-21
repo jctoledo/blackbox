@@ -2275,9 +2275,9 @@ function drawG(){
 // Receiver-time rolling intervals. Derived results are reproducible from GPS CSV.
 class RollingRuns{
     constructor(interval={label:'45-70 mph',lo:45*.44704,hi:70*.44704}){this.interval=interval;this.reset()}
-    reset(){this.previous=null;this.belowSince=null;this.armed=false;this.attempt=null;this.results=[];this.dropped=0;this.status='Waiting for GPS evidence'}
+    reset(){this.previous=null;this.belowSince=null;this.leadSynthetic=0;this.armed=false;this.attempt=null;this.results=[];this.dropped=0;this.status='Waiting for GPS evidence'}
     save(result){this.results.push(result);if(this.results.length>1000){this.results.shift();this.dropped++}}
-    abort(reason){if(this.attempt)this.save({...this.attempt,status:'rejected',reason,seconds:null});this.attempt=null;this.armed=false;this.status=reason}
+    abort(reason){if(this.attempt)this.save({...this.attempt,status:'rejected',reason,seconds:null});this.attempt=null;this.armed=false;this.leadSynthetic=0;this.status=reason}
     update(r){
         if(r.rowType!==1)return;
         const {lo,hi}=this.interval;
@@ -2285,13 +2285,23 @@ class RollingRuns{
         const p=this.previous;
         if(p&&r.gpsBootId===p.gpsBootId&&r.gpsSeq===p.gpsSeq)return;
         this.previous=r;
-        if(!p){this.belowSince=r.sp<lo-.44704?r.gpsUtcUs:null;this.status='Waiting for lead-in';return}
+        if(!p){this.belowSince=r.sp<lo-.44704?r.gpsUtcUs:null;this.leadSynthetic=this.belowSince!==null&&r.gpsSynthetic?1:0;this.status='Waiting for lead-in';return}
         const dt=(r.gpsUtcUs-p.gpsUtcUs)/1e6;
         if(r.gpsBootId!==p.gpsBootId||r.gpsDate!==p.gpsDate||r.gpsSeq!==p.gpsSeq+1||r.gpsMissing>0||dt<.02||dt>.3){this.abort('GPS gap or clock boundary');this.belowSince=null;return}
         if(Math.abs(r.sp-p.sp)/dt>15){this.abort('Implausible speed change');this.belowSince=null;return}
-        if(r.sp<lo-.44704){if(this.attempt)this.abort('Below start speed');if(this.belowSince===null)this.belowSince=p.sp<lo-.44704?p.gpsUtcUs:r.gpsUtcUs;this.armed=r.gpsUtcUs-this.belowSince>=200000;this.status='Waiting for '+this.interval.label}else if(!this.armed)this.belowSince=null;
+        if(r.sp<lo-.44704){
+            if(this.attempt)this.abort('Below start speed');
+            if(this.belowSince===null){this.belowSince=p.sp<lo-.44704?p.gpsUtcUs:r.gpsUtcUs;this.leadSynthetic=p.sp<lo-.44704&&p.gpsSynthetic?1:0}
+            this.leadSynthetic=this.leadSynthetic||r.gpsSynthetic?1:0;
+            this.armed=r.gpsUtcUs-this.belowSince>=200000;this.status='Waiting for '+this.interval.label;
+        }else if(this.armed)this.leadSynthetic=this.leadSynthetic||r.gpsSynthetic?1:0;
+        else{this.belowSince=null;this.leadSynthetic=0}
         const crossing=v=>p.gpsUtcUs+(v-p.sp)/(r.sp-p.sp)*(r.gpsUtcUs-p.gpsUtcUs);
-        if(!this.attempt&&this.armed&&p.sp<lo&&r.sp>=lo){this.attempt={interval:this.interval.label,startUs:crossing(lo),startSeq:p.gpsSeq,endUs:null,endSeq:null,boot:r.gpsBootId,date:r.gpsDate,course:r.gpsCourse,synthetic:r.gpsSynthetic?1:0,confirmed:false};this.armed=false;this.belowSince=null}
+        if(!this.attempt&&this.armed&&p.sp<lo&&r.sp>=lo){
+            // Eligibility and both interpolated endpoints are part of the evidence.
+            this.attempt={interval:this.interval.label,startUs:crossing(lo),startSeq:p.gpsSeq,endUs:null,endSeq:null,boot:r.gpsBootId,date:r.gpsDate,course:r.gpsCourse,synthetic:this.leadSynthetic||p.gpsSynthetic||r.gpsSynthetic?1:0,confirmed:false};this.armed=false;this.belowSince=null;this.leadSynthetic=0;
+            if(Math.abs(Math.atan2(Math.sin(r.gpsCourse-p.gpsCourse),Math.cos(r.gpsCourse-p.gpsCourse)))>Math.PI/12){this.abort('Direction changed at start');return}
+        }
         const a=this.attempt;if(!a)return;
         a.synthetic=a.synthetic||r.gpsSynthetic?1:0;
         if(!a.confirmed){if(r.sp<lo-.15){this.abort('Start not sustained');return}if(r.gpsUtcUs-a.startUs>=80000)a.confirmed=true}
