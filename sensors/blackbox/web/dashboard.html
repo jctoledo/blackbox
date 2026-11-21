@@ -330,11 +330,7 @@ body.cluster-view .bbNoticeStack{grid-column:1/-1;max-height:88px;overflow-y:aut
 body.cluster-view .bbNoticeStack .bbConnectionNotice,body.cluster-view .bbNoticeStack .bbRecordingNotice{max-height:none;overflow:visible}
 body.cluster-view .bbTrackSuggestion{grid-column:1/-1;padding:0 10px;gap:8px}
 body.cluster-view.track-suggestion-visible .bbConnectionNotice,body.cluster-view.track-suggestion-visible .bbRecordingNotice{padding-top:4px;padding-bottom:4px}
-@container cluster-card (max-height:150px){
-    body.cluster-view .bbApp .bbGTop{grid-template-rows:minmax(0,1fr)}
-    body.cluster-view .bbApp .bbGTopRight,body.cluster-view .bbSpeedMaximum{display:none}
-    body.cluster-view .bbPeakGrid{padding-bottom:4px;gap:4px}body.cluster-view .bbPeakGrid dd{font-size:20px}
-}
+
 @media(max-width:420px){.bbTrackSuggestion{gap:8px;padding:4px 8px}.bbToastBtn{padding:8px 10px}}
 
 /* Instrument system: carbon, signal lime, and legible measured values. */
@@ -499,6 +495,11 @@ body.cluster-view .bbDrivePanel{flex:1;min-height:0;display:grid;grid-template-r
     body.cluster-view .bbDriveActions button{padding:6px 8px}
 }
 @media(max-width:380px){.bbDriveMetrics{gap:8px}.bbDriveNumber{font-size:27px}}
+@container cluster-card (max-height:150px){
+    body.cluster-view .bbApp .bbGTop{grid-template-rows:minmax(0,1fr)}
+    body.cluster-view .bbApp .bbGTopRight,body.cluster-view .bbSpeedMaximum{display:none}
+    body.cluster-view .bbPeakGrid{padding-bottom:4px;gap:4px}body.cluster-view .bbPeakGrid dd{font-size:20px}
+}
 </style></head>
 <body>
 
