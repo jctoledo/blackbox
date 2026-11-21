@@ -51,7 +51,7 @@ Use this checklist for a specific board, wiring revision, GPS receiver, mounting
 - [ ] Tilt about each documented axis separately. Verify axis signs and gravity compensation; restore level and check recovery.
 - [ ] At a controlled location, record straight acceleration and braking, then left and right turns. Confirm longitudinal/lateral signs and GPS course convention against the physical motion.
 - [ ] Repeat after a power cycle and with the enclosure fully mounted. Investigate direction reversals, unexplained cross-axis acceleration, or calibration drift before relying on results.
-- [ ] Do not enable the unmerged automatic mounting calibration: PR #13's magnitude-only brake gate can also accept acceleration.
+- [ ] If using experimental Mount alignment, follow the candidate/save workflow below; do not assume that a software-accepted candidate establishes physical alignment.
 
 **Pass:** axes/signs and frame conventions agree with the known motion; no nonfinite values or discontinuous corrections. Record residuals rather than claiming a universal g-force accuracy bound.
 
@@ -153,3 +153,15 @@ Keep failures and untested cases visible. Promote a candidate to stable only whe
 - [ ] Disconnect the phone from internet while staying on Blackbox Wi-Fi. Confirm the instrument fonts load from the device page.
 - [ ] Check long stage times, daylight glare, mounting distance, light/dark themes and browser bars/notches. A browser viewport test cannot establish in-car readability.
 - [ ] Test connection loss: stale values must be visibly identified and delta hidden. Stop while parked, export CSV and download a full backup.
+
+
+## Mount alignment and phone launch acceptance
+
+- [ ] Back up browser data. Record firmware, phone/browser, mounting orientation and the saved offset before changing anything.
+- [ ] On both Android and iPhone, check portrait/landscape, notches and address-bar behavior. Android: enter/exit Full screen. iPhone: install through Safari → Add to Home Screen → Open as Web App if offered. Confirm the dashboard remains connected on device Wi-Fi.
+- [ ] Check recordings/tracks after Home Screen launch; restore a backup as copies if storage is separate. Test reload and export. Do not assume background recording works.
+- [ ] With a nearly level, secure mount at a controlled site, confirm ordinary forward acceleration cannot complete mount calibration. Test sustained straight forward braking, interrupted braking and turning separately.
+- [ ] Park before saving. Confirm the candidate does not affect forces before Save, the previous offset survives Cancel/failure, and a successfully saved offset reloads after power cycling.
+- [ ] Compare known aligned, 90° and 180° mounts. Check acceleration/braking and left/right signs after saving; preserve logs and photos. Do not use reverse braking as calibration evidence.
+- [ ] Test stale GPS/IMU and NVS failure on a bench setup; no false success, indefinite collection or lost prior calibration. A successful NVS API call is not a physical power-loss test.
+- [ ] Record rejected attempts, actual receiver cadence, road slope/bank and any sign mismatch. The software tests do not establish alignment-angle accuracy.

@@ -121,3 +121,16 @@ Recordings and tracks use separate IndexedDB databases. Each group commits atomi
 The maximum supported JSON file is **100 MiB**. For larger libraries, use **Backup contents** to select one recording, all recordings, or tracks only. A single recording over that limit still needs CSV export for analysis; CSV is not a restorable backup. Backups contain precise location history and are not encrypted. The CRC checksum detects accidental damage; it is not proof of who created a file. Browser eviction and hardware failure still require an external copy to protect your data.
 
 If an incomplete legacy track prevents a full backup, choose **Recordings only** to protect the sessions independently. Use the existing track JSON export to retain the problematic track for repair; do not delete it merely to make a backup pass validation.
+
+
+## Can I hide the browser address bar on my phone?
+
+On supported Android browsers, tap **Full screen** in Blackbox. The browser requires a user gesture; Blackbox never forces fullscreen or changes recording when entering/exiting it. If fullscreen is unavailable, the control opens setup instructions.
+
+On iPhone, open the device dashboard in Safari, choose **Share → Add to Home Screen**, enable **Open as Web App** if offered, and launch that icon while connected to Blackbox Wi-Fi. **Menu → Phone setup** keeps the instructions in the app. Disable portrait orientation lock for the landscape cluster. iPhone's page fullscreen support differs from Android; a button cannot perform Apple's installation step for you. See [Apple's Home Screen instructions](https://support.apple.com/guide/iphone/iphea86e5236/ios).
+
+Download a full backup from Saved data before changing browser or launch mode. Home Screen app storage may be separate; restore the backup as copies if recordings/tracks are absent. Use the same device address. A shortcut to the device's HTTP address is not a promise of an installable Android PWA, offline telemetry, or background recording.
+
+## Can I calibrate a rotated device mount?
+
+**Menu → Mount alignment** provides an experimental candidate workflow for nearly level horizontal mounting. It uses signed GPS deceleration and consistent straight-line brake vectors, then requires saving while parked. It corrects force axes, not lap timing or GPS heading. See [the alignment guide](CALIBRATION.md). Forward travel, mounting, signs and physical accuracy still require operator validation.

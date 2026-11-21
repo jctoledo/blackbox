@@ -103,3 +103,20 @@ fn cruise_bias_converges_to_full_offset_instead_of_half() {
         assert!((corrector.get_cruise_bias() - offset).abs() < 0.01);
     }
 }
+
+#[test]
+fn mount_projection_preserves_vehicle_forces_for_all_horizontal_angles() {
+    use sensor_fusion::fusion::{FusionConfig, SensorFusion};
+    for degrees in [-179.0f32, -90.0, -45.0, 0.0, 45.0, 90.0, 179.0] {
+        let angle = degrees.to_radians();
+        for (lon, lat) in [(-3.0, 0.0), (3.0, 0.0), (0.0, 4.0), (2.0, -2.0)] {
+            let mut f = SensorFusion::new(FusionConfig::default());
+            f.set_mount_yaw(angle);
+            let x = angle.cos() * lon - angle.sin() * lat;
+            let y = angle.sin() * lon + angle.cos() * lat;
+            f.process_imu(x, y, 9.80665, 0.0, 0.0, 1.2, 15.0, 0.0, 0.033, false);
+            assert!((f.get_lon_imu_raw() - lon).abs() < 1e-5, "angle {degrees}");
+            assert!((f.get_lat_display() - lat).abs() < 1e-5, "angle {degrees}");
+        }
+    }
+}
