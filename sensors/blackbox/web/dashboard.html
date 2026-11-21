@@ -382,36 +382,60 @@ body:not(.analysis-view) .bbApp .bbGTop{display:flex;width:100%;padding:22px 24p
 body:not(.analysis-view) .bbGTopRight{display:block}
 .drive-view #analysis-mode{display:none}
 @media(max-width:600px){body:not(.drive-view) .bbQuickActions{display:grid;grid-template-columns:repeat(6,1fr)}body:not(.drive-view) .bbQuickActions button{grid-column:span 2;margin:0;padding:10px 5px}body:not(.drive-view) #analysis-mode,body:not(.drive-view) #drive-mode{grid-column:span 3}}
-/* Landscape cluster: the same live values, arranged as a mounted instrument. */
-.bbElapsedLabel,.bbClusterRecording{display:none}
-.cluster-view #view-dashboard{position:relative}
-.cluster-view .bbTopbar{max-width:none;padding:4px max(14px,env(safe-area-inset-right)) 4px max(14px,env(safe-area-inset-left));min-height:48px}
-.cluster-view .bbTopRight{margin-right:110px}.cluster-view .bbDiag,.cluster-view .bbKebab,.cluster-view .bbModeLabel,.cluster-view .bbModeIcon{display:none}
-.cluster-view .bbRecordingStatus{display:none}
-.cluster-view .bbBrand{font-size:12px}.cluster-view .bbStatusCluster{font-size:11px;gap:12px}
-.cluster-view .bbClusterRecording{display:inline;color:var(--text-tertiary)}.cluster-view .bbClusterRecording.recording{color:var(--red);font-weight:700}
-.cluster-view .bbQuickActions{position:absolute;right:max(14px,env(safe-area-inset-right));top:2px;z-index:5;margin:0}
-.cluster-view .bbQuickActions button{min-height:44px;padding:8px 14px;font-size:12px}
-.cluster-view .bbApp{max-width:none;display:grid;grid-template-columns:minmax(0,.85fr) minmax(0,1.4fr);align-content:start;align-items:stretch;padding:8px max(14px,env(safe-area-inset-right)) 8px max(14px,env(safe-area-inset-left));gap:8px 12px}
-.cluster-view .bbConnectionNotice,.cluster-view .bbRecordingNotice{grid-column:1/-1;order:0;padding:7px 10px;font-size:12px;line-height:1.3}
-.cluster-view .bbSaveStatus{grid-column:1/-1;order:3;font-size:11px}
-.cluster-view .bbLapCard{grid-column:2;order:2;min-width:0;border-left-width:1px;border-top:3px solid var(--ok);border-radius:10px}
-.cluster-view .bbApp .bbGCard{grid-column:1;order:1;min-width:0;border-top:3px solid var(--divider);border-radius:10px}
-.cluster-view .bbApp .bbGTop{height:100%;min-height:225px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;padding:14px}
-.cluster-view .bbApp .bbSpeed{font-size:clamp(68px,13vw,112px);line-height:1;letter-spacing:-.075em}
-.cluster-view .bbUnit{font-size:16px}.cluster-view .bbInstrumentLabel{font-size:11px;letter-spacing:.14em}
-.cluster-view .bbApp .bbGTopRight{display:flex;gap:10px;align-items:baseline;padding:18px 0 0;font-size:13px}
-.cluster-view .bbElapsedLabel{display:block;color:var(--text-tertiary);font:10px/1.3 var(--mono);letter-spacing:.12em;text-transform:uppercase;margin-bottom:3px}
-.cluster-view .bbLapMain{padding:8px 14px 6px}.cluster-view .bbLapTime{font-size:clamp(36px,6.5vw,58px);letter-spacing:-.055em}
-.cluster-view .bbReferenceLabel{font-size:10px;margin:3px 0}.cluster-view .bbDeltaBar{margin:4px 0;gap:3px}
-.cluster-view .bbDeltaText{font-size:clamp(28px,4.5vw,38px)}.cluster-view .bbDeltaBar.no-ref .bbDeltaText{font-size:12px;line-height:1.3}
-.cluster-view .bbDeltaTrack{height:6px}.cluster-view .bbLapTrackName{display:block;font-size:11px;margin-top:3px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.cluster-view .bbLapMeta{margin-top:3px;gap:10px}.cluster-view .bbLapCount,.cluster-view .bbLapState{font-size:11px}
-.cluster-view .bbLapProgress{padding:4px 14px;font-size:10px}.cluster-view .bbLapProgress progress{height:3px;margin-top:4px}
-.cluster-view .bbLapHistory{padding:7px 8px}.cluster-view .bbLapHistLabel{font-size:10px}.cluster-view .bbLapHistValue{font-size:18px}
-.cluster-view .bbLapResult{padding:5px 8px;font-size:11px}.cluster-view .bbStartLineIndicator,.cluster-view .bbFinishLineIndicator{padding:6px 10px;font-size:12px}
-.cluster-view .bbLapCard.inactive{display:flex;align-items:center;padding:20px}.cluster-view .bbLapSetup{flex-direction:column;align-items:flex-start}.cluster-view .bbLapSetupText{font-size:18px}
-@media(max-height:360px){.cluster-view .bbApp .bbGTop{min-height:190px}.cluster-view .bbApp .bbSpeed{font-size:clamp(68px,13vw,108px)}.cluster-view .bbLapTime{font-size:40px}.cluster-view .bbElapsedLabel{display:none}.cluster-view .bbLapMain{padding:5px 12px}.cluster-view .bbLapHistValue{font-size:16px}.cluster-view .bbLapTrackName{display:none}}
+/* Landscape cluster: fixed timing, selectable instrument, aligned footer rails. */
+.bbElapsedLabel,.bbClusterRecording,.bbClusterTabs,.bbClusterPeaks,.bbClusterHeader{display:none}
+body.cluster-view #view-dashboard{position:relative}
+body.cluster-view .bbTopbar{max-width:none;padding:4px max(14px,env(safe-area-inset-right)) 4px max(14px,env(safe-area-inset-left));height:52px;min-height:52px;flex-wrap:nowrap}
+body.cluster-view .bbTopRight{margin-right:108px;gap:10px}body.cluster-view .bbDiag,body.cluster-view .bbKebab,body.cluster-view .bbModeLabel,body.cluster-view .bbModeIcon,body.cluster-view .bbRecordingStatus{display:none}
+body.cluster-view .bbBrand{font-size:12px}body.cluster-view .bbStatusCluster{font-size:10px;gap:10px}
+body.cluster-view .bbClusterRecording{display:inline;color:var(--text-tertiary)}body.cluster-view .bbClusterRecording.recording{color:var(--red);font-weight:700}
+body.cluster-view .bbQuickActions{position:absolute;right:max(14px,env(safe-area-inset-right));top:4px;z-index:5;margin:0}
+body.cluster-view .bbQuickActions button,body.cluster-view .bbDisplayButton{min-height:44px;padding:8px 10px;font-size:11px;border-color:transparent;background:transparent}
+body.cluster-view .bbApp{max-width:none;display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.45fr);grid-template-rows:minmax(0,1fr);align-content:stretch;align-items:stretch;padding:8px max(14px,env(safe-area-inset-right)) max(8px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left));gap:12px;overflow:hidden}
+body.cluster-view .bbConnectionNotice,body.cluster-view .bbRecordingNotice{position:absolute;left:14px;right:14px;bottom:8px;z-index:9;background:var(--surface);padding:8px 12px;font-size:12px;line-height:1.3}body.cluster-view .bbRecordingNotice{bottom:48px}
+body.cluster-view .bbSaveStatus{display:none}
+body.cluster-view .bbLapCard,body.cluster-view .bbApp .bbGCard{grid-row:1;margin:0;min-width:0;min-height:0;display:flex;flex-direction:column;border:1px solid var(--divider);border-radius:10px;position:relative}
+body.cluster-view .bbLapCard{grid-column:2;border-color:var(--divider)}body.cluster-view .bbApp .bbGCard{grid-column:1}
+body.cluster-view .bbClusterHeader{display:flex;align-items:center;flex:0 0 44px;gap:10px;padding:0 12px 0 18px;border-bottom:1px solid var(--divider);color:var(--text-secondary);font:10px var(--mono)}
+.bbClusterHeader button{margin-left:auto;min-height:44px;border:0;background:transparent;color:var(--text);font:600 11px Inter,sans-serif;padding:0 10px;cursor:pointer}
+.bbClusterHealth{display:flex;align-items:center;gap:8px;font-size:9px;white-space:nowrap}.bbClusterHealth .recording{color:var(--red)}
+body.cluster-view:not(.cluster-controls) .bbTopbar,body.cluster-view:not(.cluster-controls) .bbQuickActions{display:none}
+body.cluster-view .bbLapMeta{position:static!important;grid-column:1;grid-row:1;margin-top:18px!important;justify-content:flex-start}
+body.cluster-view .bbElapsedLabel{grid-row:1;align-self:start}
+
+body.cluster-view .bbClusterTabs{display:flex;flex:0 0 44px;border-bottom:1px solid var(--divider);padding:0 6px;gap:2px}
+.bbClusterTabs button{flex:1;min-width:0;border:0;border-bottom:2px solid transparent;background:none;color:var(--text-tertiary);font:600 11px Inter,sans-serif;cursor:pointer;padding:0 6px}
+.bbClusterTabs button[aria-pressed="true"]{border-bottom-color:var(--ok);color:var(--text)}
+body.cluster-view .bbApp .bbGTop{flex:1;height:auto;min-height:0;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) 52px;justify-content:stretch;align-items:stretch;padding:0;width:100%}
+body.cluster-view .bbGTopLeft{display:flex;flex-direction:column;padding:12px 18px;min-height:0}body.cluster-view .bbSpeedLine{margin:auto 0;align-items:baseline;gap:4px}
+body.cluster-view .bbApp .bbSpeed{font-size:clamp(64px,12vw,108px);line-height:1;letter-spacing:-.07em}body.cluster-view .bbUnit{font:12px var(--mono);margin:0}
+body.cluster-view .bbInstrumentLabel,body.cluster-view .bbElapsedLabel{display:block;color:var(--text-tertiary);font:10px/1.3 var(--mono);letter-spacing:.12em;text-transform:uppercase;margin:0}
+body.cluster-view .bbApp .bbGTopRight{display:flex;justify-content:space-between;align-items:center;padding:0 18px;font:18px var(--mono);border-top:1px solid var(--divider)}
+body.cluster-view .bbLapCard.active .bbLapActive{display:flex;flex:1;min-height:0;flex-direction:column;position:static}
+body.cluster-view .bbLapMain{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);grid-template-rows:auto 1fr auto;gap:5px 14px;flex:1;min-height:0;padding:12px 18px 8px;text-align:left}
+body.cluster-view .bbElapsedLabel{grid-column:1;grid-row:1}body.cluster-view .bbLapTime{grid-column:1;grid-row:2;align-self:center;font-size:clamp(30px,5.5vw,56px);line-height:1.1;letter-spacing:-.065em;white-space:nowrap}
+body.cluster-view .bbReferenceLabel{grid-column:1;grid-row:3;font-size:10px;line-height:1.2;margin:0;color:var(--text-tertiary)}
+body.cluster-view .bbDeltaBar{grid-column:2;grid-row:1/4;align-self:stretch;justify-content:center;margin:0;padding-left:14px;border-left:1px solid var(--divider);gap:8px}
+body.cluster-view .bbDeltaBar::before{content:'DELTA';color:var(--text-tertiary);font:9px var(--mono);letter-spacing:.08em}
+body.cluster-view .bbDeltaText{font-size:clamp(24px,3.6vw,38px);line-height:1.1;white-space:nowrap}body.cluster-view .bbDeltaBar.no-ref .bbDeltaText{font-size:12px;white-space:normal;line-height:1.4}body.cluster-view .bbDeltaTrack{height:4px;width:100%}
+body.cluster-view .bbLapTrackName{display:none}body.cluster-view .bbLapMeta{position:absolute;top:15px;right:18px;margin:0;gap:8px}body.cluster-view .bbLapCount,body.cluster-view .bbLapState{font:10px var(--mono)}
+body.cluster-view .bbLapProgress{flex:none;padding:0 18px 8px;font:10px var(--mono)}body.cluster-view .bbLapProgress progress{height:3px;margin-top:4px}
+body.cluster-view .bbLapHistory{flex:0 0 52px;height:52px;padding:7px 10px;margin:0;border-top:1px solid var(--divider);align-items:center}body.cluster-view .bbLapHistLabel{font:9px var(--mono);letter-spacing:.06em}body.cluster-view .bbLapHistValue{font:500 18px/1.3 var(--mono);margin-top:3px}
+body.cluster-view .bbLapResult,body.cluster-view .bbStartLineIndicator,body.cluster-view .bbFinishLineIndicator{position:absolute;bottom:52px;left:0;right:0;z-index:2;padding:7px 12px;font-size:12px;background:var(--surface)}body.cluster-view .bbLapResult{background:var(--ok)}
+body.cluster-view .bbLapCard.inactive{padding:0}body.cluster-view .bbLapSetup{padding:18px;flex:1;flex-direction:column;justify-content:center;align-items:flex-start;gap:14px}body.cluster-view .bbLapSetupText{font-size:18px}
+body.cluster-view.cluster-forces .bbApp .bbGTop,body.cluster-view.cluster-peaks .bbApp .bbGTop{display:none!important}
+body.cluster-view.cluster-forces .bbApp .bbGPlotWrap{display:flex!important;position:relative;flex:1;min-height:0;width:100%;padding:6px;justify-content:center;align-items:center}
+body.cluster-view.cluster-forces .bbApp .bbGPlotFrame{height:100%;max-height:170px;width:auto;aspect-ratio:1;max-width:100%;margin:0}
+body.cluster-view .bbGExpand,body.cluster-view .bbPlotMeta{display:none!important}body.cluster-view .bbAxis{font-size:9px}
+body.cluster-view.cluster-forces .bbApp .bbGReadoutRow{display:flex!important;flex:0 0 52px;height:52px;padding:6px 8px;margin:0;border-top:1px solid var(--divider)}body.cluster-view .bbGReadoutCol{gap:3px}body.cluster-view .bbGReadoutLbl{font:9px var(--mono)}body.cluster-view .bbGReadoutVal{font:500 21px/1.1 var(--mono);margin:0}body.cluster-view .bbGDivider{height:28px}
+body.cluster-view.cluster-peaks .bbClusterPeaks{display:flex;flex:1;min-height:0;flex-direction:column}.bbPeakGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px 18px;flex:1;align-items:center}.bbPeakGrid dt{font:10px var(--mono);color:var(--text-tertiary);letter-spacing:.06em;margin-bottom:5px}.bbPeakGrid dd{font:500 clamp(20px,3.5vw,30px)/1 var(--mono);letter-spacing:-.06em}.bbPeakGrid small{font-size:12px;color:var(--text-secondary);letter-spacing:0}.bbPeakNote{display:flex;align-items:center;justify-content:center;flex:0 0 52px;border-top:1px solid var(--divider);font:10px/1.4 var(--mono);color:var(--text-tertiary);text-align:center;padding:6px 10px}
+@media(max-height:360px){body.cluster-view .bbTopbar{height:52px;min-height:52px}body.cluster-view .bbApp{padding-top:5px;gap:8px}body.cluster-view .bbLapMain{padding:8px 12px;gap:3px 10px}body.cluster-view .bbGTopLeft{padding:8px 12px}body.cluster-view .bbApp .bbSpeed{font-size:72px}body.cluster-view .bbLapTime{font-size:34px}body.cluster-view .bbLapProgress{font-size:9px;padding-bottom:5px}body.cluster-view .bbReferenceLabel{font-size:9px}body.cluster-view .bbLapHistValue{font-size:16px}body.cluster-view .bbLapMeta{right:12px}body.cluster-view .bbDeltaBar{padding-left:10px}body.cluster-view .bbDeltaBar::before{font-size:8px}body.cluster-view .bbStatusCluster{gap:6px;font-size:9px}}
+
+.bbForceTools{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;font:9px var(--mono);color:var(--text-tertiary)}.bbForceTools button{white-space:nowrap;flex-shrink:0;min-height:44px;padding:0 8px;border:0;background:none;color:var(--text-secondary);font:inherit;cursor:pointer}
+body.cluster-view.cluster-forces .bbApp .bbGPlotWrap{flex-direction:column;padding:0 10px 4px;gap:0}body.cluster-view.cluster-forces .bbGPlotFrame{min-height:0;flex:1}body.cluster-view.cluster-forces .bbForceTools{flex:0 0 44px}body.cluster-view.cluster-forces .bbApp .bbGPlotFrame{height:calc(100% - 44px)}
+body.analysis-view .bbGPlotWrap{flex-wrap:wrap}
+
+body.cluster-view .bbSpeed.peak{color:var(--text);text-shadow:none}
 
 .bbDisplayButton{min-height:44px;padding:8px 10px;border:1px solid var(--divider);border-radius:8px;background:var(--surface);color:var(--text);font:600 12px Inter,sans-serif;cursor:pointer}.bbDisplayButton[hidden]{display:none}.bbSetupText{font-size:14px;line-height:1.6;color:var(--text-secondary)}.bbSetupText p{margin:12px 0}.bbSetupText h3{color:var(--text);font-size:16px;margin:16px 0 6px}.bbSetupActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}.bbSetupActions button{min-height:44px;padding:10px 14px;border-radius:8px;border:1px solid var(--divider);background:var(--bg);color:var(--text);font:600 13px Inter,sans-serif}.bbSetupActions button:disabled{opacity:.45}.bbSetupStatus{border-left:3px solid var(--amber);padding:10px 12px;margin:14px 0;background:var(--bg);overflow-wrap:anywhere}
 @media(max-width:420px){.bbDisplayButton{font-size:11px;padding:8px}.bbTopbar{gap:6px}.bbStatusCluster{gap:6px}}
@@ -443,6 +467,7 @@ body:not(.analysis-view) .bbGTopRight{display:block}
     <div id="save-status" class="bbSaveStatus" role="status" hidden></div>
     <div id="recording-notice" class="bbRecordingNotice" role="status" hidden></div>
     <section class="bbCard bbLapCard inactive" id="lap-section">
+        <div class="bbClusterHeader"><span class="bbClusterHealth"><span id="cluster-link">Connecting</span><span id="cluster-gps">GPS —</span><span id="cluster-rec">REC OFF</span></span><button id="cluster-controls" aria-expanded="false">Controls</button></div>
         <div class="bbLapSetup" id="lap-setup">
             <span class="bbLapSetupText" id="lap-setup-text">Ready for a session?<small>Select a track to arm lap timing.</small></span>
             <button class="bbLapSetupBtn" id="btn-tracks">Select track</button>
@@ -485,6 +510,8 @@ body:not(.analysis-view) .bbGTopRight{display:block}
         </div>
     </section>
     <section class="bbCard bbGCard" id="g-card">
+        <div class="bbClusterTabs" role="group" aria-label="Cluster instrument"><button id="cluster-speed" aria-pressed="true">Speed</button><button id="cluster-forces" aria-pressed="false">G-meter</button><button id="cluster-peaks" aria-pressed="false">Peaks</button></div>
+        <div class="bbClusterPeaks"><dl class="bbPeakGrid"><div><dt>ACCEL</dt><dd><span id="effort-accel">—</span><small> g</small></dd></div><div><dt>BRAKING</dt><dd><span id="effort-brake">—</span><small> g</small></dd></div><div><dt>LEFT</dt><dd><span id="effort-left">—</span><small> g</small></dd></div><div><dt>RIGHT</dt><dd><span id="effort-right">—</span><small> g</small></dd></div></dl><div class="bbPeakNote">Strongest 0.5 s averages<br>Moving samples · this page session</div></div>
         <div class="bbGTop">
             <div class="bbGTopLeft">
                 <div class="bbInstrumentLabel">Speed</div><div class="bbSpeedLine"><span class="bbSpeed bbNum" id="speed">0</span><span class="bbUnit">km/h</span></div>
@@ -492,13 +519,13 @@ body:not(.analysis-view) .bbGTopRight{display:block}
             </div>
             <div class="bbGTopRight"><div class="bbInstrumentLabel">Session</div><span class="bbNum" id="session-time">0:00</span></div>
         </div>
-        <div class="bbGPlotWrap">
+        <div class="bbGPlotWrap"><div class="bbForceTools"><button id="range-val" title="Cycle plot scale: 0.5, 1 or 2 g">Scale 1.0 g</button><span id="force-status">Waiting for fresh GPS</span></div>
             <div class="bbGPlotFrame">
                 <div class="bbAxis bbAxis--top">Brake</div>
                 <div class="bbAxis bbAxis--bottom">Accel</div>
                 <div class="bbAxis bbAxis--left">Left</div>
                 <div class="bbAxis bbAxis--right">Right</div>
-                <div class="bbPlotMeta" id="range-val">Range ±0.5g</div>
+
                 <canvas class="bbGPlot" id="gcanvas" role="img" aria-label="Lateral and longitudinal g-force trail"></canvas>
             </div>
             <button class="bbGExpand" id="expand-g" aria-expanded="false" aria-controls="gcanvas">Expand G-meter</button>
@@ -2008,9 +2035,9 @@ function updateFinishLineIndicator(){
 
 // G-meter
 const cv=$('gcanvas'),ctx=cv.getContext('2d');
-const SCALE_STEPS=[0.3,0.5,0.8,1.0,1.5,2.0];
-let currentScale=0.5,magHist=[];
-const TRAIL_DURATION_MS=6000,TRAIL_MAX_POINTS=120,TRAIL_JITTER_THRESHOLD=0.015;
+const SCALE_STEPS=[0.5,1,2];
+let currentScale=1;
+const TRAIL_DURATION_MS=3000,TRAIL_MAX_POINTS=120;
 
 function resize(){
     const frame=cv.parentElement,rect=frame.getBoundingClientRect();
@@ -2021,18 +2048,11 @@ function resize(){
 }
 resize();window.addEventListener('resize',resize);
 
-function updateScale(gx,gy){
-    const now=Date.now(),mag=Math.sqrt(gx*gx+gy*gy);
-    magHist.push({t:now,m:mag});magHist=magHist.filter(h=>now-h.t<1000);
-    const peakMag=Math.max(...magHist.map(h=>h.m),0.1);
-    const needed=peakMag*1.4;
-    let targetScale=SCALE_STEPS[0];
-    for(const step of SCALE_STEPS){if(step>=needed){targetScale=step;break}targetScale=step}
-    if(targetScale>currentScale)currentScale+=(targetScale-currentScale)*0.15;
-    else if(targetScale<currentScale)currentScale+=(targetScale-currentScale)*0.03;
-    for(const step of SCALE_STEPS){if(Math.abs(currentScale-step)<0.02){currentScale=step;break}}
-    $('range-val').textContent='Range ±'+currentScale.toFixed(1)+'g';
-}
+// Fixed scale avoids making identical forces look different during a maneuver.
+$('range-val').onclick=()=>{currentScale=SCALE_STEPS[(SCALE_STEPS.indexOf(currentScale)+1)%SCALE_STEPS.length];$('range-val').textContent='Scale '+currentScale.toFixed(1)+' g';drawG()};
+function forcePoint(x,y,scale){const mag=Math.hypot(x,y),factor=mag>scale?scale/mag:1;return{x:x*factor/scale,y:y*factor/scale,clipped:mag>scale}}
+function forcesUsable(gps,age){return gps===1&&Number.isFinite(age)&&age>=0&&age<=300}
+function clearForces(label){trail=[];emaGx=emaGy=0;lastT=0;effortPeaks.update(0,0,false);$('force-status').textContent=label;$('lat-g').textContent=$('lon-g').textContent='—';drawG()}
 
 function hexToRgba(hex,a){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return`rgba(${r},${g},${b},${a})`}
 function downsampleTrail(points,maxPoints){
@@ -2076,14 +2096,14 @@ function drawG(){
             if(freshness>0.75){ctx.shadowColor=currentModeColor;ctx.shadowBlur=8*freshness}else{ctx.shadowBlur=0}
             ctx.strokeStyle=hexToRgba(currentModeColor,alpha);ctx.lineWidth=width;
             ctx.beginPath();
-            ctx.moveTo(cx+(p0.x/currentScale)*r,cy-(p0.y/currentScale)*r);
-            ctx.lineTo(cx+(p1.x/currentScale)*r,cy-(p1.y/currentScale)*r);
+            const a=forcePoint(p0.x,p0.y,currentScale),b=forcePoint(p1.x,p1.y,currentScale);
+            ctx.moveTo(cx+a.x*r,cy-a.y*r);ctx.lineTo(cx+b.x*r,cy-b.y*r);
             ctx.stroke();
         }
         ctx.shadowBlur=0;
     }
-    if(trail.length>0){
-        const cur=trail[trail.length-1],x=cx+(cur.x/currentScale)*r,y=cy-(cur.y/currentScale)*r;
+    if(recentTrail.length>0){
+        const cur=recentTrail[recentTrail.length-1],point=forcePoint(cur.x,cur.y,currentScale),x=cx+point.x*r,y=cy-point.y*r;
         const mag=Math.sqrt(cur.x*cur.x+cur.y*cur.y);
         const intensity=Math.min(1,mag/0.8); // Intensity based on G-force
         const baseRadius=7+intensity*3; // 7-10px radius based on G
@@ -2107,6 +2127,54 @@ function drawG(){
 // State
 let cnt=0,lastSeq=0;
 let maxL=0,maxR=0,maxA=0,maxB=0,peak=0;
+// Sustained effort: a time-weighted half-second window, never a single-sample record.
+class EffortPeaks{
+    constructor(){this.reset()}
+    reset(){this.points=[];this.last=null;this.clock=0;this.accel=null;this.brake=null;this.left=null;this.right=null}
+    update(timeMs,g,usable,lateral=0){
+        if(!usable||!Number.isFinite(g)||!Number.isFinite(lateral)||!Number.isInteger(timeMs)){this.points=[];this.last=null;return}
+        const dt=this.last===null?0:(timeMs-this.last)>>>0;this.last=timeMs;
+        if(dt>250){this.points=[];this.clock=0}
+        else if(dt===0&&this.points.length)return;
+        else this.clock+=dt;
+        this.points.push({t:this.clock,g,l:lateral});const cut=this.clock-500;
+        while(this.points.length>1&&this.points[1].t<=cut)this.points.shift();
+        if(this.points[0].t>cut)return;
+        let integral=0,lateralIntegral=0;
+        for(let i=1;i<this.points.length;i++){
+            const a=this.points[i-1],b=this.points[i],start=Math.max(a.t,cut);
+            if(b.t<=start)continue;
+            const startG=a.g+(b.g-a.g)*(start-a.t)/(b.t-a.t);
+            integral+=(startG+b.g)*.5*(b.t-start);
+            const startL=a.l+(b.l-a.l)*(start-a.t)/(b.t-a.t);lateralIntegral+=(startL+b.l)*.5*(b.t-start);
+        }
+        const mean=integral/500;this.accel=Math.max(this.accel||0,mean);this.brake=Math.max(this.brake||0,-mean);this.left=Math.max(this.left||0,-lateralIntegral/500);this.right=Math.max(this.right||0,lateralIntegral/500);
+    }
+}
+const effortPeaks=new EffortPeaks();
+$('cluster-controls').onclick=()=>{const show=document.body.classList.toggle('cluster-controls');$('cluster-controls').setAttribute('aria-expanded',String(show));$('cluster-controls').textContent=show?'Hide controls':'Controls';requestAnimationFrame(()=>{resize();drawG()})};
+let clusterInstrument='speed';
+function selectClusterInstrument(name){
+    if(!['speed','forces','peaks'].includes(name))return;
+    clusterInstrument=name;
+    for(const mode of ['speed','forces','peaks']){$('cluster-'+mode).setAttribute('aria-pressed',String(mode===name));document.body.classList.toggle('cluster-'+mode,mode===name)}
+    requestAnimationFrame(()=>{resize();drawG()});
+}
+for(const mode of ['speed','forces','peaks'])$('cluster-'+mode).onclick=()=>selectClusterInstrument(mode);
+let clusterSwipe=null;
+$('g-card').addEventListener('touchstart',event=>{
+    if(!document.body.classList.contains('cluster-view')||event.touches.length!==1||event.target.closest('button'))return;
+    const t=event.touches[0];clusterSwipe={x:t.clientX,y:t.clientY,at:performance.now()};
+},{passive:true});
+$('g-card').addEventListener('touchcancel',()=>{clusterSwipe=null},{passive:true});
+$('g-card').addEventListener('touchend',event=>{
+    const start=clusterSwipe;clusterSwipe=null;if(!start||!event.changedTouches.length)return;
+    const t=event.changedTouches[0],dx=t.clientX-start.x,dy=t.clientY-start.y;
+    if(Math.abs(dx)<60||Math.abs(dx)<1.5*Math.abs(dy)||performance.now()-start.at>800)return;
+    const modes=['speed','forces','peaks'];selectClusterInstrument(modes[(modes.indexOf(clusterInstrument)+(dx<0?1:2))%3]);
+},{passive:true});
+// End selectable cluster instrument.
+
 let speed_ema=0,displaySessionStart=Date.now();
 let emaGx=0,emaGy=0,lastT=0;
 const EMA_TAU=0.07;
@@ -2123,7 +2191,7 @@ function fmtLapTime(ms){if(ms===0)return'0:00.000';const mins=Math.floor(ms/6000
 function updateLapProgress(active){
     const value=active&&lapTracker?.reliable&&lapTracker.match?.valid?lapTracker.match.progress:null;
     $('lap-progress').hidden=value===null;
-    if(value!==null){$('lap-progress-label').textContent='Reference route · '+value+'%';$('lap-progress-bar').value=value}
+    if(value!==null){$('lap-progress-label').textContent=(activeTrack?.type==='point_to_point'?'Stage progress · ':'Lap progress · ')+value+'%';$('lap-progress-bar').value=value}
 }
 let lapResultGeneration=0;
 function showLapResult(time,previousBest){
@@ -2136,7 +2204,7 @@ function showLapResult(time,previousBest){
 }
 function updateLapTimer(lapTimeMs,lapCnt,lapFlags,timing=null){
     updateLapProgress(false);
-    $('reference-label').textContent=referenceLap?.spatial?'Reference '+fmtLapTime(referenceLap.lapTimeMs)+' · spatial trace':referenceLap?'Older reference · complete a clean lap/run to upgrade':'';
+    $('reference-label').textContent=referenceLap?.spatial?'Reference '+fmtLapTime(referenceLap.lapTimeMs):referenceLap?'Older reference · complete a clean lap/run to upgrade':'';
     const sec=$('lap-section');
     // Don't deactivate if we have an active track - firmware zeros just means "armed"
     // Only deactivate via explicit deactivateTrack() call
@@ -2237,9 +2305,9 @@ function resetState(){
     maxL=maxR=maxA=maxB=peak=0;
     $('max-l').textContent=$('max-r').textContent=$('max-a').textContent=$('max-b').textContent='0.00g';
     $('speed').classList.remove('peak');
-    trail=[];magHist=[];currentScale=SCALE_STEPS[0];
-    $('range-val').textContent='Range ±'+currentScale.toFixed(1)+'g';
-    emaGx=emaGy=0;displaySessionStart=Date.now();
+    trail=[];currentScale=1;
+    $('range-val').textContent='Scale '+currentScale.toFixed(1)+' g';
+    emaGx=emaGy=0;displaySessionStart=Date.now();effortPeaks.reset();
 }
 
 let peakHighlightTimeout=null;
@@ -2289,6 +2357,7 @@ function process(buf,timing=null){
     }
 
     const now=Date.now();
+    if(lastT&&now-lastT>250){trail=[];emaGx=emaGy=0;effortPeaks.update(0,0,false)}
     const dt=lastT?Math.min((now-lastT)/1000,0.2):0.033;
     lastT=now;
     const alpha=1-Math.exp(-dt/EMA_TAU);
@@ -2315,7 +2384,10 @@ function process(buf,timing=null){
     el.textContent=MODES[mo]||'IDLE';
     el.style.color=MODE_COLORS[mo]||MODE_COLORS[0];
 
-    updateReadouts(-gx,-gy);
+    effortPeaks.update(d.getUint32(3,true),lng,forcesUsable(gpsOk,timing?.gps_age_ms)&&sp>=10,latg);
+    $('effort-accel').textContent=effortPeaks.accel===null?'—':effortPeaks.accel.toFixed(2);$('effort-brake').textContent=effortPeaks.brake===null?'—':effortPeaks.brake.toFixed(2);
+    $('effort-left').textContent=effortPeaks.left===null?'—':effortPeaks.left.toFixed(2);$('effort-right').textContent=effortPeaks.right===null?'—':effortPeaks.right.toFixed(2);
+    updateReadouts(gx,gy);
     $('yaw').textContent=Math.round(yawDeg);
 
     if(latg<0&&Math.abs(latg)>maxL){maxL=Math.abs(latg);$('max-l').textContent=maxL.toFixed(2)+'g'}
@@ -2323,14 +2395,12 @@ function process(buf,timing=null){
     if(lng>0&&lng>maxA){maxA=lng;$('max-a').textContent=maxA.toFixed(2)+'g'}
     if(lng<0&&Math.abs(lng)>maxB){maxB=Math.abs(lng);$('max-b').textContent=maxB.toFixed(2)+'g'}
 
-    if(speed_ema>=2){updateScale(gx,gy)}else{magHist=[];currentScale=SCALE_STEPS[0];$('range-val').textContent='Range ±'+currentScale.toFixed(1)+'g'}
-
-    const lastPt=trail.length>0?trail[trail.length-1]:null;
-    // Flip axes for driver's perspective: brake=up, accel=down, left turn=right, right turn=left
-    const plotX=-gx,plotY=-gy;
-    const dx=lastPt?Math.abs(plotX-lastPt.x):1,dy=lastPt?Math.abs(plotY-lastPt.y):1;
-    if(!lastPt||dx>TRAIL_JITTER_THRESHOLD||dy>TRAIL_JITTER_THRESHOLD){trail.push({x:plotX,y:plotY,t:now})}
-    trail=trail.filter(p=>now-p.t<TRAIL_DURATION_MS+200);
+    // Vehicle acceleration convention: right = positive lateral, accel = positive
+    // longitudinal; braking is drawn upward, matching the plot's text labels.
+    if(forcesUsable(gpsOk,timing?.gps_age_ms)){
+        trail.push({x:gx,y:-gy,t:now});trail=trail.filter(p=>now-p.t<TRAIL_DURATION_MS);
+        $('force-status').textContent=Math.hypot(gx,gy)>currentScale?'Over scale · tap scale':'3 s trail · est. g';
+    }else clearForces('Waiting for fresh GPS');
 
     lastGpsState=gpsOk;
     updateLapTimer(lapTimeMs,lapCnt,lapFlags,timing);
@@ -2351,6 +2421,7 @@ async function requestDevice(url){
     try{return await fetch(url,{signal:controller.signal})}finally{clearTimeout(timer)}
 }
 function markTelemetryUnavailable(label){
+    clearForces('No live force data');
     $('lap-result').hidden=true;lapResultGeneration++;
     if(lapTimerActive){$('lap-state').textContent='Timing unconfirmed';$('lap-state').classList.remove('timing');$('lap-section').classList.remove('timing')}
     if(lapTracker)lapTracker.invalidate();updateLapProgress(false);updateDeltaBar({deltaMs:null,hasRef:!!referenceLap});
@@ -2377,6 +2448,7 @@ async function poll(){
             document.body.classList.remove('telemetry-stale');$('connection-notice').hidden=true;
             $('liveDot').classList.add('on');$('stxt').textContent='LIVE';
         }
+        if(lastTelemetryAt&&Date.now()-lastTelemetryAt>300)clearForces('No fresh force data');
         if(!lastTelemetryAt||Date.now()-lastTelemetryAt>1500)markTelemetryUnavailable('No fresh data');
         setTimeout(poll,Math.max(0,33-(performance.now()-started)));
     }catch(e){markTelemetryUnavailable('Offline');setTimeout(poll,500)}
@@ -2858,6 +2930,7 @@ setInterval(()=>{
     $('session-time').textContent=fmtTime(Date.now()-displaySessionStart);
     if(lastGpsState){$('gpsDot').classList.add('on');$('gpsHz').textContent='GPS '+Math.round(fusion.gps_rate)}
     else{$('gpsDot').classList.remove('on');$('gpsHz').textContent='GPS --'}
+    $('cluster-link').textContent=$('stxt').textContent;$('cluster-gps').textContent=$('gpsHz').textContent;$('cluster-rec').textContent=$('cluster-recording').textContent;$('cluster-rec').classList.toggle('recording',rec);
     $('gps-acc').textContent=lastGpsState&&currentPos&&currentPos.sigma>0?currentPos.sigma.toFixed(1):'--';
     updateRecUI();
 },1000);
