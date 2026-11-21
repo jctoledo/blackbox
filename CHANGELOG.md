@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Device JSON requests bound complete bodies and recover from stalled reads; an independent receipt watchdog clears stale forces and marks timing unconfirmed. Landscape connection and recording recovery notices occupy separate rows.
+
 ### Added
 - Diagonal GPS-course regression checks forward and reverse crossing directions; mutation validation exposed a gap in cardinal-heading-only coverage.
 - Repository-specific agent workflow, triage/domain pointers and a documented three-arm code-review trial; no defect-recall superiority claim.
