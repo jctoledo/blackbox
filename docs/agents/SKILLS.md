@@ -4,6 +4,7 @@ Installed from [mattpocock/skills](https://github.com/mattpocock/skills) at comm
 
 | Skill | Use in Blackbox |
 | --- | --- |
+| grilling | Pressure-test unresolved product decisions in rounds; wait for shared design confirmation while independent authorized bug fixes continue |
 | research | Follow a technical question to primary sources and save cited findings under `docs/research/` |
 | code-review | Review a pinned diff against repository standards and the originating requirements separately |
 | codebase-design | Evaluate module interfaces and isolate complexity when restructuring code |
@@ -21,3 +22,7 @@ The [controlled code-review trial](evals/code-review-2026-11-21.md) compared the
 ## Real workflow exercise
 
 [Recording context #88](https://github.com/jctoledo/blackbox/issues/88) exercised a specified parent, device/browser tickets and native blocking edges. The browser ticket started only after the device and transport prerequisites merged. Independent review found a stale pending-backup overwrite and inconsistent synthetic boot identities; both were reproduced and corrected before merge. Browser rotation checks then exposed narrow-modal card and zero-height-list defects. The work kept all automated checks on lat and left hardware evidence separate. This demonstrates the adapted workflow on one feature, not general skill superiority.
+
+## Confirmed product grilling
+
+The user explicitly requested grilling during the post-rc.11 follow-up. The pinned `grilling` skill was installed and applied in four question rounds. The confirmed design is [Drive panel #105](https://github.com/jctoledo/blackbox/issues/105): recording-owned duration and qualified distance, frozen Stop summary, explicit gaps, unchanged track timing and no automatic recording/resumption. Mounting stays parallel to the car floor; non-horizontal mounting remains R&D requiring validation. This was a user-invoked interview, not a claim that grilling was evaluated as a mandatory improvement for every task.
