@@ -7,6 +7,7 @@ mod filter; // Only compiled for tests - production uses GPS blend instead of Bi
 mod fusion;
 mod gps;
 mod gps_log;
+mod gps_timing;
 mod imu;
 mod mode;
 mod mqtt;
@@ -763,12 +764,16 @@ fn main() {
         }
 
         // Poll GPS and update EKF correction
-        if sensors.poll_gps(telemetry_state.as_deref()) {
+        let gps_updated = sensors.poll_gps(telemetry_state.as_deref());
+        // UART parsing can advance the clock beyond the loop-start timestamp.
+        let gps_now_us = unsafe { esp_idf_svc::sys::esp_timer_get_time() as u64 };
+        let now_ms = (gps_now_us / 1000) as u32;
+        pending_lap_flags |= sensors.replay_gps_timing(&mut lap_timer, gps_now_us);
+        if gps_updated {
             // Count GPS rate only when a NEW valid RMC fix is received
             // (not on every GGA/GSA sentence while last_fix.valid is still true)
             let is_new_fix = sensors.gps_parser.take_new_fix();
             if is_new_fix {
-                sensors.record_gps_fix(now_ms);
                 diagnostics.record_gps_fix();
             }
 
@@ -793,18 +798,6 @@ fn main() {
                 }
             } else if !sensors.gps_parser.last_fix().valid {
                 mount_calibrator.invalidate();
-            }
-
-            // Use each fresh GPS fix, with velocity from the same receiver/frame.
-            // EKF heading lag must not reject a real GPS timing-line crossing.
-            if is_new_fix && sensors.gps_parser.is_warmed_up() {
-                let fix = sensors.gps_parser.last_fix();
-                if let Some(velocity) = sensors.gps_parser.get_velocity_enu() {
-                    pending_lap_flags |=
-                        lap_timer.update(fix.lat, fix.lon, velocity, now_ms, fix.speed);
-                }
-            } else if !sensors.gps_parser.last_fix().valid {
-                lap_timer.invalidate_fix();
             }
 
             // ALWAYS feed GPS speed to sensor fusion when we have a new fix
