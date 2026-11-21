@@ -481,8 +481,19 @@ body.cluster-view .bbLapCard,body.cluster-view .bbApp .bbGCard{container:cluster
 .bbDetailsGroup{padding:12px 0;border-top:1px solid var(--divider)}.bbDetailsGroup h4{font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px}.bbDetailsGroup dl{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.6fr);gap:5px 12px}.bbDetailsGroup dt{color:var(--text-secondary)}.bbDetailsGroup dd{color:var(--text);min-width:0;font-variant-numeric:tabular-nums}.bbDetailsNote{padding:10px 12px;margin:4px 0 12px;border-left:3px solid var(--amber);background:var(--bg);color:var(--text)}.bbDetailsLimit{color:var(--text-secondary);font-size:11px;margin-top:6px}
 /* Drive summary shares the timing frame; track selection only changes presentation. */
 .bbDrivePanel{display:flex;flex-direction:column;gap:12px;padding:18px;min-width:0}.bbDrivePanel[hidden],.bbLapCard.active .bbDrivePanel,.bbLapCard.inactive .bbLapSetup{display:none}
-.bbDriveState{font:600 12px/1.4 Inter,sans-serif;color:var(--text-secondary)}.bbDriveMetrics{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;margin:6px 0}.bbDriveLabel{color:var(--text-tertiary);font:10px/1.4 var(--mono);text-transform:uppercase;letter-spacing:.04em}.bbDriveNumber{font:500 clamp(24px,5vw,46px)/1.2 var(--mono);letter-spacing:-.06em;white-space:nowrap;margin-top:8px}.bbDriveNumber small{font:12px var(--mono);margin-left:5px;letter-spacing:0}.bbDrivePanel p{font:11px/1.4 var(--mono);color:var(--text-secondary);margin:0;overflow-wrap:anywhere}.bbDriveActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:auto}.bbDriveActions button{min-height:44px;padding:8px 12px;border:1px solid var(--divider);border-radius:6px;background:transparent;color:var(--text);font:600 11px Inter,sans-serif;cursor:pointer}.bbDriveActions button.recording{color:var(--red)}
-body.cluster-view .bbDrivePanel{flex:1;min-height:0;overflow:auto;gap:8px;padding:12px 18px}body.cluster-view .bbDriveMetrics{flex:1;align-items:center;margin:0}body.cluster-view .bbDriveActions{flex-wrap:nowrap}body.cluster-view .bbDriveActions button{padding:6px 10px}body.cluster-view .bbDriveNumber{font-size:clamp(24px,4.7vw,46px)}
+.bbDriveBody{display:flex;flex-direction:column;gap:12px;min-width:0}.bbDriveState{font:600 12px/1.4 Inter,sans-serif;color:var(--text-secondary)}.bbDriveMetrics{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;margin:6px 0}.bbDriveLabel{color:var(--text-tertiary);font:10px/1.4 var(--mono);text-transform:uppercase;letter-spacing:.04em}.bbDriveNumber{font:500 clamp(24px,5vw,46px)/1.2 var(--mono);letter-spacing:-.06em;white-space:nowrap;margin-top:8px}.bbDriveNumber small{font:12px var(--mono);margin-left:5px;letter-spacing:0}.bbDrivePanel p{font:11px/1.4 var(--mono);color:var(--text-secondary);margin:0;overflow-wrap:anywhere}.bbDriveActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:auto}.bbDriveActions button{min-height:44px;padding:8px 12px;border:1px solid var(--divider);border-radius:6px;background:transparent;color:var(--text);font:600 11px Inter,sans-serif;cursor:pointer}.bbDriveActions button.recording{color:var(--red)}
+body.cluster-view .bbDrivePanel{flex:1;min-height:0;display:grid;grid-template-rows:auto minmax(0,1fr) auto;overflow:hidden;gap:8px;padding:12px 18px}body.cluster-view .bbDriveBody{min-height:0;overflow:auto;gap:8px}body.cluster-view .bbDriveActions{min-height:44px}body.cluster-view .bbDriveMetrics{flex:1;align-items:center;margin:0}body.cluster-view .bbDriveActions{flex-wrap:nowrap}body.cluster-view .bbDriveActions button{padding:6px 10px}body.cluster-view .bbDriveNumber{font-size:clamp(24px,4.7vw,46px)}
+@container cluster-card (max-height:210px){
+    body.cluster-view .bbDrivePanel{padding:4px 10px;gap:3px}
+    body.cluster-view .bbDriveState{font-size:10px;line-height:14px}
+    body.cluster-view .bbDriveBody{gap:4px}
+    body.cluster-view .bbDriveMetrics{gap:8px;flex:none;align-items:start}
+    body.cluster-view .bbDriveLabel{font-size:9px;line-height:12px;letter-spacing:0}
+    body.cluster-view .bbDriveNumber{font-size:24px;line-height:28px;margin-top:2px}
+    body.cluster-view .bbDrivePanel p{font-size:10px;line-height:14px}
+    body.cluster-view .bbDriveActions{gap:6px}
+    body.cluster-view .bbDriveActions button{padding:6px 8px}
+}
 @media(max-width:380px){.bbDriveMetrics{gap:8px}.bbDriveNumber{font-size:27px}}
 </style></head>
 <body>
@@ -515,8 +526,8 @@ body.cluster-view .bbDrivePanel{flex:1;min-height:0;overflow:auto;gap:8px;paddin
         <div class="bbClusterHeader"><span class="bbClusterHealth"><span id="cluster-link">Connecting</span><span id="cluster-gps">GPS —</span><span id="cluster-rec">REC OFF</span></span><button id="cluster-controls" aria-expanded="false">Controls</button></div>
         <div class="bbDrivePanel" id="drive-panel">
             <div class="bbDriveState" id="drive-state" role="status">Ready to record</div>
-            <div class="bbDriveMetrics"><div><div class="bbDriveLabel">Recording duration</div><div class="bbDriveNumber" id="drive-duration">—</div></div><div><div class="bbDriveLabel">GPS distance · partial</div><div class="bbDriveNumber"><span id="drive-distance">—</span><small id="drive-distance-unit">km</small></div></div></div>
-            <p id="drive-coverage">GPS distance uses qualified receiver evidence</p><p id="drive-health" role="status">Checking sensors and browser storage…</p>
+            <div class="bbDriveBody" tabindex="0" aria-label="Recording metrics and health"><div class="bbDriveMetrics"><div><div class="bbDriveLabel">Recording duration</div><div class="bbDriveNumber" id="drive-duration">—</div></div><div><div class="bbDriveLabel">GPS distance · partial</div><div class="bbDriveNumber"><span id="drive-distance">—</span><small id="drive-distance-unit">km</small></div></div></div>
+            <p id="drive-coverage">GPS distance uses qualified receiver evidence</p><p id="drive-health" role="status">Checking sensors and browser storage…</p></div>
             <div class="bbDriveActions"><button id="drive-record">Record session</button><button id="drive-tracks">Tracks</button><button id="drive-data">Saved data</button></div>
         </div>
         <div class="bbLapSetup" id="lap-setup">
@@ -1332,7 +1343,7 @@ async function getStorageStats(){
 
 async function deleteSession(targetId){
     if(!db)await openDB();
-    if((rec||chunkWrite||chunkBuffer.length)&&targetId===sessionId)throw new Error('Save or export pending recording data before deleting');
+    if((rec||recordingBusy||chunkWrite||chunkBuffer.length)&&targetId===sessionId)throw new Error('Save or export pending recording data before deleting');
     await new Promise((resolve,reject)=>{
         const tx=db.transaction(['sessions','chunks'],'readwrite');tx.oncomplete=resolve;tx.onerror=tx.onabort=()=>reject(tx.error||new Error('Recording deletion failed'));
         const cursor=tx.objectStore('chunks').index('sessionId').openCursor(IDBKeyRange.only(targetId));
@@ -1365,7 +1376,7 @@ async function exportSessionById(targetId,gpsOnly=false,runsOnly=false){
 }
 
 async function clearAllRecordings(){
-    if(rec||chunkWrite||chunkBuffer.length)throw new Error('Save or export pending recording data before clearing');
+    if(rec||recordingBusy||chunkWrite||chunkBuffer.length)throw new Error('Save or export pending recording data before clearing');
     if(!db)await openDB();
     await new Promise((resolve,reject)=>{
         const tx=db.transaction(['sessions','chunks'],'readwrite');tx.oncomplete=resolve;tx.onerror=tx.onabort=()=>reject(tx.error||new Error('Recording deletion failed'));
@@ -3244,7 +3255,7 @@ async function renderSessionList(){
     const listEl=$('session-list'),clearBtn=$('btn-clear-all-recordings');
     try{
         const stats=await getStorageStats();
-        clearBtn.disabled=stats.sessionCount===0||rec||!!chunkWrite||chunkBuffer.length>0;
+        clearBtn.disabled=stats.sessionCount===0||rec||recordingBusy||!!chunkWrite||chunkBuffer.length>0;
         recoveredSessionCount=stats.sessions.filter(s=>s.status==='active'&&s.sessionId!==sessionId).length;updateRecUI();
         if(stats.sessionCount===0){
             listEl.innerHTML='<div class=\"bbSessionEmpty\"><div class=\"icon\"></div>No saved sessions yet.<br>Choose Record session to capture data in this browser.</div>';
@@ -3265,7 +3276,7 @@ async function renderSessionList(){
                     '<button class=\"bbSessionBtn\" data-action=\"export\">Session CSV</button>'+
                     '<button class=\"bbSessionBtn\" data-action=\"gps-export\">GPS CSV</button>'+
                     '<button class=\"bbSessionBtn\" data-action=\"runs-export\">Runs CSV</button>'+
-                    '<button class=\"bbSessionBtn danger\" data-action=\"delete\"'+((s.sessionId===sessionId&&(rec||chunkWrite||chunkBuffer.length))?' disabled':'')+'>Delete</button>'+
+                    '<button class=\"bbSessionBtn danger\" data-action=\"delete\"'+((s.sessionId===sessionId&&(rec||recordingBusy||chunkWrite||chunkBuffer.length))?' disabled':'')+'>Delete</button>'+
                 '</div>'+
             '</div>';
         }).join('');

@@ -165,9 +165,16 @@
   if(url.pathname==='/api/diagnostics')return json({sensor_rates:{imu_hz:200,gps_hz:25,loop_hz:900,imu_expected:200,gps_expected:25,zupt_per_min:0,ekf_per_gps:8},ekf:{pos_sigma:2.5,vel_sigma:.2,yaw_sigma_deg:2,bias_x:0,bias_y:0},system:{heap_free:100000,uptime_s:Math.floor(elapsed/1000),tx_ok:100,tx_fail:0},gps:{model:'SIMULATED',rate_hz:25,fix:true,warmup:true,satellites:12,hdop:1,ref_lat:origin.lat,ref_lon:origin.lon},wifi:{mode:'DEMO',ssid:'SIMULATED DATA'},config:{telemetry_hz:30,gps_model:'demo',warmup_fixes:5},fusion:{lon_raw:m.lonAccel,lon_filtered:m.lonAccel,lon_blended:m.lonAccel,gps_weight:.3,gps_accel:m.lonAccel,gps_rate:25,gps_rejected:false,pitch_corr:0,roll_corr:0,pitch_conf:95,roll_conf:95,yaw_bias:0,yaw_calibrated:true,tilt_x:0,tilt_y:0,tilt_valid:true}});
   return Promise.resolve(new Response('{"error":"Unavailable in demo"}',{status:404}));
  };
+ function suppressDriveSuggestions(){
+  // Explicit synthetic preview only; production detection is unchanged.
+  if(typeof trackAutoDetector!=='undefined')trackAutoDetector.check=async()=>null;
+  if(typeof showTrackDetectedToast==='function')showTrackDetectedToast=()=>{};
+  if(typeof dismissActiveToast==='function')dismissActiveToast();
+ }
  document.addEventListener('DOMContentLoaded',async()=>{
   const drivePreview=new URL(location.href).searchParams.get('view')==='drive';
-  document.getElementById('demo-drive').onclick=async()=>{if(activeTrack)await deactivateTrack();document.getElementById('menu-overlay')?.classList?.remove('open');renderDrive()};
+  if(drivePreview)suppressDriveSuggestions();
+  document.getElementById('demo-drive').onclick=async()=>{suppressDriveSuggestions();if(activeTrack)await deactivateTrack();document.getElementById('menu-overlay')?.classList?.remove('open');renderDrive()};
   document.getElementById('demo-interval').onclick=async event=>{
    intervalStart=intervalStart===null?Math.floor(performance.now()-start):null;demoBoot++;revision++;armedCycle=null;
    event.target.textContent=intervalStart===null?'Simulate rolling interval':'Return to circuit demo';
