@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Automatic receiver-time 30–60 mph and 50–100 km/h estimates alongside 45–70 mph, with continuous lead-in and sustained start confirmation, interval selection and evidence export.
+- Recovered recording notices occupy layout space instead of covering the landscape instruments.
+- Updated synthetic rolling scenario populates all intervals and exercises GPS-gap rejection.
+
 All notable changes to Blackbox will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),

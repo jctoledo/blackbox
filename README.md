@@ -149,7 +149,7 @@ Connect to the device's WiFi and open `192.168.71.1` in any browser.
 | Analysis | Show optional force analysis |
 | Drive view / Dashboard | Enter the focused display or return to controls |
 
-Landscape offers Speed, G-meter, sustained Peaks and Runs, with timing fixed alongside. Tap the instrument name to reveal its picker, or swipe horizontally to switch; the picker closes after selection. Speed includes a subtle maximum speed estimate while GPS is fresh for this page session. Choose **Menu → Speed units** for mph or km/h; the preference stays in this browser and applies to Speed and MAX. Recording/export units and the explicitly named 45–70 mph interval do not change. Tap Controls for the toolbar; the G-meter uses a selectable fixed scale and clears when data becomes unavailable.
+Landscape offers Speed, G-meter, sustained Peaks and Runs, with timing fixed alongside. Tap the instrument name to reveal its picker, or swipe horizontally to switch; the picker closes after selection. Speed includes a subtle maximum speed estimate while GPS is fresh for this page session. Choose **Menu → Speed units** for mph or km/h; the preference stays in this browser and applies to Speed and MAX. Recording/export units and the named 45–70 mph, 30–60 mph and 50–100 km/h intervals do not change. Tap Controls for the toolbar; the G-meter uses a selectable fixed scale and clears when data becomes unavailable.
 
 ![Landscape cluster with synthetic demo data](docs/dashboard-cluster-v6.png)
 
@@ -490,4 +490,4 @@ Timestamp-logging firmware saves receiver UTC and device parse times alongside r
 
 For the implemented equations, rate budgets, force-display semantics and current driveway-calibration limitation, see [Maths and update rates](docs/MATHS_AND_RATES.md).
 
-[Rolling interval estimates](docs/RUNS.md) use receiver timestamps for 45–70 mph, with rejected-attempt evidence in Runs CSV. Standing-start 0–60 and slope correction are not yet implemented.
+[Rolling interval estimates](docs/RUNS.md) use receiver timestamps for 45–70 mph, 30–60 mph and 50–100 km/h, with rejected-attempt evidence in Runs CSV. Standing-start 0–60 and slope correction are not yet implemented.

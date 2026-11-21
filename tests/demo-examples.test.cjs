@@ -6,7 +6,7 @@ test('demo examples populate both cornering signs and produce auditable accepted
  const c=fixture(),circuit=c.window.examplesForTest('circuit'),rolling=c.window.examplesForTest('rolling');
  for(const rows of [circuit,rolling])for(const row of rows){assert.equal(row.gpsSynthetic,1);for(const value of Object.values(row))assert.ok(Number.isFinite(value))}
  const forces=circuit.filter(r=>r.rowType!==1);assert.ok(Math.max(...forces.map(r=>r.latg))>.3);assert.ok(Math.min(...forces.map(r=>r.latg))<-.3);assert.ok(Math.max(...forces.map(r=>r.lng))>.15);assert.ok(Math.min(...forces.map(r=>r.lng))<-.3);
- vm.runInContext(html.slice(html.indexOf('function samplesToCSV('),html.indexOf('async function exportCSV(')),c);const csv=c.samplesToCSV(rolling).trim().split('\n');assert.equal(csv[0].split(',').at(-1),'synthetic');assert.equal(csv[1].split(',').at(-1),'1');assert.equal(Number(csv[1].split(',')[1]),64.8);
+ vm.runInContext(html.slice(html.indexOf('function samplesToCSV('),html.indexOf('async function exportCSV(')),c);const csv=c.samplesToCSV(rolling).trim().split('\n');assert.equal(csv[0].split(',').at(-1),'synthetic');assert.equal(csv[1].split(',').at(-1),'1');assert.equal(Number(csv[1].split(',')[1]),36);
  const detector=new c.Runs();for(const row of rolling)detector.update(row);const accepted=detector.results.filter(r=>r.status==='accepted'),rejected=detector.results.filter(r=>r.status==='rejected');assert.equal(accepted.length,2);assert.equal(rejected.length,1);assert.equal(rejected[0].reason,'GPS gap or clock boundary');for(const r of accepted)assert.ok(Math.abs(r.seconds-5.588)<1e-8);assert.equal(rolling.reduce((sum,r)=>sum+(r.gpsMissing||0),0),6);
 });
 let serial=0;
