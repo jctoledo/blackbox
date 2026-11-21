@@ -157,13 +157,14 @@ Record tracks anywhere and get real-time lap timing with delta display.
 ### Delta Bar
 
 ```
-    -2.3s                     2.3 seconds AHEAD of best
+    -2.3s                     2.3 seconds AHEAD of reference
 ◄████████████░░░░░░░░►        Green bar extends left
 
-    +1.5s                     1.5 seconds BEHIND best
+    +1.5s                     1.5 seconds BEHIND reference
 ◄░░░░░░░░████████████►        Red bar extends right
 ```
 
+- **Reference:** New position/time traces compare the same route location; old references upgrade after a clean lap/run. Ambiguous or stale matches hide delta. Historical best remains separate.
 - **Scale:** ±2 seconds = full bar. Number shows actual delta beyond ±2s.
 - **Trend arrows:** ▲ gaining time, ▼ losing time
 - **Glow effect:** Appears when delta exceeds 1 second

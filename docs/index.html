@@ -178,24 +178,24 @@
             <div class="preview">
                 <div class="preview-text">
                     <span class="eyebrow">BUILT FOR THE NEXT LAP</span><h3>A reference for<br>every return.</h3>
-                    <p>Record a circuit or stage, then arm timing. Drive view puts lap time, distance-based delta, and speed first. Open Analysis when parked to inspect forces. The driving dashboard stays focused on timing and speed.</p>
+                    <p>Record a circuit or stage, then arm timing. Drive view puts lap time, position-matched reference delta, and speed first. Open Analysis when parked to inspect forces. The driving dashboard stays focused on timing and speed.</p>
                     <ul class="preview-features">
                         <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg> Interpolated GPS line crossings</li>
                         <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg> Circuit and point-to-point tracks</li>
                         <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg> Browser-local recording, backups, and CSV export</li>
                         <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg> Saved tracks with start-line guidance</li>
-                        <li>Estimated distance progress after a reference lap</li>
+                        <li>Matched route progress after a spatial reference lap</li>
                         <li>Explicit offline and unavailable-data states</li><li>Lap consistency and recording-health summaries</li><li>Frequent saves and interrupted-session recovery</li>
                     </ul>
                     <a href="guides/lap-timer.html" target="_blank" style="color: var(--accent); font-size: 13px; text-decoration: none;">Explore the lap timer guide</a>
                 </div>
                 <div class="preview-device" aria-label="Dashboard preview with simulated data">
-                    <img src="dashboard-screenshot.png" alt="Blackbox dashboard showing simulated lap time, reference delta, estimated distance progress and speed" loading="lazy" width="390" height="844">
+                    <img src="dashboard-screenshot.png" alt="Blackbox dashboard showing simulated lap time, reference delta, matched route progress and speed" loading="lazy" width="390" height="844">
                 </div>
             </div>
 
             <div class="demo-delta">
-                <h4>See time gained or lost against your reference</h4><p>Negative means ahead; positive means behind. Illustrative values below. Live delta compares elapsed time at equal accumulated distance; it is not corner-matched coaching. Estimates are suppressed after detected gaps or invalid data.</p>
+                <h4>See time gained or lost against your reference</h4><p>Negative means ahead; positive means behind. Illustrative values below. New references compare elapsed time at a matched route position. Direction and continuity checks reject ambiguous matches. This is reference pace feedback, not corner coaching; detected gaps and invalid matches suppress the estimate.</p>
                 <div class="delta-examples">
                     <div class="delta-example">
                         <div class="delta-value negative">-2.3s</div>

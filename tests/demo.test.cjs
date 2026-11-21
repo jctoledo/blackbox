@@ -44,3 +44,17 @@ test('demo disconnect rejects telemetry and configuration until restored',async(
  d.button.onclick({target:d.button});assert.equal((await d.fetch('/api/telemetry')).status,200);
  assert.equal((await d.fetch('/not-a-device-endpoint')).status,404);
 });
+
+
+test('spatial reference matches a complete synthetic circuit through its start/finish seam',async()=>{
+ const html=fs.readFileSync('sensors/blackbox/web/dashboard.html','utf8'),c={Math,Number,Array};vm.createContext(c);
+ vm.runInContext(html.slice(html.indexOf('function referencePosition('),html.indexOf('// End spatial reference matching.'))+';this.Matcher=SpatialMatcher;',c);
+ const d=demo();await d.ready();await d.fetch('/api/laptimer/configure?type=loop');d.advance(5100);
+ const m=new c.Matcher(d.reference());let matched=0,total=0;
+ for(let i=0;i<700;i++){
+  const {j,p}=await sample(d);if(p.readUInt16LE(77)>0)break;
+  const r=m.match({valid:true,lat:j.timing.lat,lon:j.timing.lon,speed:p.readFloatLE(51),gpsAgeMs:0,gpsCourse:p.readFloatLE(69),validGpsCourse:true},p.readUInt32LE(73));
+  total++;if(r.valid)matched++;else assert.fail(r.reason+' at '+p.readUInt32LE(73));d.advance(100);
+ }
+ assert.ok(total>400);assert.equal(matched,total);
+});

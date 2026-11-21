@@ -76,12 +76,9 @@ UI shows "Run" instead of "Lap" and "Running" instead of "Timing."
 - Suitability for a particular timing requirement must be established against an independent reference.
 
 ### Delta Calculation
-Uses **arc-length comparison**:
-1. Track cumulative distance traveled
-2. Find time at that distance on reference lap
-3. Difference = delta
+New references record position/time samples in the saved track's geographic frame. Current GPS position is projected onto nearby reference segments; direction, continuity, and competing nearby branches gate the match. Reference time is interpolated at the matched position, then subtracted from current elapsed time corrected for GPS fix age. The live delta is against the labeled reference, not necessarily the historical best.
 
-Arc-length comparison is inexpensive, but equal distance need not mean the same track location when lines differ. Position noise can accumulate extra distance. Treat the delta and progress bar as estimates; detected gaps, late starts, and large jumps invalidate them until a new lap. This is not corner-matched coaching.
+Old distance-only references remain exportable; completing a clean lap/run creates a spatial replacement. New spatial references replace one another only when faster. A 12 m corridor and 60° direction gate are heuristics, not measured error bounds. Fresh stationary fixes preserve local continuity without displaying a delta. Gaps, ambiguous matches, and off-route positions suppress the estimate. Progress follows the matched trace and stops at 99%; firmware crossings remain the timing authority. This does not implement corner coaching or change firmware crossing timestamps.
 
 ---
 

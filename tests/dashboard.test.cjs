@@ -118,34 +118,17 @@ test('a stalled request is aborted and its timer is cleaned up',async()=>{
  const p=c.requestDevice('/api/telemetry');timeout();await assert.rejects(p,/aborted/);assert.equal(cleared,true);
 });
 
-test('distance progress is explicitly estimated and never asserts a finish',()=>{
- const c={Number,Math};vm.createContext(c);vm.runInContext(section('function estimatedLapProgress(', 'function updateLapProgress('),c);
- assert.equal(c.estimatedLapProgress({reliable:true,dist:250},{totalDistance:1000}),25);
- assert.equal(c.estimatedLapProgress({reliable:true,dist:1000},{totalDistance:1000}),99);
- assert.equal(c.estimatedLapProgress({reliable:false,dist:250},{totalDistance:1000}),null);
- assert.equal(c.estimatedLapProgress({reliable:true,dist:250},null),null);
- assert.equal(c.estimatedLapProgress({reliable:true,dist:250},{totalDistance:NaN}),null);
- assert.equal(c.estimatedLapProgress({reliable:true,dist:1200},{totalDistance:1000}),null);
-});
 test('reference distance is invalid for late starts, gaps and position jumps',()=>{
  const c={Math,Number,ArrayBuffer,Float32Array};vm.createContext(c);
- vm.runInContext(section('class LapTracker{','function calcDelta(')+'\nthis.Tracker=LapTracker;',c);
+ vm.runInContext(section('function referencePosition(','function fmtDelta(')+'\nthis.Tracker=LapTracker;',c);
  for(const values of [[[0,0,2000]],[[0,0,100],[2,0,1700]],[[0,0,100],[51,0,200]],[[NaN,0,100]]]){
   const tracker=new c.Tracker();for(const v of values)tracker.update(...v);assert.equal(tracker.reliable,false);assert.equal(tracker.isValid(),false);
   tracker.reset();assert.equal(tracker.reliable,true);
  }
  const tracker=new c.Tracker();for(let i=0;i<20;i++)tracker.update(i*4,0,i*100);assert.equal(tracker.isValid(),true);
 });
-test('delta never extrapolates beyond recorded reference distance',()=>{
- const c={Float32Array,Number};vm.createContext(c);vm.runInContext(section('function calcDelta(', 'function fmtDelta('),c);
- const ref={samples:new Float32Array([0,0,100,10000]).buffer};
- assert.equal(c.calcDelta(50,5500,ref).deltaMs,500);
- assert.equal(c.calcDelta(101,10000,ref).valid,false);
- assert.equal(c.calcDelta(NaN,10000,ref).valid,false);
-});
-
 test('a slower first lap after rearming cannot replace the saved best reference',()=>{
- const {c,references,elements}=context();c.activeTrack.bestLapMs=58000;c.referenceLap={lapTimeMs:58000};
+ const {c,references,elements}=context();c.activeTrack.bestLapMs=58000;c.referenceLap={lapTimeMs:58000,spatial:{version:1}};
  c.updateLapTimer(75,1,0,{state:'timing',last_lap_ms:60023,best_lap_ms:60023,gps_valid:true});
  assert.equal(references.length,0);assert.equal(elements.get('best-lap').textContent,'0:58.000');
 });
@@ -203,9 +186,9 @@ test('emergency export includes committed and unsaved rows without another write
 
 
 test('reference save completion cannot replace a newly selected track reference',async()=>{
- let finish;const original={lapTimeMs:50000};const c={console,Date,Math,activeTrack:{id:'old'},referenceLap:original,saveRefLap:()=>new Promise(resolve=>{finish=resolve})};vm.createContext(c);
+ let finish;const original={lapTimeMs:50000};const c={console,Date,Math,validSpatialReference:()=>true,activeTrack:{id:'old'},referenceLap:original,saveRefLap:()=>new Promise(resolve=>{finish=resolve})};vm.createContext(c);
  vm.runInContext(section('async function saveNewRefLap(', 'async function saveTrack('),c);
- const p=c.saveNewRefLap('old',60000,{toBinary:()=>new ArrayBuffer(0),samples:[],dist:100});c.activeTrack={id:'new'};finish();await p;assert.equal(c.referenceLap,original);
+ const p=c.saveNewRefLap('old',60000,{toBinary:()=>new ArrayBuffer(0),samples:[],dist:100,spatialPoints:[],spatialOrigin:{lat:0,lon:0}});c.activeTrack={id:'new'};finish();await p;assert.equal(c.referenceLap,original);
 });
 
 
