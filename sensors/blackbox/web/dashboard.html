@@ -532,7 +532,7 @@ body.cluster-view.cluster-controls .bbKebab{display:block}
         <div class="bbGTop">
             <div class="bbGTopLeft">
                 <div class="bbInstrumentLabel">Speed</div><div class="bbSpeedMaximum" title="Maximum speed estimate with fresh GPS, this page session">MAX <span id="speed-maximum">—</span> <span id="speed-maximum-unit">km/h</span></div><div class="bbSpeedLine"><span class="bbSpeed bbNum" id="speed">0</span><span class="bbUnit" id="speed-unit">km/h</span></div>
-                <div class="bbManeuver" id="maneuver">IDLE</div>
+                <div class="bbManeuver" id="maneuver">—</div>
             </div>
             <div class="bbGTopRight"><div class="bbInstrumentLabel">Session</div><span class="bbNum" id="session-time">0:00</span></div>
         </div>
@@ -568,7 +568,7 @@ body.cluster-view.cluster-controls .bbKebab{display:block}
     <div class="bbTelemetryStrip">
         <span class="bbTItem" title="Accepted dashboard samples per second, not GPS receiver rate">UI <span class="bbNum bbNum--hz" id="hz">0</span> Hz</span>
         <span class="bbTItem" title="Estimator position sigma, not measured GPS accuracy">Est. σ <span class="bbNum bbNum--gps" id="gps-acc">--</span>m</span>
-        <span class="bbTItem">Turn rate <span class="bbNum" id="yaw">0</span>°/s</span>
+        <span class="bbTItem">Sensor Z rate <span class="bbNum" id="yaw">0</span>°/s</span>
     </div>
 </main>
 </div>
@@ -2598,10 +2598,11 @@ function process(buf,timing=null){
     if(gpsOk===1&&Number.isFinite(timing?.gps_age_ms)&&timing.gps_age_ms>=0&&timing.gps_age_ms<=300)maximumFreshSpeed=Math.max(maximumFreshSpeed??0,sp);
     $('speed-maximum').textContent=maximumFreshSpeed===null?'—':speedForDisplay(maximumFreshSpeed);
 
-    currentModeColor=getModeColorHex(mo);
+    const modeUsable=forcesUsable(gpsOk,timing?.gps_age_ms,timing?.imu_age_ms);
+    currentModeColor=getModeColorHex(modeUsable?mo:0);
     const el=$('maneuver');
-    el.textContent=MODES[mo]||'IDLE';
-    el.style.color=MODE_COLORS[mo]||MODE_COLORS[0];
+    el.textContent=modeUsable?(MODES[mo]||'IDLE'):'—';
+    el.style.color=modeUsable?(MODE_COLORS[mo]||MODE_COLORS[0]):MODE_COLORS[0];
 
     effortPeaks.update(d.getUint32(3,true),lng,forcesUsable(gpsOk,timing?.gps_age_ms,timing?.imu_age_ms)&&sp>=10,latg);
     $('effort-accel').textContent=effortPeaks.accel===null?'—':effortPeaks.accel.toFixed(2);$('effort-brake').textContent=effortPeaks.brake===null?'—':effortPeaks.brake.toFixed(2);

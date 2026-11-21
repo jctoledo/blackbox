@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Hide maneuver labels without fresh GPS/IMU force evidence while retaining valid GPS speed and timing. Label raw body-Z gyro data as Sensor Z rate.
 - Clear reference delta and timing indicators when device timing becomes idle or a track revision is unconfirmed.
 - Refresh completed recording details in place, distinguish interrupted snapshots from running requests, and show pending recording samples without promising saved data for empty interrupted recordings.
 - Reset page speed and force statistics immediately, including while disconnected; label the reset scope explicitly.

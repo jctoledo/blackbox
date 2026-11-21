@@ -28,3 +28,11 @@ test('live metadata refresh preserves the details element, expanded state, focus
  vm.runInContext(slice('function refreshRecordingDetails(', 'function recordingDetailsHTML('),c);c.refreshRecordingDetails({sessionId:42});
  assert.equal(selected,'[data-session-id="42"]');assert.equal(details.open,true);assert.equal(focused,true);assert.equal(scroller.scrollTop,123);assert.deepEqual(body.nodes,['new metadata']);button.onclick();assert.equal(action,button);
 });
+test('invalid IMU evidence hides maneuver while fresh GPS speed and timing still update',()=>{
+ let timingUpdates=0;const {c}=fixture({DataView,Uint8Array,ArrayBuffer,firmwareGpsRef:{},updateJsGpsRef(){},getGpsRef:()=>null,updateTrackRecording(){},updateStartLineIndicator(){},updateFinishLineIndicator(){},activeTrack:{},trackRecorder:null,lastT:0,EMA_TAU:.07,emaGx:0,emaGy:0,speed_ema:0,speedForDisplay:Math.round,peak:100,maximumFreshSpeed:null,getModeColorHex:()=> 'red',MODES:{6:'BRAKING + CORNERING'},MODE_COLORS:{0:'gray',6:'red'},effortPeaks:{accel:null,brake:null,left:null,right:null,update(){}},updateReadouts(){},maxL:0,maxR:0,maxA:0,maxB:0,trail:[],TRAIL_DURATION_MS:3000,currentScale:1,lastGpsState:0,updateLapTimer(){timingUpdates++},drawG(){},cnt:0,rec:false});
+ const original=c.$;c.$=id=>{const el=original(id);el.style??={};return el};
+ vm.runInContext(slice('function forcePoint(', 'function clearForces(')+slice('function process(buf', '// Read the complete bounded body'),c);c.clearForces=()=>{};
+ const bytes=Uint8Array.from(fs.readFileSync('tests/fixtures/telemetry-v4.hex','utf8').replace(/\s/g,'').match(/../g),x=>parseInt(x,16)),d=new DataView(bytes.buffer);d.setUint8(59,6);d.setFloat32(51,80,true);d.setUint16(80,bytes.slice(0,80).reduce((sum,b)=>(sum+b)&65535,0),true);
+ for(const imuAge of [null,undefined,201]){c.process(bytes.buffer,{gps_valid:true,gps_age_ms:0,imu_age_ms:imuAge,lat:37,lon:-122});assert.equal(c.$('maneuver').textContent,'—');assert.equal(c.$('maneuver').style.color,'gray');assert.ok(c.$('speed').textContent>0);assert.equal(c.currentPos.valid,true)}
+ assert.equal(timingUpdates,3);c.process(bytes.buffer,{gps_valid:true,gps_age_ms:0,imu_age_ms:0,lat:37,lon:-122});assert.equal(c.$('maneuver').textContent,'BRAKING + CORNERING');assert.equal(timingUpdates,4);
+});
