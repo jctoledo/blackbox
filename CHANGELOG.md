@@ -25,6 +25,7 @@ Release candidate; physical USB/drive acceptance remains required. Includes rc.3
 - IndexedDB integration coverage for round trips, aborts, collisions, recovery, and concurrent session allocation.
 
 ### Fixed
+- Saved track names use full-width, wrapping headings above their controls in both track panels, including on desktop and for restored copies.
 - New recordings allocate IDs above existing sessions within one transaction, preventing imported timestamp IDs or concurrent starts from overwriting recordings.
 
 ## [0.0.4-rc.3] - 2026-11-19
