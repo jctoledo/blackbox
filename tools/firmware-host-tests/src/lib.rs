@@ -13,3 +13,6 @@ pub mod gps_timing;
 pub mod recording_metadata;
 #[path = "../../../sensors/blackbox/src/telemetry_http.rs"]
 pub mod telemetry_http;
+
+#[path = "../../../sensors/blackbox/src/imu_evidence.rs"]
+pub mod imu_evidence;

@@ -176,3 +176,26 @@ Keep failures and untested cases visible. Promote a candidate to stable only whe
 - [ ] Power-cycle the device during a disposable recording. The GPS CSV must show a new boot boundary; UTC must not be fabricated during reacquisition.
 - [ ] Reload the phone, export again, then back up and restore as a copy. Check GPS row counts and timestamps match.
 - [ ] Keep the phone foregrounded for the intended drive duration; record any collection gaps, unavailable logger status or storage failure.
+
+## Mounting tilt consistency acceptance (issue #104)
+
+Software regressions do not close physical incline/mounting validation (#73/#21).
+Record module identity, WT901 installation-direction settings, firmware commit,
+mounting photos and measured roll/pitch. Establish the upright, nearly level, parallel-to-car-floor baseline first. In a
+separate R&D experiment compare modest fixed dash-like pitch/roll, while keeping the road/site conditions comparable.
+The startup/alignment collection gates are not accepted physical tolerances.
+
+- At rest, verify startup bias and sustained stationary detection on level ground and
+  a modest driveway incline; then return to level and compare residuals.
+- Check known left/right turns at matching speed against an independent angular or
+  lateral reference, including compound fixed tilt. Inspect all three raw gyros.
+- Check straight travel with pitch/roll motion and rough-road vibration for false
+  cornering/stationary evidence. Repeat with warm/cold hardware.
+- Interrupt gyro, attitude and acceleration independently: forces must become
+  unavailable in HTTP/dashboard without interrupting healthy GPS timing; recovery
+  must collect fresh stationary evidence before reasserting parked state.
+- Assess magnetic interference, vibration, temperature and rigid attachment for the
+  actual dash/hood installation. Keep road grade/bank distinct from fixed mounting.
+
+Do not infer arbitrary/inverted mounting support, full 3D vehicle attitude,
+validated bank/grade compensation or tyre loads from these checks.

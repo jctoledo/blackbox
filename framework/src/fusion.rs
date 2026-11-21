@@ -993,14 +993,14 @@ impl SensorFusion {
     /// * `ahrs_pitch_deg` - AHRS pitch angle in degrees
     /// * `yaw` - Vehicle yaw angle (rad, from EKF or magnetometer)
     /// * `speed` - Vehicle speed (m/s)
-    /// * `yaw_rate` - Yaw rate (rad/s)
+    /// * `yaw_rate` - Earth-vertical angular velocity (rad/s), not body gyro Z
     /// * `dt` - Time step (seconds)
     /// * `is_stationary` - Whether vehicle is currently stationary
     ///
     /// # Returns
     /// (lon_blended, lat_centripetal) - Accelerations for mode detection (m/s²)
     /// lon_blended: orientation-corrected IMU blended with GPS
-    /// lat_centripetal: speed * yaw_rate (pro-style, mount-independent)
+    /// lat_centripetal: speed * yaw_rate (pro-style, approximately planar)
     #[allow(clippy::too_many_arguments)]
     pub fn process_imu(
         &mut self,
@@ -1066,7 +1066,7 @@ impl SensorFusion {
         let yaw_rate_corrected = self.yaw_rate_calibrator.correct(yaw_rate);
 
         // Step 8: Calculate centripetal lateral for mode detection
-        // a_lateral = v * omega (mount-angle independent)
+        // a_lateral = v * omega (earth-vertical, approximately planar)
         self.lat_centripetal = speed * yaw_rate_corrected;
 
         // Step 9: Handle stationary state - learn residual offsets
@@ -1148,6 +1148,21 @@ impl SensorFusion {
         (lon_blended, self.lat_centripetal)
     }
 
+    /// No fresh finite IMU evidence: age references and interrupt learning windows.
+    /// Keep the last finite outputs for v4 compatibility; HTTP marks them unavailable.
+    pub fn pause_imu(&mut self, dt: f32) {
+        if dt.is_finite() && dt > 0.0 {
+            self.gps_accel.advance_time(dt);
+            self.heading_aligner.time_since_gps += dt;
+        }
+        self.tilt_estimator.reset_stationary();
+        self.yaw_rate_calibrator.reset_accumulator();
+        self.orientation_corrector.cruise_time = 0.0;
+        self.orientation_corrector.cruise_bias_sum = 0.0;
+        self.orientation_corrector.cruise_bias_count = 0;
+        self.was_stationary = false;
+    }
+
     /// Process GPS speed update (call at GPS rate, e.g., 25Hz)
     ///
     /// # Arguments
@@ -1196,7 +1211,7 @@ impl SensorFusion {
     }
 
     /// Get centripetal lateral acceleration (vehicle frame, m/s²)
-    /// Computed as speed × yaw_rate - instant, mount-independent, doesn't stick
+    /// Computed as speed × yaw_rate - instant, approximately planar, doesn't stick
     /// This is the same value used by mode detection
     /// Positive = left turn
     pub fn get_lat_centripetal(&self) -> f32 {
