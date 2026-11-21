@@ -139,15 +139,11 @@ For circuits, **Circuit captured — not saved** appears when the closure criter
 
 ## Track Auto-Detection
 
-When driving near a saved track, the system offers to activate it.
+With fresh GPS near a saved track, Blackbox may offer **Track nearby** in a reserved notice row. It does not activate timing or start recording automatically. Choose **Activate** while parked to arm that track, or **Dismiss** to suppress it for the rest of this page session. An untouched suggestion expires after 10 seconds; that track waits at least 60 seconds before another offer. Stale GPS/connection data and track setup changes withdraw suggestions.
 
-**How it works:**
-- Checks position every 3 seconds against saved tracks
-- Requires 2 consecutive matches (~6 seconds)
-- Toast notification: "Track detected: [name]"
-- Tap **Activate** or **Dismiss**
+The existing matching heuristics check at most every three seconds and require two matching checks, using a 50 m centerline cutoff plus a distance/heading score. This is not a probability or an accuracy claim. Explicit dismissals are bounded to 256 IDs; at that limit, further automatic suggestions stop until reload rather than reviving dismissed tracks.
 
-**Thresholds:** 50m from centerline, combined distance + heading score
+Compact landscape groups connection, recording and track notices in a bounded scrolling region. Warnings and suggestion actions remain accessible without covering the instruments.
 
 ---
 
