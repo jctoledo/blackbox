@@ -45,6 +45,8 @@ test('invalid IMU evidence hides maneuver while fresh GPS speed and timing still
   for(let t=0;t<=500;t+=50){d.setUint32(3,t,true);d.setFloat32(51,(initial+change*t/500)*3.6,true);d.setUint16(80,bytes.slice(0,80).reduce((sum,b)=>(sum+b)&65535,0),true);c.process(bytes.buffer,{gps_valid:true,gps_age_ms:0,imu_age_ms:0,lat:37,lon:-122})}
   if(qualifies)assert.ok(Math.abs(c.effortPeaks.accel-1/9.81)<1e-8);else assert.equal(c.effortPeaks.accel,null);
  }
+ const origin={lat:37,lon:-122};c.getGpsRef=()=>origin;vm.runInContext(slice('function gpsToLocal(', 'function localToGps('),c);
+ c.process(bytes.buffer,{gps_valid:true,gps_age_ms:0,imu_age_ms:0,lat:37,lon:-122});assert.equal(c.currentPos.x,0);assert.equal(c.currentPos.y,0);origin.lat=37.001;assert.equal(c.currentPos.coordinateOrigin.lat,37);assert.equal(c.currentPos.coordinateOrigin.lon,-122);
 });
 
 function timingFixture(){

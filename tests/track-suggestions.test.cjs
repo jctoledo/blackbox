@@ -49,3 +49,15 @@ test('saved-track mutation suspends detection until commit and invalidates older
  const p=setup();await p.check();p.advance(3100);p.fresh();let finish;p.c.getAllTracks=()=>new Promise(r=>finish=r);const lookup=p.check();let tx;p.c.trackDb={transaction(){tx={objectStore:()=>({put(){}})};return tx}};
  vm.runInContext(slice('async function saveTrack(', 'async function getTrack('),p.c);const save=p.c.saveTrack(p.tracks[0]);assert.equal(vm.runInContext('trackAutoDetector.trackChanges',p.c),1);finish(p.tracks);assert.equal(await lookup,null);assert.equal(await p.check(),null);tx.oncomplete();await save;assert.equal(vm.runInContext('trackAutoDetector.trackChanges',p.c),0);assert.equal(p.c.activations,0);
 });
+test('delayed lookup and presentation retain the point origin across firmware-origin replacement',async()=>{
+ const p=setup(),oldOrigin={lat:37,lon:-122},newOrigin={lat:37.001,lon:-122};let liveOrigin=oldOrigin;
+ p.c.getGpsRef=()=>liveOrigin;vm.runInContext(slice('function transformCoord(', 'function transformLine('),p.c);p.tracks[0].gpsOrigin=oldOrigin;p.c.currentPos.coordinateOrigin={...oldOrigin};
+ await p.check();p.advance(3100);p.fresh();p.c.currentPos.coordinateOrigin={...oldOrigin};let finish;p.c.getAllTracks=()=>new Promise(r=>finish=r);const pending=p.check();liveOrigin=newOrigin;
+ finish(p.tracks);const result=await pending;assert.equal(result?.track.id,'a');assert.equal(p.c.showTrackDetectedToast(result.track,result.generation),true);assert.equal(p.$('track-suggestion').hidden,false);
+});
+test('origin replacement cannot reinterpret an old-frame point as a new nearby track match',async()=>{
+ const p=setup(),oldOrigin={lat:37,lon:-122},newOrigin={lat:37.001,lon:-122};let liveOrigin=oldOrigin;
+ p.c.getGpsRef=()=>liveOrigin;vm.runInContext(slice('function transformCoord(', 'function transformLine('),p.c);p.tracks[0].gpsOrigin=newOrigin;p.c.currentPos.coordinateOrigin={...oldOrigin};p.c.currentPos.y=(newOrigin.lat-oldOrigin.lat)*111320;
+ await p.check();p.advance(3100);p.fresh();p.c.currentPos.coordinateOrigin={...oldOrigin};let finish;p.c.getAllTracks=()=>new Promise(r=>finish=r);const pending=p.check();liveOrigin=newOrigin;finish(p.tracks);
+ assert.equal(await pending,null);assert.equal(p.c.showTrackDetectedToast(p.tracks[0]),false);assert.equal(p.$('track-suggestion').hidden,true);
+});

@@ -1524,7 +1524,7 @@ function updateJsGpsRef(lat,lon){if(jsGpsRef||lat===0||lon===0)return;jsGpsRefSa
 async function fetchFirmwareGpsRef(){if(firmwareGpsRef||firmwareGpsRefFetching)return;firmwareGpsRefFetching=true;try{const r=await requestDevice('/api/diagnostics');const d=await r.json();if(d.gps&&d.gps.ref_lat&&d.gps.ref_lon&&d.gps.ref_lat!==0){firmwareGpsRef={lat:d.gps.ref_lat,lon:d.gps.ref_lon};console.log('Firmware GPS ref:',firmwareGpsRef)}}catch(e){console.warn('Failed to fetch firmware GPS ref:',e)}finally{firmwareGpsRefFetching=false}}
 // Use firmware GPS reference for coordinates (fall back to jsGpsRef if not available)
 function getGpsRef(){return firmwareGpsRef||jsGpsRef}
-function gpsToLocal(lat,lon){const ref=getGpsRef();if(!ref)return null;const latRad=ref.lat*Math.PI/180;return{x:(lon-ref.lon)*Math.cos(latRad)*111320,y:(lat-ref.lat)*111320}}
+function gpsToLocal(lat,lon,ref=getGpsRef()){if(!ref)return null;const latRad=ref.lat*Math.PI/180;return{x:(lon-ref.lon)*Math.cos(latRad)*111320,y:(lat-ref.lat)*111320}}
 function localToGps(x,y){const ref=getGpsRef();if(!ref)return null;const latRad=ref.lat*Math.PI/180;return{lat:ref.lat+y/111320,lon:ref.lon+x/(111320*Math.cos(latRad))}}
 function transformCoord(x,y,fromRef,toRef){const fLatRad=fromRef.lat*Math.PI/180;const lon=fromRef.lon+x/(111320*Math.cos(fLatRad));const lat=fromRef.lat+y/111320;const tLatRad=toRef.lat*Math.PI/180;return{x:(lon-toRef.lon)*Math.cos(tLatRad)*111320,y:(lat-toRef.lat)*111320}}
 function transformLine(line,fromRef,toRef){const p1=transformCoord(line.p1[0],line.p1[1],fromRef,toRef);const p2=transformCoord(line.p2[0],line.p2[1],fromRef,toRef);return{p1:[p1.x,p1.y],p2:[p2.x,p2.y],direction:line.direction}}
@@ -1568,14 +1568,14 @@ class TrackAutoDetector{
         const p=currentPos,now=performance.now(),age=p?now-p.receivedAtMs:NaN;
         if(activeTrack||trackRecorder||this.trackChanges||!p?.valid||!Number.isFinite(p.gpsAgeMs)||p.gpsAgeMs<0||!Number.isFinite(age)||age<0||p.gpsAgeMs+age>300)return null;
         const heading=p.validGpsCourse?p.gpsCourse:p.yaw;
-        return [p.x,p.y,heading].every(Number.isFinite)?{x:p.x,y:p.y,heading}:null;
+        return [p.x,p.y,heading].every(Number.isFinite)?{x:p.x,y:p.y,heading,origin:p.coordinateOrigin}:null;
     }
     eligible(track){
         const now=performance.now();for(const [id,until] of this.cooldowns)if(until<=now)this.cooldowns.delete(id);
         return this.dismissed.size<this.maxDismissed&&!track.isDemo&&!this.dismissed.has(track.id)&&!this.cooldowns.has(track.id);
     }
     canPresent(track,generation=this.generation){
-        const context=this.currentContext();return generation===this.generation&&context&&this.eligible(track)&&this.scoreMatch(context.x,context.y,context.heading,track)>0.5;
+        const context=this.currentContext();return generation===this.generation&&context&&this.eligible(track)&&this.scoreMatch(context.x,context.y,context.heading,track,context.origin)>0.5;
     }
     async check(){
         const context=this.currentContext();
@@ -1588,7 +1588,7 @@ class TrackAutoDetector{
             if(request!==this.generation)return null;
             if(!current){this.withdraw();return null}
             let bestMatch=null,bestScore=0;
-            for(const track of tracks){if(!this.eligible(track))continue;const score=this.scoreMatch(current.x,current.y,current.heading,track);if(score>bestScore&&score>0.5){bestScore=score;bestMatch=track}}
+            for(const track of tracks){if(!this.eligible(track))continue;const score=this.scoreMatch(current.x,current.y,current.heading,track,current.origin);if(score>bestScore&&score>0.5){bestScore=score;bestMatch=track}}
             if(bestMatch){
                 if(this.candidateTrack?.id===bestMatch.id)this.matchCount++;else{this.candidateTrack=bestMatch;this.matchCount=1}
                 if(this.matchCount>=this.requiredMatches)return{track:bestMatch,confidence:bestScore,generation:request};
@@ -1596,9 +1596,9 @@ class TrackAutoDetector{
             return null;
         }finally{if(this.pending===request)this.pending=null}
     }
-    scoreMatch(x,y,heading,track){
-        // Skip tracks from different sessions if we can't transform
-        const ref=getGpsRef();if(track.gpsOrigin&&!ref)return 0;
+    scoreMatch(x,y,heading,track,pointOrigin){
+        // The point and its origin are one sample; the live GPS origin may change during lookup.
+        const ref=pointOrigin;if(track.gpsOrigin&&!ref)return 0;
         // Transform bounds check if needed
         let bx=x,by=y;
         if(track.gpsOrigin&&ref){const t=transformCoord(x,y,ref,track.gpsOrigin);bx=t.x;by=t.y}
@@ -2869,10 +2869,10 @@ function process(buf,timing=null){
     // Update position for track manager and recording
     // ARCHITECTURE: Use GPS-derived local coordinates relative to firmware's GPS origin (via gpsToLocal)
     // This ensures dashboard coords match firmware's EKF coordinate frame for timing line crossing.
-    let localX=ekfX,localY=ekfY; // fallback to EKF if GPS ref not ready
-    const ref=getGpsRef();if(ref&&gpsOk===1&&lat&&lon){const local=gpsToLocal(lat,lon);if(local){localX=local.x;localY=local.y}}
+    let localX=ekfX,localY=ekfY,coordinateOrigin=null; // fallback to EKF if GPS ref not ready
+    const ref=getGpsRef();if(ref&&gpsOk===1){const local=gpsToLocal(lat,lon,ref);if(local){localX=local.x;localY=local.y;coordinateOrigin={lat:ref.lat,lon:ref.lon}}}
     const validGpsCourse=Number.isFinite(gpsCourse)&&sp>2.0;
-    currentPos={receivedAtMs:performance.now(),gpsAgeMs:timing?.gps_age_ms,x:localX,y:localY,yaw:ekfYaw,gpsCourse:gpsCourse,validGpsCourse:validGpsCourse,speed:sp,valid:gpsOk===1,sigma:posSigma,lat:lat,lon:lon};
+    currentPos={coordinateOrigin,receivedAtMs:performance.now(),gpsAgeMs:timing?.gps_age_ms,x:localX,y:localY,yaw:ekfYaw,gpsCourse:gpsCourse,validGpsCourse:validGpsCourse,speed:sp,valid:gpsOk===1,sigma:posSigma,lat:lat,lon:lon};
     updateTrackRecording();
     updateStartLineIndicator();
     updateFinishLineIndicator();
