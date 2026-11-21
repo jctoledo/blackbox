@@ -54,6 +54,14 @@
   const m=motion(c.index,c.lapMs),lat=origin.lat+m.north/111320,lon=origin.lon+m.east/(111320*Math.cos(origin.lat*Math.PI/180));
   const timing=armedCycle!==null&&c.cycle>=armedCycle,count=timing?c.cycle-armedCycle:0;
   const completed=Array.from({length:Math.min(count,4)},(_,i)=>durations[(c.cycle-1-i)%4]);
+  if(url.pathname==='/api/gps-log'){
+   const latest=Math.floor(elapsed/40)+1;
+   const events=Array.from({length:Math.min(64,latest)},(_,i)=>{
+    const seq=Math.max(1,latest-63)+i,ms=(seq-1)*40,epoch=clock(ms),point=motion(epoch.index,epoch.lapMs);
+    return {seq,host_us:ms*1000,utc_us:(43200000000+ms*1000)%86400000000,date_ddmmyy:10126,fractional_digits:2,active:true,accepted:true,lat:origin.lat+point.north/111320,lon:origin.lon+point.east/(111320*Math.cos(origin.lat*Math.PI/180)),speed_mps:point.speed,course_rad:(point.yaw+tau)%tau};
+   });
+   return json({version:1,simulated:true,boot_id:1,capacity:64,latest_seq:latest,events});
+  }
   if(url.pathname==='/api/telemetry'){
    const data=new Uint8Array(82),v=new DataView(data.buffer);v.setUint8(0,4);v.setUint16(1,0xAA55,true);v.setUint32(3,Math.floor(elapsed),true);
    [-m.lonAccel,m.latAccel,0,m.yawRate,0,0,m.yaw,m.east,m.north,m.vx,m.vy,m.speed*3.6,2.5].forEach((n,i)=>v.setFloat32(7+4*i,n,true));

@@ -12,6 +12,8 @@ pub struct TimingTelemetry {
     pub lon: f64,
     pub gps_valid: bool,
     pub gps_age_ms: Option<u32>,
+    pub gps_boot_id: Option<u32>,
+    pub gps_event: Option<crate::gps_log::GpsEvent>,
 }
 
 /// serde_json encodes non-finite sensor values as null and escapes text fields.

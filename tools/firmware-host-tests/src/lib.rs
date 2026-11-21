@@ -5,5 +5,7 @@ pub mod binary_telemetry;
 pub mod calibration;
 #[path = "../../../sensors/blackbox/src/diagnostics.rs"]
 pub mod diagnostics;
+#[path = "../../../sensors/blackbox/src/gps_log.rs"]
+pub mod gps_log;
 #[path = "../../../sensors/blackbox/src/telemetry_http.rs"]
 pub mod telemetry_http;
