@@ -12,6 +12,8 @@ mod imu;
 mod mode;
 mod mqtt;
 mod nvs_storage;
+mod recording_metadata;
+mod recording_metadata_device;
 mod rgb_led;
 mod system;
 mod telemetry_http;
@@ -244,6 +246,23 @@ fn main() {
     // Keep server alive (prevent drop)
     let _server = telemetry_server;
 
+    let mut recording_metadata = telemetry_state
+        .as_ref()
+        .and_then(|state| state.boot_id())
+        .and_then(|boot_id| recording_metadata_device::initial(boot_id, &config.gps));
+    if let Some(ref mut snapshot) = recording_metadata {
+        // This is the saved startup state; pending mounting candidates never enter it.
+        if mount_storage.is_some() {
+            snapshot.calibration.mount_alignment = recording_metadata::MountAlignment::finite(
+                saved_mount.is_calibrated,
+                saved_mount.yaw_offset,
+            );
+        }
+        if let Some(ref state) = telemetry_state {
+            state.publish_recording_metadata(snapshot.clone());
+        }
+    }
+
     // Initialize UART for IMU with auto-detection of baud rate
     // WT901 could be at 9600 (factory) or 115200 (configured for 200Hz)
     // LED feedback: orange blink = trying baud, green = found, red = not found
@@ -263,11 +282,13 @@ fn main() {
     // Try to detect IMU at different baud rates
     let baud_rates: [u32; 4] = [115200, 9600, 38400, 19200];
     let mut detected_baud: u32 = 0;
+    let mut configured_imu_baud = Some(115200);
 
     for (idx, &baud) in baud_rates.iter().enumerate() {
         if baud != 115200 {
-            imu_uart
+            configured_imu_baud = imu_uart
                 .change_baudrate(esp_idf_hal::units::Hertz(baud))
+                .map(|_| baud)
                 .ok();
         }
 
@@ -329,8 +350,9 @@ fn main() {
             FreeRtos::delay_ms(200);
         }
 
-        imu_uart
+        configured_imu_baud = imu_uart
             .change_baudrate(esp_idf_hal::units::Hertz(9600))
+            .map(|_| 9600)
             .ok();
     }
 
@@ -436,6 +458,24 @@ fn main() {
         info!("GPS configuration saved to flash");
     }
 
+    if let Some(ref mut snapshot) = recording_metadata {
+        snapshot.imu = if detected_baud == 0 {
+            recording_metadata::Imu::selected(
+                configured_imu_baud,
+                recording_metadata::BaudSelection::Fallback,
+            )
+        } else {
+            recording_metadata::Imu::selected(
+                configured_imu_baud,
+                recording_metadata::BaudSelection::HeaderProbe,
+            )
+        };
+        snapshot.captured_uptime_ms = recording_metadata_device::uptime_ms();
+        if let Some(ref state) = telemetry_state {
+            state.publish_recording_metadata(snapshot.clone());
+        }
+    }
+
     // Create sensor manager
     let mut sensors = SensorManager::new(imu_uart, gps_uart, config.gps.warmup_fixes);
 
@@ -448,6 +488,14 @@ fn main() {
         .calibrate_imu(status_mgr.led_mut(), mqtt_opt.as_mut())
         .expect("Calibration failed");
     sensors.imu_parser.set_bias(bias);
+    if let Some(ref mut snapshot) = recording_metadata {
+        snapshot.calibration.accelerometer_bias_mps2 =
+            recording_metadata::Bias::finite(bias.ax, bias.ay, bias.az);
+        snapshot.captured_uptime_ms = recording_metadata_device::uptime_ms();
+        if let Some(ref state) = telemetry_state {
+            state.publish_recording_metadata(snapshot.clone());
+        }
+    }
 
     if let Some(ref mut mqtt) = mqtt_opt {
         mqtt.publish_status("calib_done", Some(1.0)).ok();
@@ -496,6 +544,7 @@ fn main() {
     let mut last_mqtt_diag_ms = 0u32;
     let mut last_connectivity_check_ms = 0u32;
     let mut loop_count = 0u32;
+    let mut last_metadata_ms = 0u64;
 
     // Track previous connectivity state to detect changes
     let mut was_wifi_connected = true;
@@ -523,6 +572,14 @@ fn main() {
                     });
                     if changed {
                         sensor_fusion.set_mount_yaw(mount_calibrator.status.saved.yaw_offset);
+                        if let Some(ref mut snapshot) = recording_metadata {
+                            let saved = mount_calibrator.status.saved;
+                            snapshot.calibration.mount_alignment =
+                                recording_metadata::MountAlignment::finite(
+                                    saved.is_calibrated,
+                                    saved.yaw_offset,
+                                );
+                        }
                     }
                 }
                 _ => {}
@@ -537,6 +594,10 @@ fn main() {
                 match sensors.calibrate_imu(status_mgr.led_mut(), None) {
                     Ok(bias) => {
                         sensors.imu_parser.set_bias(bias);
+                        if let Some(ref mut snapshot) = recording_metadata {
+                            snapshot.calibration.accelerometer_bias_mps2 =
+                                recording_metadata::Bias::finite(bias.ax, bias.ay, bias.az);
+                        }
                         info!(
                             ">>> Recalibration complete! Bias: ax={:.4}, ay={:.4}, az={:.4}",
                             bias.ax, bias.ay, bias.az
@@ -617,6 +678,18 @@ fn main() {
                     }
                 }
             }
+        }
+
+        // Bounded refresh also publishes applied changes; use the full monotonic clock.
+        let metadata_now_ms = recording_metadata_device::uptime_ms();
+        if metadata_now_ms.saturating_sub(last_metadata_ms) >= 1000 {
+            if let (Some(ref state), Some(ref mut snapshot)) =
+                (&telemetry_state, &mut recording_metadata)
+            {
+                snapshot.captured_uptime_ms = metadata_now_ms;
+                state.publish_recording_metadata(snapshot.clone());
+            }
+            last_metadata_ms = metadata_now_ms;
         }
 
         // Periodic diagnostics (serial log every 5s)
