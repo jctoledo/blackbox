@@ -1,5 +1,5 @@
 //! A modular, extensible framework for building custom automotive sensor fusion
-//! systems. Build professional-grade telemetry for track days, racing, vehicle
+//! systems. Build inspectable telemetry experiments for track days, racing, vehicle
 //! dynamics research, and fleet monitoring without vendor lock-in.
 //!
 //! ## Features
@@ -14,7 +14,7 @@
 //! - **SOLID Principles**: Designed following best practices for
 //!   maintainability
 //! - **Distributed Support**: MQTT-based multi-board sensor networks (optional)
-//! - **No-std Compatible**: Works on embedded systems without operating system
+//! - **Host-testable**: The framework currently requires std; selected drivers support no_std.
 //!
 //! ## Architecture
 //!

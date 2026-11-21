@@ -18,12 +18,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Release candidate; includes rc.4 backup/restore. The spatial matcher is software-validated and ready for controlled field evaluation; this release does not establish a measured timing-error bound.
 
+### Fixed
+- Estimator position variance now propagates velocity/bias variance with the correct time powers; nonfinite measurements cannot poison state. Diagonal covariance remains approximate.
+- Cruise-bias residual learning converges to the full persistent offset instead of roughly half.
+
 ### Added
+- Automatic landscape speed-and-timing cluster, explicit Dashboard escape, and bundled offline Inter/JetBrains Mono fonts.
 - Position/time reference traces, route-position delta, and matched route progress for circuits and stages.
 - Conservative direction, continuity, freshness, and overlapping-route rejection; local continuity across fresh stationary pauses.
 - Spatial reference backup/restore coverage and complete synthetic-circuit matching tests.
 - A sourced build-versus-buy guide comparing capabilities with RaceBox, RaceChrono Pro, and Performance Box Touch.
-- A dark, silent driver’s-eye hero background with pause, offscreen suspension, reduced-motion/data-saving fallback, and documented footage licensing.
+- A dark, silent aerial circuit background selected by the owner, with footer motion preferences, offscreen suspension, reduced-motion/data-saving fallback, and repository-only media notes.
 
 ### Changed
 - Old distance-only references upgrade after a clean lap/run. The reference time and historical best have distinct labels.

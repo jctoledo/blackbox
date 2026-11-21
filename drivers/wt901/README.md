@@ -16,7 +16,7 @@ Pure Rust driver for the WT901 9-axis IMU sensor (accelerometer + gyroscope + ma
 This driver supports the WT901 IMU connected via UART:
 - **Baud rate:** 9600 (default)
 - **Voltage:** 3.3V - 5V
-- **Packet rate:** Up to 200 Hz
+- **Packet rate:** Configurable output up to 200 Hz; verify the module settings and actual delivered rate. Parsing multiple packets in one application poll does not imply a prediction step per packet.
 
 ## Usage
 
@@ -63,7 +63,7 @@ loop {
 ### With Calibration
 
 ```rust
-use wt901::{Wt901Parser, ImuCalibrator};
+use wt901::{Wt901Parser, ImuCalibrator, PacketType};
 
 let mut parser = Wt901Parser::new();
 let mut calibrator = ImuCalibrator::new(500); // 500 samples
@@ -128,7 +128,7 @@ This driver works in `no_std` environments:
 wt901 = { path = "...", default-features = false }
 ```
 
-Note: Calibration requires `alloc` feature (Vec usage).
+Calibration uses `alloc::vec::Vec` and requires an allocator on a no_std target; there is no separate Cargo feature named `alloc`.
 
 ## License
 

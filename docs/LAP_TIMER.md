@@ -8,9 +8,9 @@ GPS-based lap timing for an open telemetry project. Record circuits or stages, s
 
 ### Record a Track
 1. Open dashboard at `192.168.71.1`
-2. Tap **lap timer card** → **+** to record
+2. Open **Tracks** and choose circuit or stage recording
 3. Drive one complete lap
-4. For circuits: auto-detects loop completion. For stages: tap **Stop Recording**
+4. For circuits, review the loop-complete prompt. For stages, stop safely and tap **Mark Finish**
 5. Name and save
 
 ### Start Timing
@@ -118,17 +118,17 @@ For P2P tracks, similar messages show for finish line once timing starts.
 
 ### During Recording
 The overlay shows:
-- GPS quality (Excellent/Good/Fair/Poor)
+- Estimate status (a heuristic, not measured GPS accuracy)
 - Distance traveled
-- Corner count
+- Estimated turn count
 - Elapsed time
 
-**GPS Quality:** Record with Good or better. Fair works but accuracy suffers. Poor — wait for better signal.
+**Data checks:** Wait for fresh valid GPS and inspect the captured route before saving. A quality label does not establish position accuracy.
 
 ### Loop Detection
 For circuits, "Loop Detected!" appears when criteria met. Options:
 - **Save Track** — open save dialog
-- **Keep Driving** — continue for more accuracy
+- **Keep Driving** — continue recording; more samples do not guarantee better accuracy
 
 ### Tips
 - Wait for GPS lock (cyan LED pulse)
@@ -154,11 +154,11 @@ When driving near a saved track, the system offers to activate it.
 
 ## Session History
 
-Every lap time saves automatically, grouped by session.
+Observed completed laps are saved automatically, grouped by session. Multiple completions missed during a browser outage cannot all be reconstructed.
 
 ### Viewing
 1. Open track list (tap lap timer card)
-2. Tap **H** button next to tracks with history
+2. Tap **Laps** next to a track with history
 3. View sessions grouped by date
 
 ### What's Saved
@@ -170,7 +170,7 @@ Every lap time saves automatically, grouped by session.
 
 ## Data Management
 
-Access via **Data** in hamburger menu.
+Open **Saved data** from the dashboard.
 
 **Storage Overview:** Total usage, recordings vs tracks breakdown
 
@@ -284,21 +284,7 @@ A sufficiently wide line reduces missed intersections near the track edge. Direc
 
 **Current Behavior:** The lap timer only processes valid GPS fixes. No detection during dropout is correct behavior—better than wrong detections.
 
-**Potential Enhancement:** Fall back to EKF position during GPS dropout by converting EKF (x,y) to GPS using firmware's GPS origin:
-```rust
-// Pseudocode for potential enhancement
-if gps_fix.valid {
-    lap_timer.update(gps_fix.lat, gps_fix.lon, ...);
-} else if gps_parser.is_warmed_up() {
-    // Convert EKF position to GPS using firmware's origin
-    let (ekf_x, ekf_y) = ekf.position();
-    let ref_origin = gps_parser.reference();
-    let fallback_lat = ref_origin.lat + ekf_y / 111320.0;
-    let fallback_lon = ref_origin.lon + ekf_x / (111320.0 * cos(ref_origin.lat));
-    lap_timer.update(fallback_lat, fallback_lon, ...);
-}
-```
-This maintains session independence while providing continuity during brief dropouts.
+An EKF fallback is a research option, not an implemented or validated replacement for missing fixes. It needs an explicit error model and independent crossing evidence before it can report a completed lap.
 
 #### Coordinate Precision
 

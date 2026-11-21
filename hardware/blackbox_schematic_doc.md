@@ -1,5 +1,7 @@
 # Blackbox - ESP32 Vehicle Telemetry System
 
+> **Design proposal, not the released board.** This document describes the S3 powerBox schematic. Published firmware targets ESP32-C3. CAN, battery charging, wake/sleep and board-level protection require electrical/PCB/bench review; they are not delivered Blackbox firmware features. Component labels below describe design intent, not verified ratings of the assembled unit.
+
 ## Overview
 A comprehensive vehicle telemetry system built around the ESP32-S3 microcontroller with integrated power management, CAN bus communication, GPS tracking, and IMU sensing.
 
@@ -23,7 +25,7 @@ A comprehensive vehicle telemetry system built around the ESP32-S3 microcontroll
   - Status LEDs
 
 #### 3.3V Regulator
-- **IC:** TPS631000DRLR (U2) - High-efficiency buck converter
+- **IC:** TPS631000DRLR (U2) - [Buck-boost converter](https://www.ti.com/product/TPS631000) (verify part selection and layout)
   - Input: SYS rail from battery charger
   - Output: 3.3V for all logic circuits
 
@@ -94,7 +96,7 @@ A comprehensive vehicle telemetry system built around the ESP32-S3 microcontroll
 - Dual power input (USB-C or 12V battery)
 - Automatic power path management
 - Li-Ion/Li-Po battery charging with temperature monitoring
-- Automotive-grade CAN bus interface
+- Proposed CAN bus interface (assembled-board qualification not established)
 - Multi-GNSS positioning
 - 9-axis inertial measurement
 - Wi-Fi and Bluetooth connectivity

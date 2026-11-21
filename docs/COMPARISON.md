@@ -12,7 +12,7 @@ Blackbox brings circuit and stage timing, GPS + inertial telemetry, reference pa
 | Fast inertial input | WT901 can be configured for 200 Hz output | Sensor output rate; not proof that every sample reaches the estimator or browser. |
 | Interpolated GPS timing | Direction-aware start/finish crossings; circuits and point-to-point stages | Crossing time between fresh fixes, stored in milliseconds. Physical timing error needs reference tests. |
 | Position-matched reference pace | New references store position/time; direction, continuity, and ambiguity gates suppress bad matches | Comparison against a labeled reference trace, distinct from historical best. Not automatic corner coaching. |
-| Phone-friendly local display | Device-hosted browser dashboard over Wi-Fi; focused Drive view and optional force Analysis | No project cloud login or subscription. Browser/device connectivity and phone power management still matter. |
+| Phone-friendly local display | Device-hosted browser dashboard over Wi-Fi; automatic landscape cluster, focused Drive view and optional force Analysis | No project cloud login or subscription. Browser/device connectivity and phone power management still matter. |
 | Portable session data | CSV export, full JSON backups, validated restore as copies | Browser-local persistence. Keep external backups; this is not autonomous onboard session logging. |
 | An inspectable instrument | MIT-licensed Rust firmware, browser source, protocol, and regression tests | You can modify the implementation and reproduce builds. Tests establish behavior for their inputs, not a road accuracy certification. |
 
@@ -41,4 +41,4 @@ Reference-timed hardware error distributions, environmental durability, and comm
 
 Acceleration/drag tests with explicit rollout settings, braking-distance tests, slope estimation/correction, linked drive replay, section-loss visualization, and adaptive corner analysis are **proposals, not shipped features**. The priority is to retain the necessary evidence and validate each calculation before presenting it as a driver aid. Spatial references establish a foundation for later route-based analysis; they do not by themselves deliver those features.
 
-Choose Blackbox for the build, the transparency, and the freedom to develop it. Choose against your actual requirements using the [demo](https://jctoledo.github.io/blackbox/demo.html), [timing guide](LAP_TIMER.md), and [engineering review](REVIEW.md).
+Choose Blackbox for the build, the transparency, and the freedom to develop it. Choose against your actual requirements using the [demo](https://jctoledo.github.io/blackbox/demo.html), [timing guide](LAP_TIMER.md), and [architecture guide](ENGINEERING.md).

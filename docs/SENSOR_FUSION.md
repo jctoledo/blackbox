@@ -1,438 +1,70 @@
-# Sensor Fusion Technical Guide
+# Sensor fusion: equations, frames and practical limits
 
-This document explains how Blackbox combines GPS and IMU data to provide accurate, real-time vehicle dynamics. Understanding these concepts helps with troubleshooting, tuning, and extending the system.
+Blackbox combines GPS and a WT901 IMU for vehicle telemetry. It has two related processing paths: an earth-frame position/velocity estimator, and a GPS/IMU acceleration pipeline for the displayed forces and driving modes. Lap timing uses receiver fixes directly, so a lagging estimator heading does not veto a crossing.
 
----
+## Frames and units
 
-## Why Sensor Fusion?
+| Quantity | Convention |
+|---|---|
+| GPS latitude/longitude | Degrees; north/east positive, receiver coordinates retained as f64 for crossings |
+| GPS course | Radians, clockwise from north |
+| Local position and velocity | East/north metres and m/s |
+| Mathematical yaw / timing-line direction | Radians, counterclockwise from east |
+| WT901 roll/pitch/yaw parser output | Degrees; gyro output rad/s; acceleration m/s² |
+| Vehicle acceleration | Forward/left positive; divide by 9.80665 for g |
 
-Neither GPS nor IMU alone provides what we need:
+Convert compass course to mathematical yaw with `π/2 − course` only at the relevant boundary. Recorded timing-line bearings already use `atan2(y,x)` and must not be converted again. An arbitrary sensor mounting/yaw offset is not automatically validated by this convention table; bench/drive checks must establish axis signs and mounting alignment.
 
-| Sensor | Strengths | Weaknesses |
-|--------|-----------|------------|
-| **GPS** | Accurate position, no drift | Slow (5-25 Hz), dropouts in tunnels |
-| **IMU** | Fast (200 Hz), responsive | Drifts over time, affected by vibration |
+`remove_gravity` subtracts the body-frame vector `g × [−sin(pitch), sin(roll)cos(pitch), cos(roll)cos(pitch)]`. `body_to_earth` applies `Rz(yaw) Ry(pitch) Rx(roll)`. `earth_to_car` applies the inverse horizontal yaw rotation. The full gravity-free body vector, including z, belongs in that transform.
 
-**Solution:** Combine them. Use IMU for responsive, high-rate updates. Use GPS to correct drift. The result is a responsive estimate whose accuracy must be validated against a reference.
+Local geographic conversion uses `north = Δlatitude × 111320` and `east = Δlongitude × 111320 × cos(reference latitude)`. This is a short-distance planar approximation, not an ellipsoidal survey conversion. It has no antimeridian/polar route support. Store the geographic origin with traces because the live local origin resets at boot.
 
----
+## Estimator prediction
 
-## The 7-State Extended Kalman Filter
-
-The estimator maintains seven state values, with a **diagonal covariance approximation**. Cross-covariances and a full Jacobian covariance propagation are not implemented. Its reported uncertainty is an internal diagnostic, not a calibrated statistical guarantee. Sensor output rate, estimator update rate, and browser refresh rate are distinct; UART batches may coalesce samples.
-
-### State Vector
-
-```
-x = [x, y, ψ, vx, vy, bax, bay]
-     │  │  │   │   │   │    │
-     │  │  │   │   │   │    └─ Y-axis accelerometer bias (m/s²)
-     │  │  │   │   │   └────── X-axis accelerometer bias (m/s²)
-     │  │  │   │   └────────── Velocity Y component (m/s)
-     │  │  │   └────────────── Velocity X component (m/s)
-     │  │  └───────────────── Heading/yaw angle (radians)
-     │  └──────────────────── Position Y (meters, local frame)
-     └─────────────────────── Position X (meters, local frame)
-```
-
-### What Each State Represents
-
-**Position (x, y)**
-- Location in meters relative to where GPS first locked
-- X is approximately east-west, Y is approximately north-south
-- Origin resets each time the device powers on
-
-**Heading (ψ)**
-- Direction the vehicle is pointing, in radians
-- 0 = East, π/2 = North, π = West, -π/2 = South
-- Used to rotate accelerations into vehicle frame for mode detection
-
-**Velocity (vx, vy)**
-- Speed broken into X and Y components
-- Combined: `speed = sqrt(vx² + vy²)`
-- Used for position prediction between GPS updates
-
-**Accelerometer Biases (bax, bay)**
-- Systematic errors in the IMU readings
-- Learned when stationary (ZUPT)
-- Subtracted from raw accelerometer values
-
----
-
-## Predict-Update Cycle
-
-The EKF alternates between two steps:
-
-### Predict (on processed IMU samples)
-
-When new IMU data arrives:
-
-1. Read accelerometer values (ax, ay)
-2. Subtract learned biases: `ax_corrected = ax - bax`
-3. Remove gravity using roll/pitch angles
-4. Transform to earth frame (horizontal plane)
-5. Update velocity: `vx += ax_earth × dt`
-6. Update position using the velocity from the start of the step: `x += vx_old × dt + 0.5 × ax_earth × dt²`
-7. Update heading using gyroscope yaw rate
-8. Increase uncertainty (covariance grows)
-
-**Key insight:** Each predict step makes the estimate slightly less certain because we're integrating noisy sensors.
-
-### Update (GPS, 5-25 Hz)
-
-When new GPS data arrives:
-
-1. Compare GPS position/velocity to current estimate
-2. Calculate "innovation" (difference)
-3. Compute Kalman gain (how much to trust GPS vs estimate)
-4. Adjust state toward GPS measurement
-5. Reduce uncertainty (covariance shrinks)
-
-**Key insight:** GPS updates "pull" the estimate back toward truth, counteracting IMU drift.
-
----
-
-## Motion Models
-
-The EKF uses different physics models depending on speed and turn rate:
-
-### CTRA (Constant Turn Rate and Acceleration)
-
-Used when: `speed > 2 m/s AND |yaw_rate| > 0.0001 rad/s`
-
-Accounts for curved motion. Position prediction follows an arc, not a straight line. Essential for accurate tracking through corners.
-
-### CA (Constant Acceleration)
-
-Used when: Going straight or moving slowly
-
-Simple kinematic model:
-```
-x_new = x + vx × dt + 0.5 × ax × dt²
-v_new = vx + ax × dt
-```
-
----
-
-## Coordinate Frames
-
-Understanding coordinate frames is essential for debugging. Data flows through three frames:
-
-### Body Frame (Sensor)
-
-- What the IMU actually measures
-- X-axis: forward (device's forward direction)
-- Y-axis: left
-- Z-axis: up
-- Contains gravity on Z-axis
-
-### Earth Frame (Horizontal)
-
-- Gravity removed
-- Aligned with horizontal plane
-- X approximately east, Y approximately north
-- Where physics calculations happen
-
-### Vehicle Frame (Car-Aligned)
-
-- Rotated to match vehicle heading
-- X-axis: forward (car's forward direction)
-- Y-axis: left (driver's left)
-- Used for mode detection (accel/brake/corner)
-
-### Transform Pipeline
+The state is `[x, y, ψ, vx, vy, bax, bay]`; position, velocity and learned residual biases share the earth frame. After gravity removal and rotation:
 
 ```
-Body Frame          Earth Frame          Vehicle Frame
-(raw IMU)     →     (horizontal)    →    (car-aligned)
-              │                     │
-         Remove gravity        Rotate by yaw
-         using roll/pitch      (EKF heading)
+a = measured_earth_acceleration − learned_earth_bias
+position_new = position_old + velocity_old × dt + ½ × a × dt²
+velocity_new = velocity_old + a × dt
+yaw_new = wrap(yaw_old + yaw_rate × dt)
 ```
 
-**Code locations:**
-- `remove_gravity()` — `framework/src/transforms.rs`
-- `body_to_earth()` — `framework/src/transforms.rs`
-- Vehicle rotation — `framework/src/mode.rs`
+Measured lateral acceleration already produces curved motion. The current code does not switch between CTRA and CA models or add another centripetal acceleration. GPS updates correct position/velocity; stationary updates constrain velocity and learn biases. The separate orientation-correction/display path does not retroactively correct every EKF input.
 
----
+## Covariance and measurement updates
 
-## Zero-Velocity Update (ZUPT)
-
-ZUPT constrains velocity when the stationary detector has sufficient fresh evidence. Its correctness depends on the detector: slow motion, vibration, and GPS outages must not be mistaken for a verified stop.
-
-### Detection Criteria
-
-The system detects "stationary" when ALL conditions are met:
-
-| Parameter | Threshold | Reason |
-|-----------|-----------|--------|
-| Acceleration magnitude | < 0.18g | No significant forces |
-| Yaw rate | < 12°/s | Not rotating |
-| GPS speed (reported) | < 3.5 km/h | GPS agrees we're stopped |
-| GPS speed (position-derived) | < 5.0 km/h | Backup check |
-
-### What Happens During ZUPT
-
-1. **Force velocity to zero** — EKF state updated: `vx = 0, vy = 0`
-2. **Learn biases** — Current acceleration reading should be zero; any non-zero value is bias
-3. **Reset covariance** — Uncertainty reduced dramatically
-
-### Why Biases Are Learned During ZUPT
-
-When truly stationary:
-- Gravity is removed (we know roll/pitch from IMU)
-- Any remaining horizontal acceleration is IMU bias
-- This "ground truth" allows bias estimation
-
-### Practical Implications
-
-- System improves at every stop (red lights, parking)
-- Long drives without stops accumulate drift
-- Track sessions benefit from pit stops
-
----
-
-## GPS-Corrected Orientation
-
-This is an ArduPilot-inspired technique to fix a fundamental IMU problem.
-
-### The Problem
-
-The IMU's AHRS (Attitude Heading Reference System) cannot distinguish linear acceleration from tilt. When you accelerate forward, the AHRS reports false pitch — it thinks the device is tilting backward.
-
-**Result:** Gravity removal fails. Earth-frame accelerations are wrong. Mode detection is unreliable.
-
-### The Solution
-
-GPS velocity provides ground truth for horizontal acceleration:
+Only seven diagonal variances are retained. Prediction propagates the diagonal of `F P Fᵀ + Q` for independent position/velocity/bias states:
 
 ```
-true_acceleration = d(GPS_velocity) / dt
+P_position += P_velocity × dt² + ¼ × (P_bias + q_acc) × dt⁴
+P_velocity += (P_bias + q_acc) × dt²
+P_yaw += q_gyro × dt²
+P_bias += q_bias × dt
 ```
 
-By comparing IMU-derived acceleration with GPS-derived acceleration, we can calculate orientation error:
+`q_acc` and `q_gyro` describe per-step measurement variance in the current model; `q_bias` is a variance growth rate. They are tuning values, not measured sensor noise spectra. Dropping cross-covariances still underrepresents accumulated correlations, especially over long outages. A full covariance model and measured time/noise calibration remain future work.
 
-```
-pitch_error ≈ (ax_imu - ax_gps) / g
-roll_error ≈ (ay_imu - ay_gps) / g
-```
+Defaults in `framework/src/ekf.rs`: `q_acc=0.40`, `q_gyro=0.005`, `q_bias=0.001`, `r_pos=20 m²`, `r_vel=0.2 (m/s)²`, `r_yaw=0.10 rad²`. Position uses a two-axis normalized residual gate (sum threshold 32); yaw uses a wrapped residual gate (12). Finite velocity updates deliberately remain available for recovery after drift, with receiver validity and a 100 m/s bound checked by the application. This is not a guarantee against all GPS outliers. Nonfinite measurements are rejected before state mutation.
 
-### Learning Process
+The position diagnostic combines diagonal variance, accepted-update residual statistics, discrepancy from the last accepted GPS fix, and a 2.5 m heuristic floor. It is **not a calibrated 68% error radius**. Gating biases accepted-only residual statistics. Do not turn these values into a physical accuracy claim or tune away real failures just to make the display look healthy.
 
-The `OrientationCorrector` continuously refines its estimate:
+## Acceleration and orientation correction
 
-1. During forward/backward acceleration → learns pitch correction
-2. During left/right cornering → learns roll correction
-3. Confidence grows with more observations
-4. Corrections capped at ±15° for safety
+`GpsAcceleration` differentiates scalar GPS speed using the application sample interval, filters the result, and expires stale data. Differentiation amplifies noise; it is a reference signal, not ground truth. `speed × corrected yaw_rate` estimates lateral acceleration under approximately planar motion, aligned gyro axes and limited sideslip. Banking, slip, vibration and mounting errors violate those assumptions.
 
-### Blending Based on Confidence
+`OrientationCorrector` compares the filtered longitudinal IMU signal with the speed derivative, and lateral IMU acceleration with the centripetal estimate. Small-angle pitch/roll residual corrections accumulate with opposite signs, bounded near ±15°. Cruise-bias learning also accumulates the residual; averaging it as an absolute bias would converge to half the true offset. Its confidence is a learning-sample counter, not a probability of correctness. GPS blend weight interpolates approximately 80% → 50% → 30% as pitch confidence grows. Freshness controls fallback to IMU-only estimates.
 
-| Confidence | GPS Weight | IMU Weight |
-|------------|------------|------------|
-| < 30% | 80% | 20% |
-| 30-80% | 50% | 50% |
-| > 80% | 30% | 70% |
+The filter attenuates vibration; it cannot eliminate arbitrary vibration or distinguish every road slope from attitude error. This pipeline does not supply validated slope compensation, brake pressure, tyre grip, apex location or driver coaching.
 
-As correction confidence grows, the system trusts the corrected IMU more.
+## Stationary detection and rates
 
----
+The candidate check requires finite data, each horizontal acceleration below 0.18 g, yaw rate below 12°/s and GPS speed below 3.5 km/h. The application also requires fresh GPS and five consecutive candidate fixes. Very slow motion and vibration remain hardware validation cases. ZUPT constrains velocity; it does not establish absolute position truth.
 
-## Tuning Parameters
+M9N builds target 25 Hz GPS, 6M builds 5 Hz. WT901 output can be configured up to 200 Hz; UART packet counts, processed estimator steps and the roughly 33 ms telemetry cadence are different rates. GPS crossings currently use host receive times, not receiver epoch/PPS synchronization. Serial buffering, receiver latency and browser sampling therefore remain in the error budget.
 
-### Process Noise (Q Matrix)
+## What to validate
 
-Controls how much the EKF trusts its motion model vs. sensors.
+Synthetic regressions cover gravity/rotation conventions, earth-frame integration, covariance propagation, invalid measurements, residual correction convergence, crossing interpolation and outages. They prove those software behaviors, not driving accuracy. For an M9N drive, record actual rates, antenna placement, orientation, firmware commit, gaps and an independent crossing reference. See [the hardware checklist](HARDWARE_VALIDATION.md) and [timing guide](LAP_TIMER.md).
 
-```rust
-const Q_ACC: f32 = 0.40;    // Acceleration uncertainty
-const Q_GYRO: f32 = 0.005;  // Gyro uncertainty
-const Q_BIAS: f32 = 1e-3;   // Bias drift rate
-```
-
-**Higher Q values:**
-- More responsive to sensor changes
-- More noise in estimates
-- Faster reaction to real motion
-
-**Lower Q values:**
-- Smoother estimates
-- Slower reaction to real motion
-- May miss rapid maneuvers
-
-### Measurement Noise (R Matrix)
-
-Controls how much the EKF trusts GPS measurements.
-
-```rust
-const R_POS: f32 = 20.0;    // GPS position uncertainty (m²)
-const R_VEL: f32 = 0.2;     // GPS velocity uncertainty (m/s)²
-const R_YAW: f32 = 0.10;    // Magnetometer uncertainty (rad²)
-```
-
-**Higher R values:**
-- Less trust in GPS
-- More reliance on IMU prediction
-- Smoother but potentially drifty
-
-**Lower R values:**
-- More trust in GPS
-- Jumpy when GPS is noisy
-- Better long-term accuracy
-
-### Tuning Guidelines
-
-| Symptom | Likely Cause | Adjustment |
-|---------|--------------|------------|
-| Position jumps when GPS updates | R_POS too low | Increase R_POS |
-| Position drifts between GPS updates | Q_ACC too high | Decrease Q_ACC |
-| Sluggish mode detection | Q_ACC too low | Increase Q_ACC |
-| Noisy acceleration display | Q_ACC too high | Decrease Q_ACC |
-| Heading wanders | Q_GYRO too high | Decrease Q_GYRO |
-
----
-
-## Diagnostics Interpretation
-
-### IMU Rate
-
-**Expected:** 195-200 Hz (if configured) or 10-20 Hz (factory default)
-
-**If 0 Hz:**
-- Check wiring
-- Run `configure_wt901.py` to verify IMU responds
-- Check baud rate configuration
-
-**If much lower than expected:**
-- Serial buffer overrun
-- CPU overload
-
-### GPS Rate
-
-**Expected:** 5 Hz (NEO-6M) or up to 25 Hz (NEO-M9N)
-
-**If 0 Hz:**
-- Check wiring
-- Ensure clear sky view
-- GPS needs time for initial fix (30-60 seconds cold start)
-
-### Position σ (Uncertainty)
-
-Square root of position covariance. Represents 1-sigma confidence bound.
-
-| Value | Meaning |
-|-------|---------|
-| < 2m | Excellent — recent GPS fix, stable |
-| 2-5m | Good — normal operation |
-| 5-10m | Fair — GPS intermittent or degraded |
-| > 10m | Poor — GPS lost, relying on IMU prediction |
-
-**Growth pattern:**
-- Increases during GPS outages (rate depends on velocity uncertainty)
-- Decreases sharply on GPS fix
-- Resets to low value during ZUPT
-
-### Velocity σ (Uncertainty)
-
-Velocity estimate confidence.
-
-| Value | Meaning |
-|-------|---------|
-| < 0.3 m/s | Excellent |
-| 0.3-0.5 m/s | Good |
-| 0.5-1.0 m/s | Fair |
-| > 1.0 m/s | Poor |
-
-### Bias X/Y
-
-Learned accelerometer biases.
-
-| Value | Meaning |
-|-------|---------|
-| < 0.2 m/s² | Normal — well-calibrated |
-| 0.2-0.5 m/s² | Acceptable — minor offset |
-| > 0.5 m/s² | High — recalibrate or check mounting |
-
-**If growing during drive:**
-- Temperature change affecting IMU
-- Mounting shifted
-- Vibration causing issues
-
-### EKF/GPS Ratio
-
-Number of EKF predictions per GPS update.
-
-**Expected:** ~40 (200 Hz IMU / 5 Hz GPS) or ~8 (200 Hz / 25 Hz)
-
-**If much higher:**
-- GPS rate lower than expected
-- GPS dropouts
-
-**If much lower:**
-- IMU rate lower than expected
-- Processing bottleneck
-
----
-
-## Common Issues
-
-### Position Drift When Stationary
-
-**Cause:** ZUPT not triggering
-
-**Check:**
-- Is the car truly stationary? Engine vibration can prevent detection
-- Thresholds too tight for conditions
-- GPS still reporting small speeds
-
-**Fix:**
-- Ensure engine is off for calibration
-- Adjust ZUPT thresholds if needed
-
-### Jerky Mode Detection
-
-**Cause:** Noisy acceleration estimates
-
-**Check:**
-- IMU rate (higher = better filtering)
-- Bias values (high bias = poor calibration)
-- Orientation correction confidence
-
-**Fix:**
-- Recalibrate
-- Check rigid mounting
-- Wait for orientation correction to learn
-
-### Position Jumps
-
-**Cause:** GPS measurement noise being applied too aggressively
-
-**Check:**
-- R_POS value (too low = trusts GPS too much)
-- GPS quality (HDOP should be < 2.0)
-
-**Fix:**
-- Increase R_POS
-- Improve GPS antenna placement
-
----
-
-## Code Reference
-
-| Component | Location | Purpose |
-|-----------|----------|---------|
-| EKF | `framework/src/ekf.rs` | Core Kalman filter |
-| Transforms | `framework/src/transforms.rs` | Coordinate frame math |
-| Mode Detection | `framework/src/mode.rs` | ACCEL/BRAKE/CORNER logic |
-| GPS/IMU Blending | `framework/src/fusion.rs` | Orientation correction, blending |
-| Stationary Detection | `sensors/blackbox/src/main.rs` | ZUPT triggering |
-| Diagnostics | `sensors/blackbox/src/diagnostics.rs` | Health monitoring |
-
----
-
-## Further Reading
-
-- [Extended Kalman Filter Explained](https://www.bzarg.com/p/how-a-kalman-filter-works-in-pictures/) — Visual introduction
-- [ArduPilot EKF Documentation](https://ardupilot.org/dev/docs/ekf2-estimation-system.html) — Similar approach
-- [IMU Noise Characteristics](https://www.analog.com/en/technical-articles/understanding-noise-analysis-allan-variance.html) — Understanding sensor noise
+Before adjusting Q/R, establish mounting signs, timestamp cadence, receiver validity and whether the fault is in the estimator, display fusion or raw-GPS timing path. Changing Q does not directly smooth the separate mode/display filters.

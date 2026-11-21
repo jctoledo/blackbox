@@ -56,3 +56,50 @@ fn orientation_feedback_removes_persistent_pitch_and_roll_error() {
         }
     }
 }
+
+#[test]
+fn diagonal_prediction_propagates_velocity_and_bias_variance_with_correct_units() {
+    let mut ekf = Ekf::new();
+    ekf.p = [1.0, 2.0, 0.1, 4.0, 9.0, 0.2, 0.3];
+    ekf.predict(0.0, 0.0, 0.0, 0.5);
+    // Independent analytic F P F^T diagonal for x += vx*dt - bax*dt²/2.
+    assert!((ekf.p[0] - (1.0 + 4.0 * 0.25 + 0.25 * 0.6 * 0.0625)).abs() < 1e-6);
+    assert!((ekf.p[1] - (2.0 + 9.0 * 0.25 + 0.25 * 0.7 * 0.0625)).abs() < 1e-6);
+    assert!((ekf.p[3] - 4.15).abs() < 1e-6);
+    assert!((ekf.p[4] - 9.175).abs() < 1e-6);
+}
+
+#[test]
+fn corrupt_measurements_do_not_poison_the_estimator() {
+    use sensor_fusion::ekf::UpdateResult;
+    let mut ekf = Ekf::new();
+    for bad in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+        assert_eq!(ekf.update_position(bad, 0.0), UpdateResult::Rejected);
+        assert_eq!(ekf.update_yaw(bad), UpdateResult::Rejected);
+        assert_eq!(ekf.update_yaw_soft(0.0, bad), UpdateResult::Rejected);
+        ekf.update_velocity(0.0, bad);
+        ekf.update_speed(bad);
+        ekf.update_bias(bad, 0.0);
+        assert_eq!(ekf.x, [0.0; 7]);
+        assert!(ekf.p.iter().all(|v| v.is_finite() && *v >= 0.0));
+    }
+    ekf.update_velocity(12.0, 0.0);
+    assert!(
+        ekf.speed() > 11.0,
+        "Valid velocity must still recover after bad input"
+    );
+}
+
+#[test]
+fn cruise_bias_converges_to_full_offset_instead_of_half() {
+    use sensor_fusion::fusion::OrientationCorrector;
+    for offset in [-1.0, 0.8] {
+        let mut corrector = OrientationCorrector::new();
+        for _ in 0..10000 {
+            corrector.update(offset, 0.0, 0.0, 0.0, 15.0, true, 0.033);
+        }
+        assert!((corrector.get_cruise_bias() - offset).abs() < 0.01);
+        corrector.update(f32::NAN, 0.0, 0.0, 0.0, 15.0, true, 0.033);
+        assert!((corrector.get_cruise_bias() - offset).abs() < 0.01);
+    }
+}

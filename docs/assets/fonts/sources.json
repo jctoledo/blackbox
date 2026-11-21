@@ -1,0 +1,14 @@
+{
+  "inter": {
+    "family": "Inter",
+    "source": "https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa1ZL7W0Q5nw.woff2",
+    "weight": "400 800",
+    "bytes": 48432
+  },
+  "jetbrains-mono": {
+    "family": "JetBrains Mono",
+    "source": "https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwBNntkaToggR7BYRbKPxDcwgknk-4.woff2",
+    "weight": "400 700",
+    "bytes": 31340
+  }
+}

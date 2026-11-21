@@ -4,10 +4,10 @@
 
 Blackbox is an open-source ESP32-C3 telemetry project: GPS and inertial sensing, circuit and stage timing, optional force analysis, and a phone-friendly dashboard served directly over local Wi-Fi. Rust firmware, inspectable maths, and browser-local recordings—no cloud account required.
 
-[Project website & USB installer](https://jctoledo.github.io/blackbox/) · [Lap timer guide](docs/LAP_TIMER.md) · [Sensor fusion](docs/SENSOR_FUSION.md) · [Review & validation](docs/REVIEW.md) · [Hardware checklist](docs/HARDWARE_VALIDATION.md) · [Try the demo](https://jctoledo.github.io/blackbox/demo.html)
+[Project website & USB installer](https://jctoledo.github.io/blackbox/) · [Lap timer guide](docs/LAP_TIMER.md) · [Sensor fusion](docs/SENSOR_FUSION.md) · [Hardware checklist](docs/HARDWARE_VALIDATION.md) · [Try the demo](https://jctoledo.github.io/blackbox/demo.html)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-3b6b3b.svg)](LICENSE)
-[![Host regressions](https://github.com/jctoledo/blackbox/actions/workflows/host-tests.yml/badge.svg)](https://github.com/jctoledo/blackbox/actions/workflows/host-tests.yml)
+[![Host regressions](https://github.com/jctoledo/blackbox/actions/workflows/ci.yml/badge.svg)](https://github.com/jctoledo/blackbox/actions/workflows/ci.yml)
 
 ### What it does
 
@@ -45,12 +45,11 @@ The installer writes a complete merged image at address `0x0`, including the dev
 ```bash
 # Install toolchain (one-time)
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-cargo +stable install espup ldproxy --locked
+cargo +stable install ldproxy --locked
 cargo +stable install cargo-espflash espflash --version 4.7.0 --locked
-espup install
+rustup toolchain install nightly-2025-10-18 --component rust-src --component clippy
 
 # Build and flash
-source $HOME/export-esp.sh  # Required in every new terminal
 cd sensors/blackbox
 cargo run --release
 ```
@@ -129,7 +128,9 @@ Connect to the device's WiFi and open `192.168.71.1` in any browser.
 | Feature | Description |
 |---------|-------------|
 | Force analysis | Optional Analysis view with lateral/longitudinal forces and a motion trail |
-| Speed | Current and max speed |
+| Speed | Current speed and session time |
+| Landscape cluster | Rotate the phone for a speed-and-timing instrument layout; Dashboard returns to controls |
+| Offline typography | Bundled Inter and JetBrains Mono match the demo without an internet font request |
 | Mode Detection | IDLE, ACCEL, BRAKE, CORNER, or combined states |
 | Driving Presets | Track, Canyon, City, Highway, or Custom |
 | Lap Timer | Record tracks, time laps, compare against a saved reference |
@@ -140,10 +141,14 @@ Connect to the device's WiFi and open `192.168.71.1` in any browser.
 
 | Action | Effect |
 |--------|--------|
-| Tap CLR | Reset max G values |
-| Tap max speed | Reset max speed |
-| Preset buttons | Switch driving profile |
-| REC button | Start/stop recording |
+| Tracks | Create/select a circuit or stage while parked |
+| Record session / Stop recording | Capture or finish a browser-local recording |
+| Saved data | Export CSV, download backups, restore copies and manage saved data |
+| Analysis | Show optional force analysis |
+| Drive view / Dashboard | Enter the focused display or return to controls |
+
+![Landscape cluster with synthetic demo data](docs/dashboard-landscape.png)
+
 
 ---
 
@@ -155,7 +160,7 @@ Record tracks anywhere and get real-time lap timing with delta display.
 
 ### Quick Overview
 
-1. **Record a Track** — Tap lap timer card → **+** → drive one lap → **Stop**
+1. **Record a Track** — Open **Tracks**, choose circuit/stage recording, capture the route, then park safely to name and save it.
 2. **Activate Track** — Tap saved track to enable timing
 3. **Drive** — Cross start line, timing begins automatically
 4. **Watch Delta** — Negative/green = ahead; positive/red = behind the saved reference
@@ -203,7 +208,7 @@ Proper calibration is critical for accurate readings.
 
 **Signs of bad calibration:** Mode triggers incorrectly, G-meter not centered when parked, non-zero acceleration when stationary.
 
-**To recalibrate:** Tap CLR in dashboard while stationary with engine off.
+**To recalibrate the boot accelerometer bias:** Park level, keep the mounted unit still and restart it. The force-display clear control only resets displayed peaks; it does not recalibrate the sensor.
 
 ---
 
@@ -230,52 +235,38 @@ sudo apt-get install -y git wget flex bison gperf python3 python3-pip \
   python3-venv cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0
 
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-cargo +stable install espup ldproxy --locked
+cargo +stable install ldproxy --locked
 cargo +stable install cargo-espflash espflash --version 4.7.0 --locked
-espup install
-rustup component add rust-src --toolchain esp
+rustup toolchain install nightly-2025-10-18 --component rust-src --component clippy
 ```
 
 **macOS:**
 ```bash
 brew install cmake ninja dfu-util
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-cargo +stable install espup ldproxy --locked
+cargo +stable install ldproxy --locked
 cargo +stable install cargo-espflash espflash --version 4.7.0 --locked
-espup install
-rustup component add rust-src --toolchain esp
+rustup toolchain install nightly-2025-10-18 --component rust-src --component clippy
 ```
 
 **Windows:**
 1. Install Visual Studio Build Tools, Python 3, Git
 2. Install Rust via rustup-init.exe
-3. Run: `cargo +stable install espup ldproxy --locked
-cargo +stable install cargo-espflash espflash --version 4.7.0 --locked && espup install`
+3. Install the same pinned Rust toolchain and Cargo tools shown above. Native Windows has not been validated by this project; the automated build environment is Linux.
 
 </details>
 
-### First Time Setup
+### Build commands and target
 
-After cloning, run the partition setup script to configure paths for your machine:
-
-```bash
-./scripts/setup-partition.sh
-```
-
-This is required because the ESP-IDF build system needs absolute paths. See [Validation](docs/REVIEW.md) for details.
-
-### Build Commands
+The checked-in toolchain is `nightly-2025-10-18`; the C3 target is `riscv32imc-esp-espidf`. The checked-in flash runner and release packager explicitly pass the root `partitions.csv`; the old partition setup helper is not required. The maintainer's automated builds and tests run on lat.
 
 ```bash
-source $HOME/export-esp.sh  # Required in every new terminal!
 cd sensors/blackbox
-
-cargo check              # Quick syntax check
-cargo build --release    # Build firmware
-cargo run --release      # Build + flash + monitor
-cargo fmt                # Format code
-cargo clippy             # Lint
+GPS_MODEL=m9n GPS_RATE=25 cargo +nightly-2025-10-18 build --release --locked
+GPS_MODEL=m9n GPS_RATE=25 cargo +nightly-2025-10-18 clippy --release --locked -- -D warnings
 ```
+
+Host tests run separately from the repository root, targeting the pure Rust crates as shown in CONTRIBUTING.md. Do not build/test the whole workspace against a host target and expect ESP-IDF firmware to work.
 
 ### GPS Configuration
 
@@ -293,13 +284,13 @@ cargo build --release
 
 **"can't find crate for core"**
 ```bash
-source $HOME/export-esp.sh
-rustup component add rust-src --toolchain esp
+rustup component add rust-src --toolchain nightly-2025-10-18
 ```
 
 **"linking with riscv32-esp-elf-gcc failed"**
 ```bash
-source $HOME/export-esp.sh  # You forgot this
+# Check the ESP-IDF tool installation reported by esp-idf-sys.
+# Re-run the build from sensors/blackbox with the pinned nightly toolchain.
 ```
 
 **Permission denied on serial port (Linux)**
@@ -310,9 +301,9 @@ sudo usermod -a -G dialout $USER
 
 **Build hangs**
 ```bash
-cargo clean
-rm -rf ~/.espressif
-espup install
+# Inspect the build log and compare toolchain/dependency versions with CI.
+# Avoid deleting shared toolchain caches as a first troubleshooting step.
+cargo +nightly-2025-10-18 build --release --locked -vv
 ```
 
 </details>
@@ -351,7 +342,7 @@ Configure via dashboard presets or custom sliders:
 <details>
 <summary><b>EKF Tuning (Advanced)</b></summary>
 
-Edit `sensors/blackbox/src/ekf.rs`:
+Edit `EkfConfig` in `framework/src/ekf.rs` (the firmware module re-exports it):
 
 ```rust
 const Q_ACC: f32 = 0.40;    // Process noise: acceleration
@@ -360,7 +351,7 @@ const R_POS: f32 = 20.0;    // Measurement noise: GPS position
 const R_VEL: f32 = 0.2;     // Measurement noise: GPS velocity
 ```
 
-Higher Q = trust sensors more. Higher R = trust sensors less.
+These are estimator tuning values; they do not directly tune the separate force-display filters. See the sensor fusion guide for units and limitations.
 
 </details>
 
@@ -369,17 +360,17 @@ Higher Q = trust sensors more. Higher R = trust sensors less.
 
 | Metric | Healthy | Meaning |
 |--------|---------|---------|
-| IMU Rate | 195-200 Hz | Accelerometer samples/sec |
+| IMU Rate | Compare with configured output | Parsed accelerometer packets/sec; processed prediction rate may differ |
 | GPS Rate | 5-25 Hz | Position fixes/sec |
-| Position σ | <5m | EKF position uncertainty |
-| Velocity σ | <0.5 m/s | EKF velocity uncertainty |
+| Position σ | Track trends | Heuristic estimator diagnostic, not a measured error bound |
+| Velocity σ | Track trends | Diagonal model diagnostic |
 | Bias X/Y | <0.5 m/s² | Learned accelerometer bias |
 | HDOP | <2.0 | GPS quality (lower = better) |
 
 **Troubleshooting:**
 - IMU 0 Hz → Check wiring, run configure_wt901.py
 - GPS 0 Hz → Check wiring, ensure sky view
-- High bias → Recalibrate (CLR button)
+- High bias → Check mounting and restart stationary on level ground
 
 </details>
 
@@ -425,10 +416,10 @@ blackbox/
 ├── sensors/blackbox/    # ESP32 firmware
 │   └── src/
 │       ├── main.rs      # Main loop
-│       ├── websocket_server.rs  # Dashboard
+│       ├── websocket_server.rs  # HTTP transport; UI in web/dashboard.html
 │       └── ...
 └── tools/
-    ├── dashboard-dev/   # Dashboard simulator
+    ├── dashboard-dev/   # Historical simulator (not production)
     └── python/          # Receivers and tools
 ```
 

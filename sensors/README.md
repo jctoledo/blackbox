@@ -93,13 +93,13 @@ fn main() {
         let imu_data = imu.read();
 
         // Transform accelerations
-        let (ax_b, ay_b, _) = remove_gravity(
+        let (ax_b, ay_b, az_b) = remove_gravity(
             imu_data.ax, imu_data.ay, imu_data.az,
             imu_data.roll, imu_data.pitch
         );
 
         let (ax_e, ay_e) = body_to_earth(
-            ax_b, ay_b, 0.0,
+            ax_b, ay_b, az_b,
             imu_data.roll, imu_data.pitch, ekf.yaw()
         );
 
@@ -117,32 +117,15 @@ fn main() {
 
 ### 5. Add to Workspace
 
-The workspace is configured to automatically include all projects in `sensors/`. Just make sure your `Cargo.toml` is valid and it will be built by CI.
+Add the new path to the root Cargo workspace members explicitly. Configure the target/toolchain for that hardware and review its build integration. The example above is pseudocode: hardware types and `dt` must be supplied by your application.
 
-### 6. Test Your Build
+### 6. Validate the build
 
-```bash
-# For ESP32:
-rustup target add riscv32imc-unknown-none-elf
-cargo build --release --target riscv32imc-unknown-none-elf
+For Blackbox, follow the root README and `.github/workflows/ci.yml`: host tests target pure crates; firmware builds run from `sensors/blackbox` for `riscv32imc-esp-espidf`. All project builds/tests run on lat.
 
-# For ARM Cortex-M:
-rustup target add thumbv7em-none-eabihf
-cargo build --release --target thumbv7em-none-eabihf
+## CI integration
 
-# For native (testing):
-cargo build --release
-```
-
-## CI Integration
-
-The CI automatically:
-1. **Discovers** all sensor projects in `sensors/*/`
-2. **Builds** each project for the target architecture
-3. **Uploads** firmware artifacts
-4. **Reports** build status for each project
-
-No CI configuration changes needed when adding new projects!
+CI checks Blackbox explicitly. Release discovery finds project metadata, but its build step still assumes the C3 target and 6M/M9N variants. Adding metadata alone does not provide another board's toolchain, pin mapping or release validation.
 
 ## Example Use Cases
 
@@ -189,8 +172,7 @@ Create your own driver crates in `drivers/` for reuse across projects!
 ## Questions?
 
 - Check the [Blackbox implementation](./blackbox/) for a complete example
-- See [SENSOR_DRIVERS.md](../SENSOR_DRIVERS.md) for driver architecture
-- Read [WORKSPACE_STRUCTURE.md](../WORKSPACE_STRUCTURE.md) for workspace organization
+- Read the [framework guide](../framework/README.md) for current integration boundaries
 - Open an issue on GitHub for help
 
 Happy building! 🏁
