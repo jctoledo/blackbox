@@ -205,3 +205,9 @@ test('streamed recording summaries retain gaps and validity across chunk boundar
  const whole=c.recordingHealth(chunks),streamed=c.recordingHealth([chunks[1]],c.recordingHealth([chunks[0]]));
  assert.deepEqual(streamed,whole);assert.equal(streamed.gaps,1);assert.equal(streamed.gpsPercent,67);
 });
+
+test('lap history persistence rejection reaches the visible recovery notice',async()=>{
+ const {c,elements}=context();c.console={error(){}};c.updateTrackBestLap=async()=>{throw Error('Lap history storage failed')};
+ c.updateLapTimer(75,1,0,{state:'timing',last_lap_ms:60023,best_lap_ms:60023,gps_valid:true});
+ await new Promise(resolve=>setImmediate(resolve));assert.equal(elements.get('recording-notice').hidden,false);assert.match(elements.get('recording-notice').textContent,/Lap result 1:00.023 could not be saved/);
+});
