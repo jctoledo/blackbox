@@ -4,7 +4,7 @@ Blackbox turns a small sensor box and a phone into an instrument for your drive.
 
 The useful question is not simply “how fast does it update?” It is **what does each number mean, and when should you trust it?** This guide follows a measurement from the car to the screen.
 
-[Try the dashboard](https://jctoledo.github.io/blackbox/demo.html) · [Build the hardware](BUILD.md) · [Equations and rate budgets](MATHS_AND_RATES.md)
+[Try the dashboard](https://jctoledo.github.io/blackbox/demo.html?v=0.0.4-rc.8) · [Build the hardware](BUILD.md) · [Equations and rate budgets](MATHS_AND_RATES.md)
 
 [TOC]
 
