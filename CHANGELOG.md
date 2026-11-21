@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Versioned `/api/recording-metadata` exposes boot-associated build, configured sensor settings and applied calibration context with explicit unknowns; browser capture follows separately.
 - Diagonal GPS-course regression checks forward and reverse crossing directions; mutation validation exposed a gap in cardinal-heading-only coverage.
 - Repository-specific agent workflow, triage/domain pointers and a documented three-arm code-review trial; no defect-recall superiority claim.
 

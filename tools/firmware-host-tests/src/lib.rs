@@ -9,5 +9,7 @@ pub mod diagnostics;
 pub mod gps_log;
 #[path = "../../../sensors/blackbox/src/gps_timing.rs"]
 pub mod gps_timing;
+#[path = "../../../sensors/blackbox/src/recording_metadata.rs"]
+pub mod recording_metadata;
 #[path = "../../../sensors/blackbox/src/telemetry_http.rs"]
 pub mod telemetry_http;
