@@ -9,6 +9,7 @@ mod gps;
 mod gps_log;
 mod gps_timing;
 mod imu;
+mod imu_evidence;
 mod mode;
 mod mqtt;
 mod nvs_storage;
@@ -805,34 +806,34 @@ fn main() {
         }
 
         // Poll IMU and update EKF prediction (only after GPS warmup AND reset)
-        if let Some((dt, _, accel_count)) = sensors.poll_imu() {
+        if let Some((dt, imu_at_us, accel_count)) = sensors.poll_imu() {
             // Record all processed Accel packets for accurate rate measurement
             for _ in 0..accel_count {
                 diagnostics.record_imu_packet();
             }
             // Only run EKF prediction after reset is done
-            if unsafe { EKF_RESET_DONE } {
-                let (ax_corr, ay_corr, az_corr) = sensors.imu_parser.get_accel_corrected();
-                let (ax_b, ay_b, az_b) = remove_gravity(
-                    ax_corr,
-                    ay_corr,
-                    az_corr,
-                    sensors.imu_parser.data().roll,
-                    sensors.imu_parser.data().pitch,
-                );
-                let (ax_e, ay_e) = body_to_earth(
-                    ax_b,
-                    ay_b,
-                    az_b,
-                    sensors.imu_parser.data().roll,
-                    sensors.imu_parser.data().pitch,
-                    estimator.ekf.yaw(),
-                );
-                estimator.predict(ax_e, ay_e, sensors.imu_parser.data().wz, dt);
+            let imu_now_ms = (imu_at_us / 1000) as u32;
+            if let Some(evidence) = sensors
+                .motion_evidence(imu_now_ms)
+                .filter(|_| unsafe { EKF_RESET_DONE })
+            {
+                // Near Euler pitch singularity, skip prediction rather than inventing a rate.
+                if let Some(heading_rate) = evidence.rates.heading {
+                    let [ax_b, ay_b, az_b] = evidence.linear_body;
+                    let (ax_e, ay_e) = body_to_earth(
+                        ax_b,
+                        ay_b,
+                        az_b,
+                        sensors.imu_parser.data().roll,
+                        sensors.imu_parser.data().pitch,
+                        estimator.ekf.yaw(),
+                    );
+                    estimator.predict(ax_e, ay_e, heading_rate, dt);
 
-                // Update yaw from magnetometer
-                let yaw_mag = sensors.imu_parser.data().yaw.to_radians();
-                estimator.update_yaw(yaw_mag);
+                    // Update yaw from magnetometer
+                    let yaw_mag = sensors.imu_parser.data().yaw.to_radians();
+                    estimator.update_yaw(yaw_mag);
+                }
             }
         }
 
@@ -859,15 +860,19 @@ fn main() {
                 let (ax, ay, az) = sensors.imu_parser.get_accel_corrected();
                 let (x, y, z) = remove_gravity(ax, ay, az, imu.roll, imu.pitch);
                 let (x, y) = body_to_earth(x, y, z, imu.roll, imu.pitch, 0.0);
-                if let Some(sample) = calibration::Sample::from_fix(
-                    fix,
-                    now_ms,
-                    (x, y),
-                    imu.wz,
-                    sensors.calibration_imu_age_ms(now_ms),
-                    (imu.roll, imu.pitch),
-                ) {
-                    mount_calibrator.sample(sample);
+                if let Some(evidence) = sensors.motion_evidence(now_ms) {
+                    if let Some(sample) = calibration::Sample::from_fix(
+                        fix,
+                        now_ms,
+                        (x, y),
+                        evidence.rates.earth_vertical,
+                        sensors.calibration_imu_age_ms(now_ms),
+                        (imu.roll, imu.pitch),
+                    ) {
+                        mount_calibrator.sample(sample);
+                    }
+                } else {
+                    mount_calibrator.invalidate();
                 }
             } else if !sensors.gps_parser.last_fix().valid {
                 mount_calibrator.invalidate();
@@ -909,12 +914,7 @@ fn main() {
                 }
 
                 // Check stationary FIRST - if stopped, lock position to prevent GPS noise
-                let stationary = sensors.update_stationary(
-                    ax_corr,
-                    ay_corr,
-                    sensors.imu_parser.data().wz,
-                    now_ms,
-                );
+                let stationary = sensors.update_stationary(now_ms);
                 if stationary {
                     // Vehicle stopped - perform ZUPT and bias estimation
                     estimator.zupt();
@@ -999,26 +999,31 @@ fn main() {
                 now_ms.wrapping_sub(last_telemetry_ms)
             } as f32
                 / 1000.0;
-            let (lon_blended, lat_filtered) = sensor_fusion.process_imu(
-                ax_corr,                         // Raw body-frame X accel (bias-corrected)
-                ay_corr,                         // Raw body-frame Y accel (bias-corrected)
-                az_corr,                         // Raw body-frame Z accel (gravity)
-                sensors.imu_parser.data().roll,  // AHRS roll (degrees)
-                sensors.imu_parser.data().pitch, // AHRS pitch (degrees)
-                estimator.ekf.yaw(),             // EKF yaw (radians)
-                speed,
-                sensors.imu_parser.data().wz,
-                dt,
-                is_stationary,
-            );
+            if let Some(evidence) = sensors.motion_evidence(now_ms) {
+                let (lon_blended, lat_filtered) = sensor_fusion.process_imu(
+                    ax_corr,                         // Raw body-frame X accel (bias-corrected)
+                    ay_corr,                         // Raw body-frame Y accel (bias-corrected)
+                    az_corr,                         // Raw body-frame Z accel (gravity)
+                    sensors.imu_parser.data().roll,  // AHRS roll (degrees)
+                    sensors.imu_parser.data().pitch, // AHRS pitch (degrees)
+                    estimator.ekf.yaw(),             // EKF yaw (radians)
+                    speed,
+                    evidence.rates.earth_vertical,
+                    dt,
+                    is_stationary,
+                );
 
-            // Update mode classifier with hybrid (blended) acceleration
-            estimator.mode_classifier.update_hybrid(
-                lon_blended,
-                lat_filtered,
-                sensors.imu_parser.data().wz,
-                speed,
-            );
+                // Update mode classifier with hybrid (blended) acceleration
+                estimator.mode_classifier.update_hybrid(
+                    lon_blended,
+                    lat_filtered,
+                    evidence.rates.earth_vertical,
+                    speed,
+                );
+            } else {
+                // Preserve finite v4 values; HTTP motion age marks forces unavailable.
+                sensor_fusion.pause_imu(dt);
+            }
 
             if !sensors.gps_is_fresh(now_ms) {
                 lap_timer.invalidate_fix();

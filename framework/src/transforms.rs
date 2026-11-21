@@ -2,6 +2,51 @@
 const G: f32 = 9.80665; // m/s²
 const METERS_PER_DEGREE_LAT: f64 = 111320.0; // Approximate meters per degree latitude
 
+/// Distinct angular measurements for a Z-Y-X Euler pose (rad/s).
+#[derive(Clone, Copy, Debug)]
+pub struct AngularRates {
+    /// Euler yaw derivative. None near the pitch singularity: skip heading prediction.
+    pub heading: Option<f32>,
+    /// Angular-velocity vector projected onto earth vertical, for planar approximations.
+    pub earth_vertical: f32,
+    /// Rotation-invariant motion evidence, including roll/pitch motion.
+    pub body_norm: f32,
+}
+
+/// Convert all three body gyros using finite roll/pitch in degrees.
+/// |cos(pitch)| < 0.1 is a numerical guard, not a physical mounting tolerance.
+pub fn body_angular_rates(
+    wx: f32,
+    wy: f32,
+    wz: f32,
+    roll_deg: f32,
+    pitch_deg: f32,
+) -> Option<AngularRates> {
+    if ![wx, wy, wz, roll_deg, pitch_deg]
+        .iter()
+        .all(|v| v.is_finite())
+    {
+        return None;
+    }
+    let (sr, cr) = roll_deg.to_radians().sin_cos();
+    let (sp, cp) = pitch_deg.to_radians().sin_cos();
+    let horizontal = sr * wy + cr * wz;
+    let earth_vertical = -sp * wx + cp * horizontal;
+    let body_norm = wx.hypot(wy).hypot(wz);
+    let heading = (cp.abs() >= 0.1).then(|| horizontal / cp);
+    if !earth_vertical.is_finite()
+        || !body_norm.is_finite()
+        || heading.is_some_and(|v| !v.is_finite())
+    {
+        return None;
+    }
+    Some(AngularRates {
+        heading,
+        earth_vertical,
+        body_norm,
+    })
+}
+
 /// Transform body-frame acceleration to earth frame (ENU)
 ///
 /// # Arguments

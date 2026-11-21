@@ -58,7 +58,7 @@ The seven states are `[x, y, yaw, vx, vy, accel_bias_x, accel_bias_y]`. With acc
 ```
 position += velocity * dt + 0.5 * (acceleration - bias) * dt²
 velocity += (acceleration - bias) * dt
-yaw += yaw_rate * dt
+yaw += euler_heading_rate * dt
 ```
 
 The covariance is a **diagonal approximation**, dropping cross-correlations between position, velocity, heading and bias. For one position/velocity axis the implemented prediction includes:
@@ -73,7 +73,7 @@ Here q_acc is per-step acceleration variance, not a continuous-time white-noise 
 
 ## G-meter and peaks
 
-The firmware sends a longitudinal estimate selected/blended from GPS speed change and corrected IMU acceleration, and a lateral estimate from `speed × corrected yaw rate`. The latter assumes approximately coordinated turning; banking, sideslip and mounting errors can violate the model. This force-fusion path runs at telemetry cadence, not the IMU's nominal maximum output rate.
+The firmware sends a longitudinal estimate selected/blended from GPS speed change and corrected IMU acceleration, and a lateral estimate from `speed × bias-corrected earth-vertical angular velocity`. The latter assumes approximately coordinated turning; banking, sideslip and mounting errors can violate the model. This force-fusion path runs at telemetry cadence, not the IMU's nominal maximum output rate.
 
 The dashboard divides by 9.81 to show g and applies a time-based 70 ms exponential smoothing constant. Positive longitudinal means acceleration; negative means braking. Positive lateral is right, matching firmware packet convention. The plot places braking upward and acceleration downward; left/right position matches the signed lateral value. A previous UI inversion contradicted those labels and is corrected in this review.
 
@@ -94,7 +94,13 @@ gravity_z =  g * cos(roll) * cos(pitch)
 bias = mean(raw_acceleration - gravity_vector)
 ```
 
-Tests recover known injected biases at level and combined modest pitch/roll angles; stale packets, rotation, nonfinite data and vibration are rejected. This is conditional on attitude accuracy, not an independent multi-pose calibration. A single pose cannot resolve all bias/attitude ambiguities. Initial hardware testing should still use level ground, then compare modest inclines. Horizontal mount alignment is separate; its 10° collection gate is not slope compensation. See [mount alignment](CALIBRATION.md).
+Tests recover known injected biases at level and combined modest pitch/roll angles; stale packets, rotation, nonfinite data and vibration are rejected. This is conditional on attitude accuracy, not an independent multi-pose calibration. A single pose cannot resolve all bias/attitude ambiguities. Initial hardware testing should still use level ground, then compare modest inclines. Downstream stationary detection now also removes gravity and checks full linear
+acceleration and angular-speed magnitudes. Euler heading prediction uses
+`(wy sin(roll) + wz cos(roll)) / cos(pitch)`; planar forces instead use the earth-Z
+projection of all three body gyro components. The heading prediction is skipped
+near the Euler singularity (`|cos(pitch)| < 0.1`) or without fresh finite evidence.
+Raw v4 `wz` retains sensor-body semantics. Horizontal mount alignment is separate;
+its 10° collection gate is not slope compensation. See [mount alignment](CALIBRATION.md).
 
 ## Hardware checks that software cannot replace
 
