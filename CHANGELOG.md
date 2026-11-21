@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Startup bias calibration separates AHRS-predicted gravity from accelerometer offset, rejects stale/moving/unstable collection and uses precise averaging. Inclined-pose software tests pass; physical driveway validation remains open.
 - Landscape Speed / G-meter / Peaks tabs and swipe selection; compact status and a collapsible toolbar. Fixed force scale, dropout clearing and consistent lateral/longitudinal signs; time-weighted half-second page-session peaks.
 - Textured synthetic demo, fullscreen banner hiding, simpler timing labels and refreshed website screenshots.
 - Renamed `neo6m` driver to `ublox-gps` to reflect support for multiple u-blox GPS modules (NEO-6M, NEO-M9N, etc.)
