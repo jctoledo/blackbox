@@ -10,6 +10,6 @@ Installed from [mattpocock/skills](https://github.com/mattpocock/skills) at comm
 | writing-for-agents | Keep engineering instructions concise and link to task-specific references |
 | setup-matt-pocock-skills | Available for an interactive future setup of tracker/domain conventions; its setup interview has not been run |
 
-For this discovery pass, research produced `docs/research/DISCOVERY.md`; writing-for-agents informed the maintainer pointers in `CLAUDE.md`; code-review is applied before merge. Installation does not certify the project or replace the lat checks and hardware acceptance plan.
+For this discovery pass, research produced `docs/research/DISCOVERY.md`; writing-for-agents informed the maintainer pointers in `CLAUDE.md`; code-review is applied before merge. Codebase-design informed the shared cache helper: one small interface owns cache selection, while firmware outputs retain the existing build/version behavior. Installation does not certify the project or replace the lat checks and hardware acceptance plan.
 
 GitHub Issues in `jctoledo/blackbox` are the existing tracker. Session authorization and repository instructions continue to govern builds, external posts, merges and claims. Launch drafts are reviewable source material; publishing them to communities is a separate maintainer action.

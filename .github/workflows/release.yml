@@ -39,6 +39,7 @@ jobs:
         project: ${{ fromJson(needs.discover-projects.outputs.projects) }}
         gps_model: [6m, m9n]
     env:
+      CARGO_BUILD_JOBS: '4'
       GPS_MODEL: ${{ matrix.gps_model }}
       GPS_RATE: ${{ matrix.gps_model == 'm9n' && '25' || '5' }}
     outputs:
@@ -74,8 +75,9 @@ jobs:
 
       - name: Build firmware
         run: |
+          source "$GITHUB_WORKSPACE/scripts/cargo-cache.sh" nightly-2025-10-18 firmware
           cd sensors/${{ matrix.project }}
-          cargo build --release --locked --target riscv32imc-esp-espidf
+          cargo +nightly-2025-10-18 build --release --locked --target riscv32imc-esp-espidf
 
       - name: Generate flashable binary
         run: |
@@ -87,10 +89,13 @@ jobs:
           # Full image: ESP32-C3 bootloader begins at address zero.
           espflash save-image \
             --chip esp32c3 --merge --flash-size 4mb \
-            --bootloader ../../target/riscv32imc-esp-espidf/release/bootloader.bin \
+            --bootloader "$CARGO_TARGET_DIR/riscv32imc-esp-espidf/release/bootloader.bin" \
             --partition-table ../../partitions.csv \
-            ../../target/riscv32imc-esp-espidf/release/blackbox \
+            "$CARGO_TARGET_DIR/riscv32imc-esp-espidf/release/blackbox" \
             ../../firmware-output/${{ matrix.project }}-${{ matrix.gps_model }}.bin
+          python3 ../../scripts/check_release_image.py \
+            ../../firmware-output/${{ matrix.project }}-${{ matrix.gps_model }}.bin \
+            --expected-version "${{ steps.get_version.outputs.VERSION }}"
           cd ../../firmware-output
           sha256sum *.bin > SHA256SUMS-${{ matrix.gps_model }}.txt
 

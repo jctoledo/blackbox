@@ -6,6 +6,8 @@ permissions:
 jobs:
   tests:
     runs-on: [blackbox-lat]
+    env:
+      CARGO_BUILD_JOBS: '4'
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -13,12 +15,13 @@ jobs:
           node-version: '22.14.0'
           cache: npm
       - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo test --locked -p sensor-fusion -p wt901 -p ublox-gps -p blackbox-host-tests
+      - run: |
+          source "$GITHUB_WORKSPACE/scripts/cargo-cache.sh" stable host
+          cargo +stable test --locked -p sensor-fusion -p wt901 -p ublox-gps -p blackbox-host-tests
       - run: npm ci --ignore-scripts
       - run: node --test tests/*.test.cjs
       - run: |
-          cargo run --quiet --locked -p blackbox-host-tests --example packet_fixture > /tmp/telemetry-v4.hex
+          cargo +stable run --quiet --locked -p blackbox-host-tests --example packet_fixture > /tmp/telemetry-v4.hex
           diff tests/fixtures/telemetry-v4.hex /tmp/telemetry-v4.hex
           python3 -m unittest discover -s tests -p 'test_*.py'
       - name: Check static documentation generation

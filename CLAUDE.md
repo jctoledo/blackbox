@@ -7,6 +7,7 @@ Blackbox is an ESP32-C3 GPS/WT901 telemetry instrument. Firmware uses ESP-IDF an
 - Use the actual source and current tests as authority. Read `docs/SENSOR_FUSION.md` before modifying frames, timing or estimation; `CLAUDE-design.md` before UI changes.
 - All builds, automated tests, generated demo/docs, media encoding and font embedding run on **lat**, using the dedicated `blackbox-lat` runner. Do not consume GitHub-hosted minutes. Do not automatically execute unreviewed fork PRs on the persistent runner.
 - Use `codex/` branches for Codex work. The maintainer can dispatch CI for reviewed branches; merge only after relevant checks pass.
+- For runner/cache changes, read `docs/BUILD_INFRASTRUCTURE.md`; firmware output stays checkout-local to preserve ESP-IDF Git-derived version metadata.
 - CI commands and pinned toolchains live in `.github/workflows/ci.yml`. Host tests target `sensor-fusion`, `wt901`, `ublox-gps`, and `blackbox-host-tests`, not the ESP32 workspace on the host target.
 - Embedded builds run from `sensors/blackbox` with explicit `GPS_MODEL=m9n GPS_RATE=25` or `GPS_MODEL=6m GPS_RATE=5`, nightly-2025-10-18, locked dependencies and Clippy warnings denied.
 - Keep assertions focused on physical invariants, state transitions, persistence failures and protocol boundaries. Do not mistake passing synthetic tests for hardware acceptance.
