@@ -89,11 +89,11 @@ The older dashboard waited another 33 ms after a request completed. A 30 ms requ
 
 ## Other instruments, without hiding the evidence
 
-Landscape keeps elapsed time and delta in place while the other panel switches between Speed, G-meter, Peaks and Runs. Tap the instrument name to reveal the picker or swipe horizontally; choosing a view hides the picker again. Speed includes a page-session maximum while GPS is fresh. Portrait brings setup and saved data back into reach.
+Landscape keeps elapsed time and delta in place while the other panel switches between Speed, G-meter, Peaks and Runs. Tap the instrument name to reveal the picker or swipe horizontally; choosing a view hides the picker again. Speed includes a page-session maximum while GPS is fresh. Portrait brings setup and saved data back into reach. **Menu → Speed units** switches Speed and MAX between mph and km/h and remembers the preference in this browser. Exported units and the fixed 45–70 mph test keep their existing definitions.
 
 Runs currently estimates rolling **45–70 mph** intervals from receiver timestamps, not browser arrival times. It interpolates threshold crossings and rejects gaps, restarts, turns and incomplete attempts. It has no slope correction or distance rollout. Standing-start 0–60 mph needs its own validated launch rule and is not implemented. Read [the timing rules and export format](RUNS.md).
 
-The website demo uses the same dashboard HTML as the device, with simulated input. Its circuit model anticipates braking for curvature and limits corner-exit acceleration; it is not a vehicle-dynamics validation or a recorded performance result. The discreet SIM marker remains visible.
+The website demo uses the same dashboard HTML as the device, with simulated input. Its circuit model anticipates braking for curvature and limits corner-exit acceleration; it is not a vehicle-dynamics validation or a recorded performance result. The discreet SIM marker remains visible. The circuit includes left and right bends, and its startup summary uses a simulated lead-in. Saved data contains clearly named circuit and rolling-interval examples. The rolling example includes two accepted intervals and one rejected by a deliberate six-event GPS gap, so you can inspect exports and try backup/restore without inventing a result. These example recordings are added once per demo dataset version; existing recordings are preserved.
 
 ## Your recordings should survive your next experiment
 
