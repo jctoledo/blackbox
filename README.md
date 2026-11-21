@@ -147,7 +147,7 @@ Connect to the device's WiFi and open `192.168.71.1` in any browser.
 | Analysis | Show optional force analysis |
 | Drive view / Dashboard | Enter the focused display or return to controls |
 
-![Landscape cluster with synthetic demo data](docs/dashboard-landscape.png)
+![Landscape cluster with synthetic demo data](docs/dashboard-cluster-v2.png)
 
 
 ---
