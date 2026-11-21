@@ -78,6 +78,7 @@ struct TelemetrySnapshot {
 /// Shared state for telemetry server
 pub struct TelemetryServerState {
     gps_log: Mutex<crate::gps_log::GpsLog>,
+    recording_metadata: Mutex<Option<crate::recording_metadata::RecordingMetadata>>,
     mount_command: AtomicU8,
     mount_status: Mutex<String>,
     /// Latest telemetry packet (raw bytes)
@@ -102,6 +103,7 @@ impl TelemetryServerState {
             gps_log: Mutex::new(crate::gps_log::GpsLog::new(unsafe {
                 esp_idf_svc::sys::esp_random()
             })),
+            recording_metadata: Mutex::new(None),
             mount_command: AtomicU8::new(0),
             mount_status: Mutex::new(String::from("{}")),
             telemetry_data: Mutex::new(TelemetrySnapshot::default()),
@@ -120,6 +122,7 @@ impl TelemetryServerState {
             gps_log: Mutex::new(crate::gps_log::GpsLog::new(unsafe {
                 esp_idf_svc::sys::esp_random()
             })),
+            recording_metadata: Mutex::new(None),
             mount_command: AtomicU8::new(0),
             mount_status: Mutex::new(String::from("{}")),
             telemetry_data: Mutex::new(TelemetrySnapshot::default()),
@@ -129,6 +132,21 @@ impl TelemetryServerState {
             diagnostics_state: Some(diagnostics),
             lap_timer_config: Mutex::new(None),
             lap_timer_revision: AtomicU32::new(0),
+        }
+    }
+
+    /// Reuse the GPS log identity rather than generating another boot identifier.
+    pub fn boot_id(&self) -> Option<u32> {
+        self.gps_log.lock().ok().map(|log| log.latest().0)
+    }
+
+    /// Replace the latest typed context under a brief lock; serialize only on reads.
+    pub fn publish_recording_metadata(
+        &self,
+        snapshot: crate::recording_metadata::RecordingMetadata,
+    ) {
+        if let Ok(mut guard) = self.recording_metadata.lock() {
+            *guard = Some(snapshot);
         }
     }
 
@@ -453,7 +471,7 @@ impl TelemetryServer {
 
         let server_config = Configuration {
             http_port: port,
-            max_uri_handlers: 11,
+            max_uri_handlers: 12,
             max_open_sockets: 8,
             stack_size: 10240,
             ..Default::default()
@@ -504,6 +522,35 @@ impl TelemetryServer {
                     ],
                 )?;
                 response.write_all(json.as_bytes())?;
+                Ok(())
+            },
+        )?;
+
+        let metadata_state = state.clone();
+        server.fn_handler(
+            "/api/recording-metadata",
+            esp_idf_svc::http::Method::Get,
+            move |req| -> Result<(), esp_idf_svc::io::EspIOError> {
+                // Clone the typed value under a brief lock; serialize after releasing it.
+                let snapshot = metadata_state
+                    .recording_metadata
+                    .lock()
+                    .ok()
+                    .and_then(|guard| guard.clone());
+                let json = snapshot.and_then(|value| serde_json::to_string(&value).ok());
+                let (status, body) = match json {
+                    Some(body) => (200, body),
+                    None => (503, r#"{"status":"unavailable"}"#.to_owned()),
+                };
+                let mut response = req.into_response(
+                    status,
+                    None,
+                    &[
+                        ("Content-Type", "application/json"),
+                        ("Cache-Control", "no-store"),
+                    ],
+                )?;
+                response.write_all(body.as_bytes())?;
                 Ok(())
             },
         )?;
