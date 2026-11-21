@@ -376,6 +376,7 @@ button,input,select{font:inherit}button:focus-visible,[role="button"]:focus-visi
 .bbRecordOverlay{visibility:hidden}.bbRecordOverlay.active{visibility:visible}
 .bbActionBtn.primary,.bbTrackBtn.primary,.bbRecordActionBtn.primary,.bbToastBtn.primary{color:var(--bg)}.bbRecordStartIcon{color:var(--ok);stroke-width:2}.bbRecordStartIconWrap{background:var(--bg);border:1px solid var(--divider);border-radius:8px}.bbRecordStartBtn{border-radius:8px;border-width:1px}.bbRecordStartBtn:active{border-color:var(--ok)}.bbRecordStartBtn::before{display:none}.bbHistoryLap{font-size:13px;padding:6px}.bbHistoryDate{font-size:13px}.bbHistorySessionStats{font-size:12px}.bbHistorySessionHeader{flex-wrap:wrap;gap:6px}
 @media(max-width:600px){.bbTrackInfo{flex-basis:100%;width:100%}.bbTrackActions{margin:12px 0 0;width:100%;gap:6px}.bbTrackActions .bbTrackBtn{flex:1}.bbTrackName{white-space:normal;overflow-wrap:anywhere}.bbTrackMeta{display:flex;flex-wrap:wrap;gap:4px 12px}.bbTrackMeta span{margin:0}.bbSessionActions,.bbTrackDataActions{margin:10px 0 0}}
+@media(max-width:420px){.bbSessionActions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.bbSessionActions button{white-space:nowrap;overflow-wrap:normal;padding:8px 10px}}
 /* Force analysis is optional; the default dashboard prioritizes timing and speed. */
 body:not(.analysis-view) .bbGPlotWrap,body:not(.analysis-view) .bbGReadoutRow,body:not(.analysis-view) .bbGMax,body:not(.analysis-view) .bbTelemetryStrip{display:none}
 body:not(.analysis-view) .bbApp .bbGCard{display:block;min-height:0}
