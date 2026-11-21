@@ -7,22 +7,22 @@ Each subdirectory is a complete, independent sensor application that uses the fr
 ## Current Projects
 
 ### [blackbox](./blackbox/)
-ESP32-C3 based vehicle telemetry system with WT901 IMU and NEO-6M GPS.
+ESP32-C3 based vehicle telemetry system with WT901 IMU and a supported NEO-6M/NEO-M9N GPS.
 
 **Hardware:**
 - ESP32-C3 microcontroller
-- WT901 9-axis IMU (200 Hz)
-- NEO-6M GPS receiver (5 Hz)
+- WT901 9-axis IMU (configurable output up to 200 Hz)
+- NEO-6M (5 Hz target) or NEO-M9N (25 Hz target)
 - WS2812 RGB LED
 
 **Features:**
-- Real-time sensor fusion (Extended Kalman Filter)
-- TCP binary telemetry streaming (20 Hz)
+- Local sensor fusion (diagonal covariance approximation)
+- HTTP/UDP binary v4 telemetry (33 ms configured target interval)
 - MQTT status messages
 - Driving mode detection (IDLE, ACCEL, BRAKE, CORNER, ACCEL+CORNER, BRAKE+CORNER)
 - GPS-corrected position tracking
 
-**Use case:** Track day data logging, autocross, rally, vehicle dynamics research
+**Use case:** An inspectable DIY instrument for circuit/stage timing and vehicle telemetry. [Compare capabilities and evidence](../docs/COMPARISON.md).
 
 [See full documentation →](./blackbox/README.md)
 

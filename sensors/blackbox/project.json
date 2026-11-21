@@ -79,7 +79,7 @@
     {
       "id": "udp",
       "title": "UDP Telemetry",
-      "description": "Stream real-time data to your computer (20 Hz)",
+      "description": "Stream binary v4 telemetry to your computer at the configured cadence",
       "fields": [
         {
           "id": "server",

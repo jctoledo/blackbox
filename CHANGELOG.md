@@ -8,12 +8,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
-- Position-matched live delta and route progress use GPS position/time references, with direction, continuity, staleness, and overlap rejection. Old references upgrade after a clean lap/run; historical best times remain unchanged.
 - Renamed `neo6m` driver to `ublox-gps` to reflect support for multiple u-blox GPS modules (NEO-6M, NEO-M9N, etc.)
 - Updated driver documentation with UBX protocol examples and dynamic platform models
 
 ### Removed
 - Obsolete documentation files (RELEASE.md, IMPLEMENTATION_SUMMARY.md, release-notes.md)
+
+## [0.0.4-rc.5] - 2026-11-20
+
+Release candidate; includes rc.4 backup/restore. The spatial matcher is software-validated and ready for controlled field evaluation; this release does not establish a measured timing-error bound.
+
+### Added
+- Position/time reference traces, route-position delta, and matched route progress for circuits and stages.
+- Conservative direction, continuity, freshness, and overlapping-route rejection; local continuity across fresh stationary pauses.
+- Spatial reference backup/restore coverage and complete synthetic-circuit matching tests.
+- A sourced build-versus-buy guide comparing capabilities with RaceBox, RaceChrono Pro, and Performance Box Touch.
+- A dark, silent driver’s-eye hero background with pause, offscreen suspension, reduced-motion/data-saving fallback, and documented footage licensing.
+
+### Changed
+- Old distance-only references upgrade after a clean lap/run. The reference time and historical best have distinct labels.
+- README, setup/technical docs, contributor examples, bot guidance, and website copy distinguish available features, configuration targets, and measured performance. Obsolete protocol descriptions and unsupported historical figures are corrected or annotated.
+- Dashboard screenshot and demo backend updated together; backend assets use content-versioned URLs.
 
 ## [0.0.4-rc.4] - 2026-11-20
 
@@ -153,7 +168,10 @@ Release candidate for hardware validation. No real USB write/boot or reference-t
 - NEO-6M GPS module (5 Hz update rate)
 - WS2812 RGB LED (optional status indicator)
 
-### Performance
+### Historical performance targets (not measured guarantees)
+
+These original figures describe design targets, not validated results. In particular, the latency and ±1 m position figures were not established by reference measurements. Current capabilities and evidence are maintained in [the comparison guide](docs/COMPARISON.md).
+
 - 200 Hz IMU sampling rate
 - 20 Hz telemetry output rate
 - 5 Hz GPS updates

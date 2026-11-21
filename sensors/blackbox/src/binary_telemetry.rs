@@ -1,6 +1,5 @@
-/// Binary telemetry encoding for high-speed MQTT publishing
-/// Reduces payload from ~300 bytes JSON to ~74 bytes binary
-/// Target: 20 Hz (50ms intervals) sustainable over MQTT
+/// Binary v4 telemetry shared by HTTP and UDP transports.
+/// Fixed 82-byte packet; publication cadence is configured separately.
 ///
 /// Protocol Version: 4 (GPS course and lap timer fields)
 use core::mem;
@@ -43,7 +42,7 @@ pub struct TelemetryPacket {
     pub mode: u8,       // 0=IDLE, 1=ACCEL, 2=BRAKE, 4=CORNER, 5=ACCEL+CORNER, 6=BRAKE+CORNER
 
     // GPS data (13 bytes)
-    pub lat: f32, // degrees (compact f32; sub-meter quantization, not centimeter precision)
+    pub lat: f32, // degrees (compact f32; location-dependent quantization, not a measurement accuracy bound)
     pub lon: f32,
     pub gps_valid: u8,   // 0/1
     pub gps_course: f32, // Course over ground in radians (only valid when speed > ~1 m/s)
