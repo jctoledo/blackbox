@@ -1,7 +1,7 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs');
 const {indexedDB}=require('fake-indexeddb');
 const html=fs.readFileSync('sensors/blackbox/web/dashboard.html','utf8');
-function fixture(){const events=new Map(),elements=new Map();const c={console:{...console,error(){}},Response,URL,performance:{now:()=>0},window:{},document:{addEventListener(name,fn){events.set(name,fn)},getElementById(id){if(!elements.has(id))elements.set(id,{});return elements.get(id)}},location:{href:'https://example.test/demo.html'}};c.events=events;c.elements=elements;vm.createContext(c);vm.runInContext(html.slice(html.indexOf('// Drive session core.'),html.indexOf('// End Drive session core.')),c);vm.runInContext(fs.readFileSync('docs/demo.js','utf8').replace(' window.fetch=',' window.examplesForTest=exampleRows;window.seedForTest=seedExampleRecording; window.fetch='),c);vm.runInContext(html.slice(html.indexOf('class RollingRuns{'),html.indexOf('const rollingRuns='))+';this.Runs=RollingRuns;',c);return c}
+function fixture(){const events=new Map(),elements=new Map();const c={console:{...console,error(){}},Response,URL,btoa,DataView,Uint8Array,performance:{now:()=>0},window:{},document:{addEventListener(name,fn){events.set(name,fn)},getElementById(id){if(!elements.has(id))elements.set(id,{});return elements.get(id)}},location:{href:'https://example.test/demo.html'}};c.events=events;c.elements=elements;vm.createContext(c);vm.runInContext(html.slice(html.indexOf('// Drive session core.'),html.indexOf('// End Drive session core.')),c);vm.runInContext(fs.readFileSync('docs/demo.js','utf8').replace(' window.fetch=',' window.examplesForTest=exampleRows;window.seedForTest=seedExampleRecording;window.populateForTest=populateExamples; window.fetch='),c);vm.runInContext(html.slice(html.indexOf('class RollingRuns{'),html.indexOf('const rollingRuns='))+';this.Runs=RollingRuns;',c);return c}
 test('demo examples populate both cornering signs and produce auditable accepted/rejected runs',()=>{
  const c=fixture(),circuit=c.window.examplesForTest('circuit'),rolling=c.window.examplesForTest('rolling');
  for(const rows of [circuit,rolling])for(const row of rows){assert.equal(row.gpsSynthetic,1);for(const value of Object.values(row))assert.ok(Number.isFinite(value))}
@@ -41,4 +41,34 @@ test('unchanged rolling fixture yields auditable accepted and gap-rejected examp
   for(const result of accepted){assert.ok(Math.abs(result.seconds-(interval.hi-interval.lo)/2)<1e-8);assert.equal(result.interval,interval.label);assert.equal(result.synthetic,1);assert.equal(result.boot,102);assert.ok(rows.some(row=>row.rowType===1&&row.gpsSeq===result.startSeq));assert.ok(rows.some(row=>row.rowType===1&&row.gpsSeq===result.endSeq))}
  }
  vm.runInContext(html.slice(html.indexOf('function runsToCSV('),html.indexOf('// End receiver-time rolling intervals.')),c);const csv=c.runsToCSV(rows);for(const interval of intervals){assert.ok(csv.includes(interval.label+',accepted,'));assert.ok(csv.includes(interval.label+',rejected,'))}
+});
+
+function savedSummary(c,rows){vm.runInContext(html.slice(html.indexOf('function forcesUsable('),html.indexOf('function clearForces('))+html.slice(html.indexOf('class EffortPeaks{'),html.indexOf('const effortPeaks='))+';this.Summary=RecordingSummary;',c);const summary=new c.Summary();for(const row of rows)summary.update(row);return summary.snapshot()}
+test('actual seeded drives qualify saved force windows with known boot identity and useful signs',()=>{
+ for(const kind of ['circuit','rolling']){const c=fixture(),rows=c.window.examplesForTest(kind),summary=savedSummary(c,rows);assert.ok(summary.samples.forceWindows>0,kind);assert.equal(summary.excluded.clock,0);assert.equal(summary.provenance.unknown,0);assert.equal(summary.provenance.synthetic,summary.samples.telemetry);assert.ok(summary.forcePeaksG.accel>.15);assert.ok(summary.forcePeaksG.brake>.15);for(const row of rows)assert.equal(row.gpsBootId,kind==='circuit'?101:102);
+  if(kind==='circuit'){assert.ok(summary.forcePeaksG.left>.3);assert.ok(summary.forcePeaksG.right>.3)}
+  else{assert.ok(Math.abs(summary.forcePeaksG.accel-2/9.81)<1e-12);assert.ok(Math.abs(summary.forcePeaksG.brake-2/9.81)<1e-12);assert.equal(summary.forcePeaksG.left,0);assert.equal(summary.forcePeaksG.right,0)}
+ }
+});
+test('new complete-evidence demo fixtures preserve old examples and user recordings',async()=>{
+ const c=fixture(),db=await database(),oldRows=c.window.examplesForTest('rolling').map(row=>{const old={...row};if(old.rowType!==1)delete old.gpsBootId;return old}),oldId=await c.window.seedForTest(db,'Old SIM example',oldRows,'rolling-v7');
+ const userId=oldId+1;await new Promise((resolve,reject)=>{const tx=db.transaction(['sessions','chunks'],'readwrite');tx.objectStore('sessions').put({sessionId:userId,startTime:123,status:'complete',label:'My private drive'});tx.objectStore('chunks').put({sessionId:userId,chunkIndex:0,data:[{t:123,sp:1}]});tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)});
+ const beforeSessions=await all(db,'sessions'),beforeChunks=await all(db,'chunks');c.openDB=async()=>db;c.updatePerformanceRuns=()=>{};c.effortPeaks={update(){}};c.sustainedEffortUsable=()=>true;
+ await c.window.populateForTest({id:'track'});await c.window.populateForTest({id:'track'});
+ const sessions=await all(db,'sessions'),chunks=await all(db,'chunks');assert.equal(sessions.length,4);assert.ok(sessions.some(s=>s.demoFixture==='circuit-v7'));assert.ok(sessions.some(s=>s.demoFixture==='rolling-v8'));assert.deepEqual(sessions.filter(s=>s.sessionId===oldId||s.sessionId===userId),beforeSessions);assert.deepEqual(chunks.filter(s=>s.sessionId===oldId||s.sessionId===userId),beforeChunks);
+ for(const session of sessions.filter(s=>['circuit-v7','rolling-v8'].includes(s.demoFixture))){assert.ok(session.label.startsWith('SIM'));const rows=chunks.filter(chunk=>chunk.sessionId===session.sessionId).sort((a,b)=>a.chunkIndex-b.chunkIndex).flatMap(chunk=>chunk.data);assert.ok(rows.filter(row=>row.rowType!==1).every(row=>Number.isInteger(row.gpsBootId)))}
+});
+
+test('live demo boot identity reaches actual stored telemetry rows and saved force windows across scenarios',async()=>{
+ const c=fixture();let now=0;c.performance.now=()=>now;c.chunkBuffer=[];c.fusion={};
+ const parse=html.slice(html.indexOf('function process(buf'),html.indexOf('    // Track GPS reference -'));
+ const push=html.match(/chunkBuffer\.push\(\{t:now,gpsSynthetic:[^\n]+/)[0];
+ vm.runInContext(html.slice(html.indexOf('function forcesUsable('),html.indexOf('function clearForces('))+html.slice(html.indexOf('class EffortPeaks{'),html.indexOf('const effortPeaks='))+';this.Summary=RecordingSummary;'+parse+'const now=Date.now();'+push+'return chunkBuffer.pop();};this.storedRowForTest=process;',c);
+ let previousBoot;
+ for(const scenario of ['circuit','rolling']){
+  if(scenario==='rolling'){await c.events.get('DOMContentLoaded')();await c.elements.get('demo-interval').onclick({target:{}})}
+  const metadata=await(await c.window.fetch('/api/recording-metadata')).json(),gps=await(await c.window.fetch('/api/gps-log')).json(),summary=new c.Summary();assert.equal(metadata.boot_id,gps.boot_id);if(previousBoot!==undefined)assert.notEqual(metadata.boot_id,previousBoot);previousBoot=metadata.boot_id;
+  for(let i=0;i<20;i++){const telemetry=await(await c.window.fetch('/api/telemetry')).json(),bytes=Uint8Array.from(Buffer.from(telemetry.data,'base64')),row=c.storedRowForTest(bytes.buffer,telemetry.timing);assert.equal(telemetry.timing.gps_boot_id,gps.boot_id);assert.equal(row.gpsBootId,gps.boot_id);assert.equal(row.gpsSynthetic,1);summary.update(row);now+=40}
+  assert.ok(summary.snapshot().samples.forceWindows>0,scenario);assert.equal(summary.snapshot().excluded.clock,0);
+ }
 });
