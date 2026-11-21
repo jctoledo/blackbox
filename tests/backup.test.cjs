@@ -7,7 +7,7 @@ const html=fs.readFileSync('sensors/blackbox/web/dashboard.html','utf8');
 const slice=(start,end)=>html.slice(html.indexOf(start),html.indexOf(end,html.indexOf(start)));
 function context(){
  const c={console,Number,Math,Date,Map,Set,Float32Array,ArrayBuffer,Promise,rec:false,recordingBusy:false,chunkWrite:null,activeTrack:null,trackRecorder:null,chunkBuffer:[],sessionId:null,sessionStart:0,chunkIndex:0};
- vm.createContext(c);vm.runInContext(slice('function validSpatialReference(', 'class SpatialMatcher'),c);vm.runInContext(slice('// Versioned backup / restore.','// End backup / restore'),c);
+ vm.createContext(c);vm.runInContext(slice('const failedRecordingMetadata=', '// End recording details core.'),c);vm.runInContext(slice('function validSpatialReference(', 'class SpatialMatcher'),c);vm.runInContext(slice('// Versioned backup / restore.','// End backup / restore'),c);
  vm.runInContext(slice('function portableReference(', 'async function exportTrackData'),c);
  vm.runInContext(slice('function createRecordingSession(', 'async function startRecording'),c);return c;
 }
@@ -143,3 +143,20 @@ test('GPS evidence survives backup and restore alongside ordinary samples',async
  const data=await c.readBackupStores(c.db,['sessions','chunks']);assert.deepEqual(data.chunks[0].data.at(-1),gps);
  const roundtrip=JSON.parse(JSON.stringify(await c.createBackup()));assert.equal(roundtrip.data.chunks[0].data.at(-1).gpsMissing,3);c.validateBackup(roundtrip);
 });
+
+function metadataSnapshot(){return {version:1,simulated:false,boot_id:1,captured_uptime_ms:500,build:{app_version:null,idf_version:null,source_sha:null,target:'esp32c3'},gps:{configured_model:'NEO-6M',configured_rate_hz:5,configured_uart_baud:9600,configuration_verified:false},imu:{model:'WT901',transport:'uart',configured_uart_baud:null,baud_selection:'pending',configured_output_rate_hz:null},calibration:{accelerometer_bias_mps2:null,mount_alignment:null}}}
+test('optional v1 metadata preserves legacy absence and all recovery states through copied restore',()=>{
+ const c=context();for(const state of [undefined,{status:'pending',requestedAt:100},{status:'unavailable',requestedAt:100,receivedAt:200,reason:'Metadata request unavailable'},{status:'captured',requestedAt:100,receivedAt:200,snapshot:metadataSnapshot()}]){const value=fixture(c);if(state)value.data.sessions[0].recordingMetadata=state;value.checksum=c.backupChecksum(value.data);const plan=c.makeRestorePlan(value,[],'metadata-copy',1000);assert.deepEqual(plan.sessions[0].recordingMetadata,state);assert.equal(plan.sessions[0].status,'complete')}
+});
+test('backup rejects malformed metadata and arbitrary private payload even with valid checksum',()=>{
+ const c=context();for(const metadata of [null,{status:'bogus',requestedAt:1},{status:'pending',requestedAt:-1},{status:'pending',requestedAt:1,payload:{secret:'private'}},{status:'captured',requestedAt:1,receivedAt:2,snapshot:{...metadataSnapshot(),credentials:{ssid:'private'}}},{status:'captured',requestedAt:1,receivedAt:2,snapshot:{...metadataSnapshot(),version:99}}]){const v=fixture(c);v.data.sessions[0].recordingMetadata=metadata;v.checksum=c.backupChecksum(v.data);assert.throws(()=>c.validateBackup(v),/metadata/)}
+});
+test('metadata-only storage failure overlays existing full/selected backups with empty tail; never resurrects a deleted row',async()=>{
+ const c=context();c.db=await database();c.trackDb=await database(true);const pending={status:'pending',requestedAt:100},captured={status:'captured',requestedAt:100,receivedAt:200,snapshot:metadataSnapshot()};
+ await c.addBackupStores(c.db,{sessions:[{sessionId:100,startTime:100,status:'complete',recordingMetadata:pending}],chunks:[{sessionId:100,chunkIndex:0,data:[{t:101,sp:1}]}]});c.sessionId=100;c.sessionStart=100;c.recordingContext={sessionId:100,recordingMetadata:captured,metadataSaveFailed:true};
+ for(const scope of ['all','100']){const v=await c.createBackup(scope);assert.equal(v.data.sessions[0].recordingMetadata.status,'captured');assert.equal(v.data.chunks.length,1)}
+ const tx=c.db.transaction(['sessions','chunks'],'readwrite');tx.objectStore('sessions').delete(100);tx.objectStore('chunks').clear();await new Promise(r=>tx.oncomplete=r);assert.equal((await c.createBackup()).data.sessions.length,0);
+ c.chunkBuffer=[{t:300,sp:2}];const tail=await c.createBackup();assert.equal(tail.data.sessions[0].recordingMetadata.status,'captured');assert.equal(tail.data.chunks[0].data[0].sp,2);
+});
+
+test('failed former session context is exported even after a new recording owns the tab',async()=>{const c=context();c.db=await database();c.trackDb=await database(true);await c.addBackupStores(c.db,{sessions:[{sessionId:100,startTime:100,status:'complete',recordingMetadata:{status:'pending',requestedAt:100}}]});c.failed={status:'captured',requestedAt:100,receivedAt:200,snapshot:metadataSnapshot()};vm.runInContext('failedRecordingMetadata.set(100,failed)',c);c.sessionId=200;c.recordingContext={sessionId:200,recordingMetadata:{status:'pending',requestedAt:200}};assert.equal((await c.createBackup('100')).data.sessions[0].recordingMetadata.status,'captured')});

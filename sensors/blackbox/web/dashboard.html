@@ -453,6 +453,7 @@ body.cluster-view.cluster-forces .bbForceTools{position:absolute;top:0;right:4px
 
 body.cluster-view .bbRunTitle{padding-top:44px}body.cluster-view .bbClusterRuns .bbPeakGrid{padding-top:8px;gap:10px}body.cluster-view .bbClusterRuns dd{font-size:24px}
 body.cluster-view.cluster-controls .bbKebab{display:block}
+.bbRecordingDetails{overflow-wrap:anywhere;min-width:0}.bbRecordingDetails summary{cursor:pointer;min-height:44px;display:flex;align-items:center}.bbRecordingDetails .bbSessionBtn{margin-top:8px}
 </style></head>
 <body>
 
@@ -893,8 +894,60 @@ function openDB(){
     });
 }
 
+const failedRecordingMetadata=new Map();
+// Recording details: bounded v1 projection; clocks are browser wall time and controller uptime.
+function projectRecordingSnapshot(value){
+    const fail=()=>{throw Error('Invalid recording metadata')},object=v=>v&&typeof v==='object'&&!Array.isArray(v);
+    const integer=(v,max=Number.MAX_SAFE_INTEGER)=>Number.isSafeInteger(v)&&v>=0&&v<=max;
+    const text=v=>v===null||typeof v==='string'&&v.length>0&&v.length<=32;
+    if(!object(value)||value.version!==1||typeof value.simulated!=='boolean'||!integer(value.boot_id,0xffffffff)||!integer(value.captured_uptime_ms))fail();
+    const {build:b,gps:g,imu:i,calibration:c}=value;
+    if(![b,g,i,c].every(object)||!text(b.app_version)||!text(b.idf_version)||!(b.source_sha===null||typeof b.source_sha==='string'&&/^[a-fA-F0-9]{40}$/.test(b.source_sha))||b.target!=='esp32c3')fail();
+    if(!['NEO-6M','NEO-M9N','SIMULATED'].includes(g.configured_model)||g.configured_model==='SIMULATED'&&!value.simulated||!integer(g.configured_rate_hz,1000)||!g.configured_rate_hz||!integer(g.configured_uart_baud,10000000)||!g.configured_uart_baud||g.configuration_verified!==false)fail();
+    if(i.model!=='WT901'||i.transport!=='uart'||!(i.configured_uart_baud===null||integer(i.configured_uart_baud,10000000)&&i.configured_uart_baud>0)||!['pending','header_probe','fallback'].includes(i.baud_selection)||i.baud_selection==='pending'&&i.configured_uart_baud!==null||i.configured_output_rate_hz!==null)fail();
+    const bias=c.accelerometer_bias_mps2,mount=c.mount_alignment;
+    if(bias!==null&&(!object(bias)||!['x','y','z'].every(k=>Number.isFinite(bias[k])&&Math.abs(bias[k])<=3.4028234663852886e38)))fail();
+    if(mount!==null&&(!object(mount)||typeof mount.is_calibrated!=='boolean'||!Number.isFinite(mount.yaw_offset_rad)||Math.abs(mount.yaw_offset_rad)>3.4028234663852886e38))fail();
+    return{version:1,simulated:value.simulated,boot_id:value.boot_id,captured_uptime_ms:value.captured_uptime_ms,build:{app_version:b.app_version,idf_version:b.idf_version,source_sha:b.source_sha,target:b.target},gps:{configured_model:g.configured_model,configured_rate_hz:g.configured_rate_hz,configured_uart_baud:g.configured_uart_baud,configuration_verified:false},imu:{model:i.model,transport:i.transport,configured_uart_baud:i.configured_uart_baud,baud_selection:i.baud_selection,configured_output_rate_hz:null},calibration:{accelerometer_bias_mps2:bias===null?null:{x:bias.x,y:bias.y,z:bias.z},mount_alignment:mount===null?null:{is_calibrated:mount.is_calibrated,yaw_offset_rad:mount.yaw_offset_rad}}};
+}
+function projectRecordingMetadata(value){
+    if(!value||!Number.isSafeInteger(value.requestedAt)||value.requestedAt<0)throw Error('Invalid recording metadata time');
+    const result={status:value.status,requestedAt:value.requestedAt};
+    if(value.status==='pending')return result;
+    if(!Number.isSafeInteger(value.receivedAt)||value.receivedAt<0)throw Error('Invalid recording metadata time');
+    result.receivedAt=value.receivedAt;
+    if(value.status==='captured')result.snapshot=projectRecordingSnapshot(value.snapshot);
+    else if(value.status==='unavailable')result.reason='Metadata request unavailable';
+    else throw Error('Invalid recording metadata state');
+    return result;
+}
+function sameRecordingMetadata(a,b){
+    if(a===b)return true;
+    if(!a||!b||typeof a!=='object'||typeof b!=='object')return false;
+    const keys=Object.keys(a);return keys.length===Object.keys(b).length&&keys.every(k=>Object.hasOwn(b,k)&&sameRecordingMetadata(a[k],b[k]));
+}
+function patchRecordingSession(database,id,patch){
+    return new Promise((resolve,reject)=>{
+        const tx=database.transaction('sessions','readwrite'),store=tx.objectStore('sessions');let found=false;
+        tx.oncomplete=()=>resolve(found);tx.onerror=tx.onabort=()=>reject(tx.error||Error('Recording details could not be saved'));
+        const request=store.get(id);request.onsuccess=()=>{if(request.result){found=true;store.put({...request.result,...patch,sessionId:id})}};
+    });
+}
+async function captureRecordingMetadata(database,owner,request=requestDevice){
+    const {requestedAt}=owner.recordingMetadata;let metadata;
+    try{
+        const response=await request('/api/recording-metadata',{timeoutMs:3000,maxBytes:8192,cache:'no-store'});
+        if(!response.ok)throw Error('Metadata unavailable');
+        metadata={status:'captured',requestedAt,receivedAt:Date.now(),snapshot:projectRecordingSnapshot(await response.json())};
+    }catch{metadata={status:'unavailable',requestedAt,receivedAt:Date.now(),reason:'Metadata request unavailable'}}
+    owner.recordingMetadata=metadata;
+    try{await patchRecordingSession(database,owner.sessionId,{recordingMetadata:metadata})}catch(error){owner.metadataSaveFailed=true;failedRecordingMetadata.set(owner.sessionId,metadata);console.warn('Recording details remain available in this tab',error)}
+}
+// End recording details core.
+
 // Recording state. Detach each batch before awaiting IndexedDB; only one writer runs.
 let rec=false,sessionId=null,chunkBuffer=[],chunkIndex=0,lastSaveTime=0,sessionStart=0;
+let recordingContext=null;
 let recoveredSessionCount=0;
 let gpsCursor=null,gpsRequest=null,gpsLogStatus='GPS evidence is collected while recording.';
 let chunkWrite=null,recordingBusy=false,recordingError='';
@@ -906,14 +959,14 @@ function commitStore(store,value){
         tx.objectStore(store).put(value);
     });
 }
-function createRecordingSession(startTime){
+function createRecordingSession(startTime,recordingMetadata){
     return new Promise((resolve,reject)=>{
         const tx=db.transaction('sessions','readwrite'),store=tx.objectStore('sessions');let id;
         tx.oncomplete=()=>resolve(id);tx.onerror=tx.onabort=()=>reject(tx.error||new Error('Could not create recording'));
         const request=store.openKeyCursor(null,'prev');request.onsuccess=()=>{
             id=Math.max(startTime,Number(request.result?.key||0)+1);
             if(!Number.isSafeInteger(id)){tx.abort();return}
-            store.add({sessionId:id,startTime,status:'active'});
+            store.add({sessionId:id,startTime,status:'active',...(recordingMetadata?{recordingMetadata}:{})});
         };
     });
 }
@@ -923,8 +976,10 @@ async function startRecording(){
     try{
         if(!db)await openDB();
         await saveChunk();
-        const started=Date.now(),id=await createRecordingSession(started);
+        const started=Date.now(),metadata={status:'pending',requestedAt:started},id=await createRecordingSession(started,metadata);
+        const owner={sessionId:id,recordingMetadata:metadata};recordingContext=owner;
         if(typeof resetPerformanceRuns==='function')resetPerformanceRuns();gpsCursor=null;gpsLogStatus='Waiting for GPS timestamp log…';sessionId=id;sessionStart=started;chunkIndex=0;lastSaveTime=Date.now();rec=true;recordingError='';lastSaveTime=0;
+        void captureRecordingMetadata(db,owner);
     }catch(e){recordingError='Storage error — recording not started';console.error(e)}
     finally{recordingBusy=false;updateRecUI()}
 }
@@ -948,11 +1003,12 @@ async function saveChunk(){
 async function stopRecording(){
     if(recordingBusy)return;
     recordingBusy=true;updateRecUI();
+    const ownerId=sessionId;
     await collectGpsLog();
     rec=false;updateRecUI();
     try{
         await saveChunk();
-        if(db&&sessionId)await commitStore('sessions',{sessionId,startTime:sessionStart,status:'complete',chunks:chunkIndex});
+        if(db&&ownerId)await patchRecordingSession(db,ownerId,{status:'complete',chunks:chunkIndex});
     }catch(e){recordingError='Recording could not be finalized. Keep this tab open and export from Saved data.';console.error('Recording remains recoverable in this tab:',e)}
     finally{recordingBusy=false;updateRecUI()}
 }
@@ -1076,7 +1132,7 @@ async function getAllSessions(){
     });
     const enriched=sessions.map(s=>{
         const summary=chunksBySession.get(s.sessionId)||{count:0,bytes:0,health:recordingHealth([])},health=summary.health;
-        return{sessionId:s.sessionId,startTime:s.startTime||s.sessionId,label:typeof s.label==='string'?s.label:'',status:s.status,chunkCount:summary.count,sampleCount:health.samples,durationMs:health.durationMs,estimatedBytes:summary.bytes,health};
+        return{sessionId:s.sessionId,startTime:s.startTime||s.sessionId,recordingMetadata:failedRecordingMetadata.get(s.sessionId)||(recordingContext?.sessionId===s.sessionId?recordingContext.recordingMetadata:s.recordingMetadata),metadataSaveFailed:failedRecordingMetadata.has(s.sessionId),label:typeof s.label==='string'?s.label:'',status:s.status,chunkCount:summary.count,sampleCount:health.samples,durationMs:health.durationMs,estimatedBytes:summary.bytes,health};
     });
     enriched.sort((a,b)=>b.sessionId-a.sessionId);
     return enriched;
@@ -2744,7 +2800,10 @@ function validateBackup(value){
     const finite=n=>typeof n==='number'&&Number.isFinite(n),integer=n=>Number.isSafeInteger(n)&&n>=0;
     const unique=(rows,key)=>{const seen=new Set();for(const r of rows){backupCheck(r&&typeof r==='object'&&!Array.isArray(r),'invalid record');const id=r[key];backupCheck((typeof id==='string'&&id.length>0&&id.length<=256)||integer(id),'invalid '+key);backupCheck(!seen.has(id),'duplicate '+key);seen.add(id)}return seen};
     const sessions=unique(data.sessions,'sessionId'),tracks=unique(data.tracks,'id');unique(data.references,'id');unique(data.history,'id');
-    for(const s of data.sessions)backupCheck(integer(s.sessionId)&&finite(s.startTime)&&s.startTime>=0,'invalid session timestamp');
+    for(const s of data.sessions){
+        backupCheck(integer(s.sessionId)&&finite(s.startTime)&&s.startTime>=0,'invalid session timestamp');
+        if(s.recordingMetadata!==undefined){let projected;try{projected=projectRecordingMetadata(s.recordingMetadata)}catch{backupCheck(false,'invalid recording metadata')}backupCheck(sameRecordingMetadata(projected,s.recordingMetadata),'invalid recording metadata payload')}
+    }
     const chunks=new Set();let sampleCount=0;
     for(const c of data.chunks){
         backupCheck(c&&sessions.has(c.sessionId)&&integer(c.chunkIndex)&&Array.isArray(c.data),'invalid recording chunk');
@@ -2812,14 +2871,17 @@ async function createBackup(scope='all'){
     backupIdle();
     // A visibility-change save may detach the buffer while database reads wait.
     // Snapshot the tail first, then deduplicate it against committed chunk keys.
-    const tail={sessionId,sessionStart,chunkIndex,data:chunkBuffer.slice()};
+    const tail={sessionId,sessionStart,chunkIndex,data:chunkBuffer.slice(),metadata:typeof recordingContext!=='undefined'&&recordingContext?.sessionId===sessionId?recordingContext.recordingMetadata:undefined};
     if(!db)await openDB();if(!trackDb)await openTrackDB();
     const [recording,track]=await Promise.all([readRecordingBackup(scope),(scope==='all'||scope==='tracks')?readBackupStores(trackDb,['tracks','reference_laps','lap_history']):Promise.resolve({tracks:[],reference_laps:[],lap_history:[]})]);
     // Include the unsaved tail even when storage is full; export must not require a write.
     if(tail.data.length&&(scope==='all'||scope==='recordings'||Number(scope)===tail.sessionId)&&!recording.chunks.some(c=>c.sessionId===tail.sessionId&&c.chunkIndex===tail.chunkIndex)){
         if(!recording.sessions.some(s=>s.sessionId===tail.sessionId))recording.sessions.push({sessionId:tail.sessionId,startTime:tail.sessionStart,status:'active'});
+        if(tail.metadata)recording.sessions.find(s=>s.sessionId===tail.sessionId).recordingMetadata=tail.metadata;
         recording.chunks.push({sessionId:tail.sessionId,chunkIndex:tail.chunkIndex,data:tail.data,timestamp:Date.now()});
     }
+    if(tail.metadata){const existing=recording.sessions.find(s=>s.sessionId===tail.sessionId);if(existing)existing.recordingMetadata=tail.metadata}
+    for(const row of recording.sessions){const failed=failedRecordingMetadata.get(row.sessionId);if(failed)row.recordingMetadata=failed}
     const value={format:BACKUP_FORMAT,version:BACKUP_VERSION,createdAt:new Date().toISOString(),data:{sessions:recording.sessions,chunks:recording.chunks,tracks:track.tracks,references:track.reference_laps.map(portableReference),history:track.lap_history}};
     value.checksum=backupChecksum(value.data);validateBackup(value);return value;
 }
@@ -2905,6 +2967,35 @@ async function renderDataModal(){
     await renderTrackDataList()
 }
 
+function recordingDetailsHTML(session){
+    const m=session.recordingMetadata,show=v=>v===null?'Unknown':String(v);
+    let lines;
+    if(!m)lines=['Unknown · no historical snapshot was saved.'];
+    else if(m.status!=='captured')lines=[m.status==='pending'?'Pending · request has not completed.':'Unavailable · recording continued without a snapshot.','Requested: '+new Date(m.requestedAt).toLocaleString()];
+    else{
+        const s=m.snapshot,b=s.build,g=s.gps,i=s.imu,c=s.calibration;
+        lines=[s.simulated?'SIM · Synthetic example; no hardware measurement.':'Controller snapshot',
+            'Firmware: '+show(b.app_version)+' · ESP-IDF: '+show(b.idf_version)+' · Target: '+b.target,
+            'Source SHA: '+show(b.source_sha),'Boot ID: '+s.boot_id+' · Snapshot uptime: '+s.captured_uptime_ms+' ms',
+            'Requested: '+new Date(m.requestedAt).toLocaleString()+' · Received: '+new Date(m.receivedAt).toLocaleString(),
+            'GPS: '+g.configured_model+' · Configured '+g.configured_rate_hz+' Hz · UART '+g.configured_uart_baud+' baud · Configuration unverified',
+            'IMU: '+i.model+' / '+i.transport+' · UART '+show(i.configured_uart_baud)+' baud · Selection: '+i.baud_selection+' · Configured output rate: '+show(i.configured_output_rate_hz),
+            'Applied accelerometer bias (sensor axes, m/s²): '+(c.accelerometer_bias_mps2?['x','y','z'].map(k=>k+' '+c.accelerometer_bias_mps2[k]).join(', '):'Unknown'),
+            'Mount alignment: '+(c.mount_alignment?'Saved alignment enabled: '+c.mount_alignment.is_calibrated+' · Yaw offset: '+c.mount_alignment.yaw_offset_rad+' rad':'Unknown'),
+            'One snapshot, not a history of settings. Configured rates are not delivered rates or receiver readback. Header probing does not verify sensor configuration.'];
+    }
+    if(session.metadataSaveFailed)lines.push('Details could not be saved in browser storage. Download details JSON or a backup before closing this tab.');
+    return '<details class="bbRecordingDetails"><summary>Recording details</summary><div class="bbSessionHealth">'+lines.map(escHtml).join('<br>')+'</div><button class="bbSessionBtn" data-action="details-export">Download details JSON</button></details>';
+}
+async function exportRecordingDetails(targetId){
+    if(!db)await openDB();
+    const row=await idbPromise(db.transaction('sessions','readonly').objectStore('sessions').get(targetId));
+    if(!row)throw Error('Recording no longer exists');
+    const metadata=failedRecordingMetadata.get(targetId)||(recordingContext?.sessionId===targetId?recordingContext.recordingMetadata:row.recordingMetadata);
+    const value={format:'blackbox-recording-details',version:1,sessionId:row.sessionId,startTime:row.startTime,recordingMetadata:metadata??null};
+    const url=URL.createObjectURL(new Blob([JSON.stringify(value,null,2)],{type:'application/json'})),a=document.createElement('a');
+    a.href=url;a.download='blackbox-recording-'+targetId+'-details.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+}
 async function renderSessionList(){
     const listEl=$('session-list'),clearBtn=$('btn-clear-all-recordings');
     try{
@@ -2924,7 +3015,7 @@ async function renderSessionList(){
                     '<div class=\"bbSessionDate\">'+(s.label?escHtml(s.label)+' · ':'')+formatSessionDate(s.startTime)+'</div>'+
                     '<div class=\"bbSessionMeta\"><span>'+s.chunkCount+' chunk'+(s.chunkCount!==1?'s':'')+'</span><span>'+formatBytes(s.estimatedBytes)+'</span><span>'+formatSessionDuration(s.durationMs)+'</span></div>'+
                     '<div class=\"bbSessionHealth\">'+s.sampleCount+' samples · Received samples with GPS fix: '+(s.health.gpsPercent===null?'—':s.health.gpsPercent+'%')+'<br>Largest sample gap: '+(s.health.maxGapMs/1000).toFixed(2)+'s · '+s.health.gaps+' over 1.5s'+(s.health.clockReversals?' · Clock changed':'')+'<br>'+(s.health.gpsEvents?'GPS evidence: '+s.health.gpsEvents+' events · '+s.health.gpsMissing+' missing · '+s.health.gpsRestarts+' device restarts':'GPS evidence unavailable in this recording')+'</div>'+
-                    '<div class=\"bbSessionStatus '+statusCls+'\">'+statusLbl+'</div>'+
+                    '<div class=\"bbSessionStatus '+statusCls+'\">'+statusLbl+'</div>'+recordingDetailsHTML(s)+
                 '</div>'+
                 '<div class=\"bbSessionActions\">'+
                     '<button class=\"bbSessionBtn\" data-action=\"export\">Session CSV</button>'+
@@ -2968,7 +3059,9 @@ async function renderTrackDataList(){
 
 async function handleSessionAction(btn){
     const action=btn.dataset.action,item=btn.closest('.bbSessionItem'),targetId=parseInt(item.dataset.sessionId,10);
-    if(action==='export'||action==='gps-export'||action==='runs-export'){
+    if(action==='details-export'){
+        try{await exportRecordingDetails(targetId)}catch(e){alert('Details export failed: '+e.message)}
+    }else if(action==='export'||action==='gps-export'||action==='runs-export'){
         const label=btn.textContent;
         try{btn.textContent='Exporting…';await exportSessionById(targetId,action==='gps-export'||action==='runs-export',action==='runs-export')}
         catch(e){alert('Export failed: '+e.message)}finally{btn.textContent=label}

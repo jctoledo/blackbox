@@ -11,7 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Device JSON requests bound complete bodies and recover from stalled reads; an independent receipt watchdog clears stale forces and marks timing unconfirmed. Landscape connection and recording recovery notices occupy separate rows.
 
 ### Added
-- Versioned `/api/recording-metadata` exposes boot-associated build, configured sensor settings and applied calibration context with explicit unknowns; browser capture follows separately.
+- Recordings capture one bounded firmware/sensor/calibration snapshot without delaying samples. Saved data offers Recording details and companion JSON; backups retain captured, pending and unavailable context, while older recordings remain unknown. Demo snapshots are explicitly simulated.
+- Versioned `/api/recording-metadata` exposes boot-associated build, configured sensor settings and applied calibration context with explicit unknowns.
 - Diagonal GPS-course regression checks forward and reverse crossing directions; mutation validation exposed a gap in cardinal-heading-only coverage.
 - Repository-specific agent workflow, triage/domain pointers and a documented three-arm code-review trial; no defect-recall superiority claim.
 

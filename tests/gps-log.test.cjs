@@ -22,6 +22,7 @@ test('stopping waits for the in-flight GPS fetch and saves its tail in the same 
  let deliver;const saved=[];const c={console,Math,Number,Date,MAX_PENDING_SAMPLES:6000,CHUNK_INTERVAL:5000,db:{},requestDevice:()=>new Promise(resolve=>{deliver=resolve})};vm.createContext(c);
  vm.runInContext(section('// Recording state.', 'function updateRecUI()')+';function updateRecUI(){};rec=true;sessionId=10;sessionStart=100;lastSaveTime=Date.now();',c);
  c.commitStore=async(store,value)=>saved.push({store,value});
+ c.patchRecordingSession=async(database,id,patch)=>saved.push({store:'sessions',value:{sessionId:id,...patch}});
  const pending=c.collectGpsLog(),stop=c.stopRecording();
  assert.equal(vm.runInContext('rec',c),true);
  deliver({ok:true,json:async()=>batch([1,2])});await pending;await stop;

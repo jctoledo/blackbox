@@ -17,5 +17,15 @@ test('example recording seeding is atomic, repeatable and never replaces an exis
  const first=await c.window.seedForTest(db,'SIM example',rows,'rolling-v5');assert.equal(await c.window.seedForTest(db,'SIM example',rows,'rolling-v5'),first);
  const sessions=await all(db,'sessions'),chunks=await all(db,'chunks');assert.equal(sessions.length,1);assert.equal(sessions[0].status,'complete');assert.equal(chunks.flatMap(c=>c.data).length,rows.length);
  const aborted={transaction(...args){const tx=db.transaction(...args);queueMicrotask(()=>tx.abort());return tx}};await assert.rejects(c.window.seedForTest(aborted,'Failed',rows,'different'));assert.equal((await all(db,'sessions')).length,1);assert.equal((await all(db,'chunks')).length,chunks.length);
- vm.runInContext(html.slice(html.indexOf('// Versioned backup / restore.'),html.indexOf('// End backup / restore')),c);const data={sessions,chunks,tracks:[],references:[],history:[]};assert.equal(c.validateBackup({format:'blackbox-backup',version:1,data,checksum:c.backupChecksum(data)}).recordings,1);
+ vm.runInContext(html.slice(html.indexOf('const failedRecordingMetadata='),html.indexOf('// End recording details core.')),c);vm.runInContext(html.slice(html.indexOf('// Versioned backup / restore.'),html.indexOf('// End backup / restore')),c);const data={sessions,chunks,tracks:[],references:[],history:[]};assert.equal(c.validateBackup({format:'blackbox-backup',version:1,data,checksum:c.backupChecksum(data)}).recordings,1);
+});
+
+test('metadata endpoint and owned example migration stay SIM without replacing rows or user data',async()=>{
+ const c=fixture(),db=await database(),rows=c.window.examplesForTest('rolling');
+ const id=await c.window.seedForTest(db,'SIM example',rows,'rolling-v7'),before=(await all(db,'chunks'));
+ await new Promise((res,rej)=>{const tx=db.transaction('sessions','readwrite'),store=tx.objectStore('sessions');store.put({sessionId:id,startTime:rows[0].t,status:'complete',demoFixture:'rolling-v7',marker:'keep'});store.put({sessionId:id+1,startTime:1,status:'complete',label:'user data'});tx.oncomplete=res;tx.onerror=()=>rej(tx.error)});
+ assert.equal(await c.window.seedForTest(db,'SIM replacement',[], 'rolling-v7'),id);
+ const sessions=await all(db,'sessions'),example=sessions.find(s=>s.sessionId===id),user=sessions.find(s=>s.sessionId===id+1);
+ assert.equal(sessions.length,2);assert.equal(example.marker,'keep');assert.equal(example.recordingMetadata.snapshot.simulated,true);assert.equal(example.recordingMetadata.snapshot.build.app_version,'SIM demo');assert.equal(example.recordingMetadata.snapshot.calibration.mount_alignment,null);assert.equal(user.recordingMetadata,undefined);assert.deepEqual(await all(db,'chunks'),before);
+ const response=await c.window.fetch('/api/recording-metadata');assert.equal(response.headers.get('cache-control'),'no-store');const value=await response.json();assert.equal(value.simulated,true);assert.equal(value.gps.configured_model,'SIMULATED');
 });
