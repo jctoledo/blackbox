@@ -13,7 +13,7 @@ Blackbox combines GPS and a WT901 IMU for vehicle telemetry. It has two related 
 | WT901 roll/pitch/yaw parser output | Degrees; gyro output rad/s; acceleration m/s² |
 | Vehicle acceleration | Forward/left positive; divide by 9.80665 for g |
 
-Convert compass course to mathematical yaw with `π/2 − course` only at the relevant boundary. Recorded timing-line bearings already use `atan2(y,x)` and must not be converted again. An arbitrary sensor mounting/yaw offset is not automatically validated by this convention table; bench/drive checks must establish axis signs and mounting alignment.
+Convert compass course to mathematical yaw with `π/2 − course` only at the relevant boundary. Recorded timing-line bearings already use `atan2(y,x)` and must not be converted again. An arbitrary sensor mounting/yaw offset is not automatically validated by this convention table; bench/drive checks must establish axis signs and mounting alignment. Experimental [Mount alignment](CALIBRATION.md) provides an explicitly reviewed horizontal offset for force projection. It leaves the EKF device-heading basis and GPS timing path unchanged.
 
 `remove_gravity` subtracts the body-frame vector `g × [−sin(pitch), sin(roll)cos(pitch), cos(roll)cos(pitch)]`. `body_to_earth` applies `Rz(yaw) Ry(pitch) Rx(roll)`. `earth_to_car` applies the inverse horizontal yaw rotation. The full gravity-free body vector, including z, belongs in that transform.
 
@@ -52,6 +52,8 @@ The position diagnostic combines diagonal variance, accepted-update residual sta
 ## Acceleration and orientation correction
 
 `GpsAcceleration` differentiates scalar GPS speed using the application sample interval, filters the result, and expires stale data. Differentiation amplifies noise; it is a reference signal, not ground truth. `speed × corrected yaw_rate` estimates lateral acceleration under approximately planar motion, aligned gyro axes and limited sideslip. Banking, slip, vibration and mounting errors violate those assumptions.
+
+When an offset is saved, force projection rotates into vehicle axes and learning residuals rotate back into device pitch/roll axes. Saving/clearing resets learned force-fusion corrections.
 
 `OrientationCorrector` compares the filtered longitudinal IMU signal with the speed derivative, and lateral IMU acceleration with the centripetal estimate. Small-angle pitch/roll residual corrections accumulate with opposite signs, bounded near ±15°. Cruise-bias learning also accumulates the residual; averaging it as an absolute bias would converge to half the true offset. Its confidence is a learning-sample counter, not a probability of correctness. GPS blend weight interpolates approximately 80% → 50% → 30% as pitch confidence grows. Freshness controls fallback to IMU-only estimates.
 

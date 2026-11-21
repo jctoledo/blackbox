@@ -8,7 +8,8 @@ from build_demo import main as build_demo
 
 ROOT = Path(__file__).resolve().parents[1]
 BASE = 'https://jctoledo.github.io/blackbox/'
-PAGES = {'COMPARISON.md': ('comparison', 'Blackbox vs paid GPS lap timers: capabilities, costs, and evidence'),
+PAGES = {'CALIBRATION.md': ('mount-alignment', 'Experimental horizontal mount alignment: setup and validation'),
+         'COMPARISON.md': ('comparison', 'Blackbox vs paid GPS lap timers: capabilities, costs, and evidence'),
          'FAQ.md': ('faq', 'GPS lap timer compatibility, accuracy, and ownership FAQ'),
          'HARDWARE_VALIDATION.md': ('hardware-validation', 'Blackbox hardware and lap timing acceptance checklist'),
          'LAP_TIMER.md': ('lap-timer', 'GPS lap timer setup and troubleshooting'),

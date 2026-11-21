@@ -14,6 +14,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Obsolete documentation files (RELEASE.md, IMPLEMENTATION_SUMMARY.md, release-notes.md)
 
+## [0.0.4-rc.6] - 2026-11-20
+
+Release candidate; physical mount, phone and USB acceptance remains required. Includes rc.5.
+
+### Added
+- Experimental horizontal mount alignment: signed fresh GPS braking evidence, continuous sample gates, candidate review, explicit parked save/clear and one checked persistent record.
+- Mount-aware force projection and orientation-feedback axes, with frame/invalid-input/persistence regressions. GPS timing and the EKF device-heading basis are unchanged.
+- One-tap fullscreen for supported browsers and in-app Android/iPhone Home Screen instructions, including backup/restore guidance for separate browser storage.
+
+### Fixed
+- Website portrait and landscape screenshots preserve their aspect ratios at phone widths.
+- Replaced PR #13's magnitude-only braking test, premature finalization, inconsistent heading application and silent persistence failures.
+
 ## [0.0.4-rc.5] - 2026-11-20
 
 Release candidate; includes rc.4 backup/restore. The spatial matcher is software-validated and ready for controlled field evaluation; this release does not establish a measured timing-error bound.

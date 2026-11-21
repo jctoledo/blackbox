@@ -1,4 +1,5 @@
 mod binary_telemetry;
+mod calibration;
 mod config;
 mod diagnostics;
 #[cfg(test)]
@@ -8,6 +9,7 @@ mod gps;
 mod imu;
 mod mode;
 mod mqtt;
+mod nvs_storage;
 mod rgb_led;
 mod system;
 mod telemetry_http;
@@ -74,6 +76,12 @@ fn main() {
     let peripherals = Peripherals::take().unwrap();
     let sysloop = EspSystemEventLoop::take().unwrap();
     let nvs = EspDefaultNvsPartition::take().ok();
+    let mut mount_storage = nvs
+        .as_ref()
+        .and_then(|p| nvs_storage::NvsStorage::new(p.clone()).ok());
+    let saved_mount = mount_storage.as_ref().map(|s| s.load()).unwrap_or_default();
+    let mut mount_calibrator =
+        calibration::MountCalibrator::new(saved_mount, mount_storage.is_some());
 
     // Create LED for status indication
     let led = RgbLed::new(peripherals.rmt.channel0, peripherals.pins.gpio8)
@@ -483,6 +491,9 @@ fn main() {
         lon_sample_rate: 30.0, // 33ms telemetry interval = ~30Hz (from TelemetryConfig::default)
     };
     let mut sensor_fusion = SensorFusion::new(fusion_config);
+    if saved_mount.is_calibrated {
+        sensor_fusion.set_mount_yaw(saved_mount.yaw_offset);
+    }
 
     // Main loop timing
     let mut last_telemetry_ms = 0u32;
@@ -502,9 +513,31 @@ fn main() {
         loop_count += 1;
         diagnostics.record_loop();
 
+        mount_calibrator.tick(now_ms);
+        mount_calibrator.status.parked = sensors.gps_is_fresh(now_ms)
+            && sensors.gps_parser.last_fix().speed < 0.5
+            && sensors.is_stationary(now_ms)
+            && sensors.calibration_imu_age_ms(now_ms) <= 60;
+        if let Some(ref state) = telemetry_state {
+            match state.take_mount_command() {
+                1 => mount_calibrator.command("start", now_ms),
+                2 => mount_calibrator.command("cancel", now_ms),
+                action @ (3 | 4) => {
+                    let changed = mount_calibrator.save_with(action == 4, |bytes| {
+                        mount_storage.as_mut().ok_or(())?.save(bytes)
+                    });
+                    if changed {
+                        sensor_fusion.set_mount_yaw(mount_calibrator.status.saved.yaw_offset);
+                    }
+                }
+                _ => {}
+            }
+        }
+
         // Check for calibration request from web UI
         if let Some(ref state) = telemetry_state {
             if state.take_calibration_request() {
+                mount_calibrator.command("cancel", now_ms);
                 info!(">>> Calibration requested via web UI - recalibrating IMU...");
                 match sensors.calibrate_imu(status_mgr.led_mut(), None) {
                     Ok(bias) => {
@@ -745,6 +778,29 @@ fn main() {
                 diagnostics.record_gps_fix();
             }
 
+            if is_new_fix
+                && sensors.gps_parser.is_warmed_up()
+                && sensors.gps_parser.last_fix().valid
+            {
+                let fix = sensors.gps_parser.last_fix();
+                let imu = sensors.imu_parser.data();
+                let (ax, ay, az) = sensors.imu_parser.get_accel_corrected();
+                let (x, y, z) = remove_gravity(ax, ay, az, imu.roll, imu.pitch);
+                let (x, y) = body_to_earth(x, y, z, imu.roll, imu.pitch, 0.0);
+                if let Some(sample) = calibration::Sample::from_fix(
+                    fix,
+                    now_ms,
+                    (x, y),
+                    imu.wz,
+                    sensors.calibration_imu_age_ms(now_ms),
+                    (imu.roll, imu.pitch),
+                ) {
+                    mount_calibrator.sample(sample);
+                }
+            } else if !sensors.gps_parser.last_fix().valid {
+                mount_calibrator.invalidate();
+            }
+
             // Use each fresh GPS fix, with velocity from the same receiver/frame.
             // EKF heading lag must not reject a real GPS timing-line crossing.
             if is_new_fix && sensors.gps_parser.is_warmed_up() {
@@ -866,6 +922,9 @@ fn main() {
 
         // Publish telemetry at configured rate
         if now_ms.wrapping_sub(last_telemetry_ms) >= config.telemetry.interval_ms {
+            if let Some(ref state) = telemetry_state {
+                state.publish_mount_status(&mount_calibrator.status);
+            }
             // Get current speed and check if stationary
             let speed = sensors.get_speed(Some(&estimator.ekf));
             let (ax_corr, ay_corr, az_corr) = sensors.imu_parser.get_accel_corrected();

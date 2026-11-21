@@ -38,6 +38,8 @@ pub struct SensorManager {
     imu_uart: UartDriver<'static>,
     gps_uart: UartDriver<'static>,
     last_imu_us: u64,
+    last_gyro_us: u64,
+    last_angle_us: u64,
     stationary_count: u32,
     last_gps_fix_ms: Option<u32>,
 }
@@ -54,8 +56,21 @@ impl SensorManager {
             imu_uart,
             gps_uart,
             last_imu_us: unsafe { esp_idf_svc::sys::esp_timer_get_time() as u64 },
+            last_gyro_us: 0,
+            last_angle_us: 0,
             stationary_count: 0,
             last_gps_fix_ms: None,
+        }
+    }
+
+    pub fn calibration_imu_age_ms(&self, now_ms: u32) -> u32 {
+        let accel_age = now_ms.wrapping_sub((self.last_imu_us / 1000) as u32);
+        let gyro_age = now_ms.wrapping_sub((self.last_gyro_us / 1000) as u32);
+        let angle_age = now_ms.wrapping_sub((self.last_angle_us / 1000) as u32);
+        if self.last_gyro_us == 0 || self.last_angle_us == 0 || gyro_age > 200 || angle_age > 200 {
+            u32::MAX
+        } else {
+            accel_age
         }
     }
 
@@ -202,6 +217,12 @@ impl SensorManager {
             // Process each byte
             for &byte in buf.iter().take(n) {
                 if let Some(packet_type) = self.imu_parser.feed_byte(byte, now_us) {
+                    if packet_type == PacketType::Gyro {
+                        self.last_gyro_us = now_us;
+                    }
+                    if packet_type == PacketType::Angle {
+                        self.last_angle_us = now_us;
+                    }
                     if packet_type == PacketType::Accel {
                         accel_count += 1;
                         let dt = (now_us - self.last_imu_us) as f32 * 1e-6;

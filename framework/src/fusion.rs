@@ -54,6 +54,8 @@ const G: f32 = 9.80665;
 /// - GPS velocity gives us true horizontal acceleration
 /// - The innovation (difference) is directly proportional to pitch error
 pub struct OrientationCorrector {
+    /// Vehicle-forward angle in the levelled device frame.
+    mount_yaw: f32,
     /// Pitch correction in radians (added to AHRS pitch before gravity removal)
     pitch_correction: f32,
     /// Roll correction in radians (added to AHRS roll before gravity removal)
@@ -88,6 +90,7 @@ pub struct OrientationCorrector {
 impl OrientationCorrector {
     pub fn new() -> Self {
         Self {
+            mount_yaw: 0.0,
             pitch_correction: 0.0,
             roll_correction: 0.0,
             pitch_confidence: 0.0,
@@ -142,11 +145,18 @@ impl OrientationCorrector {
 
         // Apply current cruise bias before comparison
         let lon_imu_corrected = lon_imu - self.cruise_bias;
-        let lon_error = lon_imu_corrected - lon_gps;
+        let vehicle_lon_error = lon_imu_corrected - lon_gps;
+        let vehicle_lat_error = lat_imu - lat_gps;
+        // Tilt corrections live in device pitch/roll axes, not the rotated car axes.
+        let (c, s) = (self.mount_yaw.cos(), self.mount_yaw.sin());
+        let lon_error = c * vehicle_lon_error - s * vehicle_lat_error;
+        let lat_error = s * vehicle_lon_error + c * vehicle_lat_error;
+        let gps_device_x = c * lon_gps - s * lat_gps;
+        let gps_device_y = s * lon_gps + c * lat_gps;
 
         // Learn pitch correction from longitudinal acceleration difference
         // During acceleration: pitch error → wrong ax_earth
-        if lon_gps.abs() > self.min_accel {
+        if gps_device_x.abs() > self.min_accel {
             // Signal present - can learn pitch
             let pitch_innovation = lon_error / G;
 
@@ -161,7 +171,8 @@ impl OrientationCorrector {
             // Update confidence
             self.update_count = self.update_count.saturating_add(1);
             self.pitch_confidence = (self.update_count as f32 / 100.0).min(1.0);
-
+        }
+        if lon_gps.abs() > self.min_accel {
             // Reset cruise accumulator when accelerating
             self.cruise_time = 0.0;
             self.cruise_bias_sum = 0.0;
@@ -191,8 +202,7 @@ impl OrientationCorrector {
 
         // Learn roll correction from lateral acceleration difference
         // During cornering: roll error → wrong ay_earth
-        let lat_error = lat_imu - lat_gps;
-        if lat_gps.abs() > self.min_accel {
+        if gps_device_y.abs() > self.min_accel {
             let roll_innovation = lat_error / G;
 
             // Positive roll subtracts positive lateral gravity; its sensitivity
@@ -205,6 +215,13 @@ impl OrientationCorrector {
             self.roll_update_count = self.roll_update_count.saturating_add(1);
             self.roll_confidence = (self.roll_update_count as f32 / 100.0).min(1.0);
         }
+    }
+
+    /// Learning-count heuristic projected onto the vehicle longitudinal axis.
+    /// A 90-degree mount learns forward-force tilt through device roll, not pitch.
+    fn vehicle_longitudinal_confidence(&self) -> f32 {
+        self.mount_yaw.cos().powi(2) * self.pitch_confidence
+            + self.mount_yaw.sin().powi(2) * self.roll_confidence
     }
 
     /// Get current cruise bias (m/s²) for diagnostics
@@ -891,6 +908,7 @@ impl Default for HeadingAligner {
 
 /// Main sensor fusion processor
 pub struct SensorFusion {
+    mount_yaw: f32,
     pub config: FusionConfig,
     /// GPS-derived acceleration
     pub gps_accel: GpsAcceleration,
@@ -929,6 +947,7 @@ pub struct SensorFusion {
 impl SensorFusion {
     pub fn new(config: FusionConfig) -> Self {
         Self {
+            mount_yaw: 0.0,
             gps_accel: GpsAcceleration::new(),
             orientation_corrector: OrientationCorrector::new(),
             tilt_estimator: TiltEstimator::new(config.tilt_learn_time),
@@ -947,6 +966,18 @@ impl SensorFusion {
             aligned_heading: 0.0,
             config,
         }
+    }
+
+    /// Apply a horizontal mounting angle to force projection only. The EKF keeps
+    /// its device orientation basis. Reset learned corrections after remounting.
+    pub fn set_mount_yaw(&mut self, angle: f32) {
+        if !angle.is_finite() {
+            return;
+        }
+        *self = Self::new(self.config);
+        self.mount_yaw = (angle + core::f32::consts::PI).rem_euclid(2.0 * core::f32::consts::PI)
+            - core::f32::consts::PI;
+        self.orientation_corrector.mount_yaw = self.mount_yaw;
     }
 
     /// Process IMU data with GPS-corrected orientation (call at IMU rate, e.g., 200Hz)
@@ -1018,7 +1049,7 @@ impl SensorFusion {
         let (ax_corr, ay_corr) = self.tilt_estimator.correct(ax_earth, ay_earth);
 
         // Step 5: Transform to vehicle frame
-        let (lon_imu_raw, lat_imu_raw) = earth_to_car(ax_corr, ay_corr, yaw);
+        let (lon_imu_raw, lat_imu_raw) = earth_to_car(ax_corr, ay_corr, yaw + self.mount_yaw);
 
         // Store values
         self.lon_imu_raw = lon_imu_raw;
@@ -1081,7 +1112,7 @@ impl SensorFusion {
         // Lower confidence → rely more on GPS
         let lon_blended = if let Some(lon_gps) = gps_lon {
             // Compute blend weight based on correction confidence
-            let confidence = self.orientation_corrector.get_pitch_confidence();
+            let confidence = self.orientation_corrector.vehicle_longitudinal_confidence();
 
             // Interpolate between high/medium/low GPS weights based on confidence
             let gps_weight = if confidence > 0.8 {
@@ -2483,5 +2514,41 @@ mod tests {
             end_heading,
             heading_diff
         );
+    }
+}
+
+#[cfg(test)]
+mod mount_frame_tests {
+    use super::*;
+    #[test]
+    fn sideways_mount_uses_roll_learning_for_longitudinal_blend_confidence() {
+        let mut c = OrientationCorrector::new();
+        c.mount_yaw = core::f32::consts::FRAC_PI_2;
+        for _ in 0..120 {
+            c.update(3.0, 3.0, 0.0, 0.0, 15.0, true, 0.033);
+        }
+        assert!(c.pitch_confidence < 0.01);
+        assert!(c.vehicle_longitudinal_confidence() > 0.99);
+    }
+    #[test]
+    fn tilt_feedback_stays_in_device_axes_after_mount_rotation() {
+        for degrees in [-179.0f32, -90.0, -45.0, 0.0, 45.0, 90.0, 179.0] {
+            let theta = degrees.to_radians();
+            let (lon, lat) = (3.0, 4.0);
+            let x = theta.cos() * lon - theta.sin() * lat;
+            let y = theta.sin() * lon + theta.cos() * lat;
+            let mut c = OrientationCorrector::new();
+            c.mount_yaw = theta;
+            let mut residual = 0.0;
+            for _ in 0..1500 {
+                let (p, r) = c.correct(3.0, -2.0);
+                let (a, b, z) = remove_gravity(x, y, G, r, p);
+                let (a, b) = body_to_earth(a, b, z, r, p, 0.0);
+                let (u, v) = earth_to_car(a, b, theta);
+                c.update(u, lon, v, lat, 15.0, true, 0.033);
+                residual = (u - lon).abs() + (v - lat).abs();
+            }
+            assert!(residual < 0.04, "angle {degrees}, residual {residual}");
+        }
     }
 }

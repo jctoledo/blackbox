@@ -1,5 +1,5 @@
 use std::sync::{
-    atomic::{AtomicBool, AtomicU32, Ordering},
+    atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering},
     Arc, Mutex,
 };
 
@@ -77,6 +77,8 @@ struct TelemetrySnapshot {
 
 /// Shared state for telemetry server
 pub struct TelemetryServerState {
+    mount_command: AtomicU8,
+    mount_status: Mutex<String>,
     /// Latest telemetry packet (raw bytes)
     telemetry_data: Mutex<TelemetrySnapshot>,
     /// Calibration requested flag
@@ -96,6 +98,8 @@ pub struct TelemetryServerState {
 impl TelemetryServerState {
     pub fn new() -> Self {
         Self {
+            mount_command: AtomicU8::new(0),
+            mount_status: Mutex::new(String::from("{}")),
             telemetry_data: Mutex::new(TelemetrySnapshot::default()),
             calibration_requested: AtomicBool::new(false),
             mode_settings: Mutex::new(ModeSettings::default()),
@@ -109,6 +113,8 @@ impl TelemetryServerState {
     /// Create with diagnostics state for diagnostics page support
     pub fn with_diagnostics(diagnostics: Arc<DiagnosticsState>) -> Self {
         Self {
+            mount_command: AtomicU8::new(0),
+            mount_status: Mutex::new(String::from("{}")),
             telemetry_data: Mutex::new(TelemetrySnapshot::default()),
             calibration_requested: AtomicBool::new(false),
             mode_settings: Mutex::new(ModeSettings::default()),
@@ -116,6 +122,16 @@ impl TelemetryServerState {
             diagnostics_state: Some(diagnostics),
             lap_timer_config: Mutex::new(None),
             lap_timer_revision: AtomicU32::new(0),
+        }
+    }
+
+    pub fn take_mount_command(&self) -> u8 {
+        self.mount_command.swap(0, Ordering::SeqCst)
+    }
+    pub fn publish_mount_status(&self, status: &crate::calibration::CalibrationStatus) {
+        if let (Ok(json), Ok(mut guard)) = (serde_json::to_string(status), self.mount_status.lock())
+        {
+            *guard = json;
         }
     }
 
@@ -414,7 +430,7 @@ impl TelemetryServer {
 
         let server_config = Configuration {
             http_port: port,
-            max_uri_handlers: 8,
+            max_uri_handlers: 10,
             max_open_sockets: 8,
             stack_size: 10240,
             ..Default::default()
@@ -495,6 +511,66 @@ impl TelemetryServer {
                     ],
                 )?;
                 response.write_all(body)?;
+                Ok(())
+            },
+        )?;
+
+        let mount_get = state.clone();
+        server.fn_handler(
+            "/api/mount-calibration",
+            esp_idf_svc::http::Method::Get,
+            move |req| -> Result<(), esp_idf_svc::io::EspIOError> {
+                let body = mount_get
+                    .mount_status
+                    .lock()
+                    .map(|s| s.clone())
+                    .unwrap_or_else(|_| String::from("{}"));
+                let mut response = req.into_response(
+                    200,
+                    None,
+                    &[
+                        ("Content-Type", "application/json"),
+                        ("Cache-Control", "no-store"),
+                    ],
+                )?;
+                response.write_all(body.as_bytes())?;
+                Ok(())
+            },
+        )?;
+        let mount_post = state.clone();
+        server.fn_handler(
+            "/api/mount-calibration",
+            esp_idf_svc::http::Method::Post,
+            move |req| -> Result<(), esp_idf_svc::io::EspIOError> {
+                let command = match req.uri().split_once('?').map(|(_, q)| q) {
+                    Some("action=start") => 1,
+                    Some("action=cancel") => 2,
+                    Some("action=save") => 3,
+                    Some("action=clear") => 4,
+                    _ => 0,
+                };
+                let (code, body) = if req.header("X-Blackbox-Action") != Some("mount") {
+                    (403, "Missing action header")
+                } else if command == 0 {
+                    (400, "Unknown action")
+                } else if mount_post
+                    .mount_command
+                    .compare_exchange(0, command, Ordering::SeqCst, Ordering::SeqCst)
+                    .is_err()
+                {
+                    (409, "Command pending")
+                } else {
+                    (202, "Queued; read status for outcome")
+                };
+                let mut response = req.into_response(
+                    code,
+                    None,
+                    &[
+                        ("Content-Type", "text/plain"),
+                        ("Cache-Control", "no-store"),
+                    ],
+                )?;
+                response.write_all(body.as_bytes())?;
                 Ok(())
             },
         )?;

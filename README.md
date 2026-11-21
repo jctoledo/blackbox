@@ -472,3 +472,10 @@ MIT License — see [LICENSE](LICENSE).
 **Ready to build?** [Start with Quick Start ↑](#quick-start)
 
 Website background footage is separately licensed and credited in [media provenance](docs/assets/README.md); the MIT license applies to project code.
+
+
+### Phone display and horizontal mount alignment
+
+Tap **Full screen** on supported Android browsers. On iPhone, use **Menu → Phone setup** for Safari's Home Screen steps. Back up saved data before changing browsers or launch mode; storage may be separate. The landscape layout follows orientation without changing timing or recording.
+
+**Menu → Mount alignment** offers experimental horizontal mounting calibration with signed GPS braking evidence, candidate review and persistent save while parked. It changes force axes, not timing-line direction. Read the [alignment guide](docs/CALIBRATION.md) and validate signs on your device before relying on the result.

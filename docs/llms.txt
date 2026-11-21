@@ -25,3 +25,5 @@ This file is a convenient reading index, not a crawler directive or a guarantee 
 - [Hardware acceptance checklist](https://jctoledo.github.io/blackbox/guides/hardware-validation.html): bench, USB, sensors, crossings, accuracy, and recording tests.
 - [Compatibility and accuracy FAQ](https://jctoledo.github.io/blackbox/guides/faq.html): supported configurations and explicit limits.
 - [Interactive dashboard demo](https://jctoledo.github.io/blackbox/demo.html): synthetic telemetry, not a measurement or accuracy demonstration.
+
+- [Experimental mount alignment](https://jctoledo.github.io/blackbox/guides/mount-alignment.html): signed GPS braking evidence, reviewed candidates, persistent save and physical limitations.
