@@ -392,8 +392,8 @@ body.cluster-view .bbBrand{font-size:12px}body.cluster-view .bbStatusCluster{fon
 body.cluster-view .bbClusterRecording{display:inline;color:var(--text-tertiary)}body.cluster-view .bbClusterRecording.recording{color:var(--red);font-weight:700}
 body.cluster-view .bbQuickActions{position:absolute;right:max(14px,env(safe-area-inset-right));top:4px;z-index:5;margin:0}
 body.cluster-view .bbQuickActions button,body.cluster-view .bbDisplayButton{min-height:44px;padding:8px 10px;font-size:11px;border-color:transparent;background:transparent}
-body.cluster-view .bbApp{max-width:none;display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.45fr);grid-template-rows:minmax(0,1fr);align-content:stretch;align-items:stretch;padding:8px max(14px,env(safe-area-inset-right)) max(8px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left));gap:12px;overflow:hidden}
-body.cluster-view .bbConnectionNotice,body.cluster-view .bbRecordingNotice{position:absolute;left:14px;right:14px;bottom:8px;z-index:9;background:var(--surface);padding:8px 12px;font-size:12px;line-height:1.3}body.cluster-view .bbRecordingNotice{position:static;grid-column:1/-1;grid-row:2;margin:0;max-height:64px;overflow:auto}body.cluster-view .bbApp:has(.bbRecordingNotice:not([hidden])){grid-template-rows:minmax(0,1fr) auto}
+body.cluster-view .bbApp{max-width:none;display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.45fr);grid-template-rows:minmax(0,1fr);grid-auto-rows:auto;align-content:stretch;align-items:stretch;padding:8px max(14px,env(safe-area-inset-right)) max(8px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left));gap:12px;overflow:hidden}
+body.cluster-view .bbConnectionNotice,body.cluster-view .bbRecordingNotice{position:static;grid-column:1/-1;margin:0;min-height:0;max-height:64px;overflow:auto;background:var(--surface);padding:8px 12px;font-size:12px;line-height:1.3}
 body.cluster-view .bbSaveStatus{display:none}
 body.cluster-view .bbLapCard,body.cluster-view .bbApp .bbGCard{grid-row:1;margin:0;min-width:0;min-height:0;display:flex;flex-direction:column;border:1px solid var(--divider);border-radius:10px;position:relative}
 body.cluster-view .bbLapCard{grid-column:2;border-color:var(--divider)}body.cluster-view .bbApp .bbGCard{grid-column:1}
@@ -1252,7 +1252,7 @@ let currentSessionId=null,currentSessionStart=null;
 // - Track auto-detection (matching current position to saved tracks)
 let jsGpsRef=null,jsGpsRefSamples=[],firmwareGpsRef=null,firmwareGpsRefFetching=false;
 function updateJsGpsRef(lat,lon){if(jsGpsRef||lat===0||lon===0)return;jsGpsRefSamples.push({lat,lon});if(jsGpsRefSamples.length>=5){const avgLat=jsGpsRefSamples.reduce((s,p)=>s+p.lat,0)/5;const avgLon=jsGpsRefSamples.reduce((s,p)=>s+p.lon,0)/5;jsGpsRef={lat:avgLat,lon:avgLon}}}
-async function fetchFirmwareGpsRef(){if(firmwareGpsRef||firmwareGpsRefFetching)return;firmwareGpsRefFetching=true;try{const r=await fetch('/api/diagnostics');const d=await r.json();if(d.gps&&d.gps.ref_lat&&d.gps.ref_lon&&d.gps.ref_lat!==0){firmwareGpsRef={lat:d.gps.ref_lat,lon:d.gps.ref_lon};console.log('Firmware GPS ref:',firmwareGpsRef)}}catch(e){console.warn('Failed to fetch firmware GPS ref:',e)}finally{firmwareGpsRefFetching=false}}
+async function fetchFirmwareGpsRef(){if(firmwareGpsRef||firmwareGpsRefFetching)return;firmwareGpsRefFetching=true;try{const r=await requestDevice('/api/diagnostics');const d=await r.json();if(d.gps&&d.gps.ref_lat&&d.gps.ref_lon&&d.gps.ref_lat!==0){firmwareGpsRef={lat:d.gps.ref_lat,lon:d.gps.ref_lon};console.log('Firmware GPS ref:',firmwareGpsRef)}}catch(e){console.warn('Failed to fetch firmware GPS ref:',e)}finally{firmwareGpsRefFetching=false}}
 // Use firmware GPS reference for coordinates (fall back to jsGpsRef if not available)
 function getGpsRef(){return firmwareGpsRef||jsGpsRef}
 function gpsToLocal(lat,lon){const ref=getGpsRef();if(!ref)return null;const latRad=ref.lat*Math.PI/180;return{x:(lon-ref.lon)*Math.cos(latRad)*111320,y:(lat-ref.lat)*111320}}
@@ -2451,6 +2451,16 @@ function resetState(){
 
 let peakHighlightTimeout=null;
 
+// Receipt freshness watchdog. Browser receipt age is independent of network completion.
+const telemetryStartedAt=performance.now();
+let lastTelemetryAt=null,telemetryUnavailable=false;
+function checkTelemetryFreshness(){
+    const age=performance.now()-(lastTelemetryAt??telemetryStartedAt);
+    if(age>300)clearForces('No fresh force data');
+    if(age>1500&&!telemetryUnavailable){telemetryUnavailable=true;markTelemetryUnavailable('No fresh data')}
+}
+// End receipt freshness watchdog.
+
 function process(buf,timing=null){
     if(buf.byteLength!==82)throw new Error('Unsupported telemetry packet size');
     const header=new DataView(buf);
@@ -2558,12 +2568,41 @@ function process(buf,timing=null){
     }
 }
 
-let lastTelemetryAt=0;
-async function requestDevice(url){
-    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),3000);
-    try{return await fetch(url,{signal:controller.signal})}finally{clearTimeout(timer)}
+// Read the complete bounded body before releasing the deadline. Keep HTTP status
+// inspectable even when an error response is not JSON; json() reuses the parse result.
+async function requestDevice(url,{timeoutMs=3000,maxBytes=64*1024,...options}={}){
+    const controller=new AbortController();let reader=null,complete=false,cleaned=false;
+    function cleanReader(){
+        if(!reader||cleaned)return;cleaned=true;
+        if(!complete){try{Promise.resolve(reader.cancel()).catch(()=>{})}catch(e){}}
+        try{reader.releaseLock()}catch(e){}
+    }
+    let timer;
+    const deadline=new Promise((_,reject)=>{timer=setTimeout(()=>{
+        controller.abort();cleanReader();reject(new Error('Device request timed out'));
+    },timeoutMs)});
+    const read=async()=>{
+        const response=await fetch(url,{...options,signal:controller.signal});
+        reader=response.body?response.body.getReader():null;
+        if(controller.signal.aborted){cleanReader();throw new Error('Device request timed out')}
+        const decoder=new TextDecoder('utf-8',{fatal:true});let size=0,text='',value,parseError;
+        if(reader){
+            while(true){
+                const chunk=await reader.read();
+                if(controller.signal.aborted)throw new Error('Device request timed out');
+                if(chunk.done){complete=true;break}
+                size+=chunk.value.byteLength;if(size>maxBytes)throw new Error('Device JSON response too large');
+                try{text+=decoder.decode(chunk.value,{stream:true})}catch(error){parseError=error}
+            }
+        }
+        try{if(!parseError)value=JSON.parse(text+decoder.decode())}catch(error){parseError=error}
+        return {ok:response.ok,status:response.status,json:async()=>{if(parseError)throw parseError;return value}};
+    };
+    try{return await Promise.race([read(),deadline])}
+    finally{clearTimeout(timer);controller.abort();cleanReader()}
 }
 function markTelemetryUnavailable(label){
+    telemetryUnavailable=true;
     clearForces('No live force data');
     $('lap-result').hidden=true;lapResultGeneration++;
     if(lapTimerActive){$('lap-state').textContent='Timing unconfirmed';$('lap-state').classList.remove('timing');$('lap-section').classList.remove('timing')}
@@ -2587,12 +2626,10 @@ async function poll(){
             const b=atob(j.data),a=new Uint8Array(b.length);
             for(let i=0;i<b.length;i++)a[i]=b.charCodeAt(i);
             try{process(a.buffer,j.timing||null)}catch(error){markTelemetryUnavailable('Invalid data');console.error(error);setTimeout(poll,500);return}
-            lastSeq=j.seq;lastTelemetryAt=Date.now();
+            lastSeq=j.seq;lastTelemetryAt=performance.now();telemetryUnavailable=false;
             document.body.classList.remove('telemetry-stale');$('connection-notice').hidden=true;
             $('liveDot').classList.add('on');$('stxt').textContent='LIVE';
         }
-        if(lastTelemetryAt&&Date.now()-lastTelemetryAt>300)clearForces('No fresh force data');
-        if(!lastTelemetryAt||Date.now()-lastTelemetryAt>1500)markTelemetryUnavailable('No fresh data');
         setTimeout(poll,Math.max(0,33-(performance.now()-started)));
     }catch(e){markTelemetryUnavailable('Offline');setTimeout(poll,500)}
 }
@@ -2601,7 +2638,7 @@ async function poll(){
 function rateClass(actual,expected){const pct=actual/expected;if(pct>=0.9)return'ok';if(pct>=0.5)return'warn';return'err'}
 async function updateDiag(){
     try{
-        const r=await fetch('/api/diagnostics');
+        const r=await requestDevice('/api/diagnostics');
         const d=await r.json();
         if(d.error)return;
         $('wifi-mode').textContent=d.wifi.mode;
@@ -3016,13 +3053,14 @@ function renderMountStatus(s){
     $('mount-save').disabled=!ready||!Number.isFinite(s.candidate_degrees);$('mount-clear').disabled=!ready||!s.saved.is_calibrated;
 }
 async function mountRequest(path,options={}){
-    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),2500);
-    try{const response=await fetch(path,{...options,signal:controller.signal,cache:'no-store'});if(!response.ok)throw Error('Device did not accept the request ('+response.status+')');return response}finally{clearTimeout(timer)}
+    const response=await requestDevice(path,{...options,timeoutMs:2500,cache:'no-store'});
+    if(!response.ok)throw Error('Device did not accept the request ('+response.status+')');
+    await response.json();return response;
 }
 async function refreshMountStatus(){
     if(mountBusy||mountCommandBusy||!$('mount-modal').classList.contains('open'))return;mountBusy=true;
     try{renderMountStatus(await (await mountRequest('/api/mount-calibration')).json())}
-    catch(e){disableMountActions();$('mount-message').textContent='Mount alignment unavailable. Check the connection and firmware. Saved calibration has not been changed.'}
+    catch(e){disableMountActions();$('mount-message').textContent='Mount alignment unavailable. Saved calibration could not be confirmed. Reconnect and check device status.'}
     finally{mountBusy=false}
 }
 async function sendMountCommand(action){
@@ -3069,6 +3107,7 @@ $('run-record').onclick=()=>$('menu-rec').click();
 $('quick-data').onclick=openDataModal;
 
 // Init
+setInterval(checkTelemetryFreshness,100);
 let lastRateUpdateAt=performance.now();
 setInterval(()=>{
     const rateNow=performance.now(),elapsed=rateNow-lastRateUpdateAt;

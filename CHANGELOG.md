@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Device JSON requests bound complete bodies and recover from stalled reads; an independent receipt watchdog clears stale forces and marks timing unconfirmed. Landscape connection and recording recovery notices occupy separate rows.
+
 ### Added
 - Versioned `/api/recording-metadata` exposes boot-associated build, configured sensor settings and applied calibration context with explicit unknowns; browser capture follows separately.
 - Diagonal GPS-course regression checks forward and reverse crossing directions; mutation validation exposed a gap in cardinal-heading-only coverage.

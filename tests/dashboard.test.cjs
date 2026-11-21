@@ -115,7 +115,7 @@ test('a stalled request is aborted and its timer is cleaned up',async()=>{
  let timeout,cleared=false;
  const c={AbortController,setTimeout:fn=>{timeout=fn;return 9},clearTimeout:id=>{assert.equal(id,9);cleared=true},fetch:(_,options)=>new Promise((resolve,reject)=>options.signal.addEventListener('abort',()=>reject(new Error('aborted'))))};
  vm.createContext(c);vm.runInContext(section('async function requestDevice(', 'function markTelemetryUnavailable('),c);
- const p=c.requestDevice('/api/telemetry');timeout();await assert.rejects(p,/aborted/);assert.equal(cleared,true);
+ const p=c.requestDevice('/api/telemetry');timeout();await assert.rejects(p,/timed out/);assert.equal(cleared,true);
 });
 
 test('reference distance is invalid for late starts, gaps and position jumps',()=>{
