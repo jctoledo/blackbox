@@ -110,7 +110,7 @@
   updatePerformanceRuns(rolling);
   // Warm the page-session force summary from the simulated lead-in, not invented peaks.
   const elapsed=Math.floor(performance.now()-start);
-  for(let ms=0;ms<=elapsed;ms+=40){const c=clock(ms),p=motion(c.index,c.lapMs);effortPeaks.update(ms,p.lonAccel/9.81,p.speed*3.6>=10,p.latAccel/9.81)}
+  for(let ms=0;ms<=elapsed;ms+=40){const c=clock(ms),p=motion(c.index,c.lapMs);effortPeaks.update(ms,p.lonAccel/9.81,sustainedEffortUsable(p.speed,1,0,0),p.latAccel/9.81)}
   if(typeof commitTrackWrite==='function')await commitTrackWrite('lap_history',tx=>{
    let at=Date.UTC(2026,0,1,12);
    durations.slice(0,3).forEach((lapTimeMs,i)=>{at+=Math.round(lapTimeMs);tx.objectStore('lap_history').put({id:'demo-history-v6-'+i,trackId:track.id,sessionId:'demo-history-v6',sessionStart:Date.UTC(2026,0,1,12),timestamp:at,lapTimeMs:Math.round(lapTimeMs),lapNumber:i+1})});
