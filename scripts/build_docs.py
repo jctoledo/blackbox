@@ -8,7 +8,8 @@ from build_demo import main as build_demo
 
 ROOT = Path(__file__).resolve().parents[1]
 BASE = 'https://jctoledo.github.io/blackbox/'
-PAGES = {'GPS_LOGGING.md': ('gps-logging', 'GPS timestamp logging and drive-data analysis'),
+PAGES = {'MATHS_AND_RATES.md': ('maths-and-rates', 'GPS lap timing maths, G-meter estimates and hardware update rates'),
+         'GPS_LOGGING.md': ('gps-logging', 'GPS timestamp logging and drive-data analysis'),
          'CALIBRATION.md': ('mount-alignment', 'Experimental horizontal mount alignment: setup and validation'),
          'COMPARISON.md': ('comparison', 'Blackbox vs paid GPS lap timers: capabilities, costs, and evidence'),
          'FAQ.md': ('faq', 'GPS lap timer compatibility, accuracy, and ownership FAQ'),
@@ -39,6 +40,7 @@ def main():
         content = markdown.markdown((ROOT / 'docs' / source).read_text(),
                                     extensions=['fenced_code', 'tables', 'toc'])
         content = re.sub(r'href="([^"]+)"', link, content)
+        content = content.replace('src="assets/', 'src="../assets/')
         url = BASE + f'guides/{slug}.html'
         title = html.escape(description + ' | Blackbox')
         document = f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{title}</title><meta name="description" content="{html.escape(description)}: implementation, setup, known limits, and reproducible checks for the open-source ESP32-C3 telemetry project."><link rel="canonical" href="{url}"><meta name="robots" content="index,follow,max-image-preview:large"><meta property="og:type" content="article"><meta property="og:title" content="{title}"><meta property="og:url" content="{url}"><style>{STYLE}</style></head><body><header><a href="../">BLACKBOX /</a><a href="lap-timer.html">Lap timing</a><a href="sensor-fusion.html">Sensor fusion</a><a href="engineering-review.html">How it works</a></header><main>{content}</main><footer>Open source under MIT. <a href="https://github.com/jctoledo/blackbox/blob/main/docs/{source}">View the maintained source</a>. Published firmware may lag source changes.</footer></body></html>'''
