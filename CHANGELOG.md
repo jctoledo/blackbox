@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Receiver-timed 45–70 mph Runs instrument and derived Runs CSV with rejection reasons; explicit synthetic interval scenario and banner-free website demo. Standing-start and slope-corrected timing remain unimplemented.
 - Landscape Speed / G-meter / Peaks tabs and swipe selection; compact status and a collapsible toolbar. Fixed force scale, dropout clearing and consistent lateral/longitudinal signs; time-weighted half-second page-session peaks.
 - Textured synthetic demo, fullscreen banner hiding, simpler timing labels and refreshed website screenshots.
 - Renamed `neo6m` driver to `ublox-gps` to reflect support for multiple u-blox GPS modules (NEO-6M, NEO-M9N, etc.)
