@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Clear reference delta and timing indicators when device timing becomes idle or a track revision is unconfirmed.
+- Refresh completed recording details in place, distinguish interrupted snapshots from running requests, and show pending recording samples without promising saved data for empty interrupted recordings.
+- Reset page speed and force statistics immediately, including while disconnected; label the reset scope explicitly.
+
 ### Changed
 - Renamed `neo6m` driver to `ublox-gps` to reflect support for multiple u-blox GPS modules (NEO-6M, NEO-M9N, etc.)
 - Updated driver documentation with UBX protocol examples and dynamic platform models
