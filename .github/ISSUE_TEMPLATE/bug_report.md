@@ -1,6 +1,6 @@
 ---
 name: Bug Report
-about: Report a bug to help us improve Active Wing
+about: Report a bug to help us improve Blackbox
 title: '[BUG] '
 labels: bug
 assignees: ''
@@ -10,15 +10,23 @@ assignees: ''
 A clear and concise description of what the bug is.
 
 ## Hardware Setup
-- **ESP32 Variant**: (e.g., ESP32-C3, ESP32-S3)
-- **IMU Model**: (e.g., WT901, MPU6050)
-- **GPS Module**: (e.g., NEO-6M, NEO-M8N)
+- **ESP32 Variant**: (exact ESP32-C3 board/revision; S3 is not supported by current images)
+- **IMU Model**: (WT901 variant, UART baud and packet settings)
+- **GPS Module**: (NEO-M9N or NEO-6M, antenna and delivered GPS rate)
 - **Other Sensors**: (if applicable)
 
 ## Software Version
-- **Firmware Version/Commit**: (e.g., v1.0.0 or commit hash)
+- **Firmware Version/Commit**: (release tag, image variant and checksum, or commit hash)
 - **Build Date**: (if known)
 - **Modified Code**: Yes/No (describe modifications if yes)
+
+## Phone and saved data
+- Phone, OS and browser version; local dashboard or website demo:
+- Was the dashboard foregrounded, suspended or reconnecting?
+- Recording active? Were Session CSV, GPS CSV and a backup exported?
+- Timing type and state (circuit/stage, armed/waiting/running):
+
+Keep precise routes, home coordinates, credentials and unredacted backups out of public issues. Describe the failure and share a minimal redacted example if possible.
 
 ## Steps to Reproduce
 1. Power on ESP32...

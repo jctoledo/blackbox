@@ -9,6 +9,13 @@ Blackbox is an open-source ESP32-C3 telemetry project: GPS and inertial sensing,
 [![License: MIT](https://img.shields.io/badge/License-MIT-3b6b3b.svg)](LICENSE)
 [![Host regressions](https://github.com/jctoledo/blackbox/actions/workflows/ci.yml/badge.svg)](https://github.com/jctoledo/blackbox/actions/workflows/ci.yml)
 
+### Start here
+
+- **Build your first instrument:** [DIY GPS lap timer guide](docs/DIY_GPS_LAP_TIMER.md), then the [parts and assembly journal](docs/BUILD.md).
+- **Try the interface first:** [live synthetic dashboard](https://jctoledo.github.io/blackbox/demo.html?v=0.0.4-rc.9). Turn your phone sideways and choose Speed, G-meter, Peaks or Runs.
+- **Understand the measurements:** [GPS timing accuracy](docs/GPS_TIMING_ACCURACY.md) and [NEO-M9N logging](docs/M9N_GPS_LOGGER.md).
+- **Help validate a build:** [hardware checklist](docs/HARDWARE_VALIDATION.md). Report setup problems with the exact firmware, hardware and reproduction steps; share private route logs privately.
+
 ### What it does
 
 - Shows speed, longitudinal/lateral acceleration, driving mode, and sensor health.

@@ -27,6 +27,10 @@ Preserve recording/track databases and transactional writes. Backup restore adds
 
 ## Documentation and claims
 
-Lead with implemented capabilities and configuration targets. Use `docs/COMPARISON.md` for sourced product comparison; keep maintainer findings in `docs/REVIEW.md`. Update website assets when UI changes. Do not claim millisecond physical accuracy, drift-free operation, automatic mounting calibration or commercial parity without measured evidence. Drag, slope compensation and adaptive coaching remain proposals.
+Lead with implemented capabilities and configuration targets. Use `docs/COMPARISON.md` for sourced product comparison; keep maintainer findings in `docs/REVIEW.md`. Update website assets when UI changes. Do not claim millisecond physical accuracy, drift-free operation, automatic mounting calibration or commercial parity without measured evidence. Rolling speed intervals are implemented with evidence gates; standing-start timing, slope compensation and adaptive coaching remain proposals.
 
 Check the current README wiring: GPIO18/19 conflict with C3 native USB. Confirm the physical board before changing/flashing hardware. See `docs/HARDWARE_VALIDATION.md` for bench and drive acceptance.
+
+## Agent skills
+
+Matt Pocock skills installed in the maintainer's Codex are documented in `docs/agents/SKILLS.md`. For issue operations, use GitHub `jctoledo/blackbox` and the existing labels; preserve hardware/R&D issues until their evidence is collected. For content/discovery changes, read `docs/research/DISCOVERY.md` and validate rendered navigation with `scripts/check_docs_site.py` on lat. Public launch drafts and the maintainer's photo/data plan live in `docs/LAUNCH_KIT.md`.

@@ -1,6 +1,6 @@
 ---
 name: Feature Request
-about: Suggest an idea for Active Wing
+about: Suggest an idea for Blackbox
 title: '[FEATURE] '
 labels: enhancement
 assignees: ''
