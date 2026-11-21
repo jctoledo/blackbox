@@ -204,3 +204,9 @@ validated bank/grade compensation or tyre loads from these checks.
 
 - [ ] Check opened options match the closed Runs button typography and remain touch-readable on actual Android and iPhone browsers, including short landscape with warning rows. Check scrolling, selection, Escape/keyboard focus and outside dismissal where supported.
 - [ ] Switch mph/km/h and confirm the selected lower-speed or overtaking family persists while its own literal preset/result changes; recording and timing continue. Desktop device emulation is software layout evidence only.
+
+## Track suggestion phone acceptance (issue #116)
+
+- [ ] At 390 px portrait and short landscape widths, confirm a long track name and 44 px Activate/Dismiss controls occupy a separate row. With Controls, connection and recovery notices expanded, Drive state and Stop remain reachable without any suggestion over the instruments.
+- [ ] Dismiss a nearby saved track and verify it stays suppressed until page reload; another track remains eligible. Let a suggestion expire and check it waits before returning. Disconnect GPS/Wi-Fi or change the active track during lookup and verify stale suggestions disappear.
+- [ ] Use keyboard focus and Activate/Dismiss, including Escape from the suggestion; verify only explicit Activate changes timing and suggestions never start or stop recording.
