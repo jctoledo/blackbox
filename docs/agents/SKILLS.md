@@ -13,3 +13,7 @@ Installed from [mattpocock/skills](https://github.com/mattpocock/skills) at comm
 For this discovery pass, research produced `docs/research/DISCOVERY.md`; writing-for-agents informed the maintainer pointers in `CLAUDE.md`; code-review is applied before merge. Codebase-design informed the shared cache helper: one small interface owns cache selection, while firmware outputs retain the existing build/version behavior. Installation does not certify the project or replace the lat checks and hardware acceptance plan.
 
 GitHub Issues in `jctoledo/blackbox` are the existing tracker. Session authorization and repository instructions continue to govern builds, external posts, merges and claims. Launch drafts are reviewable source material; publishing them to communities is a separate maintainer action.
+
+## Adoption evidence and house overrides
+
+The [controlled code-review trial](evals/code-review-2026-11-21.md) compared the existing baseline, stock skill and a repository-adapted version. All found five planted defects; structured variants added requirement quotes, not demonstrated recall. Keep the skill optional and use the [house workflow](../process/workflow.md), [tracker](issue-tracker.md), [triage roles](triage-labels.md) and [domain references](domain.md). These pointers were authored from established project/session rules after reading the maintainer-provided adoption guide; this is not a claim that the setup interview or every skill evaluation completed.
