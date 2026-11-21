@@ -440,6 +440,18 @@ body.cluster-view .bbSpeed.peak{color:var(--text);text-shadow:none}
 
 .bbDisplayButton{min-height:44px;padding:8px 10px;border:1px solid var(--divider);border-radius:8px;background:var(--surface);color:var(--text);font:600 12px Inter,sans-serif;cursor:pointer}.bbDisplayButton[hidden]{display:none}.bbSetupText{font-size:14px;line-height:1.6;color:var(--text-secondary)}.bbSetupText p{margin:12px 0}.bbSetupText h3{color:var(--text);font-size:16px;margin:16px 0 6px}.bbSetupActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}.bbSetupActions button{min-height:44px;padding:10px 14px;border-radius:8px;border:1px solid var(--divider);background:var(--bg);color:var(--text);font:600 13px Inter,sans-serif}.bbSetupActions button:disabled{opacity:.45}.bbSetupStatus{border-left:3px solid var(--amber);padding:10px 12px;margin:14px 0;background:var(--bg);overflow-wrap:anywhere}
 @media(max-width:420px){.bbDisplayButton{font-size:11px;padding:8px}.bbTopbar{gap:6px}.bbStatusCluster{gap:6px}}
+
+.bbInstrumentReveal{display:none}.bbSpeedMaximum{font:10px var(--mono);color:var(--text-tertiary);margin-top:6px}
+body.cluster-view .bbInstrumentReveal{display:block;position:absolute;top:0;left:6px;z-index:4;min-height:44px;padding:0 10px;border:0;background:transparent;color:var(--text-secondary);font:10px var(--mono);cursor:pointer}
+body.cluster-view .bbClusterTabs{display:none;position:absolute;top:44px;left:6px;right:6px;height:44px;z-index:5;background:var(--surface);border:1px solid var(--divider);border-radius:8px}
+body.cluster-view.instrument-picker .bbClusterTabs{display:flex}
+body.cluster-view .bbGTopLeft{padding-top:48px}body.cluster-view .bbGTopLeft>.bbInstrumentLabel{display:none}
+body.cluster-view .bbPeakGrid{padding-top:48px;gap:16px}body.cluster-view .bbPeakGrid dd{font-size:clamp(28px,5vw,44px)}
+body.cluster-view.cluster-forces .bbApp .bbGPlotWrap{padding:32px 4px 0;position:relative;container-type:size;display:block}
+body.cluster-view.cluster-forces .bbApp .bbGPlotFrame{position:absolute;width:min(100cqw,calc(100cqh - 32px));height:min(100cqw,calc(100cqh - 32px));max-height:none;max-width:none;top:32px;left:50%;transform:translateX(-50%);margin:0}
+body.cluster-view.cluster-forces .bbForceTools{position:absolute;top:0;right:4px;width:auto;z-index:4}body.cluster-view.cluster-forces #force-status{position:absolute;top:44px;right:0;white-space:nowrap;font-size:9px}
+
+body.cluster-view .bbRunTitle{padding-top:44px}body.cluster-view .bbClusterRuns .bbPeakGrid{padding-top:8px;gap:10px}body.cluster-view .bbClusterRuns dd{font-size:24px}
 </style></head>
 <body>
 
@@ -511,11 +523,11 @@ body.cluster-view .bbSpeed.peak{color:var(--text);text-shadow:none}
         </div>
     </section>
     <section class="bbCard bbGCard" id="g-card">
-        <div class="bbClusterTabs" role="group" aria-label="Cluster instrument"><button id="cluster-speed" aria-pressed="true">Speed</button><button id="cluster-forces" aria-pressed="false">G-meter</button><button id="cluster-peaks" aria-pressed="false">Peaks</button><button id="cluster-runs" aria-pressed="false">Runs</button></div>
-        <div class="bbClusterRuns"><div class="bbRunTitle">45–70 <small>mph</small></div><dl class="bbPeakGrid"><div><dt>LAST</dt><dd id="run-last">—</dd></div><div><dt>BEST</dt><dd id="run-best">—</dd></div></dl><p id="run-status">Record to collect receiver timestamps</p><button class="bbRunAction" id="run-record">Record session</button><div class="bbPeakNote">GPS estimate · uncorrected<br>No distance rollout</div></div><div class="bbClusterPeaks"><dl class="bbPeakGrid"><div><dt>ACCEL</dt><dd><span id="effort-accel">—</span><small> g</small></dd></div><div><dt>BRAKING</dt><dd><span id="effort-brake">—</span><small> g</small></dd></div><div><dt>LEFT</dt><dd><span id="effort-left">—</span><small> g</small></dd></div><div><dt>RIGHT</dt><dd><span id="effort-right">—</span><small> g</small></dd></div></dl><div class="bbPeakNote">Strongest 0.5 s averages<br>Moving samples · this page session</div></div>
+        <button class="bbInstrumentReveal" id="instrument-reveal" aria-expanded="false" aria-label="Choose instrument">Speed ···</button><div class="bbClusterTabs" role="group" aria-label="Cluster instrument"><button id="cluster-speed" aria-pressed="true">Speed</button><button id="cluster-forces" aria-pressed="false">G-meter</button><button id="cluster-peaks" aria-pressed="false">Peaks</button><button id="cluster-runs" aria-pressed="false">Runs</button></div>
+        <div class="bbClusterRuns"><div class="bbRunTitle">45–70 <small>mph</small></div><dl class="bbPeakGrid"><div><dt>LAST</dt><dd id="run-last">—</dd></div><div><dt>BEST</dt><dd id="run-best">—</dd></div></dl><p id="run-status">Record to collect receiver timestamps</p><button class="bbRunAction" id="run-record">Record session</button><div class="bbPeakNote">GPS estimate · uncorrected<br>No distance rollout</div></div><div class="bbClusterPeaks" title="Strongest 0.5-second averages, moving samples this page session"><dl class="bbPeakGrid"><div><dt>ACCEL</dt><dd><span id="effort-accel">—</span><small> g</small></dd></div><div><dt>BRAKING</dt><dd><span id="effort-brake">—</span><small> g</small></dd></div><div><dt>LEFT</dt><dd><span id="effort-left">—</span><small> g</small></dd></div><div><dt>RIGHT</dt><dd><span id="effort-right">—</span><small> g</small></dd></div></dl></div>
         <div class="bbGTop">
             <div class="bbGTopLeft">
-                <div class="bbInstrumentLabel">Speed</div><div class="bbSpeedLine"><span class="bbSpeed bbNum" id="speed">0</span><span class="bbUnit">km/h</span></div>
+                <div class="bbInstrumentLabel">Speed</div><div class="bbSpeedMaximum" title="Maximum fresh GPS speed this page session">MAX <span id="speed-maximum">—</span> km/h</div><div class="bbSpeedLine"><span class="bbSpeed bbNum" id="speed">0</span><span class="bbUnit">km/h</span></div>
                 <div class="bbManeuver" id="maneuver">IDLE</div>
             </div>
             <div class="bbGTopRight"><div class="bbInstrumentLabel">Session</div><span class="bbNum" id="session-time">0:00</span></div>
@@ -2221,10 +2233,14 @@ let clusterInstrument='speed';
 function selectClusterInstrument(name){
     if(!['speed','forces','peaks','runs'].includes(name))return;
     clusterInstrument=name;
+    $('instrument-reveal').textContent=({speed:'Speed',forces:'G-meter',peaks:'Peaks',runs:'Runs'})[name]+' ···';
+    document.body.classList.remove('instrument-picker');
+    $('instrument-reveal').setAttribute('aria-expanded','false');
     for(const mode of ['speed','forces','peaks','runs']){$('cluster-'+mode).setAttribute('aria-pressed',String(mode===name));document.body.classList.toggle('cluster-'+mode,mode===name)}
     requestAnimationFrame(()=>{resize();drawG()});
 }
 for(const mode of ['speed','forces','peaks','runs'])$('cluster-'+mode).onclick=()=>selectClusterInstrument(mode);
+$('instrument-reveal').onclick=()=>{const open=document.body.classList.toggle('instrument-picker');$('instrument-reveal').setAttribute('aria-expanded',String(open))};
 let clusterSwipe=null;
 $('g-card').addEventListener('touchstart',event=>{
     if(!document.body.classList.contains('cluster-view')||event.touches.length!==1||event.target.closest('button'))return;
@@ -2239,6 +2255,7 @@ $('g-card').addEventListener('touchend',event=>{
 },{passive:true});
 // End selectable cluster instrument.
 
+let maximumFreshSpeed=null;
 let speed_ema=0,displaySessionStart=Date.now();
 let emaGx=0,emaGy=0,lastT=0;
 const EMA_TAU=0.07;
@@ -2366,7 +2383,7 @@ function updateReadouts(lat,lon){
 }
 
 function resetState(){
-    maxL=maxR=maxA=maxB=peak=0;
+    maxL=maxR=maxA=maxB=peak=0;maximumFreshSpeed=null;
     $('max-l').textContent=$('max-r').textContent=$('max-a').textContent=$('max-b').textContent='0.00g';
     $('speed').classList.remove('peak');
     trail=[];currentScale=1;
@@ -2442,6 +2459,8 @@ function process(buf,timing=null){
         peakHighlightTimeout=setTimeout(()=>speedEl.classList.remove('peak'),900);
     }
     speedEl.textContent=dspd;
+    if(gpsOk===1&&Number.isFinite(timing?.gps_age_ms)&&timing.gps_age_ms>=0&&timing.gps_age_ms<=300)maximumFreshSpeed=Math.max(maximumFreshSpeed??0,sp);
+    $('speed-maximum').textContent=maximumFreshSpeed===null?'—':Math.round(maximumFreshSpeed);
 
     currentModeColor=getModeColorHex(mo);
     const el=$('maneuver');
@@ -2465,7 +2484,7 @@ function process(buf,timing=null){
     // longitudinal; braking is drawn upward, matching the plot's text labels.
     if(forcesUsable(gpsOk,timing?.gps_age_ms,timing?.imu_age_ms)){
         trail.push({x:gx,y:-gy,t:now});trail=trail.filter(p=>now-p.t<TRAIL_DURATION_MS);
-        $('force-status').textContent=Math.hypot(gx,gy)>currentScale?'Over scale · tap scale':'3 s trail · est. g';
+        $('force-status').textContent=Math.hypot(gx,gy)>currentScale?'Over scale · tap scale':'';
     }else clearForces(gpsOk!==1||!Number.isFinite(timing?.gps_age_ms)||timing.gps_age_ms>300?'Waiting for fresh GPS':!Number.isFinite(timing?.imu_age_ms)?'IMU freshness unavailable':'Waiting for fresh IMU');
 
     lastGpsState=gpsOk;

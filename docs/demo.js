@@ -8,21 +8,24 @@
  // Integrate distance / speed rather than moving a point at constant angular speed.
  // Smooth sector pace changes produce useful gains and losses without position jumps.
  const paces=[1,1.025,.985,1.01];
- const speedAt=(a,pace,lap)=>{
-  const dx=-140*Math.sin(a)-70*Math.sin(2*a),dy=95*Math.cos(a)-40*Math.cos(2*a);
-  const ddx=-140*Math.cos(a)-140*Math.cos(2*a),ddy=-95*Math.sin(a)+80*Math.sin(2*a);
-  const curvature=Math.abs(dx*ddy-dy*ddx)/Math.hypot(dx,dy)**3;
-  const desired=(17+5*Math.sin(a+.4)+3*Math.cos(3*a))*(1+((pace-1)+.035*Math.sin(2*a+lap))*Math.sin(a/2)**2);
-  const cornerLimit=Math.sqrt(5/Math.max(curvature,.0001));
-  return (desired**-4+cornerLimit**-4)**-.25;
- };
+ // A distance-domain driver: curvature limits lateral load; backward braking
+ // and forward traction passes anticipate corners rather than adding display jitter.
  const laps=paces.map((pace,lap)=>{
-  let distance=0,time=0;
-  return route.map((point,i)=>{
-   const speed=speedAt(point.a,pace,lap);
-   if(i){const previous=route[i-1],ds=Math.hypot(point.x-previous.x,point.y-previous.y);distance+=ds;time+=ds/((speed+speedAt(previous.a,pace,lap))/2)*1000}
-   return {...point,speed,distance,time};
+  const points=route.map(point=>{
+   const a=point.a,dx=-140*Math.sin(a)-70*Math.sin(2*a),dy=95*Math.cos(a)-40*Math.cos(2*a);
+   const ddx=-140*Math.cos(a)-140*Math.cos(2*a),ddy=-95*Math.sin(a)+80*Math.sin(2*a);
+   const curvature=Math.abs(dx*ddy-dy*ddx)/Math.hypot(dx,dy)**3;
+   return {...point,curvature,speed:Math.min(31,Math.sqrt(5/Math.max(curvature,.0001)))*(1+(pace-1)*Math.sin(a/2)**2)};
   });
+  // Repeated cyclic passes also constrain the start/finish seam.
+  for(let pass=0;pass<8;pass++){
+   for(let i=steps-1;i>=0;i--){const p=points[i],q=points[i+1],ds=Math.hypot(q.x-p.x,q.y-p.y);p.speed=Math.min(p.speed,Math.sqrt(q.speed*q.speed+2*4.5*ds))}
+   points[steps].speed=points[0].speed=Math.min(points[steps].speed,points[0].speed);
+   for(let i=1;i<=steps;i++){const p=points[i-1],q=points[i],ds=Math.hypot(q.x-p.x,q.y-p.y);const lateral=p.speed*p.speed*p.curvature;const traction=2.4*Math.sqrt(Math.max(.04,1-(lateral/5.5)**2));q.speed=Math.min(q.speed,Math.sqrt(p.speed*p.speed+2*traction*ds))}
+   points[steps].speed=points[0].speed=Math.min(points[steps].speed,points[0].speed);
+  }
+  let distance=0,time=0;
+  return points.map((p,i)=>{if(i){const q=points[i-1],ds=Math.hypot(p.x-q.x,p.y-q.y);distance+=ds;time+=ds/((p.speed+q.speed)/2)*1000}return {...p,distance,time}});
  });
  const durations=laps.map(lap=>lap[steps].time),superPeriod=durations.reduce((a,b)=>a+b,0);
  const start=performance.now()-(durations[0]-5000);
@@ -45,7 +48,7 @@
  // Synthetic residuals after filtering: deterministic texture, not measured sensor noise.
  function texture(ms){
   const t=ms/1000,rough=Math.exp(-(((t%18-9)/.7)**2));
-  return {lon:.12*Math.sin(t*19)+.08*Math.sin(t*43)+rough*.7*Math.sin(t*31),lat:.10*Math.sin(t*23)+.06*Math.sin(t*37)+rough*.45*Math.sin(t*29)};
+  return {lon:.025*Math.sin(t*19)+.015*Math.sin(t*43)+rough*.08*Math.sin(t*31),lat:.02*Math.sin(t*23)+.01*Math.sin(t*37)+rough*.06*Math.sin(t*29)};
  }
  // Explicit menu-selected straight-line scenario, repeated without speed/position jumps.
  function intervalMotion(ms){
@@ -104,11 +107,11 @@
   document.getElementById('demo-connection').onclick=event=>{paused=!paused;event.target.textContent=paused?'Restore connection':'Simulate disconnect'};
   try{
    await openTrackDB();
-   const id='demo-circuit-v3',track={id,name:'Demo circuit · simulated',type:'loop',gpsOrigin:origin,startLine:{p1:[155,0],p2:[195,0],direction:Math.PI/2},centerline:route.map(p=>({x:p.x,y:p.y})),pathLength:laps[0][steps].distance,lapCount:0,bestLapMs:Math.round(durations[0]),createdAt:Date.now(),quality:'good'};
+   const id='demo-circuit-v4',track={id,name:'Demo circuit · simulated',type:'loop',gpsOrigin:origin,startLine:{p1:[155,0],p2:[195,0],direction:Math.PI/2},centerline:route.map(p=>({x:p.x,y:p.y})),pathLength:laps[0][steps].distance,lapCount:0,bestLapMs:Math.round(durations[0]),createdAt:Date.now(),quality:'good'};
    const previous=(await getAllTracks()).find(item=>item.id===id);if(previous){track.bestLapMs=previous.bestLapMs;track.lapCount=previous.lapCount}
    if(!(await getRefLap(id))?.spatial){
     const pairs=new Float32Array(laps[0].flatMap(p=>[p.distance,p.time]));
-    await saveRefLap({id:'demo-reference-v3',trackId:id,lapTimeMs:Math.round(durations[0]),created:Date.now(),samples:pairs.buffer,sampleCount:steps+1,totalDistance:track.pathLength,spatial:{version:1,closed:true,origin,points:laps[0].map(p=>({x:p.x,y:p.y,t:Math.min(p.time,Math.round(durations[0]))}))}});
+    await saveRefLap({id:'demo-reference-v4',trackId:id,lapTimeMs:Math.round(durations[0]),created:Date.now(),samples:pairs.buffer,sampleCount:steps+1,totalDistance:track.pathLength,spatial:{version:1,closed:true,origin,points:laps[0].map(p=>({x:p.x,y:p.y,t:Math.min(p.time,Math.round(durations[0]))}))}});
    }
    demoTrack=track;await saveTrack(track);await activateTrack(track);
   }catch(error){document.getElementById('demo-note').textContent='Simulated data. Browser storage unavailable; recording and saved tracks require storage access.';console.error(error)}

@@ -147,9 +147,9 @@ Connect to the device's WiFi and open `192.168.71.1` in any browser.
 | Analysis | Show optional force analysis |
 | Drive view / Dashboard | Enter the focused display or return to controls |
 
-Landscape automatically offers Speed, G-meter, sustained Peaks and Runs tabs, with timing fixed alongside. Tap Controls for the toolbar; the G-meter uses a selectable fixed scale and clears when data becomes unavailable.
+Landscape offers Speed, G-meter, sustained Peaks and Runs, with timing fixed alongside. Tap the instrument name to reveal its picker, or swipe horizontally to switch; the picker closes after selection. Speed includes a subtle maximum from fresh GPS samples for this page session. Tap Controls for the toolbar; the G-meter uses a selectable fixed scale and clears when data becomes unavailable.
 
-![Landscape cluster with synthetic demo data](docs/dashboard-cluster-v4.png)
+![Landscape cluster with synthetic demo data](docs/dashboard-cluster-v5.png)
 
 
 ---

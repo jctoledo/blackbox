@@ -66,6 +66,7 @@ jobs:
         uses: actions/download-artifact@v7
         with:
           name: protocol-fixture
+          github-token: ${{ github.token }}
           path: artifact-check
       - name: Verify artifact round trip
         run: diff tests/fixtures/telemetry-v4.hex artifact-check/telemetry-v4.hex

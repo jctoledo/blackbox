@@ -1,6 +1,6 @@
 # Rolling speed-interval estimates
 
-The landscape **Runs** instrument reports the last and best 45–70 mph intervals from GPS evidence collected while recording. Select it with a tab or horizontal swipe. **Record session** uses the ordinary recording flow; no performance maneuver is required for an ordinary neighborhood or highway data-collection trip.
+The landscape **Runs** instrument reports the last and best 45–70 mph intervals from GPS evidence collected while recording. Tap the instrument name to reveal the picker and select Runs, or swipe horizontally. **Record session** uses the ordinary recording flow; no performance maneuver is required for an ordinary neighborhood or highway data-collection trip.
 
 This first implementation is an uncorrected GPS estimate. It is not a validated drag timer, and it does not yet implement standing-start 0–60 mph. Defining launch from noisy near-zero speed needs separate validation; a nonzero threshold must not silently be sold as a true zero-speed start. There is no distance rollout, slope correction, wind correction or vehicle-efficiency inference.
 

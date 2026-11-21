@@ -50,9 +50,10 @@ test('force plot, readouts and peaks share right-positive / acceleration-positiv
  const p=peaks();for(let t=0;t<=500;t+=50)p.update(t,.3,true,.4);assert.ok(Math.abs(p.right-.4)<1e-9);assert.ok(Math.abs(p.accel-.3)<1e-9);
 });
 test('horizontal swipes cycle instrument tabs without changing timing or recording',()=>{
- const elements=new Map(),classes=new Set(['cluster-view']);const c={performance:{now:()=>100},requestAnimationFrame:fn=>fn(),resize(){},drawG(){},document:{body:{classList:{contains:k=>classes.has(k),toggle(k,on){on?classes.add(k):classes.delete(k)}}}},$:id=>{if(!elements.has(id))elements.set(id,{handlers:{},setAttribute(k,v){this[k]=v},addEventListener(k,fn){this.handlers[k]=fn}});return elements.get(id)}};vm.createContext(c);vm.runInContext(html.slice(html.indexOf("let clusterInstrument='speed'"),html.indexOf('// End selectable cluster instrument.')),c);
+ const elements=new Map(),classes=new Set(['cluster-view']);const c={performance:{now:()=>100},requestAnimationFrame:fn=>fn(),resize(){},drawG(){},document:{body:{classList:{contains:k=>classes.has(k),remove:k=>classes.delete(k),toggle(k,on){if(on===undefined)on=!classes.has(k);on?classes.add(k):classes.delete(k);return on}}}},$:id=>{if(!elements.has(id))elements.set(id,{handlers:{},setAttribute(k,v){this[k]=v},addEventListener(k,fn){this.handlers[k]=fn}});return elements.get(id)}};vm.createContext(c);vm.runInContext(html.slice(html.indexOf("let clusterInstrument='speed'"),html.indexOf('// End selectable cluster instrument.')),c);
+ elements.get('instrument-reveal').onclick();assert.equal(classes.has('instrument-picker'),true);assert.equal(elements.get('instrument-reveal')['aria-expanded'],'true');
  const events=elements.get('g-card').handlers,start={touches:[{clientX:150,clientY:80}],target:{closest:()=>null}},end={changedTouches:[{clientX:50,clientY:82}]};
- events.touchstart(start);events.touchend(end);assert.equal(elements.get('cluster-forces')['aria-pressed'],'true');
+ events.touchstart(start);events.touchend(end);assert.equal(elements.get('cluster-forces')['aria-pressed'],'true');assert.equal(classes.has('instrument-picker'),false);
  events.touchstart(start);events.touchcancel();events.touchend(end);assert.equal(elements.get('cluster-forces')['aria-pressed'],'true');
  events.touchstart(start);events.touchend(end);assert.equal(elements.get('cluster-peaks')['aria-pressed'],'true');
  events.touchstart(start);events.touchend(end);assert.equal(elements.get('cluster-runs')['aria-pressed'],'true');

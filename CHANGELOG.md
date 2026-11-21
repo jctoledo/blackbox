@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Landscape instrument picker collapses after selection; larger force plot, space-efficient Peaks and fresh-GPS maximum speed. Circuit demo now anticipates braking zones and limits corner-exit acceleration using route curvature, with continuous lap-boundary speeds.
 - Startup bias calibration separates AHRS-predicted gravity from accelerometer offset, rejects stale/moving/unstable collection and uses precise averaging. Inclined-pose software tests pass; physical driveway validation remains open.
 - Receiver-timed 45–70 mph Runs instrument and derived Runs CSV with rejection reasons; explicit synthetic interval scenario and banner-free website demo. Standing-start and slope-corrected timing remain unimplemented.
 - Landscape Speed / G-meter / Peaks tabs and swipe selection; compact status and a collapsible toolbar. Fixed force scale, dropout clearing and consistent lateral/longitudinal signs; time-weighted half-second page-session peaks.
