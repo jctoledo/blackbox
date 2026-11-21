@@ -49,7 +49,7 @@ While parked, start recording and keep the phone dashboard in the foreground. In
 
 ## Set up circuit or stage timing
 
-At a suitable controlled site, open **Tracks**, record the route and save it as a circuit or a stage. For a stage, stop safely at the end and choose **Mark Finish**. Select the saved track with **Use** to arm timing for a later pass. Review the line direction and displayed state before attempting a timed run. Follow the [operating guide](LAP_TIMER.md) for reference pace and lap history.
+At a suitable controlled site, open **Tracks**, record the route and save it as a circuit or a stage. For a stage, stop safely at the end and choose **Mark Finish**. Select the saved track with **Arm timing** to arm timing for a later pass. Review the line direction and displayed state before attempting a timed run. Follow the [operating guide](LAP_TIMER.md) for reference pace and lap history.
 
 Timing uses the segment between consecutive valid receiver positions, intersects a finite timing line and interpolates host timestamps. It checks direction and continuity rather than triggering merely because the car is nearby. Missing GPS can mean a missed crossing. The estimator and a faster browser display do not supply extra measured GPS positions.
 

@@ -9,12 +9,12 @@ GPS-based lap timing for an open telemetry project. Record circuits or stages, s
 ### Record a Track
 1. Open dashboard at `192.168.71.1`
 2. Open **Tracks** and choose circuit or stage recording
-3. Drive one complete lap
+3. At a controlled site, record one circuit, or follow the stage to its finish
 4. For circuits, review the loop-complete prompt. For stages, stop safely and tap **Mark Finish**
 5. Name and save
 
 ### Start Timing
-1. Tap saved track → **Use**
+1. Open **Tracks** → saved track → **Arm timing**
 2. **Start line indicator** shows distance and direction: "Start line: 150 m ↗"
 3. Drive across start line — timing begins automatically
 4. Complete a clean lap/run to save a spatial reference; faster valid references replace it
@@ -47,10 +47,7 @@ The delta bar is the key feature — it shows *during the lap* if you're ahead o
 ## Track Types
 
 ### Circuit (Loop)
-Closed loop where start and finish are the same. Auto-detection triggers when:
-- 150+ meters traveled
-- Within 25m of starting point
-- Heading within 30° of start
+Closed loop where start and finish are the same. While capturing the route, closure is detected after at least 150 m of GPS distance when the receiver position is within 12 m of the starting position. There is no heading gate for route closure. This capture prompt is separate from timed start/finish crossings, which require crossing the directed finite line.
 
 *Use cases: controlled circuits and repeatable closed-course routes*
 
@@ -93,7 +90,7 @@ Armed or Timing -- deactivate --> Idle
 
 | State | Display | Notes |
 |-------|---------|-------|
-| **Idle** | "Tap to configure" | No track active |
+| **Idle** | Drive recording panel | No track active; readiness or recording summary |
 | **Armed** | Track name + start indicator | Waiting for line crossing |
 | **Timing** | Running clock + delta bar | Active timing |
 
@@ -114,7 +111,9 @@ For P2P tracks, similar messages show for finish line once timing starts.
 
 ---
 
-## Recording
+## Route recording
+
+This creates track geometry; it is separate from **Record session**, which captures raw telemetry/GPS. With no track selected, the [Drive recording panel](DRIVE.md) shows raw recording duration and partial GPS distance.
 
 ### During Recording
 The overlay shows:
@@ -126,7 +125,7 @@ The overlay shows:
 **Data checks:** Wait for fresh valid GPS and inspect the captured route before saving. A quality label does not establish position accuracy.
 
 ### Loop Detection
-For circuits, "Loop Detected!" appears when criteria met. Options:
+For circuits, **Circuit captured — not saved** appears when the closure criteria are met. Stages show **Finish marked — not saved** after marking the finish. Neither prompt means the track has been committed. Options:
 - **Save Track** — open save dialog
 - **Keep Driving** — continue recording; more samples do not guarantee better accuracy
 
@@ -157,8 +156,8 @@ When driving near a saved track, the system offers to activate it.
 Observed completed laps are saved automatically, grouped by session. Multiple completions missed during a browser outage cannot all be reconstructed.
 
 ### Viewing
-1. Open track list (tap lap timer card)
-2. Tap **Laps** next to a track with history
+1. Open **Tracks**
+2. Tap **History** next to a track with history
 3. View sessions grouped by date
 
 ### What's Saved
@@ -184,15 +183,15 @@ Open **Saved data** from the dashboard.
 
 ### Timer Not Starting
 **Causes:**
-- Not close enough to line (GPS inaccuracy)
+- The receiver-position segment did not cross the finite line (including because of GPS error or a near miss)
 - Wrong direction approach
-- For new P2P tracks: warmup not complete (must be 50m+ away first)
+- Timing is not armed, or the saved finite line does not span the intended crossing
 - GPS signal lost or degraded
 
 **Solutions:**
-- Drive closer to recorded start
+- Check the saved line spans the route; approaching it alone does not start timing
 - Ensure correct direction
-- For new P2P: drive away, then return
+- While parked, select the saved circuit/stage with **Arm timing**; cross its start line in the intended direction with fresh GPS
 - Wait for GPS lock (cyan LED pulse) before starting
 
 ### Delta asks for a new reference
@@ -205,8 +204,8 @@ Complete a clean lap/run with fresh GPS throughout. Older distance-only referenc
 
 ### Loop Not Detected
 - Distance < 150m? Keep driving
-- > 25m from start? Drive closer
-- Heading off > 30°? Approach from starting direction
+- Still more than 12 m from the recorded start? The route-capture closure prompt has not qualified
+- Inspect the route and GPS reception while parked; closure has no heading gate
 
 ---
 
@@ -234,9 +233,9 @@ State machine with hysteresis:
 ### Loop Detection Thresholds
 | Parameter | Value |
 |-----------|-------|
-| Min track length | 150m |
-| Close proximity | 25m |
-| Heading tolerance | 30° |
+| Minimum GPS distance during route capture | 150 m |
+| Closure proximity to recorded start | 12 m |
+| Heading gate for route closure | None |
 
 ---
 

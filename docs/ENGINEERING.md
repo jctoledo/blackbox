@@ -4,7 +4,7 @@ Blackbox turns a small sensor box and a phone into an instrument for your drive.
 
 The useful question is not simply “how fast does it update?” It is **what does each number mean, and when should you trust it?** This guide follows a measurement from the car to the screen.
 
-[Try the dashboard](https://jctoledo.github.io/blackbox/demo.html?v=0.0.4-rc.10) · [Build the hardware](BUILD.md) · [Equations and rate budgets](MATHS_AND_RATES.md)
+[Try the dashboard](https://jctoledo.github.io/blackbox/demo.html) · [Build the hardware](BUILD.md) · [Equations and rate budgets](MATHS_AND_RATES.md)
 
 [TOC]
 
@@ -95,7 +95,7 @@ The older dashboard waited another 33 ms after a request completed. A 30 ms requ
 
 ## Other instruments, without hiding the evidence
 
-Landscape keeps elapsed time and delta in place while the other panel switches between Speed, G-meter, Peaks and Runs. Tap the instrument name to reveal the picker or swipe horizontally; choosing a view hides the picker again. Speed includes a page-session maximum while GPS is fresh. Portrait brings setup and saved data back into reach. **Menu → Speed units** switches Speed and MAX between mph and km/h, chooses the corresponding Runs preset within its selected family, and remembers the preference in this browser. Exported units and the named 45–70 mph, 30–60 mph, 50–100 km/h and 80–120 km/h tests keep their existing definitions.
+Landscape keeps timing/reference, or the recording-backed Drive panel when no track is selected, in place while the other panel switches between Speed, G-meter, Peaks and Runs. Tap the instrument name to reveal the picker or swipe horizontally; choosing a view hides the picker again. Speed includes a page-session maximum while GPS is fresh. Portrait brings setup and saved data back into reach. **Menu → Speed units** switches Speed and MAX between mph and km/h, chooses the corresponding Runs preset within its selected family, and remembers the preference in this browser. Exported units and the named 45–70 mph, 30–60 mph, 50–100 km/h and 80–120 km/h tests keep their existing definitions.
 
 Runs currently estimates rolling **45–70 mph, 30–60 mph, 50–100 km/h and 80–120 km/h** intervals from receiver timestamps, not browser arrival times. It interpolates threshold crossings and rejects gaps, restarts, turns and incomplete attempts. It has no slope correction or distance rollout. Standing-start 0–60 mph needs its own validated launch rule and is not implemented. Read [the timing rules and export format](RUNS.md).
 
