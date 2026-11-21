@@ -1,0 +1,62 @@
+diff --git a/docs/EVAL_CHANGE_NOTE.md b/docs/EVAL_CHANGE_NOTE.md
+new file mode 100644
+index 0000000..ad4cc08
+--- /dev/null
++++ b/docs/EVAL_CHANGE_NOTE.md
+@@ -0,0 +1,3 @@
++# Cleanup note
++
++Recording, timing and build-cache cleanup; retain the existing exported formats and release layout.
+diff --git a/docs/REVIEW_EVAL_SPEC.md b/docs/REVIEW_EVAL_SPEC.md
+new file mode 100644
+index 0000000..3fd4597
+--- /dev/null
++++ b/docs/REVIEW_EVAL_SPEC.md
+@@ -0,0 +1,10 @@
++# Recording and timing reliability cleanup
++
++Review the proposed cleanup against these requirements and the repository's engineering guidance.
++
++1. A completed lap retains the track and recording session that owned it when completion was observed, even if setup changes or deactivates while a database operation waits. Best/count and history remain transactional.
++2. History-clear success means its transaction committed. Request success or exhausting a cursor is not durable success; failed clears preserve the prior persistent data and must not reset the live count.
++3. The named 50–100 km/h rolling interval uses exactly those SI speed thresholds, independently of dashboard display units. Existing 45–70 mph and 30–60 mph definitions remain unchanged.
++4. GPS course is clockwise from north. Timing velocity remains east/north: course zero must produce northward velocity so direction-aware crossings retain their documented frame.
++5. Release builds preserve Git-derived application version metadata and the exact requested tag in the descriptor. SDK reuse must retain clean checkout and supported packaging behavior.
++6. Clarifying comments and short change notes are in scope. No new driver features or external services are requested.
+diff --git a/scripts/cargo-cache.sh b/scripts/cargo-cache.sh
+index 7623359..f326cb5 100644
+--- a/scripts/cargo-cache.sh
++++ b/scripts/cargo-cache.sh
+@@ -73 +73 @@ PY
+-    export CARGO_TARGET_DIR="$GITHUB_WORKSPACE/target"
++    export CARGO_TARGET_DIR="$config_root/target/firmware"
+diff --git a/scripts/check_release_image.py b/scripts/check_release_image.py
+index 4f99b03..fc38078 100644
+--- a/scripts/check_release_image.py
++++ b/scripts/check_release_image.py
+@@ -2 +2 @@
+-"""Check a merged C3 release's application identity before uploading it."""
++"""Check the application identity of a merged C3 release before upload."""
+diff --git a/sensors/blackbox/src/gps_timing.rs b/sensors/blackbox/src/gps_timing.rs
+index c87af8e..7aa8c81 100644
+--- a/sensors/blackbox/src/gps_timing.rs
++++ b/sensors/blackbox/src/gps_timing.rs
+@@ -79 +79 @@ impl GpsTimingQueue {
+-            let velocity = (fix.speed * fix.course.sin(), fix.speed * fix.course.cos());
++            let velocity = (fix.speed * fix.course.cos(), fix.speed * fix.course.sin());
+diff --git a/sensors/blackbox/web/dashboard.html b/sensors/blackbox/web/dashboard.html
+index 699ef26..d38202b 100644
+--- a/sensors/blackbox/web/dashboard.html
++++ b/sensors/blackbox/web/dashboard.html
+@@ -1425 +1425 @@ async function clearLapHistory(trackId=null){
+-            history.clear();
++            history.clear().onsuccess=resolve;
+@@ -1429 +1429 @@ async function clearLapHistory(trackId=null){
+-            request.onsuccess=()=>{const cursor=request.result;if(cursor){cursor.delete();cursor.continue()}};
++            request.onsuccess=()=>{const cursor=request.result;if(cursor){cursor.delete();cursor.continue()}else resolve()};
+@@ -1979 +1979 @@ async function updateTrackBestLap(lapTimeMs){
+-            tracks.put(result);tx.objectStore('lap_history').add({...lap,lapNumber:result.lapCount});
++            tracks.put(result);tx.objectStore('lap_history').add({...lap,trackId:activeTrack?.id,sessionId:currentSessionId,lapNumber:result.lapCount});
+@@ -2221 +2221 @@ class RollingRuns{
+-const runIntervals=[{label:'45-70 mph',lo:45*.44704,hi:70*.44704},{label:'30-60 mph',lo:30*.44704,hi:60*.44704},{label:'50-100 km/h',lo:50/3.6,hi:100/3.6}];
++const runIntervals=[{label:'45-70 mph',lo:45*.44704,hi:70*.44704},{label:'30-60 mph',lo:30*.44704,hi:60*.44704},{label:'50-100 km/h',lo:50*.44704,hi:100*.44704}];

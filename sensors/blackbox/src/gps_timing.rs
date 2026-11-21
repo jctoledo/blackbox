@@ -196,4 +196,49 @@ mod tests {
             assert_eq!(timer.state(), LapTimerState::Armed);
         }
     }
+
+    #[test]
+    fn diagonal_course_preserves_forward_and_reverse_crossing_directions() {
+        for (course, start, end, expected_crossing) in [
+            (
+                3.0 * core::f32::consts::FRAC_PI_4,
+                (0.000001, -0.000001),
+                (-0.000001, 0.000001),
+                true,
+            ),
+            (
+                7.0 * core::f32::consts::FRAC_PI_4,
+                (-0.000001, 0.000001),
+                (0.000001, -0.000001),
+                false,
+            ),
+        ] {
+            let mut timer = LapTimer::new();
+            timer.configure_loop(TimingLine::new(
+                0.0,
+                -0.001,
+                0.0,
+                0.001,
+                -core::f32::consts::FRAC_PI_4,
+            ));
+            let mut queue = GpsTimingQueue::new();
+            for (position, host_us) in [(start, 1_000_000), (end, 1_040_000)] {
+                queue.push(
+                    GpsFix {
+                        lat: position.0,
+                        lon: position.1,
+                        speed: 10.0,
+                        course,
+                        valid: true,
+                        ..GpsFix::default()
+                    },
+                    host_us,
+                );
+            }
+            assert_eq!(
+                queue.replay(&mut timer, 1_040_000) & CROSSED_START != 0,
+                expected_crossing
+            );
+        }
+    }
 }

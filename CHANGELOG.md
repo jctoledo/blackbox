@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Diagonal GPS-course regression checks forward and reverse crossing directions; mutation validation exposed a gap in cardinal-heading-only coverage.
+- Repository-specific agent workflow, triage/domain pointers and a documented three-arm code-review trial; no defect-recall superiority claim.
+
 ### Changed
 - Renamed `neo6m` driver to `ublox-gps` to reflect support for multiple u-blox GPS modules (NEO-6M, NEO-M9N, etc.)
 - Updated driver documentation with UBX protocol examples and dynamic platform models

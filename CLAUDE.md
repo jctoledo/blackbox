@@ -34,4 +34,6 @@ Check the current README wiring: GPIO18/19 conflict with C3 native USB. Confirm 
 
 ## Agent skills
 
-Matt Pocock skills installed in the maintainer's Codex are documented in `docs/agents/SKILLS.md`. For issue operations, use GitHub `jctoledo/blackbox` and the existing labels; preserve hardware/R&D issues until their evidence is collected. For content/discovery changes, read `docs/research/DISCOVERY.md` and validate rendered navigation with `scripts/check_docs_site.py` on lat. Public launch drafts and the maintainer's photo/data plan live in `docs/LAUNCH_KIT.md`.
+For task planning, worker coordination, review and merge authority, read `docs/process/workflow.md`; repository rules and current maintainer authorization govern generic skill defaults. Tracker: `docs/agents/issue-tracker.md`. Triage roles: `docs/agents/triage-labels.md`. Domain references: `docs/agents/domain.md` and `GLOSSARY.md`.
+
+Installed skills and their evaluated scope are recorded in `docs/agents/SKILLS.md`. For content/discovery changes, read `docs/research/DISCOVERY.md` and validate rendered navigation with `scripts/check_docs_site.py` on lat. Launch drafts and the maintainer's photo/data plan live in `docs/LAUNCH_KIT.md`.
