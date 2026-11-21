@@ -23,7 +23,11 @@ Last/best display values reset with a new recording or page reload. **Saved data
 
 A run may never qualify: a short recording, no lower-threshold crossing, missing receiver time, an interrupted stream or a turn can all explain that. An empty result is not zero seconds.
 
+Changing dashboard speed units does not redefine this interval: it remains explicitly **45–70 mph**. Additional 30–60 mph and 50–100 km/h detectors and labelled precision/recall evaluation are tracked in [issue #79](https://github.com/jctoledo/blackbox/issues/79).
+
 ## Try the synthetic scenario
+
+The demo starts with a clearly labelled saved rolling example: two accepted intervals and a third rejected by a deliberate six-event GPS gap. Its Last/Best values come from the same GPS evidence available in Saved data, not a separately invented result. Starting your own recording resets those example results.
 
 In the website demo, open **Menu → Simulate rolling interval**, then record a session and select **Runs** in landscape. This explicitly changes the synthetic data source to a straight-line acceleration/deceleration scenario and disarms circuit timing. The 2 m/s² acceleration produces an interpolated 45–70 interval of 5.588 s (displayed as 5.59 s). The menu can return to the textured circuit scenario. **SIM** remains visible; these are not measured driving results.
 

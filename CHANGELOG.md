@@ -14,6 +14,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Obsolete documentation files (RELEASE.md, IMPLEMENTATION_SUMMARY.md, release-notes.md)
 
+## [0.0.4-rc.8] - 2026-11-21
+
+Release candidate for hardware evaluation. Includes rc.6 and the rc.7 source changes below; rc.7 binary packaging was stopped after a display-resize bug was reported.
+
+### Fixed
+- G-meter canvas follows its actual frame through Controls toggles, orientation and browser chrome changes; inherited size transitions no longer leave the canvas overflowing the card.
+- Landscape Controls exposes Menu, with bounded scrolling on short screens.
+
+### Added
+- Persistent mph/km/h preference for Speed and MAX. Recorded units and explicitly named rolling intervals are unchanged.
+- Synthetic circuit with left/right bends, common speed at lap boundaries, populated force summaries and lap history. Two named example recordings seed Saved data once without replacing existing sessions; rolling evidence includes two accepted intervals and a deliberate gap rejection.
+- Synthetic provenance in ordinary Session CSV as well as GPS/Run exports. Updated website screenshots and demo guidance.
+
+### Still to validate
+- Real driving, calibration, receiver cadence and reference-timed accuracy remain hardware work. Expanded run detection is tracked in #79; 0–60 mph and slope-corrected performance are not implemented.
+
 ## [0.0.4-rc.7] - 2026-11-21
 
 Release candidate for weekend data collection; hardware timing accuracy remains unmeasured. Includes rc.6.
