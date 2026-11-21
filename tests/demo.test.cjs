@@ -31,7 +31,7 @@ test('demo trajectory has consistent velocity, varying speed, braking and accele
  let previous,minimum=Infinity,maximum=0,braking=false,accelerating=false;
  for(let i=0;i<1500;i++){
   const {p}=await sample(d),speed=p.readFloatLE(51)/3.6,vx=p.readFloatLE(43),vy=p.readFloatLE(47),x=p.readFloatLE(35),y=p.readFloatLE(39),a=p.readFloatLE(7);
-  assert.ok(Math.abs(Math.hypot(vx,vy)-speed)<.0001);assert.ok(Number.isFinite(a));assert.ok(Math.abs(p.readFloatLE(11))<=5.01);assert.ok(Math.abs(a)<8);
+  assert.ok(Math.abs(Math.hypot(vx,vy)-speed)<.0001);assert.ok(Number.isFinite(a));assert.ok(Math.abs(p.readFloatLE(11))<=5.7);assert.ok(Math.abs(a)<9);
   minimum=Math.min(minimum,speed);maximum=Math.max(maximum,speed);braking ||= a<-.35;accelerating ||= a>.35;
   if(previous){const derived=Math.hypot(x-previous.x,y-previous.y)/.1;assert.ok(Math.abs(derived-speed)<.6,`Position speed ${derived} vs ${speed}`)}
   previous={x,y};d.advance(100);
@@ -61,4 +61,10 @@ test('spatial reference matches a complete synthetic circuit through its start/f
 test('demo GPS evidence is explicitly synthetic, bounded and uses 40ms receiver epochs',async()=>{
  const d=demo();const a=await (await d.fetch('/api/gps-log')).json();assert.equal(a.simulated,true);assert.equal(a.events.length,64);
  assert.equal(a.events[1].utc_us-a.events[0].utc_us,40000);d.advance(1000);const b=await (await d.fetch('/api/gps-log')).json();assert.equal(b.latest_seq-a.latest_seq,25);
+});
+
+test('demo road texture is deterministic and differs from ideal acceleration',async()=>{
+ const a=demo(),b=demo();let residual=0;
+ for(let i=0;i<600;i++){a.advance(40);b.advance(40);const x=await sample(a),y=await sample(b);assert.equal(x.p.readFloatLE(7),y.p.readFloatLE(7));const noise=-x.p.readFloatLE(7)-x.j.f.li;assert.ok(Math.abs(noise)<.91);residual=Math.max(residual,Math.abs(noise))}
+ assert.ok(residual>.3);
 });

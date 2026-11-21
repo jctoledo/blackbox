@@ -19,3 +19,33 @@ test('Dashboard gives an explicit escape from automatic cluster without changing
 test('portrait manual Drive view and parked Analysis remain independently usable',()=>{
  const p=context(false);p.elements.get('drive-mode').onclick();assert.equal(p.classes.has('drive-view'),true);assert.equal(p.classes.has('cluster-view'),false);p.elements.get('analysis-mode').onclick();assert.equal(p.classes.has('analysis-view'),true);assert.equal(p.classes.has('drive-view'),false);p.rotate(true);assert.equal(p.classes.has('cluster-view'),false);p.elements.get('analysis-mode').onclick();assert.equal(p.classes.has('cluster-view'),true);
 });
+function peaks(){const c={Number,Math};vm.createContext(c);vm.runInContext(html.slice(html.indexOf('class EffortPeaks{'),html.indexOf('const effortPeaks='))+';this.Peaks=EffortPeaks;',c);return new c.Peaks();}
+test('sustained peaks use time-weighted windows and distinguish braking from acceleration',()=>{
+ const p=peaks();for(let t=0;t<=1000;t+=50)p.update(t,.4,true);assert.ok(Math.abs(p.accel-.4)<1e-8);assert.equal(p.brake,0);
+ for(let t=1050;t<=2000;t+=50)p.update(t,-.6,true);assert.ok(Math.abs(p.brake-.6)<1e-8);assert.ok(Math.abs(p.accel-.4)<1e-8);
+});
+test('spikes, outages and repeated packets cannot masquerade as sustained effort',()=>{
+ const p=peaks();for(let t=0;t<=500;t+=50)p.update(t,t===250?1:0,true);assert.ok(p.accel<.11);
+ p.reset();p.update(0,1,true);p.update(600,1,true);assert.equal(p.accel,null);
+ for(let i=0;i<20;i++)p.update(600,1,true);assert.equal(p.accel,null);
+ p.update(650,NaN,true);p.update(700,1,false);assert.equal(p.accel,null);
+});
+test('device millisecond rollover does not create an enormous effort window',()=>{
+ const p=peaks();for(let i=0;i<=10;i++)p.update((0xfffffff0+i*50)>>>0,.3,true);assert.ok(Math.abs(p.accel-.3)<1e-8);
+});
+test('left and right sustained peaks keep independent signs',()=>{
+ const p=peaks();for(let t=0;t<=500;t+=50)p.update(t,0,true,-.7);assert.ok(Math.abs(p.left-.7)<1e-8);assert.equal(p.right,0);
+ for(let t=550;t<=1100;t+=50)p.update(t,0,true,.4);assert.ok(Math.abs(p.right-.4)<1e-8);
+});
+
+test('force scale preserves direction and marks clipping without dropping the dot offscreen',()=>{
+ const c={Math,Number};vm.createContext(c);vm.runInContext(html.slice(html.indexOf('function forcePoint('),html.indexOf('function clearForces(')),c);
+ const p=c.forcePoint(3,-4,1);assert.equal(p.clipped,true);assert.ok(Math.abs(Math.hypot(p.x,p.y)-1)<1e-10);assert.ok(p.x>0&&p.y<0);
+ assert.equal(c.forcesUsable(1,40),true);for(const age of [null,undefined,-1,301,NaN])assert.equal(c.forcesUsable(1,age),false);assert.equal(c.forcesUsable(0,40),false);
+});
+test('force plot, readouts and peaks share right-positive / acceleration-positive packet convention',()=>{
+ const c={Math,Number,Date:{now:()=>1000},forcesUsable:()=>true,gpsOk:1,timing:{gps_age_ms:0},gx:.4,gy:.3,now:1000,trail:[],TRAIL_DURATION_MS:3000,currentScale:1,$:()=>({textContent:''}),clearForces:()=>assert.fail('fresh packet cleared')};vm.createContext(c);
+ vm.runInContext(html.slice(html.indexOf('    // Vehicle acceleration convention:'),html.indexOf('    lastGpsState=gpsOk;')),c);
+ assert.equal(c.trail[0].x,.4);assert.equal(c.trail[0].y,-.3);
+ const p=peaks();for(let t=0;t<=500;t+=50)p.update(t,.3,true,.4);assert.ok(Math.abs(p.right-.4)<1e-9);assert.ok(Math.abs(p.accel-.3)<1e-9);
+});

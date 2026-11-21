@@ -42,6 +42,11 @@
   const speed=p.speed+(q.speed-p.speed)*f,curvature=(dx*ddy-dy*ddx)/(norm**3);
   return {east:p.x+(q.x-p.x)*f,north:p.y+(q.y-p.y)*f,speed,yaw:Math.atan2(dx,dy),vx:speed*dx/norm,vy:speed*dy/norm,lonAccel:(q.speed-p.speed)/((q.time-p.time)/1000),latAccel:-speed*speed*curvature,yawRate:-speed*curvature};
  }
+ // Synthetic residuals after filtering: deterministic texture, not measured sensor noise.
+ function texture(ms){
+  const t=ms/1000,rough=Math.exp(-(((t%18-9)/.7)**2));
+  return {lon:.12*Math.sin(t*19)+.08*Math.sin(t*43)+rough*.7*Math.sin(t*31),lat:.10*Math.sin(t*23)+.06*Math.sin(t*37)+rough*.45*Math.sin(t*29)};
+ }
  window.fetch=(input,options={})=>{
   const url=new URL(String(input),location.href),elapsed=performance.now()-start,c=clock(elapsed);
   if(options.signal?.aborted)return Promise.reject(new DOMException('Aborted','AbortError'));
@@ -64,7 +69,8 @@
   }
   if(url.pathname==='/api/telemetry'){
    const data=new Uint8Array(82),v=new DataView(data.buffer);v.setUint8(0,4);v.setUint16(1,0xAA55,true);v.setUint32(3,Math.floor(elapsed),true);
-   [-m.lonAccel,m.latAccel,0,m.yawRate,0,0,m.yaw,m.east,m.north,m.vx,m.vy,m.speed*3.6,2.5].forEach((n,i)=>v.setFloat32(7+4*i,n,true));
+   const noise=texture(elapsed);
+   [-m.lonAccel-noise.lon,m.latAccel+noise.lat,0,m.yawRate,0,0,m.yaw,m.east,m.north,m.vx,m.vy,m.speed*3.6,2.5].forEach((n,i)=>v.setFloat32(7+4*i,n,true));
    const turning=Math.abs(m.latAccel)>1.2,mode=(turning?4:0)|(m.lonAccel>.35?1:m.lonAccel<-.35?2:0);
    v.setUint8(59,mode);v.setFloat32(60,lat,true);v.setFloat32(64,lon,true);v.setUint8(68,1);v.setFloat32(69,(m.yaw+tau)%tau,true);
    v.setUint32(73,timing?Math.floor(c.lapMs):0,true);v.setUint16(77,count,true);v.setUint16(80,data.slice(0,80).reduce((a,b)=>a+b,0)&65535,true);
