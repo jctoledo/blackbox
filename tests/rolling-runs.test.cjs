@@ -12,7 +12,16 @@ test('synthetic provenance survives a complete estimate',()=>{const c=context(),
 test('Runs CSV is derived from saved GPS evidence and reports rejected attempts',()=>{
  const c=context();vm.runInContext(html.slice(html.indexOf('function runsToCSV('),html.indexOf('// End receiver-time rolling intervals.')),c);
  const rows=Array.from({length:220},(_,i)=>row(i,18+i*.08,{gpsSynthetic:1}));
- const csv=c.runsToCSV(rows).trim().split('\n');assert.equal(csv.length,2);assert.match(csv[1],/^45-70 mph,accepted,/);assert.ok(Math.abs(Number(csv[1].split(',')[3])-5.588)<1e-9);assert.equal(csv[1].split(',').at(-1),'1');
+ const csv=c.runsToCSV(rows).trim().split('\n');assert.ok(csv.length>=2);assert.match(csv[1],/^45-70 mph,accepted,/);assert.ok(Math.abs(Number(csv[1].split(',')[3])-5.588)<1e-9);assert.equal(csv[1].split(',').at(-1),'1');
  rows[60]={...rows[60],gpsAccepted:0};assert.match(c.runsToCSV(rows),/rejected,GPS evidence incomplete/);
- assert.throws(()=>c.runsToCSV([]),/No 45–70 mph attempts/);
+ assert.throws(()=>c.runsToCSV([]),/No rolling interval attempts/);
 });
+
+for(const interval of [{label:'30-60 mph',lo:30*.44704,hi:60*.44704},{label:'50-100 km/h',lo:50/3.6,hi:100/3.6}]){
+ test(interval.label+' interpolates exact thresholds and rejects interrupted lead-in',()=>{
+  const c=context(),d=new c.Runs(interval);for(let i=0;i<400;i++)d.update(row(i,10+i*.08));
+  const accepted=d.results.filter(r=>r.status==='accepted');assert.equal(accepted.length,1);assert.ok(Math.abs(accepted[0].seconds-(interval.hi-interval.lo)/2)<1e-8);assert.equal(accepted[0].interval,interval.label);
+  const b=new c.Runs(interval);b.update(row(0,interval.lo-1));b.update(row(1,interval.lo-.1));b.update(row(2,interval.lo+.1));for(let i=3;i<200;i++)b.update(row(i,interval.lo+.1+i*.08));assert.equal(b.results.length,0);
+ });
+}
+test('no start from a brief threshold spike and no repeat until rearmed below threshold',()=>{const c=context(),d=new c.Runs();for(let i=0;i<220;i++)d.update(row(i,i===30?20.15:i===31?19.9:19.6));assert.equal(d.results.some(r=>r.status==='accepted'),false);assert.ok(d.results.some(r=>r.reason==='Start not sustained'))});

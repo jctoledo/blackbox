@@ -62,23 +62,23 @@
  }
  // Explicit menu-selected straight-line scenario, repeated without speed/position jumps.
  function intervalMotion(ms){
-  const t=Math.max(0,ms)/1000,cycle=Math.floor(t/20),p=t%20;
+  const t=Math.max(0,ms)/1000,cycle=Math.floor(t/28),p=t%28;
   let speed,distance,accel;
-  if(p<8){speed=18+2*p;distance=18*p+p*p;accel=2}
-  else if(p<10){speed=34;distance=208+34*(p-8);accel=0}
-  else if(p<18){const q=p-10;speed=34-2*q;distance=276+34*q-q*q;accel=-2}
-  else{speed=18;distance=484+18*(p-18);accel=0}
-  return {east:cycle*520+distance,north:0,speed,yaw:Math.PI/2,vx:speed,vy:0,lonAccel:accel,latAccel:0,yawRate:0};
+  if(p<12){speed=10+2*p;distance=10*p+p*p;accel=2}
+  else if(p<14){speed=34;distance=264+34*(p-12);accel=0}
+  else if(p<26){const q=p-14;speed=34-2*q;distance=332+34*q-q*q;accel=-2}
+  else{speed=10;distance=596+10*(p-26);accel=0}
+  return {east:cycle*616+distance,north:0,speed,yaw:Math.PI/2,vx:speed,vy:0,lonAccel:accel,latAccel:0,yawRate:0};
  }
  function sampleMotion(elapsed){const c=clock(elapsed);return intervalStart===null?motion(c.index,c.lapMs):intervalMotion(elapsed-intervalStart)}
  // Example recordings use the same motion model and receiver-time evidence as the live demo.
  function exampleRows(kind){
-  const rows=[],base=Date.UTC(2026,0,1,12),duration=kind==='circuit'?Math.floor(durations[0]/40)*40:60000;
+  const rows=[],base=Date.UTC(2026,0,1,12),duration=kind==='circuit'?Math.floor(durations[0]/40)*40:84000;
   let priorSeq=0;
   for(let ms=0;ms<=duration;ms+=40){
    const p=kind==='circuit'?motion(0,ms):intervalMotion(ms),seq=ms/40+1;
    // One deliberate receiver-log gap in the middle interval exercises rejection/export.
-   const missing=kind==='rolling'&&ms>=25000&&ms<25240;
+   const missing=kind==='rolling'&&ms>=35000&&ms<35240;
    const lat=origin.lat+p.north/111320,lon=origin.lon+p.east/(111320*Math.cos(origin.lat*Math.PI/180));
    rows.push({t:base+ms,deviceTimeMs:ms,sp:p.speed*3.6,ax:-p.lonAccel,ay:p.latAccel,wz:p.yawRate,latg:p.latAccel/9.81,lng:p.lonAccel/9.81,lat,lon,gpsOk:1,gpsAgeMs:0,imuAgeMs:0,gpsSynthetic:1,ekfX:p.east,ekfY:p.north,ekfYaw:p.yaw,gpsCourse:(p.yaw+tau)%tau});
    if(!missing){rows.push({t:base+ms,rowType:1,gpsSynthetic:1,gpsBootId:kind==='circuit'?101:102,gpsSeq:seq,gpsHostUs:ms*1000,gpsUtcUs:43200000000+ms*1000,gpsDate:10126,gpsFractionDigits:2,gpsActive:1,gpsAccepted:1,lat,lon,sp:p.speed,gpsCourse:(p.yaw+tau)%tau,gpsMissing:priorSeq?seq-priorSeq-1:0,gpsBoundary:priorSeq?0:1});priorSeq=seq}
@@ -101,7 +101,7 @@
   if(typeof openDB!=='function')return;
   const database=await openDB(),circuit=exampleRows('circuit'),rolling=exampleRows('rolling');
   await seedExampleRecording(database,'SIM · Circuit example',circuit,'circuit-v6');
-  await seedExampleRecording(database,'SIM · Rolling intervals + GPS gap',rolling,'rolling-v6');
+  await seedExampleRecording(database,'SIM · Rolling intervals + GPS gap',rolling,'rolling-v7');
   updatePerformanceRuns(rolling);
   // Warm the page-session force summary from the simulated lead-in, not invented peaks.
   const elapsed=Math.floor(performance.now()-start);
@@ -150,7 +150,7 @@
   document.getElementById('demo-interval').onclick=async event=>{
    intervalStart=intervalStart===null?Math.floor(performance.now()-start):null;demoBoot++;revision++;armedCycle=null;
    event.target.textContent=intervalStart===null?'Simulate rolling interval':'Return to circuit demo';
-   document.getElementById('demo-note').textContent=intervalStart===null?'Synthetic circuit and sensor texture. No measured driving data.':'Synthetic straight-line 45–70 mph intervals. Record a session, then open Runs. No measured driving data.';
+   document.getElementById('demo-note').textContent=intervalStart===null?'Synthetic circuit and sensor texture. No measured driving data.':'Synthetic straight-line 45–70 mph, 30–60 mph and 50–100 km/h intervals. Record a session, then open Runs. No measured driving data.';
    document.getElementById('menu-overlay')?.classList?.remove('open');
    if(intervalStart===null&&demoTrack)await activateTrack(demoTrack);
    else if(typeof deactivateTrack==='function')await deactivateTrack();
