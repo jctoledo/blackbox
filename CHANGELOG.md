@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Atomic raw-chunk/Drive checkpoints, strict reproducible backup validation, recovery-tail context and companion details exports; synthetic Drive preview and operator guide.
 
 ### Fixed
+- Nearby-track suggestions reserve a separate layout row, retain explicit page-session dismissals, and cool down after timeout. Fresh GPS/context and generation checks reject stale async lookup results; suggestions never activate timing or capture automatically (#116).
 - Rolling interval estimates preserve synthetic provenance from eligibility lead-in and both start endpoints, and reject direction changes across the interpolated start (#101). Real-drive accuracy validation remains pending.
 - Compact landscape cards respond to space left by warning rows and expanded Controls, keeping timing state and instruments separate from their footers.
 - Preserve the completed point-to-point tracker until its reference is saved when firmware returns directly to the armed state.

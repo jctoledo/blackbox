@@ -91,11 +91,11 @@ test('aborted recording writes restore the batch before newer samples',async()=>
 });
 
 test('track save waits for transaction commit and rejects a later abort',async()=>{
- let tx;const c={Date,trackDb:{transaction(){tx={objectStore:()=>({put(){}})};return tx}}};
+ let changes=0,tx;const c={trackAutoDetector:{beginTrackChange(){changes++},endTrackChange(){changes--}},Date,trackDb:{transaction(){tx={objectStore:()=>({put(){}})};return tx}}};
  vm.createContext(c);vm.runInContext(section('async function saveTrack(', 'async function getTrack('),c);
  let settled=false;const pending=c.saveTrack({id:'track'});pending.then(()=>{settled=true},()=>{});
  await Promise.resolve();assert.equal(settled,false);
- tx.onabort();await assert.rejects(pending,/Track storage failed/);
+ tx.onabort();await assert.rejects(pending,/Track storage failed/);assert.equal(changes,0);
 });
 test('reference replacement deletes old key and writes new lap in one committed transaction',async()=>{
  const ops=[];let tx,lookup;const store={index:()=>({getKey:()=>lookup={}}),delete:key=>ops.push(['delete',key]),put:ref=>ops.push(['put',ref.id])};
@@ -107,9 +107,9 @@ test('reference replacement deletes old key and writes new lap in one committed 
 });
 test('failed stop acknowledgement preserves the active track',async()=>{
  const active={id:'still-running'},messages=[];
- const c={activeTrack:active,requestDevice:async()=>({ok:false}),alert:s=>messages.push(s)};
+ let changes=0;const c={trackAutoDetector:{beginTrackChange(){changes++},endTrackChange(){changes--}},activeTrack:active,requestDevice:async()=>({ok:false}),alert:s=>messages.push(s)};
  vm.createContext(c);vm.runInContext(section('async function deactivateTrack(', '// Track Recording Functions'),c);
- assert.equal(await c.deactivateTrack(),false);assert.equal(c.activeTrack,active);assert.match(messages[0],/Could not stop/);
+ assert.equal(await c.deactivateTrack(),false);assert.equal(c.activeTrack,active);assert.match(messages[0],/Could not stop/);assert.equal(changes,0);
 });
 test('a stalled request is aborted and its timer is cleaned up',async()=>{
  let timeout,cleared=false;
