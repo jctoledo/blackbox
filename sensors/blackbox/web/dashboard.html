@@ -453,7 +453,8 @@ body.cluster-view.cluster-forces .bbForceTools{position:absolute;top:0;right:4px
 
 body.cluster-view .bbRunTitle{padding-top:44px}body.cluster-view .bbClusterRuns .bbPeakGrid{padding-top:8px;gap:10px}body.cluster-view .bbClusterRuns dd{font-size:24px}
 body.cluster-view.cluster-controls .bbKebab{display:block}
-.bbRecordingDetails{overflow-wrap:anywhere;min-width:0}.bbRecordingDetails summary{cursor:pointer;min-height:44px;display:flex;align-items:center}.bbRecordingDetails .bbSessionBtn{margin-top:8px}
+.bbRecordingDetails{overflow-wrap:anywhere;min-width:0;font-size:12px;line-height:1.5}.bbRecordingDetails summary{cursor:pointer;min-height:44px;padding:12px 0;color:var(--text);font-weight:600}.bbRecordingDetails .bbSessionBtn{margin-top:12px}
+.bbDetailsGroup{padding:12px 0;border-top:1px solid var(--divider)}.bbDetailsGroup h4{font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px}.bbDetailsGroup dl{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.6fr);gap:5px 12px}.bbDetailsGroup dt{color:var(--text-secondary)}.bbDetailsGroup dd{color:var(--text);min-width:0;font-variant-numeric:tabular-nums}.bbDetailsNote{padding:10px 12px;margin:4px 0 12px;border-left:3px solid var(--amber);background:var(--bg);color:var(--text)}.bbDetailsLimit{color:var(--text-secondary);font-size:11px;margin-top:6px}
 </style></head>
 <body>
 
@@ -2871,16 +2872,18 @@ async function createBackup(scope='all'){
     backupIdle();
     // A visibility-change save may detach the buffer while database reads wait.
     // Snapshot the tail first, then deduplicate it against committed chunk keys.
-    const tail={sessionId,sessionStart,chunkIndex,data:chunkBuffer.slice(),metadata:typeof recordingContext!=='undefined'&&recordingContext?.sessionId===sessionId?recordingContext.recordingMetadata:undefined};
+    const tail={sessionId,sessionStart,chunkIndex,data:chunkBuffer.slice(),owner:typeof recordingContext!=='undefined'&&recordingContext?.sessionId===sessionId?recordingContext:null};
     if(!db)await openDB();if(!trackDb)await openTrackDB();
     const [recording,track]=await Promise.all([readRecordingBackup(scope),(scope==='all'||scope==='tracks')?readBackupStores(trackDb,['tracks','reference_laps','lap_history']):Promise.resolve({tracks:[],reference_laps:[],lap_history:[]})]);
     // Include the unsaved tail even when storage is full; export must not require a write.
     if(tail.data.length&&(scope==='all'||scope==='recordings'||Number(scope)===tail.sessionId)&&!recording.chunks.some(c=>c.sessionId===tail.sessionId&&c.chunkIndex===tail.chunkIndex)){
         if(!recording.sessions.some(s=>s.sessionId===tail.sessionId))recording.sessions.push({sessionId:tail.sessionId,startTime:tail.sessionStart,status:'active'});
-        if(tail.metadata)recording.sessions.find(s=>s.sessionId===tail.sessionId).recordingMetadata=tail.metadata;
         recording.chunks.push({sessionId:tail.sessionId,chunkIndex:tail.chunkIndex,data:tail.data,timestamp:Date.now()});
     }
-    if(tail.metadata){const existing=recording.sessions.find(s=>s.sessionId===tail.sessionId);if(existing)existing.recordingMetadata=tail.metadata}
+    // Keep the original owner, but read its envelope after database awaits: the
+    // detached request may have completed while this backup was reading.
+    const metadata=tail.owner?.recordingMetadata,existing=recording.sessions.find(s=>s.sessionId===tail.sessionId);
+    if(existing&&metadata&&(metadata.status!=='pending'||!existing.recordingMetadata||existing.recordingMetadata.status==='pending'))existing.recordingMetadata=metadata;
     for(const row of recording.sessions){const failed=failedRecordingMetadata.get(row.sessionId);if(failed)row.recordingMetadata=failed}
     const value={format:BACKUP_FORMAT,version:BACKUP_VERSION,createdAt:new Date().toISOString(),data:{sessions:recording.sessions,chunks:recording.chunks,tracks:track.tracks,references:track.reference_laps.map(portableReference),history:track.lap_history}};
     value.checksum=backupChecksum(value.data);validateBackup(value);return value;
@@ -2969,23 +2972,23 @@ async function renderDataModal(){
 
 function recordingDetailsHTML(session){
     const m=session.recordingMetadata,show=v=>v===null?'Unknown':String(v);
-    let lines;
-    if(!m)lines=['Unknown · no historical snapshot was saved.'];
-    else if(m.status!=='captured')lines=[m.status==='pending'?'Pending · request has not completed.':'Unavailable · recording continued without a snapshot.','Requested: '+new Date(m.requestedAt).toLocaleString()];
+    const note=text=>'<p class="bbDetailsNote">'+escHtml(text)+'</p>';
+    const group=(title,rows)=>'<div class="bbDetailsGroup"><h4>'+escHtml(title)+'</h4><dl>'+rows.map(([label,value])=>'<dt>'+escHtml(label)+'</dt><dd>'+escHtml(value)+'</dd>').join('')+'</dl></div>';
+    let body;
+    if(!m)body=note('Unknown · no historical snapshot was saved.');
+    else if(m.status!=='captured')body=note(m.status==='pending'?'Pending · request has not completed.':'Unavailable · recording continued without a snapshot.')+group('Snapshot',[['Requested',new Date(m.requestedAt).toLocaleString()]]);
     else{
         const s=m.snapshot,b=s.build,g=s.gps,i=s.imu,c=s.calibration;
-        lines=[s.simulated?'SIM · Synthetic example; no hardware measurement.':'Controller snapshot',
-            'Firmware: '+show(b.app_version)+' · ESP-IDF: '+show(b.idf_version)+' · Target: '+b.target,
-            'Source SHA: '+show(b.source_sha),'Boot ID: '+s.boot_id+' · Snapshot uptime: '+s.captured_uptime_ms+' ms',
-            'Requested: '+new Date(m.requestedAt).toLocaleString()+' · Received: '+new Date(m.receivedAt).toLocaleString(),
-            'GPS: '+g.configured_model+' · Configured '+g.configured_rate_hz+' Hz · UART '+g.configured_uart_baud+' baud · Configuration unverified',
-            'IMU: '+i.model+' / '+i.transport+' · UART '+show(i.configured_uart_baud)+' baud · Selection: '+i.baud_selection+' · Configured output rate: '+show(i.configured_output_rate_hz),
-            'Applied accelerometer bias (sensor axes, m/s²): '+(c.accelerometer_bias_mps2?['x','y','z'].map(k=>k+' '+c.accelerometer_bias_mps2[k]).join(', '):'Unknown'),
-            'Mount alignment: '+(c.mount_alignment?'Saved alignment enabled: '+c.mount_alignment.is_calibrated+' · Yaw offset: '+c.mount_alignment.yaw_offset_rad+' rad':'Unknown'),
-            'One snapshot, not a history of settings. Configured rates are not delivered rates or receiver readback. Header probing does not verify sensor configuration.'];
+        body=(s.simulated?note('SIM · Synthetic example; no hardware measurement.'):'')+
+            group('Firmware',[['Application',show(b.app_version)],['ESP-IDF / target',show(b.idf_version)+' / '+b.target],['Source SHA',show(b.source_sha)]])+
+            group('GPS setup',[['Receiver',g.configured_model],['Configured',g.configured_rate_hz+' Hz · '+g.configured_uart_baud+' baud'],['Verification','Unverified']])+
+            group('IMU link',[['Sensor',i.model+' / '+i.transport],['UART',show(i.configured_uart_baud)+' baud · '+i.baud_selection],['Output rate',show(i.configured_output_rate_hz)]])+
+            group('Applied calibration',[['Bias · sensor axes',c.accelerometer_bias_mps2?['x','y','z'].map(k=>k+' '+c.accelerometer_bias_mps2[k]).join(', ')+' m/s²':'Unknown'],['Saved alignment enabled',c.mount_alignment?String(c.mount_alignment.is_calibrated):'Unknown'],['Yaw offset',c.mount_alignment?c.mount_alignment.yaw_offset_rad+' rad':'Unknown']])+
+            group('Snapshot',[['Boot ID',String(s.boot_id)],['Uptime',s.captured_uptime_ms+' ms'],['Requested',new Date(m.requestedAt).toLocaleString()],['Received',new Date(m.receivedAt).toLocaleString()]])+
+            '<p class="bbDetailsLimit">One snapshot, not a history of settings. Configured rates are not delivered rates; hardware configuration is unverified.</p>';
     }
-    if(session.metadataSaveFailed)lines.push('Details could not be saved in browser storage. Download details JSON or a backup before closing this tab.');
-    return '<details class="bbRecordingDetails"><summary>Recording details</summary><div class="bbSessionHealth">'+lines.map(escHtml).join('<br>')+'</div><button class="bbSessionBtn" data-action="details-export">Download details JSON</button></details>';
+    if(session.metadataSaveFailed)body=note('Details could not be saved in browser storage. Download details JSON or a backup before closing this tab.')+body;
+    return '<details class="bbRecordingDetails"><summary>Recording details</summary>'+body+'<button class="bbSessionBtn" data-action="details-export">Download details JSON</button></details>';
 }
 async function exportRecordingDetails(targetId){
     if(!db)await openDB();

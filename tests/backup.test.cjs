@@ -160,3 +160,13 @@ test('metadata-only storage failure overlays existing full/selected backups with
 });
 
 test('failed former session context is exported even after a new recording owns the tab',async()=>{const c=context();c.db=await database();c.trackDb=await database(true);await c.addBackupStores(c.db,{sessions:[{sessionId:100,startTime:100,status:'complete',recordingMetadata:{status:'pending',requestedAt:100}}]});c.failed={status:'captured',requestedAt:100,receivedAt:200,snapshot:metadataSnapshot()};vm.runInContext('failedRecordingMetadata.set(100,failed)',c);c.sessionId=200;c.recordingContext={sessionId:200,recordingMetadata:{status:'pending',requestedAt:200}};assert.equal((await c.createBackup('100')).data.sessions[0].recordingMetadata.status,'captured')});
+
+test('capture completion during backup reads keeps the completed envelope instead of stale pending context',async()=>{
+ const c=context();c.db=await database();c.trackDb=await database(true);c.sessionId=100;c.sessionStart=100;c.recordingContext={sessionId:100,recordingMetadata:{status:'pending',requestedAt:100}};
+ await c.addBackupStores(c.db,{sessions:[{sessionId:100,startTime:100,status:'complete',recordingMetadata:c.recordingContext.recordingMetadata}]});
+ const readRecording=c.readRecordingBackup;let release,started;const ready=new Promise(r=>started=r);
+ c.readRecordingBackup=async scope=>{started();await new Promise(r=>release=r);return readRecording(scope)};
+ const backup=c.createBackup('100');await ready;
+ await c.captureRecordingMetadata(c.db,c.recordingContext,async()=>({ok:true,json:async()=>metadataSnapshot()}));release();
+ const result=await backup;assert.equal(result.data.sessions[0].recordingMetadata.status,'captured');assert.equal(result.data.sessions[0].recordingMetadata.snapshot.boot_id,1);
+});

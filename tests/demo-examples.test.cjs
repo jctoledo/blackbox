@@ -1,7 +1,7 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs');
 const {indexedDB}=require('fake-indexeddb');
 const html=fs.readFileSync('sensors/blackbox/web/dashboard.html','utf8');
-function fixture(){const c={console,Response,URL,performance:{now:()=>0},window:{},document:{addEventListener(){}},location:{href:'https://example.test/demo.html'}};vm.createContext(c);vm.runInContext(fs.readFileSync('docs/demo.js','utf8').replace(' window.fetch=',' window.examplesForTest=exampleRows;window.seedForTest=seedExampleRecording; window.fetch='),c);vm.runInContext(html.slice(html.indexOf('class RollingRuns{'),html.indexOf('const rollingRuns='))+';this.Runs=RollingRuns;',c);return c}
+function fixture(){const events=new Map(),elements=new Map();const c={console:{...console,error(){}},Response,URL,performance:{now:()=>0},window:{},document:{addEventListener(name,fn){events.set(name,fn)},getElementById(id){if(!elements.has(id))elements.set(id,{});return elements.get(id)}},location:{href:'https://example.test/demo.html'}};c.events=events;c.elements=elements;vm.createContext(c);vm.runInContext(fs.readFileSync('docs/demo.js','utf8').replace(' window.fetch=',' window.examplesForTest=exampleRows;window.seedForTest=seedExampleRecording; window.fetch='),c);vm.runInContext(html.slice(html.indexOf('class RollingRuns{'),html.indexOf('const rollingRuns='))+';this.Runs=RollingRuns;',c);return c}
 test('demo examples populate both cornering signs and produce auditable accepted/rejected runs',()=>{
  const c=fixture(),circuit=c.window.examplesForTest('circuit'),rolling=c.window.examplesForTest('rolling');
  for(const rows of [circuit,rolling])for(const row of rows){assert.equal(row.gpsSynthetic,1);for(const value of Object.values(row))assert.ok(Number.isFinite(value))}
@@ -28,4 +28,9 @@ test('metadata endpoint and owned example migration stay SIM without replacing r
  const sessions=await all(db,'sessions'),example=sessions.find(s=>s.sessionId===id),user=sessions.find(s=>s.sessionId===id+1);
  assert.equal(sessions.length,2);assert.equal(example.marker,'keep');assert.equal(example.recordingMetadata.snapshot.simulated,true);assert.equal(example.recordingMetadata.snapshot.build.app_version,'SIM demo');assert.equal(example.recordingMetadata.snapshot.calibration.mount_alignment,null);assert.equal(user.recordingMetadata,undefined);assert.deepEqual(await all(db,'chunks'),before);
  const response=await c.window.fetch('/api/recording-metadata');assert.equal(response.headers.get('cache-control'),'no-store');const value=await response.json();assert.equal(value.simulated,true);assert.equal(value.gps.configured_model,'SIMULATED');
+});
+
+test('live and seeded metadata reuse the corresponding synthetic GPS boot identity',async()=>{
+ const c=fixture(),metadata=await(await c.window.fetch('/api/recording-metadata')).json(),gps=await(await c.window.fetch('/api/gps-log')).json();assert.equal(metadata.boot_id,gps.boot_id);await c.events.get('DOMContentLoaded')();await c.elements.get('demo-interval').onclick({target:{}});const after=await(await c.window.fetch('/api/recording-metadata')).json(),gpsAfter=await(await c.window.fetch('/api/gps-log')).json();assert.notEqual(after.boot_id,metadata.boot_id);assert.equal(after.boot_id,gpsAfter.boot_id);
+ for(const kind of ['circuit','rolling']){const db=await database(),rows=c.window.examplesForTest(kind);await c.window.seedForTest(db,'SIM example',rows,kind==='circuit'?'circuit-v6':'rolling-v7');const session=(await all(db,'sessions'))[0];assert.equal(session.recordingMetadata.snapshot.boot_id,rows.find(r=>r.gpsBootId!==undefined).gpsBootId)}
 });

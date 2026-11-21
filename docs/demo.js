@@ -85,18 +85,19 @@
   }
   return rows;
  }
- function recordingSnapshot(uptime=0){
-  return {version:1,simulated:true,boot_id:4242,captured_uptime_ms:Math.max(0,Math.floor(uptime)),build:{app_version:'SIM demo',idf_version:null,source_sha:null,target:'esp32c3'},gps:{configured_model:'SIMULATED',configured_rate_hz:25,configured_uart_baud:115200,configuration_verified:false},imu:{model:'WT901',transport:'uart',configured_uart_baud:null,baud_selection:'pending',configured_output_rate_hz:null},calibration:{accelerometer_bias_mps2:null,mount_alignment:null}};
+ function recordingSnapshot(uptime=0,boot=demoBoot){
+  return {version:1,simulated:true,boot_id:boot,captured_uptime_ms:Math.max(0,Math.floor(uptime)),build:{app_version:'SIM demo',idf_version:null,source_sha:null,target:'esp32c3'},gps:{configured_model:'SIMULATED',configured_rate_hz:25,configured_uart_baud:115200,configuration_verified:false},imu:{model:'WT901',transport:'uart',configured_uart_baud:null,baud_selection:'pending',configured_output_rate_hz:null},calibration:{accelerometer_bias_mps2:null,mount_alignment:null}};
  }
- function exampleMetadata(time){return {status:'captured',requestedAt:time,receivedAt:time,snapshot:recordingSnapshot()}}
+ function exampleMetadata(time,boot){return {status:'captured',requestedAt:time,receivedAt:time,snapshot:recordingSnapshot(0,boot)}}
  async function seedExampleRecording(database,label,rows,fixtureId){
+  const boot=rows.find(row=>row.gpsBootId!==undefined)?.gpsBootId??({'circuit-v6':101,'rolling-v7':102}[fixtureId]);
   return new Promise((resolve,reject)=>{
    const tx=database.transaction(['sessions','chunks'],'readwrite'),sessions=tx.objectStore('sessions');let id;
    tx.oncomplete=()=>resolve(id);tx.onerror=tx.onabort=()=>reject(tx.error||new Error('Demo example could not be saved'));
    const request=sessions.getAll();request.onsuccess=()=>{
-    const existing=request.result.find(s=>s.demoFixture===fixtureId);if(existing){id=existing.sessionId;if(!existing.recordingMetadata)sessions.put({...existing,recordingMetadata:exampleMetadata(existing.startTime)});return}
+    const existing=request.result.find(s=>s.demoFixture===fixtureId);if(existing){id=existing.sessionId;const metadata=existing.recordingMetadata;if(!metadata)sessions.put({...existing,recordingMetadata:exampleMetadata(existing.startTime,boot)});else if(metadata.status==='captured'&&metadata.snapshot.simulated&&metadata.snapshot.boot_id!==boot)sessions.put({...existing,recordingMetadata:{...metadata,snapshot:{...metadata.snapshot,boot_id:boot}}});return}
     id=request.result.reduce((next,s)=>Math.max(next,s.sessionId+1),Date.now());
-    sessions.add({sessionId:id,startTime:rows[0].t,status:'complete',label,demoFixture:fixtureId,recordingMetadata:exampleMetadata(rows[0].t)});
+    sessions.add({sessionId:id,startTime:rows[0].t,status:'complete',label,demoFixture:fixtureId,recordingMetadata:exampleMetadata(rows[0].t,boot)});
     for(let offset=0;offset<rows.length;offset+=250)tx.objectStore('chunks').add({sessionId:id,chunkIndex:offset/250,data:rows.slice(offset,offset+250),timestamp:rows[Math.min(offset+249,rows.length-1)].t});
    };
   });
