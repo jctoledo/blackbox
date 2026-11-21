@@ -230,3 +230,13 @@ fn gps_only_gap_requires_five_new_stationary_fixes_even_without_a_poll() {
         assert!(!tracker.confirmed());
     }
 }
+
+#[test]
+fn production_packet_age_uses_oldest_required_packet_and_freshness_boundary() {
+    use blackbox_host_tests::imu_evidence::packet_age_ms;
+    assert_eq!(packet_age_ms(1000, &[990_000, 900_000, 950_000]), Some(100));
+    assert_eq!(packet_age_ms(1000, &[990_000, 0, 950_000]), None);
+    assert_eq!(packet_age_ms(10, &[0xfffffff0u64 * 1000; 3]), Some(26));
+    assert_eq!(packet_age_ms(1000, &[800_000, 990_000, 950_000]), Some(200));
+    assert_eq!(packet_age_ms(1000, &[799_000, 990_000, 950_000]), None);
+}
