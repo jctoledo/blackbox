@@ -479,6 +479,22 @@ body.cluster-view .bbLapCard,body.cluster-view .bbApp .bbGCard{container:cluster
 
 .bbRecordingDetails{overflow-wrap:anywhere;min-width:0;font-size:12px;line-height:1.5}.bbRecordingDetails summary{cursor:pointer;min-height:44px;padding:12px 0;color:var(--text);font-weight:600}.bbRecordingDetails .bbSessionBtn{margin-top:12px}
 .bbDetailsGroup{padding:12px 0;border-top:1px solid var(--divider)}.bbDetailsGroup h4{font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px}.bbDetailsGroup dl{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.6fr);gap:5px 12px}.bbDetailsGroup dt{color:var(--text-secondary)}.bbDetailsGroup dd{color:var(--text);min-width:0;font-variant-numeric:tabular-nums}.bbDetailsNote{padding:10px 12px;margin:4px 0 12px;border-left:3px solid var(--amber);background:var(--bg);color:var(--text)}.bbDetailsLimit{color:var(--text-secondary);font-size:11px;margin-top:6px}
+/* Drive summary shares the timing frame; track selection only changes presentation. */
+.bbDrivePanel{display:flex;flex-direction:column;gap:12px;padding:18px;min-width:0}.bbDrivePanel[hidden],.bbLapCard.active .bbDrivePanel,.bbLapCard.inactive .bbLapSetup{display:none}
+.bbDriveBody{display:flex;flex-direction:column;gap:12px;min-width:0}.bbDriveState{font:600 12px/1.4 Inter,sans-serif;color:var(--text-secondary)}.bbDriveMetrics{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;margin:6px 0}.bbDriveLabel{color:var(--text-tertiary);font:10px/1.4 var(--mono);text-transform:uppercase;letter-spacing:.04em}.bbDriveNumber{font:500 clamp(24px,5vw,46px)/1.2 var(--mono);letter-spacing:-.06em;white-space:nowrap;margin-top:8px}.bbDriveNumber small{font:12px var(--mono);margin-left:5px;letter-spacing:0}.bbDrivePanel p{font:11px/1.4 var(--mono);color:var(--text-secondary);margin:0;overflow-wrap:anywhere}.bbDriveActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:auto}.bbDriveActions button{min-height:44px;padding:8px 12px;border:1px solid var(--divider);border-radius:6px;background:transparent;color:var(--text);font:600 11px Inter,sans-serif;cursor:pointer}.bbDriveActions button.recording{color:var(--red)}
+body.cluster-view .bbDrivePanel{flex:1;min-height:0;display:grid;grid-template-rows:auto minmax(0,1fr) auto;overflow:hidden;gap:8px;padding:12px 18px}body.cluster-view .bbDriveBody{min-height:0;overflow:auto;gap:8px}body.cluster-view .bbDriveActions{min-height:44px}body.cluster-view .bbDriveMetrics{flex:1;align-items:center;margin:0}body.cluster-view .bbDriveActions{flex-wrap:nowrap}body.cluster-view .bbDriveActions button{padding:6px 10px}body.cluster-view .bbDriveNumber{font-size:clamp(24px,4.7vw,46px)}
+@container cluster-card (max-height:210px){
+    body.cluster-view .bbDrivePanel{padding:4px 10px;gap:3px}
+    body.cluster-view .bbDriveState{font-size:10px;line-height:14px}
+    body.cluster-view .bbDriveBody{gap:4px}
+    body.cluster-view .bbDriveMetrics{gap:8px;flex:none;align-items:start}
+    body.cluster-view .bbDriveLabel{font-size:9px;line-height:12px;letter-spacing:0}
+    body.cluster-view .bbDriveNumber{font-size:24px;line-height:28px;margin-top:2px}
+    body.cluster-view .bbDrivePanel p{font-size:10px;line-height:14px}
+    body.cluster-view .bbDriveActions{gap:6px}
+    body.cluster-view .bbDriveActions button{padding:6px 8px}
+}
+@media(max-width:380px){.bbDriveMetrics{gap:8px}.bbDriveNumber{font-size:27px}}
 </style></head>
 <body>
 
@@ -508,6 +524,12 @@ body.cluster-view .bbLapCard,body.cluster-view .bbApp .bbGCard{container:cluster
     <div id="recording-notice" class="bbRecordingNotice" role="status" hidden></div>
     <section class="bbCard bbLapCard inactive" id="lap-section">
         <div class="bbClusterHeader"><span class="bbClusterHealth"><span id="cluster-link">Connecting</span><span id="cluster-gps">GPS —</span><span id="cluster-rec">REC OFF</span></span><button id="cluster-controls" aria-expanded="false">Controls</button></div>
+        <div class="bbDrivePanel" id="drive-panel">
+            <div class="bbDriveState" id="drive-state" role="status">Ready to record</div>
+            <div class="bbDriveBody" tabindex="0" aria-label="Recording metrics and health"><div class="bbDriveMetrics"><div><div class="bbDriveLabel">Recording duration</div><div class="bbDriveNumber" id="drive-duration">—</div></div><div><div class="bbDriveLabel">GPS distance · partial</div><div class="bbDriveNumber"><span id="drive-distance">—</span><small id="drive-distance-unit">km</small></div></div></div>
+            <p id="drive-coverage">GPS distance uses qualified receiver evidence</p><p id="drive-health" role="status">Checking sensors and browser storage…</p></div>
+            <div class="bbDriveActions"><button id="drive-record">Record session</button><button id="drive-tracks">Tracks</button><button id="drive-data">Saved data</button></div>
+        </div>
         <div class="bbLapSetup" id="lap-setup">
             <span class="bbLapSetupText" id="lap-setup-text">Ready for a session?<small>Select a track to arm lap timing.</small></span>
             <button class="bbLapSetupBtn" id="btn-tracks">Select track</button>
@@ -919,6 +941,90 @@ function openDB(){
     });
 }
 
+// Drive session core. Pure receiver evidence + explicit browser clocks; no I/O.
+const DRIVE_REASONS=['invalid','sequence','boundary','clock','implausible'];
+const DRIVE_DURATION_REASONS=['background','clock-change','monotonic-reversal'];
+function projectDrive(value){
+    const fail=()=>{throw Error('Invalid Drive summary')},integer=n=>Number.isSafeInteger(n)&&n>=0,finite=n=>Number.isFinite(n)&&n>=0&&n<=1e15;
+    const keys=['version','algorithm','status','elapsedMs','durationStatus','durationReasons','startAfterGpsRow','observedGpsRows','stopAfterGpsRow','distanceM','knownGpsSeconds','intervalCount','rejected','synthetic'];
+    if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).length!==keys.length||keys.some(k=>!Object.hasOwn(value,k)))fail();
+    const v=value;
+    if(v.version!==1||v.algorithm!=='receiver-speed-trapezoid-v1'||!['active','stopped','interrupted'].includes(v.status)||!finite(v.elapsedMs)||!['monotonic','uncertain','checkpoint'].includes(v.durationStatus)||typeof v.synthetic!=='boolean')fail();
+    if(!Array.isArray(v.durationReasons)||v.durationReasons.length>DRIVE_DURATION_REASONS.length||new Set(v.durationReasons).size!==v.durationReasons.length||v.durationReasons.some(r=>!DRIVE_DURATION_REASONS.includes(r)))fail();
+    if(!integer(v.observedGpsRows)||!integer(v.intervalCount)||v.intervalCount>v.observedGpsRows||!(v.startAfterGpsRow===null||integer(v.startAfterGpsRow)&&v.startAfterGpsRow<=v.observedGpsRows)||!(v.stopAfterGpsRow===null||integer(v.stopAfterGpsRow)&&v.stopAfterGpsRow===v.observedGpsRows))fail();
+    if(v.status==='active'&&v.stopAfterGpsRow!==null||v.status!=='active'&&v.stopAfterGpsRow===null||v.startAfterGpsRow===null&&v.observedGpsRows!==0)fail();
+    if(!finite(v.knownGpsSeconds)||!(v.distanceM===null||finite(v.distanceM))||v.intervalCount===0&&(v.distanceM!==null||v.knownGpsSeconds!==0)||v.intervalCount>0&&(v.distanceM===null||v.knownGpsSeconds<=0)||v.startAfterGpsRow!==null&&v.intervalCount>Math.max(0,v.observedGpsRows-v.startAfterGpsRow-1))fail();
+    if(v.durationStatus==='monotonic'&&v.durationReasons.length||v.durationStatus==='uncertain'&&!v.durationReasons.length||(v.status==='interrupted')!==(v.durationStatus==='checkpoint'))fail();
+    if(!v.rejected||typeof v.rejected!=='object'||Array.isArray(v.rejected)||Object.keys(v.rejected).length!==DRIVE_REASONS.length||DRIVE_REASONS.some(k=>!integer(v.rejected[k])||v.rejected[k]>v.observedGpsRows))fail();
+    return{version:1,algorithm:v.algorithm,status:v.status,elapsedMs:v.elapsedMs,durationStatus:v.durationStatus,durationReasons:[...v.durationReasons],startAfterGpsRow:v.startAfterGpsRow,observedGpsRows:v.observedGpsRows,stopAfterGpsRow:v.stopAfterGpsRow,distanceM:v.distanceM,knownGpsSeconds:v.knownGpsSeconds,intervalCount:v.intervalCount,rejected:Object.fromEntries(DRIVE_REASONS.map(k=>[k,v.rejected[k]])),synthetic:v.synthetic};
+}
+function driveCalendar(date){
+    if(!Number.isSafeInteger(date)||date<=0)return false;
+    const day=Math.floor(date/10000),month=Math.floor(date/100)%100,year=2000+date%100,d=new Date(Date.UTC(year,month-1,day));
+    return d.getUTCFullYear()===year&&d.getUTCMonth()===month-1&&d.getUTCDate()===day;
+}
+class DriveSession{
+    constructor(owner){
+        this.owner=owner;this.previous=null;this.started=false;this.mono=null;this.wall=null;
+        this.state={version:1,algorithm:'receiver-speed-trapezoid-v1',status:'active',elapsedMs:0,durationStatus:'monotonic',durationReasons:[],startAfterGpsRow:null,observedGpsRows:0,stopAfterGpsRow:null,distanceM:null,knownGpsSeconds:0,intervalCount:0,rejected:Object.fromEntries(DRIVE_REASONS.map(k=>[k,0])),synthetic:false};
+    }
+    apply(e){
+        if(e.owner!==this.owner||this.state.status!=='active')return false;
+        const s=this.state;
+        if(e.type==='start'){
+            if(this.started||!Number.isFinite(e.mono)||!Number.isFinite(e.wall))return false;
+            this.started=true;this.mono=e.mono;this.wall=e.wall;return true;
+        }
+        if(!this.started)return false;
+        if(['checkpoint','stop','interrupt'].includes(e.type)){
+            const reasons=new Set(s.durationReasons);
+            if(e.hidden)reasons.add('background');
+            if(Number.isFinite(e.mono)&&Number.isFinite(e.wall)){
+                const delta=e.mono-this.mono;if(delta<0)reasons.add('monotonic-reversal');
+                if(Math.abs(e.wall-this.wall-delta)>2000)reasons.add('clock-change');
+                s.elapsedMs+=Math.max(0,delta);this.mono=e.mono;this.wall=e.wall;
+            }
+            s.durationReasons=[...reasons];s.durationStatus=reasons.size?'uncertain':'monotonic';
+            if(e.type!=='checkpoint'){s.status=e.type==='stop'?'stopped':'interrupted';s.stopAfterGpsRow=s.observedGpsRows;if(e.type==='interrupt')s.durationStatus='checkpoint';this.previous=null}
+            return true;
+        }
+        if(e.type!=='gps'||!Array.isArray(e.rows))return false;
+        const initial=s.startAfterGpsRow===null;
+        for(const r of e.rows){
+            if(r.rowType!==1)continue;
+            s.observedGpsRows++;s.synthetic=s.synthetic||r.gpsSynthetic===1;
+            if(initial)continue;
+            const valid=r.gpsActive===1&&r.gpsAccepted===1&&Number.isFinite(r.sp)&&r.sp>=0&&r.sp<=100&&Number.isSafeInteger(r.gpsHostUs)&&r.gpsHostUs>=0&&Number.isSafeInteger(r.gpsUtcUs)&&r.gpsUtcUs>=0&&r.gpsUtcUs<86400000000&&driveCalendar(r.gpsDate)&&Number.isInteger(r.gpsFractionDigits)&&r.gpsFractionDigits>=2&&r.gpsFractionDigits<=255&&Number.isSafeInteger(r.gpsBootId)&&r.gpsBootId>=0&&r.gpsBootId<=0xffffffff&&Number.isSafeInteger(r.gpsSeq)&&r.gpsSeq>0;
+            if(!valid){s.rejected.invalid++;this.previous=null;continue}
+            const p=this.previous;
+            if(!p){this.previous=r;continue}
+            const dt=(r.gpsUtcUs-p.gpsUtcUs)/1e6;
+            const reason=r.gpsBootId!==p.gpsBootId||r.gpsDate!==p.gpsDate||r.gpsBoundary===2?'boundary':r.gpsSeq!==p.gpsSeq+1||r.gpsMissing>0?'sequence':r.gpsHostUs<=p.gpsHostUs||dt<.02||dt>.3?'clock':Math.abs(r.sp-p.sp)/dt>15?'implausible':null;
+            if(reason){s.rejected[reason]++;this.previous=null;continue}
+            s.distanceM=(s.distanceM??0)+(p.sp+r.sp)*.5*dt;s.knownGpsSeconds+=dt;s.intervalCount++;this.previous=r;
+        }
+        if(initial)s.startAfterGpsRow=s.observedGpsRows;
+        return true;
+    }
+    snapshot(){return projectDrive(this.state)}
+}
+function recoverDrive(value){
+    const state=projectDrive(value);
+    if(state.status==='active'){state.status='interrupted';state.durationStatus='checkpoint';state.stopAfterGpsRow=state.observedGpsRows}
+    return state;
+}
+function replayDrive(value,rows){
+    const saved=projectDrive(value),d=new DriveSession(0);d.apply({owner:0,type:'start',mono:0,wall:0});
+    let ordinal=0,initial=[],enrolled=[];
+    for(const r of rows){if(r.rowType!==1)continue;ordinal++;if(ordinal>saved.observedGpsRows)continue;(ordinal<=(saved.startAfterGpsRow??0)?initial:enrolled).push(r)}
+    if(ordinal<saved.observedGpsRows)throw Error('Drive summary exceeds saved evidence');
+    if(saved.startAfterGpsRow!==null){d.apply({owner:0,type:'gps',rows:initial});d.apply({owner:0,type:'gps',rows:enrolled})}
+    const actual=d.snapshot();
+    for(const key of ['startAfterGpsRow','observedGpsRows','distanceM','knownGpsSeconds','intervalCount','rejected','synthetic'])if(JSON.stringify(actual[key])!==JSON.stringify(saved[key]))throw Error('Drive summary does not match GPS evidence');
+    return saved;
+}
+// End Drive session core.
+
 const failedRecordingMetadata=new Map(),pendingRecordingMetadata=new Set();
 // Recording details: bounded v1 projection; clocks are browser wall time and controller uptime.
 function projectRecordingSnapshot(value){
@@ -973,7 +1079,8 @@ async function captureRecordingMetadata(database,owner,request=requestDevice){
 
 // Recording state. Detach each batch before awaiting IndexedDB; only one writer runs.
 let rec=false,sessionId=null,chunkBuffer=[],chunkIndex=0,lastSaveTime=0,sessionStart=0;
-let recordingContext=null;
+let recordingContext=null,latestDriveRecording=null;
+let driveReadiness={at:null,gps:false,imu:false};
 let recoveredSessionCount=0;
 let gpsCursor=null,gpsRequest=null,gpsLogStatus='GPS evidence is collected while recording.';
 let chunkWrite=null,recordingBusy=false,recordingError='';
@@ -985,6 +1092,25 @@ function commitStore(store,value){
         tx.objectStore(store).put(value);
     });
 }
+// Recording adapters: Drive clocks/state belong to the raw recording owner.
+function recordingClock(){return{mono:performance.now(),wall:Date.now(),hidden:typeof document!=='undefined'&&document.visibilityState==='hidden'}}
+function checkpointDrive(owner=recordingContext,type='checkpoint'){
+    if(!owner?.driveSession)return null;
+    owner.driveSession.apply({owner:owner.sessionId,type,...recordingClock()});
+    return owner.driveSession.snapshot();
+}
+function commitRecordingChunk(database,ownerId,index,data,drive){
+    return new Promise((resolve,reject)=>{
+        const tx=database.transaction(['sessions','chunks'],'readwrite'),store=tx.objectStore('sessions');
+        tx.oncomplete=resolve;tx.onerror=tx.onabort=()=>reject(tx.error||Error('Recording checkpoint failed'));
+        const request=store.get(ownerId);request.onsuccess=()=>{
+            if(!request.result){tx.abort();return}
+            if(data.length)tx.objectStore('chunks').put({sessionId:ownerId,chunkIndex:index,data,timestamp:Date.now()});
+            store.put({...request.result,...(drive?{drive}:{}),sessionId:ownerId});
+        };
+    });
+}
+
 function createRecordingSession(startTime,recordingMetadata){
     return new Promise((resolve,reject)=>{
         const tx=db.transaction('sessions','readwrite'),store=tx.objectStore('sessions');let id;
@@ -1003,7 +1129,8 @@ async function startRecording(){
         if(!db)await openDB();
         await saveChunk();
         const started=Date.now(),metadata={status:'pending',requestedAt:started},id=await createRecordingSession(started,metadata);
-        const owner={sessionId:id,recordingMetadata:metadata};recordingContext=owner;
+        const owner={sessionId:id,recordingMetadata:metadata,driveSession:new DriveSession(id)};recordingContext=owner;
+        owner.driveSession.apply({owner:id,type:'start',...recordingClock()});latestDriveRecording=null;
         if(typeof resetPerformanceRuns==='function')resetPerformanceRuns();gpsCursor=null;gpsLogStatus='Waiting for GPS timestamp log…';sessionId=id;sessionStart=started;chunkIndex=0;lastSaveTime=Date.now();rec=true;recordingError='';lastSaveTime=0;
         void captureRecordingMetadata(db,owner);
     }catch(e){recordingError='Storage error — recording not started';console.error(e)}
@@ -1011,16 +1138,19 @@ async function startRecording(){
 }
 async function saveChunk(){
     while(chunkWrite)await chunkWrite;
-    if(!db||chunkBuffer.length===0)return;
-    const data=chunkBuffer;
+    if(!db)return;
+    const owner=recordingContext,ownerId=sessionId,index=chunkIndex,data=chunkBuffer,drive=checkpointDrive(owner);
+    if(!data.length&&!drive)return;
     chunkBuffer=[];
     chunkWrite=(async()=>{
         try{
-            await commitStore('chunks',{sessionId,chunkIndex,data,timestamp:Date.now()});
-            chunkIndex++;lastSaveTime=Date.now();recordingError='';
+            if(owner?.driveSession)await commitRecordingChunk(db,ownerId,index,data,drive);
+            else if(data.length)await commitStore('chunks',{sessionId:ownerId,chunkIndex:index,data,timestamp:Date.now()});
+            if(data.length)chunkIndex++;lastSaveTime=Date.now();recordingError='';
         }catch(e){
             chunkBuffer=data.concat(chunkBuffer);
-            rec=false;recordingError='Recording stopped: storage unavailable. Keep this tab open and export the unsaved data.';
+            checkpointDrive(owner,'interrupt');rec=false;
+            recordingError='Recording stopped: storage unavailable. Keep this tab open and export the unsaved data.';
             throw e;
         }finally{updateRecUI()}
     })();
@@ -1028,11 +1158,13 @@ async function saveChunk(){
 }
 async function stopRecording(){
     if(recordingBusy)return;
-    recordingBusy=true;updateRecUI();
-    const ownerId=sessionId;
-    await collectGpsLog();
+    recordingBusy=true;
+    const owner=recordingContext,ownerId=sessionId;
+    checkpointDrive(owner,'stop'); // Stop fence and duration precede every await.
+    const finalGps=collectGpsLog();
     rec=false;updateRecUI();
     try{
+        await finalGps;
         await saveChunk();
         if(db&&ownerId)await patchRecordingSession(db,ownerId,{status:'complete',chunks:chunkIndex});
     }catch(e){recordingError='Recording could not be finalized. Keep this tab open and export from Saved data.';console.error('Recording remains recoverable in this tab:',e)}
@@ -1071,10 +1203,10 @@ async function collectGpsLog(){
             const response=await requestDevice('/api/gps-log');
             if(!response.ok)throw Error('GPS log unavailable');
             const batch=await response.json();
-            if(!rec||recording!==sessionId)return;
+            if(recording!==sessionId||!rec&&!recordingBusy)return;
             const result=gpsRows(batch,gpsCursor,Date.now());
-            if(chunkBuffer.length+result.rows.length>MAX_PENDING_SAMPLES){rec=false;recordingError='Recording stopped: too many unsaved samples. Keep this tab open and export.';return}
-            chunkBuffer.push(...result.rows);gpsCursor=result.cursor;if(typeof updatePerformanceRuns==='function')updatePerformanceRuns(result.rows);
+            if(chunkBuffer.length+result.rows.length>MAX_PENDING_SAMPLES){checkpointDrive(recordingContext,'interrupt');rec=false;recordingError='Recording stopped: too many unsaved samples. Keep this tab open and export.';return}
+            chunkBuffer.push(...result.rows);recordingContext?.driveSession?.apply({owner:recording,type:'gps',rows:result.rows});gpsCursor=result.cursor;if(typeof updatePerformanceRuns==='function')updatePerformanceRuns(result.rows);
             gpsLogStatus=batch.events.length?'GPS timestamps captured with this recording. Export GPS CSV from Saved data.':'GPS log connected; waiting for receiver messages.';
             if(chunkBuffer.length&&Date.now()-lastSaveTime>=CHUNK_INTERVAL&&!chunkWrite)await saveChunk();
         }catch(error){gpsLogStatus='GPS timestamp log unavailable. Dashboard recording continues; check connection and firmware.';console.warn(error)}
@@ -1087,7 +1219,45 @@ function gpsSamplesToCSV(samples){
     return 'browser_received_ms,boot_id,rmc_seq,host_parse_us,receiver_utc_us_of_day,receiver_date_ddmmyy,utc_fractional_digits,rmc_active,fix_accepted,gps_lat,gps_lon,speed_mps,course_rad,missing_before,boundary,synthetic\n'+samples.filter(r=>r.rowType===1).map(r=>keys.map(k=>Number.isFinite(r[k])?r[k]:'').join(',')).join('\n')+'\n';
 }
 
+function driveDuration(ms){
+    const seconds=Math.floor(ms/1000),h=Math.floor(seconds/3600),m=Math.floor(seconds/60)%60,s=seconds%60;
+    return(h?h+':'+String(m).padStart(2,'0'):String(m))+':'+String(s).padStart(2,'0');
+}
+function driveDistance(value){return value===null?'—':(value/(speedUnit==='mph'?1609.344:1000)).toFixed(2)}
+function renderDrive(){
+    const panel=$('drive-panel');if(!panel)return;
+    panel.hidden=!!activeTrack;
+    const state=checkpointDrive()||latestDriveRecording?.drive;
+    const historical=!recordingContext&&!!latestDriveRecording;
+    $('drive-state').textContent=state?(state.synthetic?'SIM · ':'')+(state.status==='active'?'Recording':state.status==='interrupted'?'Interrupted · saved checkpoint':historical?'Saved recording':'Recording stopped'):historical?'Saved recording · summary unavailable':'Ready to record';
+    $('drive-duration').textContent=state?(state.durationStatus==='checkpoint'?'≥ ':'')+driveDuration(state.elapsedMs):'—';
+    $('drive-distance').textContent=driveDistance(state?.distanceM??null);
+    $('drive-distance-unit').textContent=speedUnit==='mph'?'mi':'km';
+    const gaps=state?Object.values(state.rejected).reduce((n,v)=>n+v,0):0;
+    const exclusions=state?Object.entries(state.rejected).filter(([,n])=>n).map(([k])=>({invalid:'invalid fix',sequence:'GPS gap',boundary:'restart/date',clock:'clock gap',implausible:'speed jump'})[k]).join(', '):'';
+    $('drive-coverage').textContent=state?(state.distanceM===null?'GPS distance unavailable':state.knownGpsSeconds.toFixed(1)+' s GPS observed · partial')+(gaps?' · excluded: '+exclusions:'')+(state.durationStatus==='uncertain'?' · duration uncertain':state.durationStatus==='checkpoint'?' · duration lower bound':''):'GPS distance uses qualified receiver evidence';
+    const live=driveReadiness.at!==null&&performance.now()-driveReadiness.at<=1500;
+    const storage=recordingError||(!db?'Storage unavailable':chunkWrite?'Saving…':chunkBuffer.length?'Data pending save':sessionId&&lastSaveTime?'Saved in this browser':'Browser storage ready');
+    $('drive-health').textContent=rec||!state?[live?'Connected':'No fresh telemetry',live&&driveReadiness.gps?'GPS ready':'GPS waiting',live&&driveReadiness.imu?'IMU ready':'IMU waiting',storage].join(' · '):storage;
+    const button=$('drive-record');button.textContent=rec?'Stop recording':state||historical?'Record new session':'Record session';button.disabled=recordingBusy;button.classList.toggle('recording',rec);
+}
+async function loadLatestDrive(database,sessions){
+    if(recordingContext)return;
+    const row=sessions.slice().sort((a,b)=>b.sessionId-a.sessionId)[0];
+    if(!row){latestDriveRecording=null;return}
+    let drive=null;
+    if(row.drive){
+        try{
+            const chunks=await idbPromise(database.transaction('chunks','readonly').objectStore('chunks').index('sessionId').getAll(row.sessionId));
+            const rows=chunks.sort((a,b)=>a.chunkIndex-b.chunkIndex).flatMap(c=>c.data||[]);
+            drive=recoverDrive(replayDrive(row.drive,rows));
+        }catch(error){console.warn('Historical Drive summary unavailable',error)}
+    }
+    if(!recordingContext)latestDriveRecording={sessionId:row.sessionId,drive};
+}
+
 function updateRecUI(){
+    if(typeof renderDrive==='function')renderDrive();
     if(typeof renderPerformanceRuns==='function')renderPerformanceRuns();
     $('gps-log-status').textContent=gpsLogStatus;
     const clusterRecording=$('cluster-recording');clusterRecording.textContent=rec?'● REC':'REC OFF';clusterRecording.classList.toggle('recording',rec);$('cluster-rec').textContent=clusterRecording.textContent;$('cluster-rec').classList.toggle('recording',rec);
@@ -1106,7 +1276,7 @@ function updateRecUI(){
     const saveStatus=$('save-status');saveStatus.hidden=!sessionId;saveStatus.textContent=chunkWrite?'Saving recording…':chunkBuffer.length?chunkBuffer.length+' samples pending save':lastSaveTime?'Recording saved in this browser':'No samples saved yet';
     $('rec-chunks').textContent=chunkIndex;
     $('rec-lastsave').textContent=lastSaveTime?(Math.floor((Date.now()-lastSaveTime)/1000)+'s ago'):'--';
-    $('rec-duration').textContent=sessionStart?fmtTime(Date.now()-sessionStart):'--';
+    const drive=recordingContext?.driveSession?.snapshot();$('rec-duration').textContent=drive?fmtTime(drive.elapsedMs):'--';
 }
 
 function samplesToCSV(samples){
@@ -1158,7 +1328,8 @@ async function getAllSessions(){
     });
     const enriched=sessions.map(s=>{
         const summary=chunksBySession.get(s.sessionId)||{count:0,bytes:0,health:recordingHealth([])},health=summary.health;
-        return{sessionId:s.sessionId,startTime:s.startTime||s.sessionId,recordingMetadata:failedRecordingMetadata.get(s.sessionId)||(recordingContext?.sessionId===s.sessionId?recordingContext.recordingMetadata:s.recordingMetadata),metadataPending:pendingRecordingMetadata.has(s.sessionId),pendingSamples:s.sessionId===sessionId?chunkBuffer.length:0,metadataSaveFailed:failedRecordingMetadata.has(s.sessionId),label:typeof s.label==='string'?s.label:'',status:s.status,chunkCount:summary.count,sampleCount:health.samples,durationMs:health.durationMs,estimatedBytes:summary.bytes,health};
+        const drive=recordingContext?.sessionId===s.sessionId?recordingContext.driveSession?.snapshot():s.drive?recoverDrive(s.drive):null;
+        return{drive,sessionId:s.sessionId,startTime:s.startTime||s.sessionId,recordingMetadata:failedRecordingMetadata.get(s.sessionId)||(recordingContext?.sessionId===s.sessionId?recordingContext.recordingMetadata:s.recordingMetadata),metadataPending:pendingRecordingMetadata.has(s.sessionId),pendingSamples:s.sessionId===sessionId?chunkBuffer.length:0,metadataSaveFailed:failedRecordingMetadata.has(s.sessionId),label:typeof s.label==='string'?s.label:'',status:s.status,chunkCount:summary.count,sampleCount:health.samples,durationMs:drive?.elapsedMs??health.durationMs,estimatedBytes:summary.bytes,health};
     });
     enriched.sort((a,b)=>b.sessionId-a.sessionId);
     return enriched;
@@ -1172,13 +1343,16 @@ async function getStorageStats(){
 
 async function deleteSession(targetId){
     if(!db)await openDB();
-    if((rec||chunkWrite||chunkBuffer.length)&&targetId===sessionId)throw new Error('Save or export pending recording data before deleting');
+    if((rec||recordingBusy||chunkWrite||chunkBuffer.length)&&targetId===sessionId)throw new Error('Save or export pending recording data before deleting');
     await new Promise((resolve,reject)=>{
         const tx=db.transaction(['sessions','chunks'],'readwrite');tx.oncomplete=resolve;tx.onerror=tx.onabort=()=>reject(tx.error||new Error('Recording deletion failed'));
         const cursor=tx.objectStore('chunks').index('sessionId').openCursor(IDBKeyRange.only(targetId));
         cursor.onsuccess=()=>{const c=cursor.result;if(c){c.delete();c.continue()}};
         tx.objectStore('sessions').delete(targetId);
     });
+    if(recordingContext?.sessionId===targetId){recordingContext=null;sessionId=null;sessionStart=0}
+    if(latestDriveRecording?.sessionId===targetId)latestDriveRecording=null;
+    const remaining=await idbPromise(db.transaction('sessions','readonly').objectStore('sessions').getAll());await loadLatestDrive(db,remaining);updateRecUI();
 }
 
 async function exportSessionById(targetId,gpsOnly=false,runsOnly=false){
@@ -1202,13 +1376,13 @@ async function exportSessionById(targetId,gpsOnly=false,runsOnly=false){
 }
 
 async function clearAllRecordings(){
-    if(rec||chunkWrite||chunkBuffer.length)throw new Error('Save or export pending recording data before clearing');
+    if(rec||recordingBusy||chunkWrite||chunkBuffer.length)throw new Error('Save or export pending recording data before clearing');
     if(!db)await openDB();
     await new Promise((resolve,reject)=>{
         const tx=db.transaction(['sessions','chunks'],'readwrite');tx.oncomplete=resolve;tx.onerror=tx.onabort=()=>reject(tx.error||new Error('Recording deletion failed'));
         tx.objectStore('sessions').clear();tx.objectStore('chunks').clear();
     });
-    recoveredSessionCount=0;updateRecUI();
+    recoveredSessionCount=0;recordingContext=null;sessionId=null;sessionStart=0;latestDriveRecording=null;updateRecUI();
 }
 
 function formatLapTimeMs(ms){if(!ms||ms<=0)return'--:--.---';const m=Math.floor(ms/60000);const s=Math.floor((ms%60000)/1000);const msc=ms%1000;return m+':'+(s<10?'0':'')+s+'.'+(msc<100?'0':'')+(msc<10?'0':'')+msc}
@@ -1687,6 +1861,7 @@ function openTrackModal(){
 function closeTrackModal(){hideModal('track-modal')}
 
 function updateActiveTrackDisplay(){
+    if(typeof renderDrive==='function')renderDrive();
     const sec=$('active-track-section');
     if(activeTrack){
         sec.style.display='flex';
@@ -2430,6 +2605,7 @@ let speed_ema=0,displaySessionStart=Date.now();
 let speedUnit='km/h';try{if(localStorage.getItem('blackbox-speed-unit')==='mph')speedUnit='mph'}catch{}
 function speedForDisplay(kmh,unit=speedUnit){return Math.round(kmh/(unit==='mph'?1.609344:1))}
 function renderSpeedUnits(){
+    if(typeof renderDrive==='function')renderDrive();
     $('speed-unit').textContent=$('speed-maximum-unit').textContent=speedUnit;
     $('menu-units').textContent='Speed units: '+speedUnit;
     $('speed').textContent=speed_ema<1?0:speedForDisplay(speed_ema);
@@ -2673,6 +2849,7 @@ function process(buf,timing=null){
     if(gpsOk===1&&Number.isFinite(timing?.gps_age_ms)&&timing.gps_age_ms>=0&&timing.gps_age_ms<=300)maximumFreshSpeed=Math.max(maximumFreshSpeed??0,sp);
     $('speed-maximum').textContent=maximumFreshSpeed===null?'—':speedForDisplay(maximumFreshSpeed);
 
+    driveReadiness={at:performance.now(),gps:gpsOk===1&&Number.isFinite(timing?.gps_age_ms)&&timing.gps_age_ms>=0&&timing.gps_age_ms<=300,imu:Number.isFinite(timing?.imu_age_ms)&&timing.imu_age_ms>=0&&timing.imu_age_ms<=200};
     const modeUsable=forcesUsable(gpsOk,timing?.gps_age_ms,timing?.imu_age_ms);
     currentModeColor=getModeColorHex(modeUsable?mo:0);
     const el=$('maneuver');
@@ -2707,7 +2884,7 @@ function process(buf,timing=null){
     // Recording
     if(rec){
         chunkBuffer.push({t:now,gpsSynthetic:timing?.simulated?1:0,deviceTimeMs:d.getUint32(3,true),lapTimeMs,lapCnt,lapFlags,lastLapMs:timing?.last_lap_ms,bestLapMs:timing?.best_lap_ms,gpsAgeMs:timing?.gps_age_ms,imuAgeMs:timing?.imu_age_ms,timingRevision:timing?.revision,gpsBootId:timing?.gps_boot_id,gpsSeq:timing?.gps_event?.seq,gpsHostUs:timing?.gps_event?.host_us,gpsUtcUs:timing?.gps_event?.utc_us,gpsDate:timing?.gps_event?.date_ddmmyy,gpsFractionDigits:timing?.gps_event?.fractional_digits,sp,ax,ay,wz,mo,latg,lng,lat,lon,gpsOk,ekfX,ekfY,ekfYaw,gpsCourse,lon_imu:fusion.lon_imu,lon_gps:fusion.lon_gps,gps_wt:fusion.gps_wt,pitch_c:fusion.pitch_c,pitch_cf:fusion.pitch_cf,roll_c:fusion.roll_c,roll_cf:fusion.roll_cf,tilt_x:fusion.tilt_x,tilt_y:fusion.tilt_y});
-        if(chunkBuffer.length>=MAX_PENDING_SAMPLES){rec=false;recordingError='Recording stopped: too many unsaved samples. Keep this tab open and export.';updateRecUI()}
+        if(chunkBuffer.length>=MAX_PENDING_SAMPLES){checkpointDrive(recordingContext,'interrupt');rec=false;recordingError='Recording stopped: too many unsaved samples. Keep this tab open and export.';updateRecUI()}
         else if(now-lastSaveTime>=CHUNK_INTERVAL&&!chunkWrite)saveChunk().catch(console.error);
     }
 }
@@ -2890,6 +3067,7 @@ function validateBackup(value){
     const sessions=unique(data.sessions,'sessionId'),tracks=unique(data.tracks,'id');unique(data.references,'id');unique(data.history,'id');
     for(const s of data.sessions){
         backupCheck(integer(s.sessionId)&&finite(s.startTime)&&s.startTime>=0,'invalid session timestamp');
+        if(s.drive!==undefined){let projected;try{projected=projectDrive(s.drive)}catch{backupCheck(false,'invalid Drive summary')}backupCheck(sameRecordingMetadata(projected,s.drive),'invalid Drive summary payload')}
         if(s.recordingMetadata!==undefined){let projected;try{projected=projectRecordingMetadata(s.recordingMetadata)}catch{backupCheck(false,'invalid recording metadata')}backupCheck(sameRecordingMetadata(projected,s.recordingMetadata),'invalid recording metadata payload')}
     }
     const chunks=new Set();let sampleCount=0;
@@ -2901,6 +3079,7 @@ function validateBackup(value){
     }
     const coordinate=n=>finite(n)&&Math.abs(n)<=20000000;
     const line=l=>l&&Array.isArray(l.p1)&&Array.isArray(l.p2)&&l.p1.length===2&&l.p2.length===2&&[...l.p1,...l.p2].every(coordinate)&&finite(l.direction)&&Math.abs(l.direction)<=2*Math.PI&&Math.hypot(l.p1[0]-l.p2[0],l.p1[1]-l.p2[1])>0;
+    for(const session of data.sessions)if(session.drive!==undefined){try{const rows=data.chunks.filter(c=>c.sessionId===session.sessionId).sort((a,b)=>a.chunkIndex-b.chunkIndex).flatMap(c=>c.data);replayDrive(session.drive,rows)}catch{backupCheck(false,'Drive summary does not match recording evidence')}}
     for(const t of data.tracks){
         backupCheck(typeof t.id==='string'&&typeof t.name==='string'&&t.name.length<=1000&&['loop','point_to_point'].includes(t.type),'invalid track');
         backupCheck(line(t.startLine)&&(t.type!=='point_to_point'||line(t.finishLine)),'invalid timing line');
@@ -2960,6 +3139,7 @@ async function createBackup(scope='all'){
     // A visibility-change save may detach the buffer while database reads wait.
     // Snapshot the tail first, then deduplicate it against committed chunk keys.
     const tail={sessionId,sessionStart,chunkIndex,data:chunkBuffer.slice(),owner:typeof recordingContext!=='undefined'&&recordingContext?.sessionId===sessionId?recordingContext:null};
+    const drive=tail.owner?.driveSession?.snapshot();
     if(!db)await openDB();if(!trackDb)await openTrackDB();
     const [recording,track]=await Promise.all([readRecordingBackup(scope),(scope==='all'||scope==='tracks')?readBackupStores(trackDb,['tracks','reference_laps','lap_history']):Promise.resolve({tracks:[],reference_laps:[],lap_history:[]})]);
     // Include the unsaved tail even when storage is full; export must not require a write.
@@ -2971,6 +3151,7 @@ async function createBackup(scope='all'){
     // detached request may have completed while this backup was reading.
     const metadata=tail.owner?.recordingMetadata,existing=recording.sessions.find(s=>s.sessionId===tail.sessionId);
     if(existing&&metadata&&(metadata.status!=='pending'||!existing.recordingMetadata||existing.recordingMetadata.status==='pending'))existing.recordingMetadata=metadata;
+    if(existing&&drive)existing.drive=recoverDrive(drive);
     for(const row of recording.sessions){const failed=failedRecordingMetadata.get(row.sessionId);if(failed)row.recordingMetadata=failed}
     const value={format:BACKUP_FORMAT,version:BACKUP_VERSION,createdAt:new Date().toISOString(),data:{sessions:recording.sessions,chunks:recording.chunks,tracks:track.tracks,references:track.reference_laps.map(portableReference),history:track.lap_history}};
     value.checksum=backupChecksum(value.data);validateBackup(value);return value;
@@ -2980,7 +3161,7 @@ function makeRestorePlan(value,existingSessions,token,now){
     for(const session of data.sessions){do{next++}while(used.has(next));backupCheck(Number.isSafeInteger(next),'session ID capacity exceeded');ids.set(session.sessionId,next);used.add(next)}
     const trackIds=new Map(data.tracks.map((t,i)=>[t.id,'restore_'+token+'_'+i]));
     return{summary,recordingsDone:false,tracksDone:false,
-        sessions:data.sessions.map(s=>({...s,sessionId:ids.get(s.sessionId),status:'complete',restoredFrom:s.sessionId,restoredAt:now})),
+        sessions:data.sessions.map(s=>({...s,...(s.drive?{drive:recoverDrive(s.drive)}:{}),sessionId:ids.get(s.sessionId),status:'complete',restoredFrom:s.sessionId,restoredAt:now})),
         chunks:data.chunks.map(c=>({...c,sessionId:ids.get(c.sessionId)})),
         tracks:data.tracks.map(t=>({...t,id:trackIds.get(t.id),name:t.name+' (restored)',modified:now})),
         references:data.references.map((r,i)=>({...r,id:'restore_ref_'+token+'_'+i,trackId:trackIds.get(r.trackId),samples:new Float32Array(r.samples).buffer})),
@@ -3064,7 +3245,7 @@ function refreshRecordingDetails(owner){
     const row=modal.querySelector('[data-session-id="'+owner.sessionId+'"]');
     const details=row?.querySelector('.bbRecordingDetails'),body=details?.querySelector('.bbRecordingDetailsBody');if(!body)return;
     const focused=body.contains(document.activeElement),scroller=modal.querySelector('.bbModalBody'),scrollTop=scroller.scrollTop;
-    const template=document.createElement('template');template.innerHTML=recordingDetailsHTML({recordingMetadata:owner.recordingMetadata,metadataSaveFailed:owner.metadataSaveFailed});
+    const template=document.createElement('template');template.innerHTML=recordingDetailsHTML({drive:owner.driveSession?.snapshot(),recordingMetadata:owner.recordingMetadata,metadataSaveFailed:owner.metadataSaveFailed});
     body.replaceChildren(...template.content.querySelector('.bbRecordingDetailsBody').childNodes);
     const button=body.querySelector('[data-action="details-export"]');button.onclick=()=>handleSessionAction(button);
     if(focused)button.focus({preventScroll:true});scroller.scrollTop=scrollTop;
@@ -3086,6 +3267,7 @@ function recordingDetailsHTML(session){
             group('Snapshot',[['Boot ID',String(s.boot_id)],['Uptime',s.captured_uptime_ms+' ms'],['Requested',new Date(m.requestedAt).toLocaleString()],['Received',new Date(m.receivedAt).toLocaleString()]])+
             '<p class="bbDetailsLimit">One snapshot, not a history of settings. Configured rates are not delivered rates; hardware configuration is unverified.</p>';
     }
+    if(session.drive){const d=session.drive;body=group('Drive · partial GPS estimate',[['State',d.status],['Recording duration',driveDuration(d.elapsedMs)+(d.durationStatus==='checkpoint'?' · checkpoint lower bound':d.durationStatus==='uncertain'?' · uncertain':'')],['GPS observed',d.distanceM===null?'Unavailable':d.distanceM.toFixed(1)+' m · '+d.knownGpsSeconds.toFixed(2)+' s'],['Excluded GPS evidence',Object.entries(d.rejected).filter(([,n])=>n).map(([k,n])=>k+' '+n).join(', ')||'No internal exclusions'],['Enrollment fence',d.startAfterGpsRow===null?'No successful GPS snapshot':d.startAfterGpsRow+' GPS rows excluded at start'],['Clocks',d.durationReasons.join(', ')||'Monotonic browser duration']])+body}
     if(session.metadataSaveFailed)body=note('Details could not be saved in browser storage. Download details JSON or a backup before closing this tab.')+body;
     return '<details class="bbRecordingDetails"><summary>Recording details</summary><div class="bbRecordingDetailsBody">'+body+'<button class="bbSessionBtn" data-action="details-export">Download details JSON</button></div></details>';
 }
@@ -3094,7 +3276,8 @@ async function exportRecordingDetails(targetId){
     const row=await idbPromise(db.transaction('sessions','readonly').objectStore('sessions').get(targetId));
     if(!row)throw Error('Recording no longer exists');
     const metadata=failedRecordingMetadata.get(targetId)||(recordingContext?.sessionId===targetId?recordingContext.recordingMetadata:row.recordingMetadata);
-    const value={format:'blackbox-recording-details',version:1,sessionId:row.sessionId,startTime:row.startTime,recordingMetadata:metadata??null};
+    const drive=recordingContext?.sessionId===targetId?recordingContext.driveSession?.snapshot():row.drive?recoverDrive(row.drive):null;
+    const value={format:'blackbox-recording-details',version:1,sessionId:row.sessionId,startTime:row.startTime,recordingMetadata:metadata??null,...(drive?{drive}:{})};
     const url=URL.createObjectURL(new Blob([JSON.stringify(value,null,2)],{type:'application/json'})),a=document.createElement('a');
     a.href=url;a.download='blackbox-recording-'+targetId+'-details.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
 }
@@ -3102,7 +3285,7 @@ async function renderSessionList(){
     const listEl=$('session-list'),clearBtn=$('btn-clear-all-recordings');
     try{
         const stats=await getStorageStats();
-        clearBtn.disabled=stats.sessionCount===0||rec||!!chunkWrite||chunkBuffer.length>0;
+        clearBtn.disabled=stats.sessionCount===0||rec||recordingBusy||!!chunkWrite||chunkBuffer.length>0;
         recoveredSessionCount=stats.sessions.filter(s=>s.status==='active'&&s.sessionId!==sessionId).length;updateRecUI();
         if(stats.sessionCount===0){
             listEl.innerHTML='<div class=\"bbSessionEmpty\"><div class=\"icon\"></div>No saved sessions yet.<br>Choose Record session to capture data in this browser.</div>';
@@ -3123,7 +3306,7 @@ async function renderSessionList(){
                     '<button class=\"bbSessionBtn\" data-action=\"export\">Session CSV</button>'+
                     '<button class=\"bbSessionBtn\" data-action=\"gps-export\">GPS CSV</button>'+
                     '<button class=\"bbSessionBtn\" data-action=\"runs-export\">Runs CSV</button>'+
-                    '<button class=\"bbSessionBtn danger\" data-action=\"delete\"'+((s.sessionId===sessionId&&(rec||chunkWrite||chunkBuffer.length))?' disabled':'')+'>Delete</button>'+
+                    '<button class=\"bbSessionBtn danger\" data-action=\"delete\"'+((s.sessionId===sessionId&&(rec||recordingBusy||chunkWrite||chunkBuffer.length))?' disabled':'')+'>Delete</button>'+
                 '</div>'+
             '</div>';
         }).join('');
@@ -3299,6 +3482,9 @@ $('expand-g').onclick=()=>{const expanded=$('g-card').classList.toggle('expanded
 $('quick-tracks').onclick=openTrackModal;
 $('quick-record').onclick=()=>$('menu-rec').click();
 $('run-record').onclick=()=>$('menu-rec').click();
+$('drive-record').onclick=()=>$('menu-rec').click();
+$('drive-tracks').onclick=()=>openTrackModal();
+$('drive-data').onclick=()=>openDataModal();
 $('quick-data').onclick=openDataModal;
 
 // Init
@@ -3318,12 +3504,12 @@ setInterval(()=>{
 setInterval(updateDiag,1000);
 setInterval(()=>{if(rec)collectGpsLog()},1000);
 
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&chunkBuffer.length)saveChunk().catch(console.error)});
-window.addEventListener('pagehide',()=>{if(chunkBuffer.length)saveChunk().catch(console.error)});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'){checkpointDrive();if(recordingContext)saveChunk().catch(console.error)}});
+window.addEventListener('pagehide',()=>{checkpointDrive();if(recordingContext||chunkBuffer.length)saveChunk().catch(console.error)});
 openDB().then(async()=>{
     const sessions=await idbPromise(db.transaction('sessions','readonly').objectStore('sessions').getAll());
     recoveredSessionCount=sessions.filter(s=>s.status==='active'&&s.sessionId!==sessionId).length;
-    updateRecUI();
+    await loadLatestDrive(db,sessions);updateRecUI();
 }).catch(e=>{recordingError='Browser storage unavailable. Recording and recovery cannot be guaranteed.';updateRecUI();console.error(e)});
 
 openTrackDB().catch(e=>console.log('Track DB error:',e));

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Drive recording panel when no track is selected: readiness, monotonic recording duration, partial receiver-speed GPS distance, explicit coverage/exclusions, frozen Stop summary and historical/interrupted reload state. Track selection changes presentation without changing capture.
+- Atomic raw-chunk/Drive checkpoints, strict reproducible backup validation, recovery-tail context and companion details exports; synthetic Drive preview and operator guide.
+
 ### Fixed
 - Rolling interval estimates preserve synthetic provenance from eligibility lead-in and both start endpoints, and reject direction changes across the interpolated start (#101). Real-drive accuracy validation remains pending.
 - Compact landscape cards respond to space left by warning rows and expanded Controls, keeping timing state and instruments separate from their footers.

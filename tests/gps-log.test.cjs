@@ -24,7 +24,7 @@ test('stopping waits for the in-flight GPS fetch and saves its tail in the same 
  c.commitStore=async(store,value)=>saved.push({store,value});
  c.patchRecordingSession=async(database,id,patch)=>saved.push({store:'sessions',value:{sessionId:id,...patch}});
  const pending=c.collectGpsLog(),stop=c.stopRecording();
- assert.equal(vm.runInContext('rec',c),true);
+ assert.equal(vm.runInContext('rec',c),false);
  deliver({ok:true,json:async()=>batch([1,2])});await pending;await stop;
  const chunk=saved.find(s=>s.store==='chunks').value;assert.equal(chunk.sessionId,10);assert.equal(chunk.data.length,2);assert.equal(chunk.data[1].gpsSeq,2);
  assert.equal(vm.runInContext('rec',c),false);assert.equal(saved.at(-1).value.status,'complete');

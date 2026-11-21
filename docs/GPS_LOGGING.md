@@ -57,3 +57,7 @@ Protocol reference: [u-blox M9 SPG 4.04 interface description, RMC section 2.7.1
 The old browser loop waited 33 ms **after** each telemetry request completed. A 30 ms request/processing time therefore gave about `1000 / (33 + 30) = 15.9` received updates per second, even with a faster firmware/GPS source. That explains a plausible UI bottleneck; it does not measure your old Wi-Fi latency or prove the receiver was at 25 Hz.
 
 The current loop subtracts request/processing time from that interval and keeps one telemetry request in flight. Its ideal ceiling is about 30 Hz, with actual throughput limited by firmware publication, network latency, browser work and timer throttling. The UI counter uses the actual elapsed measurement window. GPS evidence is captured at the receiver parser and collected in batches independently of that UI rate.
+
+## Drive recording summary
+
+Without a selected track, the Drive panel shows recording readiness, monotonic duration and partial receiver-speed distance. Stop freezes its summary before network/storage waits. Gaps are excluded rather than estimated; interrupted reloads show a saved checkpoint and never resume recording. Keep GPS CSV with Recording details JSON or the full backup to explain the enrollment fences and clocks. See the [Drive recording guide](DRIVE.md).
