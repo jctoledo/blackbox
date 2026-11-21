@@ -10,7 +10,9 @@ BASE = 'https://jctoledo.github.io/blackbox/'
 
 
 class Page(HTMLParser):
+    """Collect navigation and search metadata from a rendered page."""
     def __init__(self):
+        """Initialize a page inventory."""
         super().__init__()
         self.links = []
         self.ids = set()
@@ -20,6 +22,7 @@ class Page(HTMLParser):
         self.title = False
 
     def handle_starttag(self, tag, attrs):
+        """Collect IDs, links, headings and metadata for validation."""
         attrs = dict(attrs)
         if attrs.get('id'):
             self.ids.add(attrs['id'])
@@ -36,6 +39,7 @@ class Page(HTMLParser):
 
 
 def main():
+    """Check all published guides against local files and sitemap URLs."""
     paths = [ROOT / 'index.html', *sorted((ROOT / 'guides').glob('*.html'))]
     assert len(paths) > 1, 'Run build_docs.py first'
     pages = {}
