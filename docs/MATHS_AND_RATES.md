@@ -85,9 +85,16 @@ Differentiating speed amplifies noise: if successive speed errors were independe
 
 ## Calibration on a driveway
 
-The current startup/recalibration bias routine assumes a stationary, **level sensor**, averages X/Y acceleration as bias and subtracts 9.81 m/s² from Z. It cannot separate sensor offset from gravity projected by a slope. At 3° tilt, `sin(3°) = 0.0523`, so about 0.052 g can be mistaken for bias. It will not damage the device, but can corrupt subsequent force estimates.
+Earlier startup/recalibration code assumed a stationary, level sensor and learned horizontal gravity as bias. At 3° tilt, `sin(3°) = 0.0523`, so about 0.052 g could be misclassified. The revised candidate subtracts the body-frame gravity vector predicted by fresh AHRS attitude before averaging:
 
-Until this is corrected and physically validated, calibrate stationary on level ground with the sensor level. Horizontal mount alignment is a separate driving workflow and does not repair that assumption. Its 10° attitude gate is a collection heuristic, not proof of slope immunity. See [mount alignment](CALIBRATION.md).
+```
+gravity_x = -g * sin(pitch)
+gravity_y =  g * sin(roll) * cos(pitch)
+gravity_z =  g * cos(roll) * cos(pitch)
+bias = mean(raw_acceleration - gravity_vector)
+```
+
+Tests recover known injected biases at level and combined modest pitch/roll angles; stale packets, rotation, nonfinite data and vibration are rejected. This is conditional on attitude accuracy, not an independent multi-pose calibration. A single pose cannot resolve all bias/attitude ambiguities. Initial hardware testing should still use level ground, then compare modest inclines. Horizontal mount alignment is separate; its 10° collection gate is not slope compensation. See [mount alignment](CALIBRATION.md).
 
 ## Hardware checks that software cannot replace
 

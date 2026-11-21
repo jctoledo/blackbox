@@ -47,6 +47,8 @@ Use this checklist for a specific board, wiring revision, GPS receiver, mounting
 
 ## 3. Axes, calibration, and mounting — bench, then controlled motion
 
+- [ ] Compare startup bias and stationary residuals on level ground and modest nose-up/nose-down driveway inclines, without remounting. Capture AHRS roll/pitch and serial calibration results; the revised gravity subtraction is not physically validated yet.
+- [ ] Try gently disturbing the unit during calibration, then letting it settle: rejected evidence must not complete early.
 - [ ] At rest on a level surface, record acceleration, yaw, tilt corrections, and bias estimates for at least two minutes.
 - [ ] Tilt about each documented axis separately. Verify axis signs and gravity compensation; restore level and check recovery.
 - [ ] At a controlled location, record straight acceleration and braking, then left and right turns. Confirm longitudinal/lateral signs and GPS course convention against the physical motion.
