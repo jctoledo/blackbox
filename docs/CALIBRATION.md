@@ -4,13 +4,17 @@ Mount alignment learns the vehicle's forward axis relative to a nearly level dev
 
 ## Use it
 
-1. Secure the device nearly level; boot motionless for the separate IMU bias calibration. Wait outdoors for fresh GPS and a stationary indication.
+1. Park on level ground and secure the sensor level; boot motionless for the separate IMU bias calibration. Wait outdoors for fresh GPS and a stationary indication.
 2. Open the dashboard menu → **Mount alignment**. Start while parked. The device must have writable NVS storage.
 3. At a controlled site, drive **forward**, then brake steadily in a straight line. Do not interact with the phone while moving. The screen does not tell the driver when to perform a sudden maneuver.
 4. Park and review the candidate. **Save candidate** writes it before activating it. A failed write leaves the previous offset active and permits retry. **Cancel attempt** discards the candidate. **Clear saved offset** restores the default axis assumption while parked.
 5. Verify acceleration/braking and left/right force signs against known motion. Repeat after remounting. Keep recordings and mounting photos for review.
 
 The operator must establish forward travel. Scalar GPS speed and a brake vector cannot independently distinguish braking while reversing: that can yield a 180° error. Slopes, banking, sensor latency, AHRS errors and valid-looking GPS outliers remain field-test cases. The current collection gate rejects more than 10° measured roll/pitch; this is a heuristic, not slope compensation.
+
+## Driveway slopes and startup bias
+
+The separate startup/recalibration routine currently assumes gravity lies along sensor Z. A stationary incline can therefore be saved as accelerometer bias: a 3° tilt projects about 0.052 g onto a horizontal sensor axis. This does not damage the device, but can skew subsequent force readings. Recalibrate on level ground with a level sensor; horizontal mount alignment does not fix this limitation.
 
 ## Evidence and gates
 

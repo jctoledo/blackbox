@@ -485,3 +485,5 @@ Tap **Full screen** on supported Android browsers. On iPhone, use **Menu → Pho
 ### GPS evidence for a drive
 
 Timestamp-logging firmware saves receiver UTC and device parse times alongside recordings. In **Saved data**, export both **Session CSV** and **GPS CSV**; the latter reveals receiver cadence, repeated epochs and phone collection gaps. [Capture and analysis guide](docs/GPS_LOGGING.md). It does not establish absolute lap accuracy.
+
+For the implemented equations, rate budgets, force-display semantics and current driveway-calibration limitation, see [Maths and update rates](docs/MATHS_AND_RATES.md).

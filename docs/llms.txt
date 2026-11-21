@@ -29,3 +29,5 @@ This file is a convenient reading index, not a crawler directive or a guarantee 
 - [Experimental mount alignment](https://jctoledo.github.io/blackbox/guides/mount-alignment.html): signed GPS braking evidence, reviewed candidates, persistent save and physical limitations.
 
 - [GPS timestamp logging](https://jctoledo.github.io/blackbox/guides/gps-logging.html): receiver UTC, device parse times, bounded capture, export and offline interval analysis.
+
+- [Maths and hardware rates](https://jctoledo.github.io/blackbox/guides/maths-and-rates.html): interpolation, update-rate budgets, estimator limits, force estimates and calibration assumptions.

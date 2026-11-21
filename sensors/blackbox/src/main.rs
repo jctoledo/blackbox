@@ -462,19 +462,12 @@ fn main() {
     let mut pending_lap_flags = 0u8;
     let mut lap_revision = 0u32;
 
-    // Create sensor fusion for mode detection
-    //
-    // Uses GPS-corrected orientation (ArduPilot-style approach):
-    // - OrientationCorrector learns pitch/roll errors from GPS velocity comparison
-    // - IMU orientation is corrected BEFORE gravity removal
-    // - Enables accurate 200 Hz IMU data instead of being limited to GPS rate
-    //
-    // For longitudinal: Blends corrected IMU with GPS based on correction
-    // confidence
-    // - High confidence → trust IMU more (fast 200 Hz response)
-    // - Low confidence → rely on GPS (ground truth but slower)
-    //
-    // For lateral: centripetal (speed × yaw_rate) - mount-independent, instant
+    // Create sensor fusion for mode detection at the telemetry cadence (~30 Hz).
+    // OrientationCorrector estimates pitch/roll errors from GPS velocity changes
+    // before gravity removal. Confidence controls the longitudinal IMU/GPS blend;
+    // neither source is ground truth. IMU acquisition can run faster than this path.
+    // Lateral acceleration uses speed * corrected yaw rate, an approximation for
+    // coordinated turns; banking, sideslip and mounting errors still matter.
     let fusion_config = FusionConfig {
         gps_high_rate: 20.0,
         gps_medium_rate: 10.0,
