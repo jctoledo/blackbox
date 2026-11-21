@@ -4,6 +4,7 @@ on:
     branches: [main]
   workflow_dispatch:
 permissions:
+  actions: read
   contents: read
   pages: read
 concurrency:
@@ -56,6 +57,11 @@ jobs:
           name: protocol-fixture
           path: tests/fixtures/telemetry-v4.hex
           retention-days: 1
+      - name: Wait for artifact index
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/wait_for_artifact.py protocol-fixture
+
       - name: Download protocol artifact
         uses: actions/download-artifact@v7
         with:

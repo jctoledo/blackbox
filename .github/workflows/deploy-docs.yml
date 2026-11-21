@@ -9,6 +9,7 @@ on:
     types: [completed]
 
 permissions:
+  actions: read
   contents: read
   pages: write
   id-token: write
@@ -48,6 +49,11 @@ jobs:
         uses: actions/upload-pages-artifact@v4
         with:
           path: 'docs'
+
+      - name: Wait for artifact index
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/wait_for_artifact.py github-pages
 
       - name: Deploy to GitHub Pages
         id: deployment
