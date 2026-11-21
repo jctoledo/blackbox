@@ -17,3 +17,7 @@ GitHub Issues in `jctoledo/blackbox` are the existing tracker. Session authoriza
 ## Adoption evidence and house overrides
 
 The [controlled code-review trial](evals/code-review-2026-11-21.md) compared the existing baseline, stock skill and a repository-adapted version. All found five planted defects; structured variants added requirement quotes, not demonstrated recall. Keep the skill optional and use the [house workflow](../process/workflow.md), [tracker](issue-tracker.md), [triage roles](triage-labels.md) and [domain references](domain.md). These pointers were authored from established project/session rules after reading the maintainer-provided adoption guide; this is not a claim that the setup interview or every skill evaluation completed.
+
+## Real workflow exercise
+
+[Recording context #88](https://github.com/jctoledo/blackbox/issues/88) exercised a specified parent, device/browser tickets and native blocking edges. The browser ticket started only after the device and transport prerequisites merged. Independent review found a stale pending-backup overwrite and inconsistent synthetic boot identities; both were reproduced and corrected before merge. Browser rotation checks then exposed narrow-modal card and zero-height-list defects. The work kept all automated checks on lat and left hardware evidence separate. This demonstrates the adapted workflow on one feature, not general skill superiority.

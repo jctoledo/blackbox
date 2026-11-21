@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Renamed `neo6m` driver to `ublox-gps` to reflect support for multiple u-blox GPS modules (NEO-6M, NEO-M9N, etc.)
+- Updated driver documentation with UBX protocol examples and dynamic platform models
+
+### Removed
+- Obsolete documentation files (RELEASE.md, IMPLEMENTATION_SUMMARY.md, release-notes.md)
+
+## [0.0.4-rc.11] - 2026-11-21
+
 ### Fixed
 - Device JSON requests bound complete bodies and recover from stalled reads; an independent receipt watchdog clears stale forces and marks timing unconfirmed. Landscape connection and recording recovery notices occupy separate rows.
 
@@ -17,11 +26,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Repository-specific agent workflow, triage/domain pointers and a documented three-arm code-review trial; no defect-recall superiority claim.
 
 ### Changed
-- Renamed `neo6m` driver to `ublox-gps` to reflect support for multiple u-blox GPS modules (NEO-6M, NEO-M9N, etc.)
-- Updated driver documentation with UBX protocol examples and dynamic platform models
+- Saved data cards keep full-width content/actions on landscape phones; the modal owns scrolling so short screens do not hide recordings.
+- Refreshed dashboard screenshots, recording-context guidance, demo and preview installer.
+- Reuse SDK tools and host build caches while preserving checkout-local firmware metadata. Release images must contain the requested tag in their actual application descriptor.
 
-### Removed
-- Obsolete documentation files (RELEASE.md, IMPLEMENTATION_SUMMARY.md, release-notes.md)
+Release candidate for ESP32-C3 hardware evaluation. Includes rc.10. Configured rates, synthetic tests and one metadata snapshot do not establish delivered rates, physical timing accuracy or calibration validity.
 
 ## [0.0.4-rc.10] - 2026-11-21
 

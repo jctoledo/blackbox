@@ -1,6 +1,6 @@
 # Recording metadata API
 
-`GET /api/recording-metadata` returns JSON with `Cache-Control: no-store`. Before initialization (or if the snapshot cannot be supplied), it returns HTTP 503 with `{"status":"unavailable"}`. HTTP 200 supplies the typed version 1 snapshot below. This endpoint does not change binary telemetry. Browser capture/export is a separate integration planned for **v0.0.4-rc.11**, not a capability of rc.10.
+`GET /api/recording-metadata` returns JSON with `Cache-Control: no-store`. Before initialization (or if the snapshot cannot be supplied), it returns HTTP 503 with `{"status":"unavailable"}`. HTTP 200 supplies the typed version 1 snapshot below. This endpoint does not change binary telemetry. Browser capture/export is included in **v0.0.4-rc.11 and later**; rc.10 does not provide it.
 
 ```json
 {
@@ -46,7 +46,7 @@ IMU baud selection is `pending` with null baud until probing completes; `header_
 
 No Wi-Fi credentials, tokens, broker/server settings, or additional hardware identity are exposed. Hardware detection, receiver readback and physical accuracy still require bench/drive evidence.
 
-## Browser recording contract (planned for v0.0.4-rc.11)
+## Browser recording contract
 
 A new session has an optional `recordingMetadata` field. Capture starts with `{status:"pending", requestedAt}` and never delays telemetry recording. One bounded request covers both response headers and body parsing. A supported, validated response becomes `{status:"captured", requestedAt, receivedAt, snapshot}`; an old endpoint, timeout, malformed or unsupported response becomes explicit `unavailable`. Browser request/receipt timestamps are wall-clock milliseconds; the snapshot's uptime is a separate device monotonic clock.
 
@@ -54,4 +54,4 @@ Before storage, the browser projects a bounded version 1 whitelist. A late respo
 
 The existing full-backup format stays at version 1 with a strictly validated optional `recordingMetadata` field. Absence in legacy recordings/backups means unknown, not captured or a fabricated default. Available context follows restore-as-new copies, interrupted sessions and unsaved-tail backups. Existing row/chunk preservation and partial-database failure behavior still apply.
 
-Saved data is intended to expose expandable **Recording details** and **Download details JSON** for a companion export. The companion does not replace sample CSVs or a restorable backup. Demo snapshots, including seeded recordings, must carry `simulated:true` and display explicit **SIM** labeling; they do not represent a physical build or calibration. Manual phone/antenna/mounting notes and the flashed image SHA-256 are still needed.
+Saved data exposes expandable **Recording details** and **Download details JSON** for a companion export. The companion does not replace sample CSVs or a restorable backup. Demo snapshots, including seeded recordings, must carry `simulated:true` and display explicit **SIM** labeling; they do not represent a physical build or calibration. Manual phone/antenna/mounting notes and the flashed image SHA-256 are still needed.
