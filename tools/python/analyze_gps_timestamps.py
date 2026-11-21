@@ -36,8 +36,9 @@ def analyze(rows):
                 raise ValueError(f'Row {line}: negative {key}')
             return result
 
-        event = {k: number(k) for k in ('boot_id', 'rmc_seq', 'host_parse_us', 'rmc_active',
-                                       'fix_accepted', 'boundary', 'synthetic')}
+        required = ('boot_id', 'rmc_seq', 'host_parse_us', 'rmc_active',
+                    'fix_accepted', 'boundary', 'synthetic')
+        event = {k: number(k) for k in required}
         for k in ('receiver_utc_us_of_day', 'receiver_date_ddmmyy', 'missing_before'):
             event[k] = number(k, optional=True)
         counts['events'] += 1

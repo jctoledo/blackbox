@@ -522,7 +522,7 @@ body:not(.analysis-view) .bbGTopRight{display:block}
         </div>
     </section>
     <div class="bbTelemetryStrip">
-        <span class="bbTItem"><span class="bbNum bbNum--hz" id="hz">0</span> Hz</span>
+        <span class="bbTItem" title="Accepted dashboard samples per second, not GPS receiver rate">UI <span class="bbNum bbNum--hz" id="hz">0</span> Hz</span>
         <span class="bbTItem" title="Estimator position sigma, not measured GPS accuracy">Est. σ <span class="bbNum bbNum--gps" id="gps-acc">--</span>m</span>
         <span class="bbTItem">Turn rate <span class="bbNum" id="yaw">0</span>°/s</span>
     </div>
@@ -603,7 +603,7 @@ body:not(.analysis-view) .bbGTopRight{display:block}
         <div class="bbCardHead">Configuration</div>
         <div class="bbRow"><span class="bbLbl">WiFi Mode</span><span class="bbVal" id="wifi-mode">--</span></div>
         <div class="bbRow"><span class="bbLbl">SSID</span><span class="bbVal" id="wifi-ssid">--</span></div>
-        <div class="bbRow"><span class="bbLbl">Telemetry Rate</span><span class="bbVal" id="telem-hz">--</span></div>
+        <div class="bbRow"><span class="bbLbl">Telemetry target</span><span class="bbVal" id="telem-hz">--</span></div>
         <div class="bbRow"><span class="bbLbl">GPS Model</span><span class="bbVal" id="gps-model">--</span></div>
     </section>
     <section class="bbDiagCard">
@@ -2360,6 +2360,7 @@ function markTelemetryUnavailable(label){
     $('connection-notice').textContent=label==='Invalid data'?'Invalid telemetry rejected. Values below are from the last accepted sample.':label==='Offline'?'Connection lost. Showing last received values; reconnect to Blackbox Wi-Fi.':'Telemetry paused. Values below are not live.';
 }
 async function poll(){
+    const started=performance.now();
     try{
         const r=await requestDevice('/api/telemetry');if(!r.ok)throw new Error('Telemetry unavailable');
         const j=await r.json();
@@ -2377,7 +2378,7 @@ async function poll(){
             $('liveDot').classList.add('on');$('stxt').textContent='LIVE';
         }
         if(!lastTelemetryAt||Date.now()-lastTelemetryAt>1500)markTelemetryUnavailable('No fresh data');
-        setTimeout(poll,33);
+        setTimeout(poll,Math.max(0,33-(performance.now()-started)));
     }catch(e){markTelemetryUnavailable('Offline');setTimeout(poll,500)}
 }
 
@@ -2850,8 +2851,10 @@ $('quick-record').onclick=()=>$('menu-rec').click();
 $('quick-data').onclick=openDataModal;
 
 // Init
+let lastRateUpdateAt=performance.now();
 setInterval(()=>{
-    $('hz').textContent=cnt;cnt=0;
+    const rateNow=performance.now(),elapsed=rateNow-lastRateUpdateAt;
+    $('hz').textContent=elapsed>0?(cnt*1000/elapsed).toFixed(1):'0';cnt=0;lastRateUpdateAt=rateNow;
     $('session-time').textContent=fmtTime(Date.now()-displaySessionStart);
     if(lastGpsState){$('gpsDot').classList.add('on');$('gpsHz').textContent='GPS '+Math.round(fusion.gps_rate)}
     else{$('gpsDot').classList.remove('on');$('gpsHz').textContent='GPS --'}

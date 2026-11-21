@@ -41,3 +41,9 @@ The tool emits JSON with receiver and host interval summaries, duplicate/backwar
 For the weekend: capture a few minutes parked outdoors, your ordinary drive and another parked segment. Keep the dashboard in the foreground. Export before changing browsers/Home Screen installations. Keep precise route files private. Independent timestamped crossing evidence is still needed to assess lap accuracy.
 
 Protocol reference: [u-blox M9 SPG 4.04 interface description, RMC section 2.7.16](https://content.u-blox.com/sites/default/files/u-blox-M9-SPG-4.04_InterfaceDescription_UBX-21022436.pdf). RMC carries UTC time/date and speed in knots; the driver converts speed to m/s. Logging preserves that unit and does not change the current host-time lap-crossing algorithm.
+
+## Why v0.0.3 could show about 16 Hz in the dashboard
+
+The old browser loop waited 33 ms **after** each telemetry request completed. A 30 ms request/processing time therefore gave about `1000 / (33 + 30) = 15.9` received updates per second, even with a faster firmware/GPS source. That explains a plausible UI bottleneck; it does not measure your old Wi-Fi latency or prove the receiver was at 25 Hz.
+
+The current loop subtracts request/processing time from that interval and keeps one telemetry request in flight. Its ideal ceiling is about 30 Hz, with actual throughput limited by firmware publication, network latency, browser work and timer throttling. The UI counter uses the actual elapsed measurement window. GPS evidence is captured at the receiver parser and collected in batches independently of that UI rate.

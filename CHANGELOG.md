@@ -24,6 +24,7 @@ Release candidate for weekend data collection; hardware timing accuracy remains 
 - Offline timestamp analyzer and collection guide; synthetic demo GPS logs are explicitly labelled.
 
 ### Fixed
+- Dashboard polling subtracts request/processing time from its 33 ms interval instead of adding another 33 ms; the measured UI receive rate is labelled separately from the firmware telemetry target.
 - RMC fractional time is retained without floating-point rounding; malformed UTC fields are rejected and repeated newlines cannot parse a sentence twice.
 - Website dashboard showcase uses versioned, correctly proportioned captures with the landscape cluster first and full-size links.
 
