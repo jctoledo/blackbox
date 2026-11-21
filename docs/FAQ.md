@@ -65,9 +65,9 @@ Recordings, tracks, and reference laps are local to the browser origin and devic
 
 ## Do recordings remember the firmware and sensor setup?
 
-The upcoming **v0.0.4-rc.11** browser integration is intended to capture one device snapshot per new recording and expose **Saved data → Recording details → Download details JSON**. Recording continues while details are pending or unavailable. rc.10 does not provide this capture/export. Older recordings remain unknown; recovery does not query the current device to fill their history. Demo context is explicitly **SIM** / simulated.
+In **v0.0.4-rc.11 and later**, the dashboard requests one device snapshot per new recording and exposes **Saved data → Recording details → Download details JSON**. Recording continues while details are pending or unavailable. rc.10 does not provide this capture/export. Older recordings remain unknown; recovery does not query the current device to fill their history. Demo context is explicitly **SIM** / simulated.
 
-Configured GPS/IMU settings are not measured delivered rates, and one snapshot does not establish the setup for the whole trip. Applied accelerometer bias is in sensor axes before mount alignment, separate from learned estimator bias. Keep manual phone/antenna/mount notes and the flashed image SHA-256. See [recording context and backup behavior](GPS_LOGGING.md#recording-context-planned-for-v004-rc11).
+Configured GPS/IMU settings are not measured delivered rates, and one snapshot does not establish the setup for the whole trip. Applied accelerometer bias is in sensor axes before mount alignment, separate from learned estimator bias. Keep manual phone/antenna/mount notes and the flashed image SHA-256. See [recording context and backup behavior](GPS_LOGGING.md#recording-context).
 
 ## Which browser supports USB flashing?
 
@@ -118,7 +118,7 @@ Track JSON exports use version 2 and explicitly encode the reference's distance/
 
 ## How do I back up and restore everything?
 
-While parked, stop session and route recording. Open **Saved data → Download backup**. The versioned JSON file includes recording samples, tracks, binary reference traces encoded as numbers, and all lap history. An unsaved recording tail is included without requiring a successful storage write. The upcoming rc.11 integration keeps validated recording context as an optional field in this same version 1 backup; legacy absence remains unknown. Confirm that the download actually reached Files/Downloads and copy it outside the browser, ideally to another device or your own backup storage. Blackbox does not upload it automatically.
+While parked, stop session and route recording. Open **Saved data → Download backup**. The versioned JSON file includes recording samples, tracks, binary reference traces encoded as numbers, and all lap history. An unsaved recording tail is included without requiring a successful storage write. rc.11 and later keep validated recording context as an optional field in this same version 1 backup; legacy absence remains unknown. Confirm that the download actually reached Files/Downloads and copy it outside the browser, ideally to another device or your own backup storage. Blackbox does not upload it automatically.
 
 On the destination browser, open **Saved data → Choose backup**, select the file, review its counts, then choose **Restore as new copies**. The full-backup checksum and data relationships are checked before any writes. Existing data is never replaced; track/reference/history IDs are remapped together. Restored recordings are stopped, and restored tracks are not automatically armed. Existing track timing may continue, and backup/restore does not require a device connection. Importing the same file a second time adds another set of copies.
 

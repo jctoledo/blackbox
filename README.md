@@ -12,7 +12,7 @@ Blackbox is an open-source ESP32-C3 telemetry project: GPS and inertial sensing,
 ### Start here
 
 - **Build your first instrument:** [DIY GPS lap timer guide](docs/DIY_GPS_LAP_TIMER.md), then the [parts and assembly journal](docs/BUILD.md).
-- **Try the interface first:** [live synthetic dashboard](https://jctoledo.github.io/blackbox/demo.html?v=0.0.4-rc.10). Turn your phone sideways and choose Speed, G-meter, Peaks or Runs.
+- **Try the interface first:** [live synthetic dashboard](https://jctoledo.github.io/blackbox/demo.html?v=0.0.4-rc.11). Turn your phone sideways and choose Speed, G-meter, Peaks or Runs.
 - **Understand the measurements:** [GPS timing accuracy](docs/GPS_TIMING_ACCURACY.md) and [NEO-M9N logging](docs/M9N_GPS_LOGGER.md).
 - **Collect your first drive:** [short NEO-M9N recording plan](docs/FIRST_DRIVE.md), including photos, CSVs and backup.
 - **Help validate a build:** [hardware checklist](docs/HARDWARE_VALIDATION.md). Report setup problems with the exact firmware, hardware and reproduction steps; share private route logs privately.
@@ -496,7 +496,7 @@ Tap **Full screen** on supported Android browsers. On iPhone, use **Menu → Pho
 
 Timestamp-logging firmware saves receiver UTC and device parse times alongside recordings. In **Saved data**, export both **Session CSV** and **GPS CSV**; the latter reveals receiver cadence, repeated epochs and phone collection gaps. [Capture and analysis guide](docs/GPS_LOGGING.md). It does not establish absolute lap accuracy.
 
-The upcoming **v0.0.4-rc.11** recording-context integration is intended to save one firmware/configuration/calibration snapshot with each new recording, with **Recording details** and **Download details JSON** in Saved data. This is not available in rc.10. Settings describe configuration, not measured delivered rates or the whole trip; keep the flashed image SHA-256 and phone/antenna/mount notes. See [recording context and limits](docs/GPS_LOGGING.md#recording-context-planned-for-v004-rc11).
+New recordings in **v0.0.4-rc.11 and later** request one firmware/configuration/calibration snapshot. Open **Saved data → Recording details** to inspect it or choose **Download details JSON**. This is not available in rc.10. Settings describe configuration, not measured delivered rates or the whole trip; keep the flashed image SHA-256 and phone/antenna/mount notes. See [recording context and limits](docs/GPS_LOGGING.md#recording-context).
 
 For the implemented equations, rate budgets, force-display semantics and current driveway-calibration limitation, see [Maths and update rates](docs/MATHS_AND_RATES.md).
 

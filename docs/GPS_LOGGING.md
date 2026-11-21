@@ -12,13 +12,13 @@ The device retains **64 events in RAM**: about 2.56 seconds at 25 Hz or 12.8 sec
 
 A longer disconnect can overwrite the RAM window. The first recovered row counts missing sequence numbers in `missing_before`. Device restarts begin a new segment; the first row's missing history is unknown, not zero. The initial fetch may include up to 64 events from before you pressed Record. Compare device timestamps to Session CSV to select the recording interval. Each boot uses a random 32-bit identifier, a practical restart discriminator rather than a globally unique ID.
 
-## Recording context (planned for v0.0.4-rc.11)
+## Recording context
 
-The upcoming browser integration is intended to request one device metadata snapshot when a new recording starts. Recording begins immediately while context is **pending**; valid details become **captured**, and an old endpoint, timeout or invalid response becomes **unavailable** without stopping collection. In **Saved data**, expand **Recording details** and choose **Download details JSON** to save a companion to Session/GPS CSV. This browser capture/export is not available in rc.10.
+In **v0.0.4-rc.11 and later**, the dashboard requests one device metadata snapshot when a new recording starts. Recording begins immediately while context is **pending**; valid details become **captured**, and an old endpoint, timeout or invalid response becomes **unavailable** without stopping collection. In **Saved data**, expand **Recording details** and choose **Download details JSON** to save a companion to Session/GPS CSV. This browser capture/export is not available in rc.10.
 
 The snapshot records firmware/build identity when available, the device boot ID and assembly uptime, configured GPS/IMU settings, successfully applied accelerometer bias and saved/applied mount alignment. Configured rates and baud choices are not receiver readback or delivered-rate measurements; use Diagnostics and GPS CSV for delivery evidence. The accelerometer bias is in sensor axes, before mount alignment, and is separate from the estimator's learned earth-frame bias. Null means unknown; a known zero is a value. One snapshot describes its assembly time, not constant settings or calibration throughout the trip.
 
-The planned integration preserves available context in the existing version 1 full backup, restore copies and interrupted-recording recovery. Older recordings/backups without context remain **unknown**; reopening or restoring them must not fill historical details from today's device. Demo details are explicitly **SIM** / simulated and must not be used as hardware evidence. See the [metadata API and browser contract](RECORDING_METADATA_API.md).
+The dashboard preserves available context in the existing version 1 full backup, restore copies and interrupted-recording recovery. Older recordings/backups without context remain **unknown**; reopening or restoring them must not fill historical details from today's device. Demo details are explicitly **SIM** / simulated and must not be used as hardware evidence. See the [metadata API and browser contract](RECORDING_METADATA_API.md).
 
 Keep manual phone/OS/browser, antenna, mounting and reception notes, plus the flashed image's SHA-256. An optional source commit is not an image checksum. Details JSON complements the CSVs and restorable backup; it does not replace them.
 
