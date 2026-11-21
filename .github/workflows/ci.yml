@@ -65,7 +65,36 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python3 scripts/wait_for_artifact.py protocol-fixture
 
-      - name: Download protocol artifact
+      # The REST index can become visible before the download endpoint is ready.
+      # Inspect outcome (before continue-on-error), and leave the last attempt fatal.
+      - name: Download protocol artifact (attempt 1 of 3)
+        id: protocol_download_1
+        continue-on-error: true
+        timeout-minutes: 2
+        uses: actions/download-artifact@v7
+        with:
+          name: protocol-fixture
+          github-token: ${{ github.token }}
+          path: artifact-check
+      - name: Wait before second protocol download
+        if: steps.protocol_download_1.outcome == 'failure'
+        run: sleep 3
+      - name: Download protocol artifact (attempt 2 of 3)
+        id: protocol_download_2
+        if: steps.protocol_download_1.outcome == 'failure'
+        continue-on-error: true
+        timeout-minutes: 2
+        uses: actions/download-artifact@v7
+        with:
+          name: protocol-fixture
+          github-token: ${{ github.token }}
+          path: artifact-check
+      - name: Wait before final protocol download
+        if: steps.protocol_download_2.outcome == 'failure'
+        run: sleep 3
+      - name: Download protocol artifact (attempt 3 of 3)
+        if: steps.protocol_download_2.outcome == 'failure'
+        timeout-minutes: 2
         uses: actions/download-artifact@v7
         with:
           name: protocol-fixture
