@@ -420,7 +420,7 @@ body:not(.analysis-view) .bbGTopRight{display:block}
                     <span class="bbLapState" id="lap-state" role="status">Ready for start</span>
                 </div>
             </div>
-            <div class="bbLapProgress" id="lap-progress" hidden><span id="lap-progress-label">Estimated distance</span><progress id="lap-progress-bar" max="100" value="0" aria-label="Estimated distance through reference lap"></progress></div>
+            <div class="bbLapProgress" id="lap-progress" hidden><span id="lap-progress-label">Estimated distance</span><progress id="lap-progress-bar" max="100" value="0" aria-label="Matched position along reference route"></progress></div>
             <div class="bbLapResult" id="lap-result" role="status" hidden></div>
             <div class="bbLapHistory">
                 <div class="bbLapHistItem">
@@ -2020,7 +2020,7 @@ function showLapResult(time,previousBest){
 }
 function updateLapTimer(lapTimeMs,lapCnt,lapFlags,timing=null){
     updateLapProgress(false);
-    $('reference-label').textContent=referenceLap?.spatial?'Vs reference '+fmtLapTime(referenceLap.lapTimeMs)+' · position matched':referenceLap?'Older reference · complete a clean lap/run to upgrade':'';
+    $('reference-label').textContent=referenceLap?.spatial?'Reference '+fmtLapTime(referenceLap.lapTimeMs)+' · spatial trace':referenceLap?'Older reference · complete a clean lap/run to upgrade':'';
     const sec=$('lap-section');
     // Don't deactivate if we have an active track - firmware zeros just means "armed"
     // Only deactivate via explicit deactivateTrack() call
