@@ -6,6 +6,10 @@ use ublox_gps::GpsFix;
 
 const CAPACITY: usize = 16;
 const MAX_AGE_US: u64 = 1_500_000;
+// Broad gross-jump guard, not a receiver accuracy estimate. Preserve normal
+// GNSS jitter and the application's existing 100 m/s supported speed ceiling.
+const POSITION_MARGIN_M: f64 = 25.0;
+const MAX_SPEED_MPS: f64 = 100.0;
 
 #[derive(Clone, Copy)]
 struct Evidence {
@@ -17,7 +21,7 @@ pub struct GpsTimingQueue {
     samples: [Option<Evidence>; CAPACITY],
     len: usize,
     discontinuity: bool,
-    previous_us: Option<u64>,
+    previous: Option<Evidence>,
 }
 
 impl GpsTimingQueue {
@@ -26,7 +30,7 @@ impl GpsTimingQueue {
             samples: [None; CAPACITY],
             len: 0,
             discontinuity: false,
-            previous_us: None,
+            previous: None,
         }
     }
 
@@ -45,7 +49,7 @@ impl GpsTimingQueue {
     pub fn replay(&mut self, timer: &mut LapTimer, now_us: u64) -> u8 {
         if self.discontinuity {
             timer.invalidate_fix();
-            self.previous_us = None;
+            self.previous = None;
             self.discontinuity = false;
         }
         let mut flags = 0;
@@ -66,16 +70,29 @@ impl GpsTimingQueue {
                 || !(0.0..=core::f32::consts::TAU).contains(&fix.course)
             {
                 timer.invalidate_fix();
-                self.previous_us = None;
+                self.previous = None;
                 continue;
             }
-            if self.previous_us.is_some_and(|previous| {
+            if self.previous.is_some_and(|previous| {
                 // Millisecond timer cannot interpolate collapsed parse timestamps.
-                host_us / 1000 <= previous / 1000 || host_us - previous > MAX_AGE_US
+                if host_us / 1000 <= previous.host_us / 1000 {
+                    return true;
+                }
+                let elapsed_us = host_us - previous.host_us;
+                if elapsed_us > MAX_AGE_US {
+                    return true;
+                }
+                let north = (fix.lat - previous.fix.lat) * 111320.0;
+                let mean_lat = (fix.lat + previous.fix.lat) * 0.5;
+                let east = (fix.lon - previous.fix.lon) * 111320.0 * mean_lat.to_radians().cos();
+                let limit = POSITION_MARGIN_M + MAX_SPEED_MPS * elapsed_us as f64 * 1e-6;
+                north * north + east * east > limit * limit
             }) {
                 timer.invalidate_fix();
             }
-            self.previous_us = Some(host_us);
+            // A rejected segment never crosses a line; its endpoint starts a new
+            // trajectory so ordinary consecutive evidence can recover promptly.
+            self.previous = Some(Evidence { fix, host_us });
             let velocity = (fix.speed * fix.course.sin(), fix.speed * fix.course.cos());
             flags |= timer.update(
                 fix.lat,
@@ -151,6 +168,84 @@ mod tests {
         queue.push(fix(0.0001), 1_040_000);
         assert_eq!(queue.replay(&mut timer, 1_040_000), 0);
         assert_eq!(timer.state(), LapTimerState::Armed);
+    }
+
+    #[test]
+    fn gross_position_jump_cannot_start_timing() {
+        let mut queue = GpsTimingQueue::new();
+        let mut timer = timer();
+        // A 200 m segment in 40 ms implies 5,000 m/s, despite a valid 10 m/s RMC.
+        queue.push(fix(-100.0 / 111320.0), 1_000_000);
+        queue.push(fix(100.0 / 111320.0), 1_040_000);
+        assert_eq!(queue.replay(&mut timer, 1_040_000), 0);
+        assert_eq!(timer.state(), LapTimerState::Armed);
+        // Returning near the line is also a rejected jump, not a bridge to the
+        // old approach. A subsequent ordinary crossing recovers normally.
+        queue.push(fix(-1.0 / 111320.0), 1_080_000);
+        assert_eq!(queue.replay(&mut timer, 1_080_000), 0);
+        queue.push(fix(1.0 / 111320.0), 1_120_000);
+        assert_ne!(queue.replay(&mut timer, 1_120_000) & CROSSED_START, 0);
+    }
+
+    #[test]
+    fn gross_position_jump_cannot_finish_a_stage() {
+        let mut queue = GpsTimingQueue::new();
+        let mut timer = LapTimer::new();
+        let line = |lat| TimingLine::new(lat, -0.001, lat, 0.001, core::f32::consts::FRAC_PI_2);
+        timer.configure_point_to_point(line(0.0), line(0.01));
+        queue.push(fix(-1.0 / 111320.0), 1_000_000);
+        queue.push(fix(1.0 / 111320.0), 1_040_000);
+        assert_ne!(queue.replay(&mut timer, 1_040_000) & CROSSED_START, 0);
+        queue.push(fix(0.01 - 100.0 / 111320.0), 12_000_000);
+        queue.push(fix(0.01 + 100.0 / 111320.0), 12_040_000);
+        assert_eq!(queue.replay(&mut timer, 12_040_000), 0);
+        assert_eq!(timer.state(), LapTimerState::Timing);
+        assert_eq!(timer.lap_count(), 0);
+        queue.push(fix(0.01 - 1.0 / 111320.0), 12_080_000);
+        assert_eq!(queue.replay(&mut timer, 12_080_000), 0);
+        queue.push(fix(0.01 + 1.0 / 111320.0), 12_120_000);
+        assert_ne!(
+            queue.replay(&mut timer, 12_120_000) & sensor_fusion::NEW_LAP,
+            0
+        );
+        assert_eq!(timer.lap_count(), 1);
+    }
+
+    #[test]
+    fn gross_jump_bound_preserves_supported_speed_and_longitude_projection() {
+        for (latitude, interval_us) in [(0.0, 40_000), (60.0, 200_000)] {
+            let mut queue = GpsTimingQueue::new();
+            let mut timer = LapTimer::new();
+            let cos_lat = (latitude as f64).to_radians().cos();
+            timer.configure_loop(TimingLine::new(
+                latitude - 0.001,
+                0.0,
+                latitude + 0.001,
+                0.0,
+                0.0,
+            ));
+            let distance = 100.0 * interval_us as f64 * 1e-6;
+            for (east, host_us) in [
+                (-distance / 2.0, 1_000_000),
+                (distance / 2.0, 1_000_000 + interval_us),
+            ] {
+                queue.push(
+                    GpsFix {
+                        lat: latitude,
+                        lon: east / (111320.0 * cos_lat),
+                        speed: 100.0,
+                        course: core::f32::consts::FRAC_PI_2,
+                        valid: true,
+                        ..GpsFix::default()
+                    },
+                    host_us,
+                );
+            }
+            assert_ne!(
+                queue.replay(&mut timer, 1_000_000 + interval_us) & CROSSED_START,
+                0
+            );
+        }
     }
 
     #[test]

@@ -4,7 +4,7 @@ This review describes the implemented pipeline, not a measured accuracy certific
 
 ## From receiver fixes to a lap time
 
-The lap timer intersects the segment between consecutive valid GPS positions with a finite timing line. Direction, speed, freshness, plausible displacement and debounce checks gate the crossing. It uses double-precision geometry and interpolates the host timestamps associated with the two fixes. It does not time laps from a 200 Hz extrapolated EKF trajectory.
+The lap timer intersects the segment between consecutive valid GPS positions with a finite timing line. Direction, speed, freshness and debounce checks gate the crossing. The firmware's GPS timing queue also breaks a segment whose displacement exceeds `25 m + 100 m/s × host interval`. The 25 m buffer is a broad heuristic allowance for position jitter, not a receiver accuracy specification; smaller GPS errors can still create or miss crossings. This application guard does not alter the generic LapTimer geometry API or remove raw events from GPS CSV. It uses double-precision geometry and interpolates the host timestamps associated with the two fixes. It does not time laps from a 200 Hz extrapolated EKF trajectory.
 
 For signed perpendicular distances d0 and d1 on opposite sides of the line:
 
