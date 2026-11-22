@@ -1,0 +1,90 @@
+{
+  "fixtureMinutes": 20,
+  "synthetic": true,
+  "rates": {
+    "telemetry": 30,
+    "gps": 25
+  },
+  "memoryNote": "Node fake-indexeddb retains source, staging and destination. Sampled process memory is not isolated export overhead or phone capacity.",
+  "phases": [
+    {
+      "name": "populate-synthetic-source",
+      "seconds": 0.685907074,
+      "memory": {
+        "rss": 139898880,
+        "heapTotal": 92016640,
+        "heapUsed": 67697520,
+        "external": 1903942,
+        "arrayBuffers": 17643
+      }
+    },
+    {
+      "name": "prepare-and-export-to-disk",
+      "seconds": 6.135584086,
+      "memory": {
+        "rss": 260227072,
+        "heapTotal": 148516864,
+        "heapUsed": 83122352,
+        "external": 21629001,
+        "arrayBuffers": 19740654
+      }
+    },
+    {
+      "name": "read-disk-files-and-validate",
+      "seconds": 5.090788571,
+      "memory": {
+        "rss": 307716096,
+        "heapTotal": 176795648,
+        "heapUsed": 141896096,
+        "external": 15912165,
+        "arrayBuffers": 14023818
+      }
+    },
+    {
+      "name": "restore-add-only-copies-after-context-reload",
+      "seconds": 2.2675979640000006,
+      "memory": {
+        "rss": 411930624,
+        "heapTotal": 280506368,
+        "heapUsed": 248032336,
+        "external": 15913189,
+        "arrayBuffers": 14024842
+      }
+    },
+    {
+      "name": "compare-original-and-restored-cursors",
+      "seconds": 2.3974942630000005,
+      "memory": {
+        "rss": 416030720,
+        "heapTotal": 283488256,
+        "heapUsed": 250250960,
+        "external": 15932866,
+        "arrayBuffers": 14024842
+      }
+    },
+    {
+      "name": "retry-without-duplicates",
+      "seconds": 0.002620699999999488,
+      "memory": {
+        "rss": 416161792,
+        "heapTotal": 283488256,
+        "heapUsed": 250618888,
+        "external": 15933890,
+        "arrayBuffers": 14025866
+      }
+    }
+  ],
+  "sourceBytes": 34953986,
+  "sourceMiB": 33.33471870422363,
+  "rows": 66000,
+  "chunks": 240,
+  "outputBytes": 38875803,
+  "files": 6,
+  "maxFileBytes": 8337692,
+  "recordingSha256": "876b00bcaeaf3b84aefd0bf3b771793d1a196a0b79694f6edeec295b67a4a635",
+  "roundTrip": "passed",
+  "originalPreserved": true,
+  "retryDuplicated": false,
+  "sampledPeakRss": 418775040,
+  "sampledPeakHeapUsed": 261099968
+}
