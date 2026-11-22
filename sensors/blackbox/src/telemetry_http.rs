@@ -38,6 +38,7 @@ pub fn telemetry_json(
 
 pub fn diagnostics_json(d: &DiagnosticsSnapshot) -> String {
     serde_json::json!({
+        "gps_transport": d.gps_transport,
         "sensor_rates": {
             "imu_hz": d.sensor_rates.imu_hz, "gps_hz": d.sensor_rates.gps_hz,
             "loop_hz": d.sensor_rates.loop_hz, "imu_expected": d.sensor_rates.imu_expected_hz,

@@ -72,6 +72,26 @@ mod tests {
     }
 
     #[test]
+    fn uart_loss_discards_partial_sentence_and_requires_a_new_valid_fix() {
+        let (mut parser, diagnostics) = warmed();
+        sentence(&mut parser, &diagnostics, VALID);
+        for byte in b"$GNRMC,123" {
+            feed_byte(&mut parser, *byte, &diagnostics);
+        }
+        parser.invalidate_stream();
+        assert!(!parser.last_fix().valid);
+        assert!(!take_latest_fix(&mut parser));
+        sentence(&mut parser, &diagnostics, VALID);
+        assert!(take_latest_fix(&mut parser));
+        let sequence = parser.rmc_timing().sequence;
+        for byte in b"$GNRMC,123456.04,A,3723.2475,N,12158.3416,W,10.0,90.0,201126,,,A*00\r\n" {
+            feed_byte(&mut parser, *byte, &diagnostics);
+        }
+        assert_eq!(parser.checksum_rejections(), 1);
+        assert_eq!(parser.rmc_timing().sequence, sequence);
+    }
+
+    #[test]
     fn warmup_non_rmc_and_bad_checksum_never_add_fixes() {
         let mut parser = NmeaParser::with_warmup_fixes(3);
         let diagnostics = DiagnosticsState::new();

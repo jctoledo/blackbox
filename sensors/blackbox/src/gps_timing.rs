@@ -25,6 +25,12 @@ pub struct GpsTimingQueue {
 }
 
 impl GpsTimingQueue {
+    /// Known UART loss must break timing continuity before further fixes arrive.
+    pub fn invalidate(&mut self) {
+        self.samples.fill(None);
+        self.len = 0;
+        self.discontinuity = true;
+    }
     pub fn new() -> Self {
         Self {
             samples: [None; CAPACITY],
@@ -151,6 +157,18 @@ mod tests {
         assert_ne!(queue.replay(&mut timer, 1_080_000) & CROSSED_START, 0);
         assert_eq!(timer.state(), LapTimerState::Timing);
         assert_eq!(queue.replay(&mut timer, 1_100_000), 0);
+    }
+
+    #[test]
+    fn uart_loss_cannot_join_fixes_across_a_timing_line() {
+        let mut queue = GpsTimingQueue::new();
+        let mut timer = timer();
+        queue.push(fix(-0.0001), 1_000_000);
+        queue.replay(&mut timer, 1_000_000);
+        queue.invalidate();
+        queue.push(fix(0.0001), 1_040_000);
+        assert_eq!(queue.replay(&mut timer, 1_040_000), 0);
+        assert_eq!(timer.state(), LapTimerState::Armed);
     }
 
     #[test]

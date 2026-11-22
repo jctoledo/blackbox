@@ -8,6 +8,7 @@ mod fusion;
 mod gps;
 mod gps_ingest;
 mod gps_log;
+mod gps_setup;
 mod gps_timing;
 mod imu;
 mod imu_bias_collection;
@@ -369,96 +370,38 @@ fn main() {
     }
     FreeRtos::delay_ms(10);
 
-    // Initialize UART for GPS
-    // NEO-M9N two-step configuration:
-    // 1. Connect at factory baud (38400) to send baud rate change command
-    // 2. Reconnect at target baud (115200) to send rate/model config
-    // Configuration is saved to GPS flash for persistence across power cycles.
+    // Larger RX buffering absorbs scheduler jitter; the runtime drains the event
+    // queue and reports overruns/errors instead of silently treating all as empty.
     let target_baud = config.gps.effective_baud();
-    let factory_baud = config.gps.model.factory_baud();
-
-    info!(
-        "Initializing GPS ({} @ {} baud, {}Hz)",
-        config.gps.model.name(),
-        target_baud,
-        config.gps.update_rate_hz
-    );
-
-    // Generate UBX commands
-    let mut ubx_buffer: [u8; 128] = [0; 128];
-    let commands = if config.gps.model.needs_ubx_init() {
-        Some(gps::generate_init_sequence(
-            config.gps.update_rate_hz,
-            target_baud,
-            &mut ubx_buffer,
-        ))
-    } else {
-        None
-    };
-
-    // Create GPS UART - start at factory baud if we need to configure
-    let initial_baud = if config.gps.model.needs_ubx_init() && target_baud != factory_baud {
-        factory_baud
-    } else {
-        target_baud
-    };
-
     let gps_uart = UartDriver::new(
         peripherals.uart0,
         peripherals.pins.gpio5,
         peripherals.pins.gpio4,
         Option::<esp_idf_hal::gpio::Gpio2>::None,
         Option::<esp_idf_hal::gpio::Gpio3>::None,
-        &Config::new().baudrate(initial_baud.into()),
+        &Config::new()
+            .baudrate(target_baud.into())
+            .rx_fifo_size(4096)
+            .queue_size(64),
     )
-    .unwrap();
-
-    // If we need to change baud rate, send command at factory baud then switch
-    if config.gps.model.needs_ubx_init() && target_baud != factory_baud {
-        info!("Configuring GPS at factory baud ({})...", factory_baud);
-
-        // Send baud rate change command (first command in sequence)
-        if let Some(cmds) = &commands {
-            let (offset, len) = cmds[0];
-            match gps_uart.write(&ubx_buffer[offset..offset + len]) {
-                Ok(_) => info!("  CFG-VALSET (baud={}) sent ({} bytes)", target_baud, len),
-                Err(e) => info!("  CFG-VALSET (baud) FAILED: {:?}", e),
-            }
-            FreeRtos::delay_ms(100); // Wait for GPS to process and switch baud
+    .expect("Failed to create GPS UART");
+    let gps_setup = if config.gps.model.needs_ubx_init() {
+        gps_setup::configure(&gps_uart, target_baud, config.gps.update_rate_hz)
+    } else {
+        ublox_gps::setup::Report {
+            detected_baud: None,
+            uart_baud: target_baud,
+            verified: false,
+            error: None,
         }
-
-        // Switch ESP32 UART to target baud rate
-        info!("Switching to target baud ({})...", target_baud);
-        gps_uart
-            .change_baudrate(esp_idf_hal::units::Hertz(target_baud))
-            .expect("Failed to change GPS UART baud rate");
-    }
-
-    // Send remaining UBX configuration commands (rate + model)
-    if let Some(cmds) = commands {
-        info!(
-            "Sending UBX configuration (rate={}Hz, mode=Automotive)...",
-            config.gps.update_rate_hz
-        );
-
-        // Skip first command if we already sent baud change
-        let start_idx = if target_baud != factory_baud { 1 } else { 0 };
-
-        for (i, (offset, len)) in cmds.iter().enumerate().skip(start_idx) {
-            let cmd_name = match i {
-                0 => "CFG-VALSET (baud)",
-                1 => "CFG-VALSET (rate + automotive)",
-                _ => "UBX",
-            };
-
-            match gps_uart.write(&ubx_buffer[*offset..*offset + *len]) {
-                Ok(_) => info!("  {} sent ({} bytes)", cmd_name, len),
-                Err(e) => info!("  {} FAILED: {:?}", cmd_name, e),
-            }
-            FreeRtos::delay_ms(100);
-        }
-
-        info!("GPS configuration saved to flash");
+    };
+    info!(
+        "GPS startup: detected={:?}, UART={}, verified={}, error={:?}",
+        gps_setup.detected_baud, gps_setup.uart_baud, gps_setup.verified, gps_setup.error
+    );
+    diagnostics.set_gps_transport(gps_setup);
+    if let Some(ref mut snapshot) = recording_metadata {
+        snapshot.gps.set_setup(gps_setup);
     }
 
     if let Some(ref mut snapshot) = recording_metadata {

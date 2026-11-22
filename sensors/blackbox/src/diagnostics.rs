@@ -65,6 +65,24 @@ pub struct GpsHealth {
     pub ref_lon: f64,
 }
 
+/// UART event counters are observed events, not an exact count of lost bytes.
+#[derive(Debug, Clone, Copy, Default, serde::Serialize)]
+pub struct GpsTransportHealth {
+    pub detected_baud: Option<u32>,
+    pub uart_baud: u32,
+    pub configuration_verified: bool,
+    pub setup_error: Option<&'static str>,
+    pub rx_bytes: u32,
+    pub read_errors: u32,
+    pub fifo_overflows: u32,
+    pub buffer_full: u32,
+    pub frame_errors: u32,
+    pub parity_errors: u32,
+    pub checksum_rejections: u32,
+    pub active_rmc: u32,
+    pub inactive_rmc: u32,
+}
+
 /// System resource usage
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SystemHealth {
@@ -150,6 +168,7 @@ pub struct FusionDiagnostics {
 /// Complete diagnostics snapshot (immutable copy for reading)
 #[derive(Debug, Clone, Default)]
 pub struct DiagnosticsSnapshot {
+    pub gps_transport: GpsTransportHealth,
     pub sensor_rates: SensorRates,
     pub ekf_health: EkfHealth,
     pub gps_health: GpsHealth,
@@ -176,6 +195,7 @@ pub struct DiagnosticsState {
 /// Inner protected state
 #[derive(Default)]
 struct DiagnosticsInner {
+    gps_transport: GpsTransportHealth,
     sensor_rates: SensorRates,
     ekf_health: EkfHealth,
     gps_health: GpsHealth,
@@ -191,6 +211,30 @@ struct DiagnosticsInner {
 }
 
 impl DiagnosticsState {
+    pub fn set_gps_transport(&self, report: ublox_gps::setup::Report) {
+        if let Ok(mut inner) = self.inner.lock() {
+            inner.gps_transport.detected_baud = report.detected_baud;
+            inner.gps_transport.uart_baud = report.uart_baud;
+            inner.gps_transport.configuration_verified = report.verified;
+            inner.gps_transport.setup_error = report.error.map(|error| error.label());
+        }
+    }
+
+    /// Add one UART drain's observations while retaining startup status.
+    pub fn record_gps_transport(&self, delta: GpsTransportHealth) {
+        if let Ok(mut inner) = self.inner.lock() {
+            let current = &mut inner.gps_transport;
+            current.rx_bytes = current.rx_bytes.saturating_add(delta.rx_bytes);
+            current.read_errors = current.read_errors.saturating_add(delta.read_errors);
+            current.fifo_overflows = current.fifo_overflows.saturating_add(delta.fifo_overflows);
+            current.buffer_full = current.buffer_full.saturating_add(delta.buffer_full);
+            current.frame_errors = current.frame_errors.saturating_add(delta.frame_errors);
+            current.parity_errors = current.parity_errors.saturating_add(delta.parity_errors);
+            current.checksum_rejections = delta.checksum_rejections;
+            current.active_rmc = current.active_rmc.saturating_add(delta.active_rmc);
+            current.inactive_rmc = current.inactive_rmc.saturating_add(delta.inactive_rmc);
+        }
+    }
     /// Create a new diagnostics state
     pub fn new() -> Self {
         Self {
@@ -372,6 +416,7 @@ impl DiagnosticsState {
     pub fn snapshot(&self) -> DiagnosticsSnapshot {
         if let Ok(inner) = self.inner.lock() {
             DiagnosticsSnapshot {
+                gps_transport: inner.gps_transport,
                 sensor_rates: inner.sensor_rates,
                 ekf_health: inner.ekf_health,
                 gps_health: inner.gps_health.clone(),
@@ -389,5 +434,38 @@ impl DiagnosticsState {
 impl Default for DiagnosticsState {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod transport_tests {
+    use super::*;
+    #[test]
+    fn observed_errors_are_accumulated_without_erasing_verified_startup() {
+        let diagnostics = DiagnosticsState::new();
+        diagnostics.set_gps_transport(ublox_gps::setup::Report {
+            detected_baud: Some(9600),
+            uart_baud: 115200,
+            verified: true,
+            error: None,
+        });
+        for _ in 0..2 {
+            diagnostics.record_gps_transport(GpsTransportHealth {
+                rx_bytes: u32::MAX,
+                fifo_overflows: 1,
+                frame_errors: 2,
+                checksum_rejections: 3,
+                inactive_rmc: 4,
+                ..Default::default()
+            });
+        }
+        let value = diagnostics.snapshot().gps_transport;
+        assert!(value.configuration_verified);
+        assert_eq!(value.detected_baud, Some(9600));
+        assert_eq!(value.rx_bytes, u32::MAX);
+        assert_eq!(value.fifo_overflows, 2);
+        assert_eq!(value.frame_errors, 4);
+        assert_eq!(value.checksum_rejections, 3);
+        assert_eq!(value.inactive_rmc, 8);
     }
 }

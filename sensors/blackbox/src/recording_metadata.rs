@@ -70,6 +70,10 @@ pub struct Gps {
     configuration_verified: bool,
 }
 impl Gps {
+    /// True only after ACK and matching RAM readback of the startup profile.
+    pub fn set_setup(&mut self, report: ublox_gps::setup::Report) {
+        self.configuration_verified = report.verified;
+    }
     /// Preserve the effective controller configuration, not receiver readback.
     pub fn configured(model: &'static str, rate_hz: u8, uart_baud: u32) -> Self {
         Self {

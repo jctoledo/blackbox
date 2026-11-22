@@ -301,19 +301,59 @@ impl SensorManager {
         server: Option<&TelemetryServerState>,
         diagnostics: &crate::diagnostics::DiagnosticsState,
     ) -> bool {
-        let mut buf = [0u8; 64];
+        let mut buf = [0u8; 256];
         let mut new_fix = false;
-
-        while let Ok(n) = self.gps_uart.read(&mut buf, 0) {
-            if n == 0 {
-                break;
+        let mut transport = crate::diagnostics::GpsTransportHealth::default();
+        if let Some(queue) = self.gps_uart.event_queue() {
+            use esp_idf_hal::uart::UartEventPayload;
+            for _ in 0..64 {
+                let Some((event, _)) = queue.recv_front(0) else {
+                    break;
+                };
+                match event.payload() {
+                    UartEventPayload::RxFifoOverflow => transport.fifo_overflows += 1,
+                    UartEventPayload::RxBufferFull => transport.buffer_full += 1,
+                    UartEventPayload::FrameError => transport.frame_errors += 1,
+                    UartEventPayload::ParityError => transport.parity_errors += 1,
+                    _ => {}
+                }
             }
+        }
+        if transport.fifo_overflows
+            + transport.buffer_full
+            + transport.frame_errors
+            + transport.parity_errors
+            > 0
+        {
+            self.gps_parser.invalidate_stream();
+            self.gps_timing.invalidate();
+            self.stationary.invalidate();
+        }
+        loop {
+            let n = match self.gps_uart.read(&mut buf, 0) {
+                Ok(0) => break,
+                Ok(n) => n,
+                Err(error) if error.code() == esp_idf_svc::sys::ESP_ERR_TIMEOUT => break,
+                Err(_) => {
+                    transport.read_errors += 1;
+                    self.gps_parser.invalidate_stream();
+                    self.gps_timing.invalidate();
+                    self.stationary.invalidate();
+                    break;
+                }
+            };
+            transport.rx_bytes = transport.rx_bytes.saturating_add(n as u32);
             for &byte in buf.iter().take(n) {
                 let before = self.gps_parser.rmc_timing().sequence;
                 if crate::gps_ingest::feed_byte(&mut self.gps_parser, byte, diagnostics) {
                     new_fix = true;
                     let timing = self.gps_parser.rmc_timing();
                     if timing.sequence != before {
+                        if timing.status_active {
+                            transport.active_rmc += 1;
+                        } else {
+                            transport.inactive_rmc += 1;
+                        }
                         let host_us = unsafe { esp_idf_svc::sys::esp_timer_get_time() as u64 };
                         let fix = *self.gps_parser.last_fix();
                         self.gps_timing.push(fix, host_us);
@@ -330,6 +370,8 @@ impl SensorManager {
                 }
             }
         }
+        transport.checksum_rejections = self.gps_parser.checksum_rejections();
+        diagnostics.record_gps_transport(transport);
         new_fix
     }
 
