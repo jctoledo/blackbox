@@ -10,7 +10,7 @@ Save each numbered part when prompted. Keep every part and the final manifest to
 
 A download request does **not** confirm that Files or Downloads saved the file. Check that all the files arrived and copy the complete set outside the browser, ideally to another device or your own backup storage. Blackbox does not automatically upload, encrypt or delete your data. These files contain location history.
 
-You can cancel without changing your recordings or tracks. Files downloaded before cancellation are an incomplete set; restart the export and keep only a complete set with its matching manifest. If source data changes during export, Blackbox refuses to finish the manifest. Stop timing/editing in other tabs and restart. Do not combine files from different attempts.
+You can cancel without changing your recordings or tracks. Without the final manifest, files downloaded before cancellation are an incomplete set; restart the export and keep only a complete set with its matching manifest. If source data changes during export, Blackbox refuses to finish the manifest. Stop timing/editing in other tabs and restart. Do not combine files from different attempts.
 
 Export reads saved chunks in bounded steps, including a captured unsaved recording tail without requiring another storage write. It does not consume that tail. There is no whole-recording array or whole-archive Blob. Working memory still includes a part, the largest supported logical record, metadata and the pending tail; this is not a fixed total-heap or phone-capacity guarantee.
 
