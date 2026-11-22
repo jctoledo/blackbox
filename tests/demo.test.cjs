@@ -6,7 +6,7 @@ function demo(){
  let now=0,ready,track,reference;const buttons=new Map();const button={textContent:''};buttons.set('demo-connection',button);
  const c={console,URL,Response,DOMException,DataView,Uint8Array,Float32Array,Math,Date,btoa,window:{},location:{href:'https://example.test/demo.html'},performance:{now:()=>now},document:{addEventListener:(_,fn)=>{ready=fn},getElementById:id=>{if(!buttons.has(id))buttons.set(id,{textContent:''});return buttons.get(id)}},openTrackDB:async()=>{},getAllTracks:async()=>[],getRefLap:async()=>null,saveRefLap:async r=>{reference=r},saveTrack:async t=>{track=t},activateTrack:async()=>{}};
  vm.createContext(c);vm.runInContext(fs.readFileSync('docs/demo.js','utf8'),c);
- return {fetch:c.window.fetch,advance:ms=>{now+=ms},ready:()=>ready(),button,interval:()=>buttons.get('demo-interval').onclick({target:buttons.get('demo-interval')}),track:()=>track,reference:()=>reference};
+ return {context:c,fetch:c.window.fetch,advance:ms=>{now+=ms},ready:()=>ready(),button,interval:()=>buttons.get('demo-interval').onclick({target:buttons.get('demo-interval')}),track:()=>track,reference:()=>reference};
 }
 async function sample(d){const j=await(await d.fetch('/api/telemetry')).json();return {j,p:Buffer.from(j.data,'base64')}}
 test('synthetic telemetry preserves packet, clock, lap result and configuration contracts',async()=>{
@@ -85,4 +85,21 @@ test('driver model brakes before corners and accelerates out with force tied to 
   prior={speed,lon};d.advance(40);
  }
  assert.ok(brake>10,'sustained braking approach');assert.ok(exit>10,'loaded corner exit');
+});
+
+// Exercise the actual persistence boundary rather than a reusable no-op save stub.
+test('a fresh demo commits its track before creating the matching stored reference',async()=>{
+ const {indexedDB}=require('fake-indexeddb'),database=await new Promise((resolve,reject)=>{
+  const request=indexedDB.open('demo-real-persistence-'+Date.now());request.onerror=()=>reject(request.error);request.onsuccess=()=>resolve(request.result);
+  request.onupgradeneeded=()=>{request.result.createObjectStore('tracks',{keyPath:'id'});request.result.createObjectStore('reference_laps',{keyPath:'id'}).createIndex('trackId','trackId',{unique:true})};
+ });
+ const d=demo(),c=d.context,html=fs.readFileSync('sensors/blackbox/web/dashboard.html','utf8');let activated=false;
+ const section=(a,b)=>html.slice(html.indexOf(a),html.indexOf(b,html.indexOf(a)));
+ c.console={log(){},error(){}};c.trackDb=database;c.openTrackDB=async()=>{};c.trackAutoDetector={beginTrackChange(){},endTrackChange(){}};c.activateTrack=async()=>{activated=true};
+ vm.runInContext(section('// Reference lap CRUD','async function deleteRefLap(')+section('function validSpatialReference(','class SpatialMatcher{')+section('async function saveTrack(','async function getTrack('),c);
+ await d.ready();
+ const read=store=>new Promise((resolve,reject)=>{const r=database.transaction(store).objectStore(store).getAll();r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)});
+ const tracks=await read('tracks'),references=await read('reference_laps');
+ assert.equal(activated,true,'fresh preview must reach activation');assert.equal(tracks.length,1);assert.equal(references.length,1);assert.equal(references[0].trackId,tracks[0].id);
+ database.close();
 });

@@ -191,11 +191,13 @@
    await openTrackDB();
    const id='demo-circuit-v6',track={id,name:'Demo circuit · S-bends',type:'loop',gpsOrigin:origin,startLine:{p1:[155,0],p2:[195,0],direction:Math.PI/2},centerline:route.map(p=>({x:p.x,y:p.y})),pathLength:laps[0][steps].distance,lapCount:3,bestLapMs:Math.round(Math.min(...durations.slice(0,3))),createdAt:Date.now(),quality:'good'};
    const previous=(await getAllTracks()).find(item=>item.id===id);if(previous){track.bestLapMs=previous.bestLapMs;track.lapCount=previous.lapCount}
+   // A reference belongs to an already committed track, just as on a real device.
+   await saveTrack(track);
    if(!(await getRefLap(id))?.spatial){
     const pairs=new Float32Array(laps[0].flatMap(p=>[p.distance,p.time]));
     await saveRefLap({id:'demo-reference-v6',trackId:id,lapTimeMs:Math.round(durations[0]),created:Date.now(),samples:pairs.buffer,sampleCount:steps+1,totalDistance:track.pathLength,spatial:{version:1,closed:true,origin,points:laps[0].map(p=>({x:p.x,y:p.y,t:Math.min(p.time,Math.round(durations[0]))}))}});
    }
-   demoTrack=track;await saveTrack(track);if(!drivePreview){await activateTrack(track);armedCycle=clock(performance.now()-start).cycle-1;}
+   demoTrack=track;if(!drivePreview){await activateTrack(track);armedCycle=clock(performance.now()-start).cycle-1;}
    await populateExamples(track);
    if(drivePreview){const databaseForDrive=await openDB();await loadLatestDrive(databaseForDrive,await idbPromise(databaseForDrive.transaction('sessions','readonly').objectStore('sessions').getAll()));renderDrive()}
   }catch(error){document.getElementById('demo-note').textContent='Simulated data. Browser storage unavailable; recording and saved tracks require storage access.';console.error(error)}
