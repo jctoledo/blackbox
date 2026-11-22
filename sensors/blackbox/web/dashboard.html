@@ -34,7 +34,7 @@ body{font-family:Inter,-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Di
 .bbHigh{color:var(--ok);font-weight:600}
 .bbDiag{color:var(--text-tertiary);text-decoration:none;font-size:10px;opacity:.7;cursor:pointer}
 .bbDiag:hover{opacity:1}
-.bbBack{color:var(--text-tertiary);text-decoration:none;font-size:12px;font-weight:500;letter-spacing:.03em;padding:8px 14px;background:var(--surface);border-radius:16px;display:flex;align-items:center;gap:4px;cursor:pointer}
+.bbBack{color:var(--text-tertiary);text-decoration:none;font-size:12px;font-weight:500;letter-spacing:.03em;padding:8px 14px;background:var(--surface);border:0;border-radius:16px;min-height:44px;display:flex;align-items:center;gap:4px;cursor:pointer}
 .bbBack:active{opacity:.7}
 .bbKebab{background:none;border:0;padding:4px;font-size:24px;line-height:1;opacity:.6;cursor:pointer;color:inherit}
 .bbApp{flex:1;display:flex;flex-direction:column;padding:0 12px 8px;min-height:0;overflow-y:auto}
@@ -402,7 +402,7 @@ body.cluster-view .bbLapCard{grid-column:2;border-color:var(--divider)}body.clus
 body.cluster-view .bbClusterHeader{display:flex;align-items:center;flex:0 0 44px;gap:10px;padding:0 12px 0 18px;border-bottom:1px solid var(--divider);color:var(--text-secondary);font:10px var(--mono)}
 .bbClusterHeader button{margin-left:auto;min-height:44px;border:0;background:transparent;color:var(--text);font:600 11px Inter,sans-serif;padding:0 10px;cursor:pointer}
 .bbClusterHealth{display:flex;align-items:center;gap:8px;font-size:9px;white-space:nowrap}.bbClusterHealth .recording{color:var(--red)}
-body.cluster-view:not(.cluster-controls) .bbTopbar,body.cluster-view:not(.cluster-controls) .bbQuickActions{display:none}
+body.cluster-view:not(.cluster-controls) #view-dashboard .bbTopbar,body.cluster-view:not(.cluster-controls) #view-dashboard .bbQuickActions{display:none}
 body.cluster-view .bbLapMeta{position:static!important;grid-column:1;grid-row:1;margin-top:18px!important;justify-content:flex-start}
 body.cluster-view .bbElapsedLabel{grid-row:1;align-self:start}
 
@@ -643,7 +643,7 @@ body.cluster-view .bbDeltaBar:not(.no-ref) .bbDeltaText{font-size:min(clamp(24px
         <span class="bbModeLabel" id="modeLabel2">Bright</span>
         <span class="bbModeIcon" aria-hidden="true">◐</span>
     </button>
-    <span class="bbBack" id="link-dashboard">← Dashboard</span>
+    <button class="bbBack" id="link-dashboard" type="button">← Dashboard</button>
 </header>
 <main class="bbDiagApp">
     <div class="bbGrid">
@@ -928,8 +928,8 @@ $('brandToggle').onclick=$('brandToggle2').onclick=()=>{isDark=!isDark;applyThem
 
 // View switching
 $('link-diag').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();$('link-diag').click()}};
-$('link-diag').onclick=()=>{$('view-dashboard').classList.remove('active');$('view-diagnostics').classList.add('active')};
-$('link-dashboard').onclick=()=>{$('view-diagnostics').classList.remove('active');$('view-dashboard').classList.add('active')};
+$('link-diag').onclick=()=>{$('view-dashboard').classList.remove('active');$('view-diagnostics').classList.add('active');$('link-dashboard').focus()};
+$('link-dashboard').onclick=()=>{$('view-diagnostics').classList.remove('active');$('view-dashboard').classList.add('active');focusVisibleControl($('link-diag'))};
 
 function getModeColorHex(mo){
     const h={0:isDark?'#636366':'#8e8e93',1:isDark?'#ffffff':'#1c1c1e',2:'#ff3b30',4:isDark?'#636366':'#8e8e93',5:isDark?'#ffffff':'#1c1c1e',6:'#ff3b30'};
@@ -2025,7 +2025,17 @@ function wrapAngle(a){while(a>Math.PI)a-=2*Math.PI;while(a<-Math.PI)a+=2*Math.PI
 // Track Manager UI
 const modalReturnFocus=new Map();
 function revealModal(id,closeId){modalReturnFocus.set(id,document.activeElement);$(id).classList.add('open');$(closeId).focus()}
-function hideModal(id){if(id==='data-modal'&&backupBusy)return;$(id).classList.remove('open');modalReturnFocus.get(id)?.focus();modalReturnFocus.delete(id)}
+function focusVisibleControl(preferred){
+    // A menu item or portrait control may be hidden after closing or rotating.
+    const target=[preferred,$('menu-btn'),$('cluster-controls'),$('link-dashboard')].find(el=>el&&!el.disabled&&!el.hidden&&el.getClientRects().length&&getComputedStyle(el).visibility==='visible');
+    target?.focus();
+}
+function hideModal(id){
+    if(id==='data-modal'&&backupBusy)return;
+    if(id==='mount-modal'){clearInterval(mountPolling);mountPolling=null}
+    $(id).classList.remove('open');
+    const opener=modalReturnFocus.get(id);modalReturnFocus.delete(id);focusVisibleControl(opener);
+}
 document.addEventListener('keydown',event=>{
     const modal=document.querySelector('.bbModal.open');if(!modal)return;
     if(event.key==='Escape'){event.preventDefault();hideModal(modal.id);return}
@@ -4019,8 +4029,8 @@ function syncDisplayControl(){
     const button=$('display-mode');button.hidden=standaloneDisplay();
     button.textContent=document.fullscreenElement?'Exit full screen':document.fullscreenEnabled&&document.documentElement.requestFullscreen?'Full screen':'App setup';
 }
-function openPhoneSetup(message){$('menu-overlay').classList.remove('open');$('phone-modal').classList.add('open');if(message)$('display-message').textContent=message;$('phone-close').focus()}
-function closePhoneSetup(){$('phone-modal').classList.remove('open');$('display-mode').focus()}
+function openPhoneSetup(message){$('menu-overlay').classList.remove('open');revealModal('phone-modal','phone-close');if(message)$('display-message').textContent=message}
+function closePhoneSetup(){hideModal('phone-modal')}
 async function toggleDisplayMode(){
     try{
         if(document.fullscreenElement)await document.exitFullscreen();
@@ -4066,11 +4076,10 @@ async function sendMountCommand(action){
     catch(e){$('mount-message').textContent='Request was not confirmed. Reconnect and check device status before retrying.'}
     finally{mountCommandBusy=false}
 }
-function closeMountSetup(){$('mount-modal').classList.remove('open');clearInterval(mountPolling);mountPolling=null;$('menu-btn').focus()}
-$('menu-mount').onclick=()=>{$('menu-overlay').classList.remove('open');$('mount-modal').classList.add('open');disableMountActions();refreshMountStatus();clearInterval(mountPolling);mountPolling=setInterval(refreshMountStatus,500);$('mount-close').focus()};
+function closeMountSetup(){hideModal('mount-modal')}
+$('menu-mount').onclick=()=>{$('menu-overlay').classList.remove('open');revealModal('mount-modal','mount-close');disableMountActions();refreshMountStatus();clearInterval(mountPolling);mountPolling=setInterval(refreshMountStatus,500)};
 $('mount-close').onclick=closeMountSetup;$('mount-modal').onclick=e=>{if(e.target===$('mount-modal'))closeMountSetup()};
 for(const action of ['start','cancel','save','clear'])$('mount-'+action).onclick=()=>sendMountCommand(action);
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){if($('phone-modal').classList.contains('open'))closePhoneSetup();if($('mount-modal').classList.contains('open'))closeMountSetup()}});
 // End mount alignment controls.
 
 // Responsive driving layout. Orientation never starts/stops recording or timing.
