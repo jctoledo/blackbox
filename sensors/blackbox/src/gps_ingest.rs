@@ -3,18 +3,20 @@
 use crate::diagnostics::DiagnosticsState;
 use ublox_gps::NmeaParser;
 
-/// Parse every byte; timing and logging retain the parser's per-RMC events.
-pub fn feed_byte(parser: &mut NmeaParser, byte: u8, _diagnostics: &DiagnosticsState) -> bool {
-    parser.feed_byte(byte)
-}
-
-/// Consume the latest-fix flag once after draining the UART.
-pub fn take_latest_fix(parser: &mut NmeaParser, diagnostics: &DiagnosticsState) -> bool {
-    let available = parser.take_new_fix();
-    if available {
+/// Count each valid post-warmup RMC when parsed, before another sentence can
+/// replace its evidence. Timing and logging retain the same per-RMC events.
+pub fn feed_byte(parser: &mut NmeaParser, byte: u8, diagnostics: &DiagnosticsState) -> bool {
+    let previous_sequence = parser.rmc_timing().sequence;
+    let updated = parser.feed_byte(byte);
+    if parser.rmc_timing().sequence != previous_sequence && parser.last_fix().valid {
         diagnostics.record_gps_fix();
     }
-    available
+    updated
+}
+
+/// Estimation still consumes only the latest-fix flag after draining the UART.
+pub fn take_latest_fix(parser: &mut NmeaParser) -> bool {
+    parser.take_new_fix()
 }
 
 #[cfg(test)]
@@ -38,7 +40,7 @@ mod tests {
         let diagnostics = DiagnosticsState::new();
         sentence(&mut parser, &diagnostics, VALID);
         assert!(parser.is_warmed_up());
-        assert!(!take_latest_fix(&mut parser, &diagnostics));
+        assert!(!take_latest_fix(&mut parser));
         assert_eq!(diagnostics.gps_fix_count(), 0);
         (parser, diagnostics)
     }
@@ -49,9 +51,9 @@ mod tests {
         for _ in 0..3 {
             sentence(&mut parser, &diagnostics, VALID);
         }
-        assert!(take_latest_fix(&mut parser, &diagnostics));
+        assert!(take_latest_fix(&mut parser));
         assert_eq!(diagnostics.gps_fix_count(), 3);
-        assert!(!take_latest_fix(&mut parser, &diagnostics));
+        assert!(!take_latest_fix(&mut parser));
         assert_eq!(diagnostics.gps_fix_count(), 3);
     }
 
@@ -62,12 +64,9 @@ mod tests {
             for body in bodies {
                 sentence(&mut parser, &diagnostics, body);
             }
-            assert_eq!(
-                take_latest_fix(&mut parser, &diagnostics),
-                bodies[2] == VALID
-            );
+            assert_eq!(take_latest_fix(&mut parser), bodies[2] == VALID);
             assert_eq!(diagnostics.gps_fix_count(), 2);
-            assert!(!take_latest_fix(&mut parser, &diagnostics));
+            assert!(!take_latest_fix(&mut parser));
             assert_eq!(diagnostics.gps_fix_count(), 2);
         }
     }
@@ -78,7 +77,7 @@ mod tests {
         let diagnostics = DiagnosticsState::new();
         for _ in 0..3 {
             sentence(&mut parser, &diagnostics, VALID);
-            assert!(!take_latest_fix(&mut parser, &diagnostics));
+            assert!(!take_latest_fix(&mut parser));
         }
         for body in [GGA, GSA, INVALID] {
             sentence(&mut parser, &diagnostics, body);
@@ -86,16 +85,16 @@ mod tests {
         for byte in b"$GNRMC,123456.04,A,3723.2475,N,12158.3416,W,10.0,90.0,201126,,,A*00\r\n" {
             feed_byte(&mut parser, *byte, &diagnostics);
         }
-        assert!(!take_latest_fix(&mut parser, &diagnostics));
+        assert!(!take_latest_fix(&mut parser));
         assert_eq!(diagnostics.gps_fix_count(), 0);
         sentence(&mut parser, &diagnostics, VALID);
-        assert!(take_latest_fix(&mut parser, &diagnostics));
+        assert!(take_latest_fix(&mut parser));
         assert_eq!(diagnostics.gps_fix_count(), 1);
         // Non-RMC sentences must not recount the retained valid position.
         for body in [GGA, GSA] {
             sentence(&mut parser, &diagnostics, body);
         }
-        assert!(!take_latest_fix(&mut parser, &diagnostics));
+        assert!(!take_latest_fix(&mut parser));
         assert_eq!(diagnostics.gps_fix_count(), 1);
     }
 }

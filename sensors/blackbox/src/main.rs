@@ -845,9 +845,8 @@ fn main() {
         let now_ms = (gps_now_us / 1000) as u32;
         pending_lap_flags |= sensors.replay_gps_timing(&mut lap_timer, gps_now_us);
         if gps_updated {
-            // Count GPS rate only when a NEW valid RMC fix is received
-            // (not on every GGA/GSA sentence while last_fix.valid is still true)
-            let is_new_fix = gps_ingest::take_latest_fix(&mut sensors.gps_parser, &diagnostics);
+            // Rates count each valid RMC at ingest; estimation remains latest-only.
+            let is_new_fix = gps_ingest::take_latest_fix(&mut sensors.gps_parser);
 
             if is_new_fix
                 && sensors.gps_parser.is_warmed_up()
