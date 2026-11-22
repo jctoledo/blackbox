@@ -416,14 +416,14 @@ body.cluster-view .bbInstrumentLabel,body.cluster-view .bbElapsedLabel{display:b
 body.cluster-view .bbApp .bbGTopRight{display:flex;justify-content:space-between;align-items:center;padding:0 18px;font:18px var(--mono);border-top:1px solid var(--divider)}
 body.cluster-view .bbLapCard.active .bbLapActive{display:flex;flex:1;min-height:0;flex-direction:column;position:static}
 body.cluster-view .bbLapMain{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);grid-template-rows:auto 1fr auto;gap:5px 14px;flex:1;min-height:0;padding:12px 18px 8px;text-align:left}
-body.cluster-view .bbElapsedLabel{grid-column:1;grid-row:1}body.cluster-view .bbLapTime{grid-column:1;grid-row:2;align-self:center;font-size:clamp(30px,5.5vw,56px);line-height:1.1;letter-spacing:-.065em;white-space:nowrap}
+body.cluster-view .bbElapsedLabel{grid-column:1;grid-row:1}body.cluster-view .bbLapTime{--timing-font:clamp(30px,5.5vw,56px);grid-column:1;grid-row:2;align-self:center;font-size:clamp(30px,5.5vw,56px);line-height:1.1;letter-spacing:-.065em;white-space:nowrap}
 body.cluster-view .bbReferenceLabel{grid-column:1;grid-row:3;font-size:10px;line-height:1.2;margin:0;color:var(--text-tertiary)}
 body.cluster-view .bbDeltaBar{grid-column:2;grid-row:1/4;align-self:stretch;justify-content:center;margin:0;padding-left:14px;border-left:1px solid var(--divider);gap:8px}
 body.cluster-view .bbDeltaBar::before{content:'DELTA';color:var(--text-tertiary);font:9px var(--mono);letter-spacing:.08em}
 body.cluster-view .bbDeltaText{font-size:clamp(24px,3.6vw,38px);line-height:1.1;white-space:nowrap}body.cluster-view .bbDeltaBar.no-ref .bbDeltaText{font-size:12px;white-space:normal;line-height:1.4}body.cluster-view .bbDeltaTrack{height:4px;width:100%}
 body.cluster-view .bbLapTrackName{display:none}body.cluster-view .bbLapMeta{position:absolute;top:15px;right:18px;margin:0;gap:8px}body.cluster-view .bbLapCount,body.cluster-view .bbLapState{font:10px var(--mono)}
 body.cluster-view .bbLapProgress{flex:none;padding:0 18px 8px;font:10px var(--mono)}body.cluster-view .bbLapProgress progress{height:3px;margin-top:4px}
-body.cluster-view .bbLapHistory{flex:0 0 52px;height:52px;padding:7px 10px;margin:0;border-top:1px solid var(--divider);align-items:center}body.cluster-view .bbLapHistLabel{font:9px var(--mono);letter-spacing:.06em}body.cluster-view .bbLapHistValue{font:500 18px/1.3 var(--mono);margin-top:3px}
+body.cluster-view .bbLapHistory{flex:0 0 52px;height:52px;padding:7px 10px;margin:0;border-top:1px solid var(--divider);align-items:center}body.cluster-view .bbLapHistLabel{font:9px var(--mono);letter-spacing:.06em}body.cluster-view .bbLapHistValue{--timing-font:18px;font:500 18px/1.3 var(--mono);margin-top:3px}
 body.cluster-view .bbLapResult,body.cluster-view .bbStartLineIndicator,body.cluster-view .bbFinishLineIndicator{position:absolute;bottom:52px;left:0;right:0;z-index:2;padding:7px 12px;font-size:12px;background:var(--surface)}body.cluster-view .bbLapResult{background:var(--ok)}
 body.cluster-view .bbLapCard.inactive{padding:0}body.cluster-view .bbLapSetup{padding:18px;flex:1;flex-direction:column;justify-content:center;align-items:flex-start;gap:14px}body.cluster-view .bbLapSetupText{font-size:18px}
 body.cluster-view.cluster-forces .bbApp .bbGTop,body.cluster-view.cluster-peaks .bbApp .bbGTop,body.cluster-view.cluster-runs .bbApp .bbGTop{display:none!important}
@@ -432,7 +432,7 @@ body.cluster-view.cluster-forces .bbApp .bbGPlotFrame{height:100%;max-height:170
 body.cluster-view .bbGExpand,body.cluster-view .bbPlotMeta{display:none!important}body.cluster-view .bbAxis{font-size:9px}
 body.cluster-view.cluster-forces .bbApp .bbGReadoutRow{display:flex!important;flex:0 0 52px;height:52px;padding:6px 8px;margin:0;border-top:1px solid var(--divider)}body.cluster-view .bbGReadoutCol{gap:3px}body.cluster-view .bbGReadoutLbl{font:9px var(--mono)}body.cluster-view .bbGReadoutVal{font:500 21px/1.1 var(--mono);margin:0}body.cluster-view .bbGDivider{height:28px}
 body.cluster-view.cluster-peaks .bbClusterPeaks{display:flex;flex:1;min-height:0;flex-direction:column}.bbPeakGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px 18px;flex:1;align-items:center}.bbPeakGrid dt{font:10px var(--mono);color:var(--text-tertiary);letter-spacing:.06em;margin-bottom:5px}.bbPeakGrid dd{font:500 clamp(20px,3.5vw,30px)/1 var(--mono);letter-spacing:-.06em}.bbPeakGrid small{font-size:12px;color:var(--text-secondary);letter-spacing:0}.bbPeakNote{display:flex;align-items:center;justify-content:center;flex:0 0 52px;border-top:1px solid var(--divider);font:10px/1.4 var(--mono);color:var(--text-tertiary);text-align:center;padding:6px 10px}
-@media(max-height:360px){body.cluster-view .bbTopbar{height:52px;min-height:52px}body.cluster-view .bbApp{padding-top:5px;gap:8px}body.cluster-view .bbLapMain{padding:8px 12px;gap:3px 10px}body.cluster-view .bbGTopLeft{padding:8px 12px}body.cluster-view .bbApp .bbSpeed{font-size:72px}body.cluster-view .bbLapTime{font-size:34px}body.cluster-view .bbLapProgress{font-size:9px;padding-bottom:5px}body.cluster-view .bbReferenceLabel{font-size:9px}body.cluster-view .bbLapHistValue{font-size:16px}body.cluster-view .bbLapMeta{right:12px}body.cluster-view .bbDeltaBar{padding-left:10px}body.cluster-view .bbDeltaBar::before{font-size:8px}body.cluster-view .bbStatusCluster{gap:6px;font-size:9px}}
+@media(max-height:360px){body.cluster-view .bbTopbar{height:52px;min-height:52px}body.cluster-view .bbApp{padding-top:5px;gap:8px}body.cluster-view .bbLapMain{padding:8px 12px;gap:3px 10px}body.cluster-view .bbGTopLeft{padding:8px 12px}body.cluster-view .bbApp .bbSpeed{font-size:72px}body.cluster-view .bbLapTime{--timing-font:34px;font-size:34px}body.cluster-view .bbLapProgress{font-size:9px;padding-bottom:5px}body.cluster-view .bbReferenceLabel{font-size:9px}body.cluster-view .bbLapHistValue{--timing-font:16px;font-size:16px}body.cluster-view .bbLapMeta{right:12px}body.cluster-view .bbDeltaBar{padding-left:10px}body.cluster-view .bbDeltaBar::before{font-size:8px}body.cluster-view .bbStatusCluster{gap:6px;font-size:9px}}
 
 .bbForceTools{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;font:9px var(--mono);color:var(--text-tertiary)}.bbForceTools button{white-space:nowrap;flex-shrink:0;min-height:44px;padding:0 8px;border:0;background:none;color:var(--text-secondary);font:inherit;cursor:pointer}
 body.cluster-view.cluster-forces .bbApp .bbGPlotWrap{flex-direction:column;padding:0 10px 4px;gap:0}body.cluster-view.cluster-forces .bbGPlotFrame{min-height:0;flex:1}body.cluster-view.cluster-forces .bbForceTools{flex:0 0 44px}body.cluster-view.cluster-forces .bbApp .bbGPlotFrame{height:calc(100% - 44px)}
@@ -460,10 +460,10 @@ body.cluster-view .bbLapCard,body.cluster-view .bbApp .bbGCard{container:cluster
 @container cluster-card (max-height:210px){
     body.cluster-view .bbLapMain{grid-template-rows:12px 12px minmax(0,1fr);padding:6px 10px;gap:2px 8px}
     body.cluster-view .bbLapMeta{grid-row:2;margin-top:0!important;gap:6px}
-    body.cluster-view .bbLapTime{grid-row:3;font-size:clamp(24px,18cqh,32px)}
+    body.cluster-view .bbLapTime{--timing-font:clamp(24px,18cqh,32px);grid-row:3;font-size:clamp(24px,18cqh,32px)}
     body.cluster-view .bbReferenceLabel,body.cluster-view .bbLapProgress{display:none}
     body.cluster-view .bbLapHistory{flex-basis:42px;height:42px;padding:4px 8px}
-    body.cluster-view .bbLapHistValue{font-size:16px}
+    body.cluster-view .bbLapHistValue{--timing-font:16px;font-size:16px}
     body.cluster-view .bbLapResult,body.cluster-view .bbStartLineIndicator,body.cluster-view .bbFinishLineIndicator{bottom:42px}
     body.cluster-view .bbApp .bbGTop{grid-template-rows:minmax(0,1fr) 42px}
     body.cluster-view .bbGTopLeft{padding:44px 10px 4px}
@@ -501,6 +501,12 @@ body.cluster-view .bbDrivePanel{flex:1;min-height:0;display:grid;grid-template-r
     body.cluster-view .bbApp .bbGTopRight,body.cluster-view .bbSpeedMaximum{display:none}
     body.cluster-view .bbPeakGrid{padding-bottom:4px;gap:4px}body.cluster-view .bbPeakGrid dd{font-size:20px}
 }
+/* Keep the complete numeric value inside its landscape column at long durations.
+   cqw belongs to the timing card; budgets leave room for labels, gaps and dividers. */
+body.cluster-view .bbLapTime{min-width:0;font-size:min(var(--timing-font),calc(80cqw / var(--timing-chars,8)))}
+body.cluster-view .bbLapHistItem{min-width:0}
+body.cluster-view .bbLapHistValue{white-space:nowrap;font-size:min(var(--timing-font),calc(50cqw / var(--timing-chars,8)))}
+body.cluster-view .bbDeltaBar:not(.no-ref) .bbDeltaText{font-size:min(clamp(24px,3.6vw,38px),calc(55cqw / var(--timing-chars,6)))}
 </style></head>
 <body>
 
@@ -3636,6 +3642,20 @@ $('drive-record').onclick=()=>$('menu-rec').click();
 $('drive-tracks').onclick=()=>openTrackModal();
 $('drive-data').onclick=()=>openDataModal();
 $('quick-data').onclick=openDataModal;
+
+// Numeric width changes only at digit boundaries; no layout reads or text truncation.
+const timingDigits=new Map();
+function sizeTimingDigits(element){
+    const length=Math.max(1,element.textContent.length);
+    if(timingDigits.get(element)===length)return;
+    timingDigits.set(element,length);element.style.setProperty('--timing-chars',String(length));
+}
+const timingDigitObserver=new MutationObserver(records=>{
+    for(const record of records){const element=record.target.nodeType===3?record.target.parentElement:record.target;if(timingDigits.has(element))sizeTimingDigits(element)}
+});
+for(const id of ['lap-time','best-lap','last-lap','lap-delta','delta-text']){
+    const element=$(id);sizeTimingDigits(element);timingDigitObserver.observe(element,{childList:true,characterData:true,subtree:true});
+}
 
 // Init
 setInterval(checkTelemetryFreshness,100);
