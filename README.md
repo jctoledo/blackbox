@@ -447,7 +447,7 @@ blackbox/
 
 ## Python Tools
 
-Station mode only. Connect ESP32 and laptop to same network.
+Live network receivers require station mode with the ESP32 and laptop on the same network. CSV analysis works offline and needs only Python's standard library.
 
 ```bash
 cd tools/python
@@ -456,12 +456,17 @@ pip install -r requirements.txt
 # Receive telemetry
 python3 udp_telemetry_server.py
 
-# Analyze CSV export
+# Analyze Session CSV quality; JSON output excludes route coordinates/timestamps
 python3 analyze_telemetry.py recorded_session.csv
+
+# Analyze receiver/host timing separately using GPS CSV
+python3 analyze_gps_timestamps.py recorded_gps.csv
 
 # Configure IMU
 python3 configure_wt901.py /dev/ttyUSB0
 ```
+
+The Session report separates phone and device cadence, freshness exclusions, provenance and qualified speed/force sample statistics. It does not infer physical accuracy, classifier performance or recording duration from dashboard samples. See the [first-drive collection plan](docs/FIRST_DRIVE.md).
 
 ---
 

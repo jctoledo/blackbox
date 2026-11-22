@@ -58,4 +58,6 @@ Avoid credentials, home addresses, registration details and identifying paperwor
 
 From this capture we can inspect receiver epoch cadence, host/phone gaps, reboots, nonfinite or stale data, parked residuals and recovery/export behavior. We can investigate timing failures if the relevant crossing and geometry were captured.
 
+Run the [two offline CSV reports](GPS_LOGGING.md#analyze-without-publishing-your-route) on your laptop: `analyze_telemetry.py` for Session CSV quality and `analyze_gps_timestamps.py` for receiver/host timing. Both emit reduced JSON without route coordinates. Keep reports beside the original files. Session sample statistics do not independently measure sensor accuracy or classifier performance.
+
 Absolute timing accuracy requires controlled repeated crossings and an independent reference with known uncertainty. Real-drive precision/recall for Runs requires labelled positive and negative examples, not just successful attempts. Those are later tests, described in the [full hardware checklist](HARDWARE_VALIDATION.md) and [Runs rules](RUNS.md).
