@@ -48,6 +48,8 @@ remains raw sensor-body Z rate for compatibility.
 
 Measured lateral acceleration already produces curved motion. The current code does not switch between CTRA and CA models or add another centripetal acceleration. GPS updates correct position/velocity; stationary updates constrain velocity and learn biases. The separate orientation-correction/display path does not retroactively correct every EKF input.
 
+For the dashboard heading, `HeadingAligner` first converts mathematical EKF yaw to clockwise compass basis with `π/2 − yaw`, then learns a residual GPS-course reference offset while moving with fresh course evidence. A constant offset alone cannot reverse the angular direction. Before learning, the output has compass turn sense but an unverified absolute reference. This display conversion does not change EKF prediction, acceleration transforms or raw-GPS crossing directions; magnetometer/mount signs and absolute heading still require the controlled bench/turn checks.
+
 ## Covariance and measurement updates
 
 Only seven diagonal variances are retained. Prediction propagates the diagonal of `F P Fᵀ + Q` for independent position/velocity/bias states:

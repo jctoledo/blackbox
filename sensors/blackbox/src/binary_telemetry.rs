@@ -32,7 +32,7 @@ pub struct TelemetryPacket {
     pub pitch: f32,
 
     // EKF state (29 bytes)
-    pub yaw: f32, // radians
+    pub yaw: f32, // Compass-basis radians; GPS reference aligned when learned
     pub x: f32,   // meters
     pub y: f32,
     pub vx: f32, // m/s
