@@ -79,7 +79,7 @@ g-force estimate = acceleration / 9.81
 
 At 20 m/s and 0.25 rad/s, the model gives 5 m/s², or about 0.51 g. Banking, pitch, sideslip, sensor delay and imperfect attitude estimates can change the relationship to real tyre and body forces. This is not a direct grip measurement.
 
-A fixed selectable scale makes the trace comparable through a manoeuvre. Its short history shows the transition from braking into a corner and back to acceleration. Stale GPS or IMU packets clear live force readings. Peaks uses the strongest **half-second averages** while moving, so one isolated spike does not become an instantaneous record; it still cannot reject every plausible sensor error.
+A fixed selectable scale makes the trace comparable through a manoeuvre. Its short history shows the transition from braking into a corner and back to acceleration. Stale GPS or IMU packets clear live force readings. Peaks uses the strongest **half-second averages ending at retained samples** while moving, so one isolated spike does not become an instantaneous record; it still cannot reject every plausible sensor error.
 
 The sensor also needs to know which way the car points. **Align sensor to car** learns the horizontal rotation between the mounted sensor and the vehicle. Startup bias calibration is a separate operation that estimates stationary sensor offsets using an attitude-based gravity subtraction. Read the [illustrated alignment guide](CALIBRATION.md), including the remaining incline tests.
 
@@ -107,7 +107,7 @@ With no track selected, the Drive panel gives an ordinary recording its own purp
 
 ## Your recordings should survive your next experiment
 
-Sessions, tracks, references and lap history stay in browser storage. Session CSV preserves ordinary telemetry; GPS CSV preserves receiver epochs, host parse times, sequences and visible gaps. Runs CSV derives accepted and rejected attempts from that evidence. A full JSON backup can be previewed and restored as new copies. **Saved data → Summary · saved samples** derives maximum qualified speed and strongest half-second acceleration, braking and left/right force estimates from committed chunks. Pending data is excluded until saved; missing legacy quality remains unavailable. This saved Summary is separate from live page-session MAX/Peaks, and [details JSON](RECORDING_SUMMARY.md) includes its versioned SI values and supporting counts.
+Sessions, tracks, references and lap history stay in browser storage. Session CSV preserves ordinary telemetry; GPS CSV preserves receiver epochs, host parse times, sequences and visible gaps. Runs CSV derives accepted and rejected attempts from that evidence. A full JSON backup can be previewed and restored as new copies. **Saved data → Summary · saved samples** derives maximum qualified speed and strongest sample-ending half-second acceleration, braking and left/right force estimates from committed chunks. Pending data is excluded until saved; missing legacy quality remains unavailable. This saved Summary is separate from live page-session MAX/Peaks, and [details JSON](RECORDING_SUMMARY.md) includes its versioned SI values and supporting counts.
 
 Local storage is convenient, but it is not an external backup. Browser eviction, private browsing, changing phones and clearing site data can remove it. Keep the dashboard foregrounded while recording, stop while parked, and export a backup before changing browsers or devices. See [backup and restore](FAQ.md#how-do-i-back-up-and-restore-everything) and [GPS drive-data analysis](GPS_LOGGING.md).
 

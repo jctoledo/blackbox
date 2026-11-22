@@ -98,11 +98,11 @@ test('track save waits for transaction commit and rejects a later abort',async()
  tx.onabort();await assert.rejects(pending,/Track storage failed/);assert.equal(changes,0);
 });
 test('reference replacement deletes old key and writes new lap in one committed transaction',async()=>{
- const ops=[];let tx,lookup;const store={index:()=>({getKey:()=>lookup={}}),delete:key=>ops.push(['delete',key]),put:ref=>ops.push(['put',ref.id])};
- const c={trackDb:{transaction(){tx={objectStore:()=>store};return tx}}};vm.createContext(c);
- vm.runInContext(section('function commitTrackWrite(', 'function openTrackDB(')+section('async function saveRefLap(', 'async function getRefLap('),c);
+ const ops=[];let tx,lookup,trackLookup;const store={index:()=>({get:()=>lookup={}}),delete:key=>ops.push(['delete',key]),put:ref=>ops.push(['put',ref.id])};
+ const c={validSpatialReference:()=>false,trackDb:{transaction(){tx={objectStore:name=>name==='tracks'?{get:()=>trackLookup={}}:store};return tx}}};vm.createContext(c);
+ vm.runInContext(section('function commitTrackWrite(', 'function openTrackDB(')+section('// Reference lap CRUD', 'async function getRefLap('),c);
  let settled=false;const p=c.saveRefLap({id:'new',trackId:'track'}).then(()=>{settled=true});
- lookup.result='old';lookup.onsuccess();await Promise.resolve();assert.equal(settled,false);
+ await Promise.resolve();trackLookup.result={id:'track'};trackLookup.onsuccess();lookup.result={id:'old'};lookup.onsuccess();await Promise.resolve();assert.equal(settled,false);
  assert.deepEqual(ops,[['delete','old'],['put','new']]);tx.oncomplete();await p;assert.equal(settled,true);
 });
 test('failed stop acknowledgement preserves the active track',async()=>{
@@ -189,7 +189,7 @@ test('emergency export includes committed and unsaved rows without another write
 
 
 test('reference save completion cannot replace a newly selected track reference',async()=>{
- let finish;const original={lapTimeMs:50000};const c={console,Date,Math,validSpatialReference:()=>true,activeTrack:{id:'old'},referenceLap:original,saveRefLap:()=>new Promise(resolve=>{finish=resolve})};vm.createContext(c);
+ let finish;const original={lapTimeMs:50000};const c={console,Date,Math,validSpatialReference:()=>true,currentSessionId:'old-session',referenceSaveGeneration:0,activeTrack:{id:'old'},referenceLap:original,saveRefLap:()=>new Promise(resolve=>{finish=resolve})};vm.createContext(c);
  vm.runInContext(section('async function saveNewRefLap(', 'async function saveTrack('),c);
  const p=c.saveNewRefLap('old',60000,{toBinary:()=>new ArrayBuffer(0),samples:[],dist:100,spatialPoints:[],spatialOrigin:{lat:0,lon:0}});c.activeTrack={id:'new'};finish();await p;assert.equal(c.referenceLap,original);
 });

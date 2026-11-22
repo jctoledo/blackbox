@@ -30,3 +30,11 @@ test('saved-data scan maintains independent bounded summary accumulators by reco
 test('a synthetic qualifying window endpoint remains visible in recording provenance',()=>{const s=summarize([0,100,200,300,400,500].map(t=>sample(t,{gpsSynthetic:t===0?1:0})));assert.equal(s.samples.forceWindows,1);assert.equal(s.provenance.synthetic,1);close(s.forcePeaksG.accel,.2)});
 
 test('invalid evidence at a duplicate timestamp still breaks the force window',()=>{const s=summarize([sample(0),sample(100),sample(100,{imuAgeMs:201}),sample(200),sample(300),sample(400),sample(500)]);assert.equal(s.forcePeaksG.accel,null);assert.equal(s.continuity.duplicates,1);assert.equal(s.excluded.imu,1)});
+
+test('half-second peaks compare complete windows ending at retained samples, not continuous extrema',()=>{
+ const rows=[0,200,400,600,800].map((t,i)=>sample(t,{lng:[0,.5,1,.5,0][i],latg:0}));
+ const summary=summarize(rows);close(summary.forcePeaksG.accel,.675);assert.equal(summary.samples.forceWindows,2);
+ // The same piecewise-linear triangle has a continuous optimum at150..650ms.
+ // It is intentionally not evaluated by saved-telemetry-v1.
+ const continuousMean=(1+.375)/2;close(continuousMean,.6875);assert.ok(summary.forcePeaksG.accel<continuousMean);
+});
