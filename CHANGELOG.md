@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
-- Serialize track arming and Stop commands, publishing the selected track, reference and revision together after storage lookup so rapid selections cannot mix timing owners (#127).
+- Serialize track arming, Stop and track deletion commands, publishing the selected track, reference and revision together after storage lookup so rapid selections cannot mix timing owners (#127).
 
 ### Changed
 - Renamed `neo6m` driver to `ublox-gps` to reflect support for multiple u-blox GPS modules (NEO-6M, NEO-M9N, etc.)

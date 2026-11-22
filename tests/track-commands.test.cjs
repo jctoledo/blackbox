@@ -4,18 +4,19 @@ const deferred=()=>{let resolve,reject;const promise=new Promise((yes,no)=>{reso
 const settle=async()=>{for(let i=0;i<20;i++)await Promise.resolve()};
 const track=id=>({id,name:'Track '+id,type:'loop',gpsOrigin:{lat:37,lon:-122},startLine:{p1:[0,0],p2:[0,20],direction:0},lapCount:0});
 function fixture(){
- const requests=[],lookups=[],alerts=[],elements=new Map(),published=[];let changes=0;
+ const requests=[],lookups=[],alerts=[],elements=new Map(),published=[],deletions=[];let changes=0;
  const c={console,Promise,Math,activeTrack:track('original'),referenceLap:{id:'ref-original'},expectedLapRevision:9,lapResultGeneration:0,lapTracker:{reset(){}},lastDeltaMs:0,deltaTrend:0,prevLapFlags:0,prevLapTimeMs:0,prevLapCnt:0,lapTimerActive:true,p2pNeedsWarmup:false,suppressStartLineIndicator:false,
   trackAutoDetector:{beginTrackChange(){changes++},endTrackChange(){changes--}},
   requestDevice(url){const pending=deferred();requests.push({url,...pending});return pending.promise},
   getRefLap(id){const pending=deferred();lookups.push({id,...pending});return pending.promise},alert:message=>alerts.push(message),startNewSession(){},clearSession(){},fmtLapTime:String,updateDeltaBar(){},
+  trackDb:{},IDBKeyRange:{only:id=>id},commitTrackWrite(names,write){write({objectStore:name=>({delete(id){deletions.push([name,id])},clear(){deletions.push([name,'*'])},index(){return{openCursor:()=>({result:null})}}})});return Promise.resolve()},
   updateActiveTrackDisplay(){published.push({id:c.activeTrack?.id??null,ref:c.referenceLap?.id??null,revision:c.expectedLapRevision})},
   $:id=>{if(!elements.has(id)){const values=new Set();elements.set(id,{textContent:'Original label',hidden:false,classList:{add(...keys){keys.forEach(k=>values.add(k))},remove(...keys){keys.forEach(k=>values.delete(k))},toggle(key,on){if(on===undefined)on=!values.has(key);on?values.add(key):values.delete(key);return on}}})}return elements.get(id)}};
  vm.createContext(c);
  const marker=html.includes('// Track command ownership.')?'// Track command ownership.':'async function activateTrack(';
- vm.runInContext(html.slice(html.indexOf(marker),html.indexOf('// Track Recording Functions')),c);
+ vm.runInContext(html.slice(html.indexOf(marker),html.indexOf('// Track Recording Functions'))+html.slice(html.indexOf('async function deleteTrackWithRef('),html.indexOf('function formatBytes(')),c);
  const ack=(index,revision=10,ok=true,error=null)=>requests[index].resolve({ok,status:ok?200:500,json:async()=>({revision,...(error?{error}:{})})});
- return{c,requests,lookups,alerts,elements,published,ack,changes:()=>changes};
+ return{c,requests,lookups,alerts,elements,published,deletions,ack,changes:()=>changes};
 }
 test('rapid track choices serialize configuration and publish matching reference and labels',async()=>{
  const f=fixture(),a=f.c.activateTrack(track('A')),b=f.c.activateTrack(track('B'));await settle();
@@ -49,4 +50,24 @@ test('saved-track lookup preserves the order of driver selections before configu
  reads[0].resolve(track('A'));await settle();f.ack(0,10);await settle();f.lookups[0].resolve({id:'ref-A'});await a;await settle();assert.equal(reads.length,2);assert.equal(reads[1].id,'B');
  reads[1].resolve(track('B'));await settle();f.ack(1,11);await settle();f.lookups[1].resolve({id:'ref-B'});await b;
  assert.equal(f.c.activeTrack.id,'B');assert.equal(f.c.referenceLap.id,'ref-B');assert.equal(f.elements.get('lap-track-name').textContent,'Track B');assert.equal(f.changes(),0);
+});
+
+test('deleting a pending selection waits for its publication and stops that exact owner',async()=>{
+ const f=fixture(),arm=f.c.activateTrack(track('B'));await settle();f.ack(0,10);await settle();const remove=f.c.deleteTrackWithRef('B');await settle();
+ assert.equal(f.deletions.length,0,'pending B must not be deleted while it can still publish');f.lookups[0].resolve(null);await arm;await settle();assert.match(f.requests[1].url,/type=clear/);f.ack(1,11);await remove;
+ assert.equal(f.c.activeTrack,null);assert.deepEqual(f.deletions,[['tracks','B']]);assert.equal(f.changes(),0);
+});
+test('clear all queued behind the first activation stops timing before removing tracks',async()=>{
+ const f=fixture();f.c.activeTrack=null;const arm=f.c.activateTrack(track('B'));await settle();f.ack(0,10);await settle();const clear=f.c.clearAllTracks();await settle();assert.equal(f.deletions.length,0);
+ f.lookups[0].resolve(null);await arm;await settle();assert.match(f.requests[1].url,/type=clear/);f.ack(1,11);await clear;
+ assert.equal(f.c.activeTrack,null);assert.deepEqual(f.deletions,[['tracks','*'],['reference_laps','*'],['lap_history','*']]);assert.equal(f.changes(),0);
+});
+test('deleting the old track after selecting B does not stop B',async()=>{
+ const f=fixture(),arm=f.c.activateTrack(track('B'));await settle();f.ack(0,10);await settle();const remove=f.c.deleteTrackWithRef('original');await settle();f.lookups[0].resolve(null);await arm;await settle();
+ assert.equal(f.requests.length,1,'deletion must evaluate the current owner inside its command');await remove;assert.equal(f.c.activeTrack.id,'B');assert.deepEqual(f.deletions,[['tracks','original']]);assert.equal(f.changes(),0);
+});
+for(const operation of ['delete','clear'])test('failed timing stop retains tracks during '+operation+' and leaves queue usable',async()=>{
+ const f=fixture(),removal=operation==='delete'?f.c.deleteTrackWithRef('original'):f.c.clearAllTracks(),rejected=assert.rejects(removal,/retained: device timing is still active/);await settle();f.ack(0,10,false);await rejected;
+ assert.equal(f.c.activeTrack.id,'original');assert.equal(f.deletions.length,0);assert.equal(f.changes(),0);
+ const arm=f.c.activateTrack(track('B'));await settle();f.ack(1,11);await settle();f.lookups[0].resolve(null);await arm;assert.equal(f.c.activeTrack.id,'B');assert.equal(f.changes(),0);
 });

@@ -1433,10 +1433,11 @@ async function getCombinedStorageStats(){
     return{totalBytes:recStats.totalBytes+trackStats.totalBytes,recordingsBytes:recStats.totalBytes,tracksBytes:trackStats.totalBytes,sessionCount:recStats.sessionCount,trackCount:trackStats.tracks.length}
 }
 
-async function deleteTrackWithRef(trackId){
+async function deleteTrackWithRef(trackId){return queueTrackCommand(()=>deleteTrackCommand(trackId))}
+async function deleteTrackCommand(trackId){
     trackAutoDetector.beginTrackChange();
     try{
-        if(activeTrack&&activeTrack.id===trackId&&await deactivateTrack()===false)throw new Error('Track retained: device timing is still active');
+        if(activeTrack&&activeTrack.id===trackId&&await deactivateTrackCommand()===false)throw new Error('Track retained: device timing is still active');
         if(!trackDb)await openTrackDB();
         await commitTrackWrite(['tracks','reference_laps','lap_history'],tx=>{
             tx.objectStore('tracks').delete(trackId);
@@ -1448,10 +1449,11 @@ async function deleteTrackWithRef(trackId){
     }finally{trackAutoDetector.endTrackChange()}
 }
 
-async function clearAllTracks(){
+async function clearAllTracks(){return queueTrackCommand(()=>clearAllTracksCommand())}
+async function clearAllTracksCommand(){
     trackAutoDetector.beginTrackChange();
     try{
-        if(activeTrack&&await deactivateTrack()===false)throw new Error('Tracks retained: device timing is still active');
+        if(activeTrack&&await deactivateTrackCommand()===false)throw new Error('Tracks retained: device timing is still active');
         if(!trackDb)await openTrackDB();
         await commitTrackWrite(['tracks','reference_laps','lap_history'],tx=>{
             for(const name of ['tracks','reference_laps','lap_history'])tx.objectStore(name).clear();
