@@ -3412,7 +3412,7 @@ async function restoreBackup(){
     });
 }
 // Multipart backup core. Bounded files; immutable staging; add-only promotion.
-const MULTIPART_BYTES=8*1024*1024,MULTIPART_FRAGMENT_CHARS=256*1024,MULTIPART_RECORD_BYTES=16*1024*1024,MULTIPART_MAX_PARTS=4096,MULTIPART_MAX_RECORDS=1000000,MULTIPART_MAX_ROOTS=10000;
+const MULTIPART_BYTES=8*1024*1024,MULTIPART_FRAGMENT_CHARS=256*1024,MULTIPART_RECORD_BYTES=16*1024*1024,MULTIPART_MAX_PARTS=4096,MULTIPART_MAX_RECORDS=1000000,MULTIPART_MAX_ROOTS=10000,MULTIPART_MAX_JOBS=100;
 const MULTIPART_COLLECTIONS=['sessions','tracks','chunks','references','history'];
 const MULTIPART_STORES={sessions:'sessions',tracks:'tracks',chunks:'chunks',references:'reference_laps',history:'lap_history'};
 const MULTIPART_STAGE_NAME='blackbox-backup-staging';
@@ -3518,6 +3518,11 @@ async function multipartValidateRecord(stage,job,collection,row){
     if(['references','history'].includes(collection)){const parent=await multipartStagedRecord(stage,job.id,'tracks',row.trackId);multipartCheck(parent,'orphan track data');data.tracks=[parent];if(collection==='references'){const prior=job.referenceTracks||[];multipartCheck(!prior.includes(row.trackId),'duplicate reference for track');prior.push(row.trackId);job.referenceTracks=prior}}
     validateBackup({format:BACKUP_FORMAT,version:1,data,checksum:backupChecksum(data)});
 }
+function multipartCreateJob(stage,job){return new Promise((resolve,reject)=>{
+    const tx=stage.transaction('jobs','readwrite'),store=tx.objectStore('jobs');let failure;
+    tx.oncomplete=resolve;tx.onabort=tx.onerror=()=>reject(failure||tx.error||Error('Backup staging creation failed'));
+    const request=store.count();request.onsuccess=()=>{if(request.result>=MULTIPART_MAX_JOBS){failure=Error('Backup staging has 100 retained jobs. Discard completed or incomplete staging to free a slot; original and restored data will remain.');tx.abort()}else store.add(job)};
+})}
 async function stageMultipartBackup(files,options={}){
     backupIdle();multipartAbort(options.signal);multipartCheck(files&&files.length>0&&files.length<=MULTIPART_MAX_PARTS+1,'choose the manifest and all numbered parts');
     let manifest=null;const selected=new Map();
@@ -3525,7 +3530,7 @@ async function stageMultipartBackup(files,options={}){
     multipartCheck(manifest,'manifest is missing; incomplete exports cannot be restored');multipartCheck(selected.size===manifest.parts.length,'parts are missing or unexpected; select the manifest and every numbered part');
     for(const descriptor of manifest.parts){const part=selected.get(descriptor.index);multipartCheck(part&&part.archiveId===manifest.archiveId&&part.file.size===descriptor.bytes,'missing or mixed archive parts')}
     const stage=await openMultipartStage(),job={id:multipartId(),archiveId:manifest.archiveId,createdAt:Date.now(),state:'building',counts:Object.fromEntries(MULTIPART_COLLECTIONS.map(k=>[k,0])),samples:0,records:0,groups:{recordings:'pending',tracks:'pending'}};
-    await multipartStagePut(stage,job);const digest=multipartDigest(),collectionDigests=Object.fromEntries(MULTIPART_COLLECTIONS.map(k=>[k,multipartDigest()]));let assembly=[],assemblyChars=0,current=null,nextRecord=1,collectionOrder=-1;
+    try{await multipartCreateJob(stage,job)}catch(error){stage.close();throw error}const digest=multipartDigest(),collectionDigests=Object.fromEntries(MULTIPART_COLLECTIONS.map(k=>[k,multipartDigest()]));let assembly=[],assemblyChars=0,current=null,nextRecord=1,collectionOrder=-1;
     try{
         for(const descriptor of manifest.parts){multipartAbort(options.signal);const checked=await multipartFile(selected.get(descriptor.index).file,MULTIPART_BYTES,true),value=checked.value,part=multipartVerify(value,'part');multipartCheck(checked.fileChecksum===descriptor.fileChecksum&&value.checksum===descriptor.checksum&&part.archiveId===manifest.archiveId&&part.index===descriptor.index&&Array.isArray(part.fragments)&&part.fragments.length>0,'part identity or checksum differs from manifest');
             for(const f of part.fragments){multipartAbort(options.signal);multipartCheck(f&&f.record===nextRecord&&MULTIPART_COLLECTIONS.includes(f.collection)&&Number.isSafeInteger(f.fragment)&&f.fragment>=0&&typeof f.last==='boolean'&&typeof f.text==='string'&&f.text.length>0&&f.text.length<=MULTIPART_FRAGMENT_CHARS,'invalid or reordered record fragment');
@@ -3555,6 +3560,16 @@ function multipartTransform(entry,job,mapping){const row=entry.data,{sessions,tr
     if(entry.collection==='references')return{...row,id:'restore_ref_'+job.id+'_'+entry.ordinal,trackId:tracks.get(row.trackId),samples:new Float32Array(row.samples).buffer};
     return{...row,id:'restore_lap_'+job.id+'_'+entry.ordinal,trackId:tracks.get(row.trackId),sessionId:'restore_session_'+job.id+'_'+row.sessionId};
 }
+async function multipartCheckRestoredSizes(stage,job,options){
+    const key=backupChecksum(job.mapping);if(job.sizedForMapping===key)return;
+    const mapping={sessions:new Map(job.mapping.sessions),tracks:new Map(job.mapping.tracks)};let count=0;
+    for(const collection of MULTIPART_COLLECTIONS)for await(const entry of multipartStagedRows(stage,job.id,collection)){
+        multipartAbort(options.signal);const row=multipartTransform(entry,job,mapping),portable=collection==='references'?portableReference(row):row;
+        multipartCheck(multipartBytes(JSON.stringify(portable))<=MULTIPART_RECORD_BYTES,'a restored record would exceed the 16 MiB limit after ID and recovery metadata are added. No destination data was changed');count++;options.onProgress?.({phase:'restore-preflight',records:count});
+    }
+    multipartCheck(count===job.records,'validated staging changed or was removed before restore');
+    await multipartUpdateJob(stage,job.id,current=>{multipartCheck(backupChecksum(current.mapping)===key,'restore mapping changed');current.sizedForMapping=key;return current});
+}
 async function multipartGroupPresence(database,job,group){const roots=group==='recordings'?job.mapping.sessions:job.mapping.tracks,store=group==='recordings'?'sessions':'tracks';if(!roots.length)return'empty';return multipartRead(database,[store],(tx,done)=>{let present=0,conflict=false,remaining=roots.length;for(const [,id]of roots){const r=tx.objectStore(store).get(id);r.onsuccess=()=>{if(r.result){if(r.result.restoreJob?.job===job.id&&r.result.restoreJob?.archive===job.archiveId&&r.result.restoreJob?.group===group&&r.result.restoreJob?.roots===roots.length)present++;else conflict=true}if(!--remaining)done(conflict||present>0&&present<roots.length?'conflict':present===roots.length?'all':'none')}}})}
 async function multipartPromote(stage,job,database,group,options){
     const collections=group==='recordings'?['chunks','sessions']:['references','history','tracks'],stores=collections.map(k=>MULTIPART_STORES[k]);
@@ -3580,15 +3595,17 @@ function multipartUpdateJob(stage,id,update){return new Promise((resolve,reject)
     request.onsuccess=()=>{try{multipartCheck(request.result,'restore staging was discarded; inspect saved copies before importing again');result=update(request.result);store.put(result)}catch(error){failure=error;tx.abort()}};
 })}
 async function executeMultipartRestore(id,options={}){
-    backupIdle();multipartAbort(options.signal);const stage=await openMultipartStage();
+    backupIdle();multipartAbort(options.signal);const stage=await openMultipartStage(),known={recordings:null,tracks:null};
     try{
         let job=await multipartStageGet(stage,id);multipartCheck(job&&['ready','restoring','partial','complete'].includes(job.state),'choose and fully validate the archive first');
-        if(job.counts.sessions&&!db)await openDB();if(job.counts.tracks&&!trackDb)await openTrackDB();await multipartMapping(stage,job,db);
+        for(const group of ['recordings','tracks'])if(job.groups[group]==='committed'&&(group==='recordings'?job.counts.sessions:job.counts.tracks))known[group]='previously marked committed';
+        if(job.counts.sessions&&!db)await openDB();if(job.counts.tracks&&!trackDb)await openTrackDB();await multipartMapping(stage,job,db);await multipartCheckRestoredSizes(stage,job,options);
         for(const group of ['recordings','tracks']){
             multipartAbort(options.signal);job=await multipartStageGet(stage,id);multipartCheck(job,'restore staging was discarded');
             const database=group==='recordings'?db:trackDb,presence=await multipartGroupPresence(database,job,group);
             multipartCheck(presence!=='conflict','restore IDs conflict or some copies were removed. Nothing will be overwritten; inspect the existing copies');
             if(presence==='empty'||presence==='all'){
+                if(presence==='all')known[group]='present in saved data';
                 job=await multipartUpdateJob(stage,id,current=>{multipartCheck(backupChecksum(current.mapping)===backupChecksum(job.mapping),'restore mapping changed');current.groups[group]='committed';return current});continue;
             }
             const attempt=multipartId();
@@ -3606,6 +3623,7 @@ async function executeMultipartRestore(id,options={}){
                 })}catch{}
                 throw Error((error.uncertain?'The group commit is uncertain; inspect saved copies before retrying. ':job.groups.recordings==='committed'?'Recordings committed; remaining tracks were not committed. ':'The active group was rolled back. ')+'Originals are unchanged. Retry remaining data only when its status is known. '+error.message);
             }
+            known[group]='committed';
             // Destination commit is already durable. A ledger failure must never
             // be reported as a rolled-back group or overwrite another tab's proof.
             try{job=await multipartUpdateJob(stage,id,current=>{
@@ -3616,6 +3634,10 @@ async function executeMultipartRestore(id,options={}){
         try{job=await multipartUpdateJob(stage,id,current=>{multipartCheck(current.groups.recordings==='committed'&&current.groups.tracks==='committed','restore groups are not complete');current.state='complete';return current})}
         catch(error){throw Error('Both restore groups committed, but completion could not be acknowledged. Originals are unchanged. Resume this staged restore to confirm the copies. '+error.message)}
         return job;
+    }catch(error){
+        const evidence=Object.entries(known).filter(([,value])=>value).map(([group,value])=>group+' copies '+value).join('; ');
+        if(evidence)throw Error(error.message+' Restore status: '+evidence+'. '+(!known.tracks?'Tracks may remain. ':'')+'Keep staging and resume to check committed copies. Originals are unchanged.');
+        throw error;
     }finally{stage.close()}
 }
 // End multipart backup core.
@@ -3623,7 +3645,7 @@ async function executeMultipartRestore(id,options={}){
 // Multipart backup controls. Downloads stay attached to explicit user taps.
 let multipartUI={exporter:null,current:null,url:null,requested:false,controller:null,working:false,locked:null};
 function multipartStatus(text){$('backup-status').textContent=text}
-function multipartProgress(p){multipartStatus(p.phase==='preparing'?'Checking saved data · '+p.records+' records…':p.phase==='checking'?'Checking part '+p.part+' of '+p.parts+' · '+p.records+' records…':p.phase==='restoring'?'Restoring '+p.group+' · '+p.records+' records. Keep this tab in the foreground…':'Preparing numbered backup files…')}
+function multipartProgress(p){multipartStatus(p.phase==='preparing'?'Checking saved data · '+p.records+' records…':p.phase==='checking'?'Checking part '+p.part+' of '+p.parts+' · '+p.records+' records…':p.phase==='restore-preflight'?'Checking restored record sizes · '+p.records+' records…':p.phase==='restoring'?'Restoring '+p.group+' · '+p.records+' records. Keep this tab in the foreground…':'Preparing numbered backup files…')}
 function multipartLock(){if(multipartUI.locked)return;multipartUI.locked=Array.from(document.querySelectorAll('button,select,input')).map(e=>[e,e.disabled]);for(const [e]of multipartUI.locked)e.disabled=true;backupBusy=true;$('backup-cancel').hidden=false;$('backup-cancel').disabled=false}
 function multipartRelease(){if(multipartUI.url)URL.revokeObjectURL(multipartUI.url);multipartUI.url=null;multipartUI.current=null;multipartUI.requested=false;for(const [e,disabled]of multipartUI.locked||[])e.disabled=disabled;multipartUI.locked=null;backupBusy=false;$('backup-save-part').hidden=true;$('backup-next-part').hidden=true;$('backup-cancel').hidden=true;$('backup-restore').disabled=!backupPreview||backupPreview.multipartComplete===true}
 async function multipartWork(action){if(multipartUI.working)return;multipartUI.working=true;multipartLock();try{await action()}catch(error){multipartStatus(error.message);await multipartUI.exporter?.cancel();multipartUI.exporter=null}finally{multipartUI.working=false;if(!multipartUI.exporter)multipartRelease();else multipartPartControls()}}
