@@ -8,7 +8,8 @@ from build_demo import main as build_demo
 
 ROOT = Path(__file__).resolve().parents[1]
 BASE = 'https://jctoledo.github.io/blackbox/'
-PAGES = {'RECORDING_SUMMARY.md': ('recording-summary', 'Saved drive summaries: speed, sustained forces and evidence gaps'),
+PAGES = {'BACKUP.md': ('backup', 'Back up and restore long Blackbox recordings safely'),
+         'RECORDING_SUMMARY.md': ('recording-summary', 'Saved drive summaries: speed, sustained forces and evidence gaps'),
          'DRIVE.md': ('drive-recording', 'Drive recording: elapsed duration, partial GPS distance and browser recovery'),
          'FIRST_DRIVE.md': ('first-drive', 'First Blackbox drive: NEO-M9N setup, recording, exports and photos'),
          'DIY_GPS_LAP_TIMER.md': ('diy-gps-lap-timer', 'Build a DIY GPS lap timer with ESP32-C3 and a phone dashboard'),

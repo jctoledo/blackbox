@@ -214,6 +214,16 @@ validated bank/grade compensation or tyre loads from these checks.
 
 ## Drive recording and backup acceptance on both phones
 
+For multipart backups, also run these checks against a disposable destination profile with enough free space. Keep the source untouched.
+
+- [ ] Save every numbered part and the final manifest on Android and iPhone over the device's ordinary HTTP connection. Confirm actual file names and sizes in Files/Downloads; a download request alone does not pass.
+- [ ] Select the complete set in a different order. Restore one recording larger than 100 MiB as one recording, then compare row counts, metadata and saved Drive summary after reload. Check that original destination recordings and tracks are unchanged.
+- [ ] Omit one part, mix two attempts, damage a copy of a part, or duplicate a selection. Each invalid set must remain unready to restore, with no production writes.
+- [ ] Cancel export and import while preparing or processing parts. Originals and unsaved tail must survive. No final manifest may complete a cancelled export.
+- [ ] Reload during validation and during each restore group. Check resumable staging, partial completion and uncertain-state explanations. Never start a fresh import merely to retry an unfinished one. Discarding temporary staging must not delete committed copies.
+- [ ] With a disposable destination near quota, make staging or promotion fail. Verify original data, explicit partial status and safe retry behavior. Keep the page foregrounded; background completion is not promised.
+
+
 Run these checks while parked on the actual Android browser and iPhone Safari/Home Screen launch you intend to use. Keep the original recording/browser data and an external backup throughout. Software transaction/replay regressions have passed; a browser-tool file-picker stall leaves the latest real GUI import attempt unverified. Record each phone's observed result rather than treating desktop emulation as acceptance.
 
 - [ ] With no selected track, start **Record session** and confirm REC, saving status and Drive duration. Check GPS distance is unavailable until qualified intervals arrive; a known stationary zero must not be confused with missing evidence.
