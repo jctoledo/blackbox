@@ -96,7 +96,8 @@ def analyze(rows):
                 continuity['browser_gaps_over_250ms'] += dt > 250
             if event['boot'] is not None and previous['boot'] is not None and event['boot'] != previous['boot']:
                 continuity['boot_changes'] += 1
-            elif event['boot'] is None or previous['boot'] is None or event['clock'] is None or previous['clock'] is None:
+            elif (event['boot'] is None or previous['boot'] is None
+                  or event['clock'] is None or previous['clock'] is None):
                 continuity['device_clock_pairs_unavailable'] += 1
             else:
                 dt = (event['clock'] - previous['clock']) % 2**32
