@@ -7,20 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-- Commit the synthetic demo track before its reference so a fresh browser initializes correctly under the reference integrity guard.
-- Bind reference-save publication and warnings to their timing owner; retain faster committed spatial references and prevent late saves from recreating references for deleted tracks (#166).
-- Phone and sensor-alignment dialogs share Escape, button and backdrop cleanup, stop alignment polling and restore a visible control after closing or rotating. Diagnostics has a keyboard-operable return that remains visible in landscape (#167).
-
-### Documentation
-- Clarify that sustained-force peaks compare complete half-second windows ending at retained samples; saved-telemetry-v1 calculations are unchanged.
-
 ### Changed
 - Renamed `neo6m` driver to `ublox-gps` to reflect support for multiple u-blox GPS modules (NEO-6M, NEO-M9N, etc.)
 - Updated driver documentation with UBX protocol examples and dynamic platform models
 
 ### Removed
 - Obsolete documentation files (RELEASE.md, IMPLEMENTATION_SUMMARY.md, release-notes.md)
+
+## [0.0.4-rc.16] - 2026-11-22
+
+### Fixed
+- Commit the synthetic demo track before its reference so a fresh browser initializes correctly under the reference integrity guard.
+- Bind reference-save publication and warnings to their timing owner; retain faster committed spatial references and prevent late saves from recreating references for deleted tracks (#166).
+- Phone and sensor-alignment dialogs share Escape, button and backdrop cleanup, stop alignment polling and restore a visible control after closing or rotating. Diagnostics has a keyboard-operable return that remains visible in landscape (#167).
+- Saved data reuses one bounded recording-evidence replay for sizes, backup choices and recording rows, with explicit loading/read-error recovery and protection against late refreshes. Newly rendered actions respect the active backup lock (#168).
+
+### Documentation
+- Clarify that sustained-force peaks compare complete half-second windows ending at retained samples; saved-telemetry-v1 calculations are unchanged.
+
+### Changed
+- Refresh native dashboard, summary and Diagnostics captures; visibly label simulated Diagnostics and keep recovery controls at the top of Saved data.
 
 ## [0.0.4-rc.15] - 2026-11-22
 

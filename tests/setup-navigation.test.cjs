@@ -10,8 +10,8 @@ function context(){
  const document={activeElement:null,fullscreenEnabled:false,fullscreenElement:null,documentElement:{},addEventListener(type,handler){if(!listeners.has(type))listeners.set(type,[]);listeners.get(type).push(handler)},querySelector(selector){assert.equal(selector,'.bbModal.open');return ['phone-modal','mount-modal','track-modal','data-modal'].map($).find(el=>el.classList.contains('open'))}};
  function $(id){
   if(!elements.has(id)){
-   const classes=new Set(),tag=html.match(new RegExp('<(\\w+)\\b[^>]*\\bid="'+id+'"'))?.[1];
-   const el={id,tagName:tag?.toUpperCase(),disabled:false,hidden:false,textContent:'',classList:{add:n=>classes.add(n),remove:n=>classes.delete(n),contains:n=>classes.has(n)},getClientRects(){return this.hidden?[]:[{}]},focus(){document.activeElement=this;returned=id},click(){this.focus();this.onclick?.()},querySelectorAll(){return []}};
+   const classes=new Set(),markup=html.match(new RegExp('<(\\w+)\\b[^>]*\\bid="'+id+'"[^>]*>')),tag=markup?.[1],explicitTabIndex=markup?.[0].match(/\btabindex="(-?\d+)"/)?.[1];
+   const el={id,tagName:tag?.toUpperCase(),tabIndex:explicitTabIndex===undefined?(['button','input','select','a'].includes(tag)?0:-1):Number(explicitTabIndex),disabled:false,hidden:false,textContent:'',classList:{add:n=>classes.add(n),remove:n=>classes.delete(n),contains:n=>classes.has(n)},getClientRects(){return this.hidden?[]:[{}]},focus(){document.activeElement=this;returned=id},click(){this.focus();this.onclick?.()},querySelectorAll(){return []}};
    elements.set(id,el);
   }
   return elements.get(id);
@@ -55,4 +55,10 @@ test('setup close routing preserves the busy backup dismissal lock',()=>{
 test('native keyboard activation enters Diagnostics and returns focus to a visible dashboard control',()=>{
  const t=context();t.$('view-dashboard').classList.add('active');t.enter('link-diag');assert.equal(t.$('view-diagnostics').classList.contains('active'),true);
  const enteredFocus=t.focus();t.enter('link-dashboard');assert.equal(t.$('view-dashboard').classList.contains('active'),true);assert.equal(t.$('view-diagnostics').classList.contains('active'),false);assert.equal(enteredFocus,'link-dashboard');assert.equal(t.focus(),'link-diag');
+});
+
+test('a visible nonfocusable opener falls back to a real dashboard control',()=>{
+ const t=context();t.document.activeElement={id:'body',tabIndex:-1,disabled:false,hidden:false,getClientRects:()=>[{}],focus(){}};
+ t.c.revealModal('phone-modal','phone-close');t.escape();
+ assert.equal(t.focus(),'menu-btn');assert.equal(t.$('phone-modal').classList.contains('open'),false);
 });
