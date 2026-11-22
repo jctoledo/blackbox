@@ -302,7 +302,11 @@ impl SensorManager {
     /// Poll GPS and return true if new fix available
     ///
     /// Reads all available bytes from UART buffer to prevent overflow.
-    pub fn poll_gps(&mut self, server: Option<&TelemetryServerState>) -> bool {
+    pub fn poll_gps(
+        &mut self,
+        server: Option<&TelemetryServerState>,
+        diagnostics: &crate::diagnostics::DiagnosticsState,
+    ) -> bool {
         let mut buf = [0u8; 64];
         let mut new_fix = false;
 
@@ -312,7 +316,7 @@ impl SensorManager {
             }
             for &byte in buf.iter().take(n) {
                 let before = self.gps_parser.rmc_timing().sequence;
-                if self.gps_parser.feed_byte(byte) {
+                if crate::gps_ingest::feed_byte(&mut self.gps_parser, byte, diagnostics) {
                     new_fix = true;
                     let timing = self.gps_parser.rmc_timing();
                     if timing.sequence != before {
