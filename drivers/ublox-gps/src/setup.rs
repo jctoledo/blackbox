@@ -25,6 +25,7 @@ pub enum Error {
     Readback,
     InvalidRate,
     InvalidBaud,
+    Bandwidth,
 }
 impl Error {
     pub fn label(self) -> &'static str {
@@ -36,6 +37,7 @@ impl Error {
             Self::Readback => "readback_mismatch",
             Self::InvalidRate => "invalid_rate",
             Self::InvalidBaud => "invalid_baud",
+            Self::Bandwidth => "uart_bandwidth",
         }
     }
 }
@@ -67,7 +69,14 @@ fn profile(rate: u8, baud: u32) -> Result<[Item; 13], Error> {
     if !(1..=25).contains(&rate) {
         return Err(Error::InvalidRate);
     }
-    if !SUPPORTED_BAUDS.contains(&baud) { return Err(Error::InvalidBaud); }
+    if !SUPPORTED_BAUDS.contains(&baud) {
+        return Err(Error::InvalidBaud);
+    }
+    // Conservative 120-byte RMC/GGA and four GSA sentences, plus 20% headroom.
+    // This budgets our profile, not unknown messages enabled by other tools.
+    if (rate as u32 * 120 + 600) * 10 > baud * 8 / 10 {
+        return Err(Error::Bandwidth);
+    }
     Ok([
         Item(UART_BAUD, baud),
         Item(0x30210001, 1000 / rate as u32), // RATE-MEAS
@@ -588,8 +597,20 @@ mod tests {
     fn unsupported_target_baud_never_starts_a_probe_or_configuration() {
         for baud in [0, 1, 500000] {
             let mut receiver = Receiver::new(115200);
-            assert_eq!(configure(&mut receiver, baud, 25).error, Some(Error::InvalidBaud));
+            assert_eq!(
+                configure(&mut receiver, baud, 25).error,
+                Some(Error::InvalidBaud)
+            );
             assert_eq!(receiver.writes, 0);
         }
+    }
+    #[test]
+    fn slow_baud_cannot_be_verified_for_a_profile_it_cannot_carry() {
+        let mut receiver = Receiver::new(9600);
+        assert_eq!(
+            configure(&mut receiver, 9600, 25).error,
+            Some(Error::Bandwidth)
+        );
+        assert_eq!(receiver.writes, 0);
     }
 }

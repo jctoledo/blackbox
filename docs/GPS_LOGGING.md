@@ -86,4 +86,12 @@ Startup probes the requested baud first, then supported alternatives including 3
 
 GPS RX buffering is 4096 bytes. Diagnostics reports **Verified at startup** or an explicit failure, actual selected controller baud, observed FIFO overflow/buffer-full/frame/parity/read errors, checksum rejects and active/inactive RMC counts. These counters describe observed events, not exact lost bytes; a full event queue can itself lose notifications. They start after probing, which can intentionally produce wrong-baud errors. Known UART loss discards partial parser and timing continuity; it never joins fixes across the missing evidence. Empty nonblocking reads are normal and do not count as errors.
 
+The baud search covers the manufacturer's eight supported UART rates, prioritizes the requested rate, 115200, factory 38400 and historical 9600, and skips duplicates. Probe windows allow a 1 KiB 8N1 reply plus processing margin, with a 250 ms minimum; they end immediately after a valid response. A full no-receiver sweep is approximately four seconds in the transport model, separate from IMU calibration and satellite acquisition. Failed configuration can trigger another sweep. The UART profile also rejects known output-rate/baud combinations that cannot carry its conservatively budgeted traffic with headroom. Actual startup latency still needs hardware measurement.
+
+The following captures use the actual phone UI with explicitly **synthetic** diagnostic values; they do not establish receiver or UART performance.
+
+![Portrait GPS UART Diagnostics, synthetic example](assets/gps-uart-diagnostics-portrait.png)
+
+![Landscape GPS UART Diagnostics, synthetic example](assets/gps-uart-diagnostics-landscape.png)
+
 The GPS CSV only contains checksum-valid parsed RMCs. No missing log sequences does not prove that bytes or sentences were never lost upstream. Capture Diagnostics alongside both CSVs when investigating loss. A receiver setup failure leaves reception at a responsive baud when one can be found, with setup explicitly unverified. The 6M path remains passive and unverified.

@@ -6,6 +6,37 @@ use esp_idf_hal::{
 use ublox_gps::setup::{self, Error, Transport};
 
 struct UartTransport<'a, 'd>(&'a UartDriver<'d>);
+pub struct Receiver<'a, 'd>(pub &'a UartDriver<'d>);
+impl crate::gps_rx::Receiver for Receiver<'_, '_> {
+    fn read(&mut self, out: &mut [u8]) -> Result<usize, crate::gps_rx::ReadError> {
+        UartTransport(self.0)
+            .read(out)
+            .map_err(|_| crate::gps_rx::ReadError)
+    }
+    fn discard(&mut self) -> Result<(), crate::gps_rx::ReadError> {
+        self.0.clear_rx().map_err(|_| crate::gps_rx::ReadError)
+    }
+    fn observe_loss(&mut self, counters: &mut crate::diagnostics::GpsTransportHealth) -> bool {
+        use esp_idf_hal::uart::UartEventPayload;
+        let mut lost = false;
+        if let Some(queue) = self.0.event_queue() {
+            for _ in 0..64 {
+                let Some((event, _)) = queue.recv_front(0) else {
+                    break;
+                };
+                match event.payload() {
+                    UartEventPayload::RxFifoOverflow => counters.fifo_overflows += 1,
+                    UartEventPayload::RxBufferFull => counters.buffer_full += 1,
+                    UartEventPayload::FrameError => counters.frame_errors += 1,
+                    UartEventPayload::ParityError => counters.parity_errors += 1,
+                    _ => continue,
+                }
+                lost = true;
+            }
+        }
+        lost
+    }
+}
 impl Transport for UartTransport<'_, '_> {
     fn set_baud(&mut self, baud: u32) -> Result<(), Error> {
         self.0

@@ -301,76 +301,52 @@ impl SensorManager {
         server: Option<&TelemetryServerState>,
         diagnostics: &crate::diagnostics::DiagnosticsState,
     ) -> bool {
-        let mut buf = [0u8; 256];
+        let Self {
+            gps_uart,
+            gps_parser,
+            gps_timing,
+            stationary,
+            ..
+        } = self;
         let mut new_fix = false;
-        let mut transport = crate::diagnostics::GpsTransportHealth::default();
-        if let Some(queue) = self.gps_uart.event_queue() {
-            use esp_idf_hal::uart::UartEventPayload;
-            for _ in 0..64 {
-                let Some((event, _)) = queue.recv_front(0) else {
-                    break;
-                };
-                match event.payload() {
-                    UartEventPayload::RxFifoOverflow => transport.fifo_overflows += 1,
-                    UartEventPayload::RxBufferFull => transport.buffer_full += 1,
-                    UartEventPayload::FrameError => transport.frame_errors += 1,
-                    UartEventPayload::ParityError => transport.parity_errors += 1,
-                    _ => {}
-                }
-            }
-        }
-        if transport.fifo_overflows
-            + transport.buffer_full
-            + transport.frame_errors
-            + transport.parity_errors
-            > 0
-        {
-            self.gps_parser.invalidate_stream();
-            self.gps_timing.invalidate();
-            self.stationary.invalidate();
-        }
-        loop {
-            let n = match self.gps_uart.read(&mut buf, 0) {
-                Ok(0) => break,
-                Ok(n) => n,
-                Err(error) if error.code() == esp_idf_svc::sys::ESP_ERR_TIMEOUT => break,
-                Err(_) => {
-                    transport.read_errors += 1;
-                    self.gps_parser.invalidate_stream();
-                    self.gps_timing.invalidate();
-                    self.stationary.invalidate();
-                    break;
-                }
-            };
-            transport.rx_bytes = transport.rx_bytes.saturating_add(n as u32);
-            for &byte in buf.iter().take(n) {
-                let before = self.gps_parser.rmc_timing().sequence;
-                if crate::gps_ingest::feed_byte(&mut self.gps_parser, byte, diagnostics) {
+        let mut active = 0;
+        let mut inactive = 0;
+        let outcome = crate::gps_rx::drain(&mut crate::gps_setup::Receiver(gps_uart), |bytes| {
+            for &byte in bytes {
+                let before = gps_parser.rmc_timing().sequence;
+                if crate::gps_ingest::feed_byte(gps_parser, byte, diagnostics) {
                     new_fix = true;
-                    let timing = self.gps_parser.rmc_timing();
+                    let timing = gps_parser.rmc_timing();
                     if timing.sequence != before {
                         if timing.status_active {
-                            transport.active_rmc += 1;
+                            active += 1;
                         } else {
-                            transport.inactive_rmc += 1;
+                            inactive += 1;
                         }
                         let host_us = unsafe { esp_idf_svc::sys::esp_timer_get_time() as u64 };
-                        let fix = *self.gps_parser.last_fix();
-                        self.gps_timing.push(fix, host_us);
+                        let fix = *gps_parser.last_fix();
+                        gps_timing.push(fix, host_us);
                         if fix.valid {
-                            self.record_gps_fix((host_us / 1000) as u32);
+                            stationary.record_gps_fix((host_us / 1000) as u32);
                         } else {
-                            // Invalid and recovered fixes can share one UART batch.
-                            self.stationary.invalidate();
+                            stationary.invalidate();
                         }
                         if let Some(server) = server {
-                            server.record_gps_event(timing, self.gps_parser.last_fix(), host_us);
+                            server.record_gps_event(timing, gps_parser.last_fix(), host_us);
                         }
                     }
                 }
             }
+        });
+        if outcome.loss {
+            gps_parser.invalidate_stream();
+            gps_timing.invalidate();
+            stationary.invalidate();
         }
-        transport.checksum_rejections = self.gps_parser.checksum_rejections();
+        let mut transport = outcome.counters;
+        transport.active_rmc = active;
+        transport.inactive_rmc = inactive;
+        transport.checksum_rejections = gps_parser.checksum_rejections();
         diagnostics.record_gps_transport(transport);
         new_fix
     }

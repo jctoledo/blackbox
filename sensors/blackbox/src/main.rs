@@ -8,6 +8,7 @@ mod fusion;
 mod gps;
 mod gps_ingest;
 mod gps_log;
+mod gps_rx;
 mod gps_setup;
 mod gps_timing;
 mod imu;
