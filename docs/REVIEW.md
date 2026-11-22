@@ -280,3 +280,10 @@ Four of nine new navigation regressions failed on the unchanged baseline on lat:
 ### Fresh-demo persistence integration
 
 The combined visual pass caught a missed demo consumer of the stronger reference integrity boundary: fresh demo setup saved its reference before its track. The guard correctly rejected that orphan, but setup stopped before activation/example population. Initialization now commits the track first. A regression runs the demo startup against the actual IndexedDB save helpers rather than permissive no-op save stubs, reproducing the failure before correction. This affects the synthetic website only; no device or database schema changes.
+## Saved data snapshot and read recovery (#168)
+
+Opening Saved data previously replayed every recording three times: combined sizes, per-recording backup choices and the recording list each requested enriched sessions. The panel now reads one enriched recording snapshot and one track snapshot, reusing them for presentation while standalone list/stat requests still read fresh evidence. The chunk cursor and bounded summary windows are unchanged; this reduces repeated scans without claiming a measured phone speedup.
+
+Loading clears actionable rows and hides clear-all controls until fresh evidence arrives. Read failures retain originals, report a retry action and cannot publish after a newer render or closure. Backup scopes preserve the latest valid driver selection. A restore refresh can create new row controls while its existing lock is active; those controls now join that lock and restore their intended disabled states on release. No database version, schema, write path or restore promotion semantics changed.
+
+Lat regression evidence reproduces three recording cursor scans on the baseline versus one after the fix, rejected outer reads, stale render publication and row actions escaping the backup lock. Read-only failure/retry tests preserve the original recording. Final browser/firmware CI and compact visual acceptance are coordinated in parent #165.

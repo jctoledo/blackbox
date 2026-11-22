@@ -47,3 +47,9 @@ On a destination browser, restore a test copy and compare recording/GPS row coun
 Actual Android and iPhone acceptance is tracked in [#153](https://github.com/jctoledo/blackbox/issues/153): downloading several files, selecting the complete set, quota handling, cancellation, and reloading during a restore. See the [phone acceptance checklist](HARDWARE_VALIDATION.md#drive-recording-and-backup-acceptance-on-both-phones). Synthetic tests on lat establish software behavior, not phone memory capacity or protection from a device failure before files have been saved externally.
 
 CRC checksums detect accidental corruption; they do not authenticate the author or defend against a deliberately forged file. Maintainers can inspect the [format and recovery protocol](BACKUP_FORMAT.md). The implementation relies on the standard [File API](https://www.w3.org/TR/FileAPI/) and [IndexedDB transactions](https://www.w3.org/TR/IndexedDB/), with ordinary file downloads and selection on HTTP. It does not require the File System Access picker.
+
+## Loading the Saved data panel
+
+Saved data shows a loading message while it reads retained recordings and tracks. Each panel refresh replays recording evidence once, reusing that snapshot for sizes, recording rows and per-recording backup choices. Large recordings still take time to read; the summary processes one chunk at a time.
+
+If that read fails, the panel removes old action rows and offers **Retry loading saved data**. Existing recordings and tracks are unchanged. A failed panel read does not mean the data was deleted. Backup and restore retain their own status and recovery controls.

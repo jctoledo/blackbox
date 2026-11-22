@@ -837,6 +837,8 @@ body.cluster-view .bbDeltaBar:not(.no-ref) .bbDeltaText{font-size:min(clamp(24px
                 <div id="backup-staged-row" hidden><label for="backup-staged">Resume or clean up a staged restore</label><select id="backup-staged" style="display:block;width:100%;min-height:44px;margin:8px 0;background:var(--bg);color:var(--text);border:1px solid var(--divider)"><option value="">Choose staged restore…</option></select><button class="bbSessionBtn" id="backup-discard-staged" disabled>Discard staging only</button></div>
                 <p id="backup-status" role="status" style="font-size:13px;line-height:1.5;overflow-wrap:anywhere">Restore adds copies; it never replaces existing data. Choose the manifest and all numbered parts together, in any order. Files contain location history. Parts are at most 8 MiB; version 1 single-file backups up to 100 MiB remain supported. Keep this tab in the foreground.</p>
             </div>
+            <p id="data-load-status" role="status" style="font-size:13px;line-height:1.5"></p>
+            <button class="bbSessionBtn" id="data-retry" style="min-height:44px" hidden>Retry loading saved data</button>
             <div class="bbStorageOverview">
                 <div class="bbStorageTotal"><div class="bbStorageLabel">Estimated data size</div><div class="bbStorageValue" id="data-total-size">—</div></div>
                 <div class="bbStorageBreakdown"><div class="bbStorageItem"><span class="bbStorageItemLabel">Recordings</span><span class="bbStorageItemValue" id="data-rec-size">—</span></div><div class="bbStorageItem"><span class="bbStorageItemLabel">Tracks</span><span class="bbStorageItemValue" id="data-track-size">—</span></div></div>
@@ -1499,9 +1501,9 @@ async function getTrackDataStats(){
     return{tracks:result,totalBytes}
 }
 
-async function getCombinedStorageStats(){
-    const recStats=await getStorageStats();
-    const trackStats=await getTrackDataStats();
+async function getCombinedStorageStats(recStats=null,trackStats=null){
+    if(recStats===null)recStats=await getStorageStats();
+    if(trackStats===null)trackStats=await getTrackDataStats();
     return{totalBytes:recStats.totalBytes+trackStats.totalBytes,recordingsBytes:recStats.totalBytes,tracksBytes:trackStats.totalBytes,sessionCount:recStats.sessionCount,trackCount:trackStats.tracks.length}
 }
 
@@ -3834,22 +3836,56 @@ async function discardSelectedMultipartJob(){if(backupBusy)return;const id=$('ba
 // End backup / restore
 
 // Data Modal
+let dataRenderGeneration=0;
 function openDataModal(){revealModal('data-modal','data-modal-close');renderDataModal();refreshMultipartJobs()}
 function closeDataModal(){hideModal('data-modal')}
-
-async function renderDataModal(){
-    const combined=await getCombinedStorageStats();
-    $('data-total-size').textContent=formatBytes(combined.totalBytes);
-    $('data-rec-size').textContent=formatBytes(combined.recordingsBytes);
-    $('data-track-size').textContent=formatBytes(combined.tracksBytes);
-    $('data-rec-count').textContent='('+combined.sessionCount+')';
-    const scope=$('backup-scope'),selected=scope.value,sessions=await getAllSessions();
-    scope.innerHTML='<option value="all">All saved data</option><option value="recordings">Recordings only</option><option value="tracks">Tracks, references &amp; history only</option>'+sessions.map(s=>'<option value="'+s.sessionId+'">Recording '+escHtml(formatSessionDate(s.startTime))+' · '+s.sampleCount+' '+(s.sampleCount===1?'sample':'samples')+'</option>').join('');
-    if(Array.from(scope.options).some(option=>option.value===selected))scope.value=selected;
-    $('data-track-count').textContent='('+combined.trackCount+')';
-    await renderSessionList();
-    await renderTrackDataList()
+// Restore can refresh these lists while its lock is active. Newly created row
+// controls must join that lock and retain their intended state for release.
+function lockRenderedDataControls(){
+    if(!backupBusy||!multipartUI.locked)return;
+    const locked=new Set(multipartUI.locked.map(([element])=>element));
+    for(const element of $('data-modal').querySelectorAll('button,select,input')){
+        if(!locked.has(element))multipartUI.locked.push([element,element.disabled]);
+        element.disabled=true;
+    }
 }
+async function renderDataModal(){
+    const generation=++dataRenderGeneration,modal=$('data-modal');
+    const isCurrent=()=>generation===dataRenderGeneration&&modal.classList.contains('open');
+    if(!isCurrent())return false;
+    const scope=$('backup-scope');
+    const baseScopes='<option value="all">All saved data</option><option value="recordings">Recordings only</option><option value="tracks">Tracks, references &amp; history only</option>';
+    $('data-load-status').textContent='Loading saved recordings and tracks…';$('data-retry').hidden=true;
+    for(const id of ['data-total-size','data-rec-size','data-track-size','data-rec-count','data-track-count'])$(id).textContent='—';
+    for(const id of ['session-list','track-data-list'])$(id).innerHTML='<div class="bbSessionEmpty">Loading saved data…</div>';
+    for(const id of ['btn-clear-all-recordings','btn-clear-all-tracks']){$(id).disabled=true;$(id).hidden=true}
+    try{
+        // One enriched recording scan supplies size, backup choices and rows.
+        const recordings=await getStorageStats();if(!isCurrent())return false;
+        const tracks=await getTrackDataStats();if(!isCurrent())return false;
+        const combined=await getCombinedStorageStats(recordings,tracks);if(!isCurrent())return false;
+        $('data-total-size').textContent=formatBytes(combined.totalBytes);
+        $('data-rec-size').textContent=formatBytes(combined.recordingsBytes);
+        $('data-track-size').textContent=formatBytes(combined.tracksBytes);
+        $('data-rec-count').textContent='('+combined.sessionCount+')';
+        $('data-track-count').textContent='('+combined.trackCount+')';
+        const selected=scope.value;
+        scope.innerHTML=baseScopes+recordings.sessions.map(s=>'<option value="'+s.sessionId+'">Recording '+escHtml(formatSessionDate(s.startTime))+' · '+s.sampleCount+' '+(s.sampleCount===1?'sample':'samples')+'</option>').join('');
+        if(Array.from(scope.options).some(option=>option.value===selected))scope.value=selected;
+        await renderSessionList(recordings,isCurrent);if(!isCurrent())return false;
+        await renderTrackDataList(tracks,isCurrent);if(!isCurrent())return false;
+        $('data-load-status').textContent='Saved data loaded. Current recordings may still have samples pending save.';
+        lockRenderedDataControls();return true;
+    }catch(error){
+        if(!isCurrent())return false;
+        console.error('Failed to load saved data:',error);
+        $('data-load-status').textContent='Saved data could not be loaded. Existing recordings and tracks are unchanged. Retry loading or close this panel and try again.';
+        $('data-retry').hidden=false;scope.innerHTML=baseScopes;
+        for(const id of ['session-list','track-data-list'])$(id).innerHTML='<div class="bbSessionEmpty">Saved data unavailable. Retry loading above.</div>';
+        lockRenderedDataControls();return false;
+    }
+}
+$('data-retry').onclick=()=>renderDataModal();
 
 function recordingRecoveryLabel(session){return session.sampleCount?'Interrupted · saved data available':'Interrupted · no saved samples'}
 function refreshRecordingDetails(owner){
@@ -3905,10 +3941,12 @@ async function exportRecordingDetails(targetId){
     const url=URL.createObjectURL(new Blob([JSON.stringify(value,null,2)],{type:'application/json'})),a=document.createElement('a');
     a.href=url;a.download='blackbox-recording-'+targetId+'-details.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
 }
-async function renderSessionList(){
+async function renderSessionList(stats=null,isCurrent=()=>true){
     const listEl=$('session-list'),clearBtn=$('btn-clear-all-recordings');
     try{
-        const stats=await getStorageStats();
+        if(stats===null)stats=await getStorageStats();
+        if(!isCurrent())return;
+        clearBtn.hidden=false;
         clearBtn.disabled=stats.sessionCount===0||rec||recordingBusy||!!chunkWrite||chunkBuffer.length>0;
         recoveredSessionCount=stats.sessions.filter(s=>s.status==='active'&&s.sessionId!==sessionId).length;updateRecUI();
         if(stats.sessionCount===0){
@@ -3935,13 +3973,16 @@ async function renderSessionList(){
             '</div>';
         }).join('');
         listEl.querySelectorAll('.bbSessionBtn').forEach(btn=>{btn.onclick=()=>handleSessionAction(btn)});
-    }catch(e){console.error('Failed to load sessions:',e);listEl.innerHTML='<div class=\"bbSessionEmpty\"><div class=\"icon\">⚠️</div>Recordings could not be loaded. Close this panel and try again.</div>'}
+        lockRenderedDataControls();
+    }catch(e){if(!isCurrent())return;console.error('Failed to load sessions:',e);listEl.innerHTML='<div class=\"bbSessionEmpty\"><div class=\"icon\">⚠️</div>Recordings could not be loaded. Close this panel and try again.</div>'}
 }
 
-async function renderTrackDataList(){
+async function renderTrackDataList(stats=null,isCurrent=()=>true){
     const listEl=$('track-data-list'),clearBtn=$('btn-clear-all-tracks');
     try{
-        const stats=await getTrackDataStats();
+        if(stats===null)stats=await getTrackDataStats();
+        if(!isCurrent())return;
+        clearBtn.hidden=false;
         clearBtn.disabled=stats.tracks.length===0;
         if(stats.tracks.length===0){
             listEl.innerHTML='<div class=\"bbSessionEmpty\"><div class=\"icon\"></div>No tracks saved.<br>Record a track to get started.</div>';
@@ -3963,7 +4004,8 @@ async function renderTrackDataList(){
             '</div>';
         }).join('');
         listEl.querySelectorAll('.bbSessionBtn').forEach(btn=>{btn.onclick=()=>handleTrackDataAction(btn)});
-    }catch(e){console.error('Failed to load tracks:',e);listEl.innerHTML='<div class=\"bbSessionEmpty\"><div class=\"icon\">⚠️</div>Tracks could not be loaded. Close this panel and try again.</div>'}
+        lockRenderedDataControls();
+    }catch(e){if(!isCurrent())return;console.error('Failed to load tracks:',e);listEl.innerHTML='<div class=\"bbSessionEmpty\"><div class=\"icon\">⚠️</div>Tracks could not be loaded. Close this panel and try again.</div>'}
 }
 
 async function handleSessionAction(btn){
