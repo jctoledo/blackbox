@@ -10,6 +10,7 @@ mod gps_ingest;
 mod gps_log;
 mod gps_timing;
 mod imu;
+mod imu_bias_collection;
 mod imu_evidence;
 mod mode;
 mod mqtt;

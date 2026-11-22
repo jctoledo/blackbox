@@ -18,3 +18,6 @@ pub mod telemetry_http;
 
 #[path = "../../../sensors/blackbox/src/imu_evidence.rs"]
 pub mod imu_evidence;
+
+#[path = "../../../sensors/blackbox/src/imu_bias_collection.rs"]
+pub mod imu_bias_collection;
