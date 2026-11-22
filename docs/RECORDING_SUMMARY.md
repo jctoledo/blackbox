@@ -4,6 +4,8 @@ Open **Saved data** while parked and expand **Summary · saved samples** on a re
 
 These values belong to the saved recording. They are separate from the live page-session MAX and Peaks, which reset when the page reloads or you choose Reset speed / force stats. Opening another drive does not transfer its results into an earlier recording.
 
+![Saved circuit summary in the actual phone dashboard; explicitly synthetic evidence](assets/recording-summary-v1.png)
+
 ## What qualifies
 
 Maximum speed uses finite, nonnegative ordinary telemetry speed with a valid GPS flag and GPS age from 0 through 300 ms. Stored ordinary `sp` and Session CSV speed are km/h; the calculation converts them once to m/s. The display follows the existing mph/km/h preference. A qualified stationary sample can establish a known zero; no qualifying sample means **Unavailable**.

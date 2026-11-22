@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Renamed `neo6m` driver to `ublox-gps` to reflect support for multiple u-blox GPS modules (NEO-6M, NEO-M9N, etc.)
+- Updated driver documentation with UBX protocol examples and dynamic platform models
+
+### Removed
+- Obsolete documentation files (RELEASE.md, IMPLEMENTATION_SUMMARY.md, release-notes.md)
+
+## [0.0.4-rc.12] - 2026-11-21
+
 ### Added
 - Synthetic saved drives include boot-qualified speed/force evidence; new example versions preserve existing browser recordings.
 - Saved recordings offer a reproducible maximum-speed and sustained 0.5-second force summary with quality, continuity and provenance counts. Summary and details JSON use committed raw evidence; pending samples and legacy missing quality do not become invented records.
@@ -27,11 +36,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Runs uses a readable in-page interval chooser with unit-aware lower-speed and overtaking families. All four literal presets retain independent evidence/results, including the added 80–120 km/h detector; unit changes preserve family and never convert a completed time (#106).
-- Renamed `neo6m` driver to `ublox-gps` to reflect support for multiple u-blox GPS modules (NEO-6M, NEO-M9N, etc.)
-- Updated driver documentation with UBX protocol examples and dynamic platform models
+- Refreshed all current website/dashboard captures, Drive and saved-summary previews, operator instructions and the weekend hardware checklist.
+- CI retries brief protocol-artifact download failures while retaining a fatal final attempt and byte-for-byte verification.
 
-### Removed
-- Obsolete documentation files (RELEASE.md, IMPLEMENTATION_SUMMARY.md, release-notes.md)
+Release candidate for ESP32-C3 hardware evaluation. Includes rc.11. Physical timing/distance/force accuracy, non-horizontal mounting and phone background capture remain unvalidated.
 
 ## [0.0.4-rc.11] - 2026-11-21
 

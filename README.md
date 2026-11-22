@@ -167,7 +167,7 @@ Landscape offers Speed, G-meter, sustained Peaks and Runs, with timing or Drive 
 
 Choose **Menu → Speed units** for mph or km/h; the preference stays in this browser and applies to Speed and MAX. Drive distance follows the same preference in mi/km. Runs shows 30–60 / 45–70 mph or 50–100 / 80–120 km/h. These are purpose counterparts, not exact conversions: all four detectors keep independent literal results and export labels. Recording/export units do not change. Tap Controls for the toolbar; the G-meter uses a selectable fixed scale and clears when data becomes unavailable.
 
-![Landscape cluster with synthetic demo data](docs/dashboard-cluster-v6.png)
+![Landscape cluster with synthetic demo data](docs/dashboard-cluster-v9.png)
 
 
 ---

@@ -40,7 +40,7 @@ Record another short stationary segment. Stop recording: Drive duration and dist
 
 Keep files together in a private folder named with date, receiver and firmware version. Keep the flashed image SHA-256 and add a short note: phone/OS/browser, antenna/mounting, foreground/background events, reception conditions and anything unexpected. Automatic recording context does not infer these details; its configured rates do not replace the delivered rates in Diagnostics. Retain originals; make redacted copies for public reports. CSV/JSON backups contain location history and are not encrypted.
 
-![Recording details in the actual phone dashboard, using explicitly synthetic example data](assets/recording-details-v1.png)
+![Recording details in the actual phone dashboard, using explicitly synthetic example data](assets/recording-details-v2.png)
 
 ## What to photograph
 
