@@ -3242,6 +3242,12 @@ function readRecordingBackup(scope){
         session.onsuccess=()=>{if(session.result)result.sessions=[session.result]};chunks.onsuccess=()=>{result.chunks=chunks.result};
     });
 }
+function portableRecordingChunk(chunk){
+    // IndexedDB preserves explicit undefined properties from optional telemetry
+    // fields. JSON does not; encode missing evidence as null before validation.
+    // Leave nonfinite numbers and other invalid values for the validator to reject.
+    return{...chunk,data:chunk.data.map(row=>Object.fromEntries(Object.entries(row).map(([key,value])=>[key,value===undefined?null:value])))};
+}
 async function createBackup(scope='all'){
     backupIdle();
     // A visibility-change save may detach the buffer while database reads wait.
@@ -3261,17 +3267,17 @@ async function createBackup(scope='all'){
     if(existing&&metadata&&(metadata.status!=='pending'||!existing.recordingMetadata||existing.recordingMetadata.status==='pending'))existing.recordingMetadata=metadata;
     if(existing&&drive)existing.drive=recoverDrive(drive);
     for(const row of recording.sessions){const failed=failedRecordingMetadata.get(row.sessionId);if(failed)row.recordingMetadata=failed}
-    const value={format:BACKUP_FORMAT,version:BACKUP_VERSION,createdAt:new Date().toISOString(),data:{sessions:recording.sessions,chunks:recording.chunks,tracks:track.tracks,references:track.reference_laps.map(portableReference),history:track.lap_history}};
+    const value={format:BACKUP_FORMAT,version:BACKUP_VERSION,createdAt:new Date().toISOString(),data:{sessions:recording.sessions,chunks:recording.chunks.map(portableRecordingChunk),tracks:track.tracks,references:track.reference_laps.map(portableReference),history:track.lap_history}};
     value.checksum=backupChecksum(value.data);validateBackup(value);return value;
 }
 function makeRestorePlan(value,existingSessions,token,now){
     const summary=validateBackup(value),data=value.data,used=new Set(existingSessions.map(s=>s.sessionId)),ids=new Map();let next=existingSessions.reduce((highest,s)=>Math.max(highest,s.sessionId),now);
     for(const session of data.sessions){do{next++}while(used.has(next));backupCheck(Number.isSafeInteger(next),'session ID capacity exceeded');ids.set(session.sessionId,next);used.add(next)}
-    const trackIds=new Map(data.tracks.map((t,i)=>[t.id,'restore_'+token+'_'+i]));
+    const trackIds=new Map(data.tracks.map((t,i)=>[t.id,'restore_'+token+'_'+i])),restoredSuffix=' (restored)';
     return{summary,recordingsDone:false,tracksDone:false,
         sessions:data.sessions.map(s=>({...s,...(s.drive?{drive:recoverDrive(s.drive)}:{}),sessionId:ids.get(s.sessionId),status:'complete',restoredFrom:s.sessionId,restoredAt:now})),
         chunks:data.chunks.map(c=>({...c,sessionId:ids.get(c.sessionId)})),
-        tracks:data.tracks.map(t=>({...t,id:trackIds.get(t.id),name:t.name+' (restored)',modified:now})),
+        tracks:data.tracks.map(t=>({...t,id:trackIds.get(t.id),name:t.name.slice(0,1000-restoredSuffix.length)+restoredSuffix,modified:now})),
         references:data.references.map((r,i)=>({...r,id:'restore_ref_'+token+'_'+i,trackId:trackIds.get(r.trackId),samples:new Float32Array(r.samples).buffer})),
         history:data.history.map((l,i)=>({...l,id:'restore_lap_'+token+'_'+i,trackId:trackIds.get(l.trackId),sessionId:'restore_session_'+token+'_'+l.sessionId}))};
 }

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Backups retain missing optional telemetry as null, including recordings started before GPS messages arrive and unsaved recovery tails; original browser data is unchanged. Restored track-copy names stay within the backup format's length limit so they can be backed up again.
+
 ### Changed
 - Renamed `neo6m` driver to `ublox-gps` to reflect support for multiple u-blox GPS modules (NEO-6M, NEO-M9N, etc.)
 - Updated driver documentation with UBX protocol examples and dynamic platform models
