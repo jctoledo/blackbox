@@ -44,9 +44,9 @@ test('force scale preserves direction and marks clipping without dropping the do
  assert.equal(c.forcesUsable(1,40,20),true);for(const age of [null,undefined,-1,301,NaN])assert.equal(c.forcesUsable(1,age,20),false);assert.equal(c.forcesUsable(0,40,20),false);for(const age of [null,undefined,-1,201,NaN])assert.equal(c.forcesUsable(1,40,age),false);
 });
 test('force plot, readouts and peaks share right-positive / acceleration-positive packet convention',()=>{
- const c={Math,Number,Date:{now:()=>1000},forcesUsable:()=>true,gpsOk:1,timing:{gps_age_ms:0},gx:.4,gy:.3,now:1000,trail:[],TRAIL_DURATION_MS:3000,currentScale:1,$:()=>({textContent:''}),clearForces:()=>assert.fail('fresh packet cleared')};vm.createContext(c);
+ const c={Math,Number,Date:{now:()=>1000},forcesUsable:()=>true,gpsOk:1,timing:{gps_age_ms:0},gx:.4,gy:.3,now:4000000,motionNow:1000,trail:[],TRAIL_DURATION_MS:3000,currentScale:1,$:()=>({textContent:''}),clearForces:()=>assert.fail('fresh packet cleared')};vm.createContext(c);
  vm.runInContext(html.slice(html.indexOf('    // Vehicle acceleration convention:'),html.indexOf('    lastGpsState=gpsOk;')),c);
- assert.equal(c.trail[0].x,.4);assert.equal(c.trail[0].y,-.3);
+ assert.equal(c.trail[0].x,.4);assert.equal(c.trail[0].y,-.3);assert.equal(c.trail[0].t,1000);
  const p=peaks();for(let t=0;t<=500;t+=50)p.update(t,.3,true,.4);assert.ok(Math.abs(p.right-.4)<1e-9);assert.ok(Math.abs(p.accel-.3)<1e-9);
 });
 test('horizontal swipes cycle instrument tabs without changing timing or recording',()=>{
