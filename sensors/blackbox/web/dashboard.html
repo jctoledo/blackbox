@@ -3570,7 +3570,20 @@ async function multipartCheckRestoredSizes(stage,job,options){
     multipartCheck(count===job.records,'validated staging changed or was removed before restore');
     await multipartUpdateJob(stage,job.id,current=>{multipartCheck(backupChecksum(current.mapping)===key,'restore mapping changed');current.sizedForMapping=key;return current});
 }
-async function multipartGroupPresence(database,job,group){const roots=group==='recordings'?job.mapping.sessions:job.mapping.tracks,store=group==='recordings'?'sessions':'tracks';if(!roots.length)return'empty';return multipartRead(database,[store],(tx,done)=>{let present=0,conflict=false,remaining=roots.length;for(const [,id]of roots){const r=tx.objectStore(store).get(id);r.onsuccess=()=>{if(r.result){if(r.result.restoreJob?.job===job.id&&r.result.restoreJob?.archive===job.archiveId&&r.result.restoreJob?.group===group&&r.result.restoreJob?.roots===roots.length)present++;else conflict=true}if(!--remaining)done(conflict||present>0&&present<roots.length?'conflict':present===roots.length?'all':'none')}}})}
+async function multipartGroupPresence(database,job,group){
+    const roots=group==='recordings'?job.mapping.sessions:job.mapping.tracks,store=group==='recordings'?'sessions':'tracks';if(!roots.length)return'empty';
+    return multipartRead(database,[store],(tx,done)=>{
+        let present=0,conflict=false,index=0;
+        const next=()=>{if(index===roots.length){done(conflict||present>0&&present<roots.length?'conflict':present===roots.length?'all':'none');return}
+            const request=tx.objectStore(store).get(roots[index++][1]);request.onsuccess=()=>{
+                const row=request.result;if(row){if(row.restoreJob?.job===job.id&&row.restoreJob?.archive===job.archiveId&&row.restoreJob?.group===group&&row.restoreJob?.roots===roots.length)present++;else conflict=true}next();
+            };
+        };
+        // One root value at a time, with all reads sharing one transaction snapshot.
+        next();
+    });
+}
+
 async function multipartPromote(stage,job,database,group,options){
     const collections=group==='recordings'?['chunks','sessions']:['references','history','tracks'],stores=collections.map(k=>MULTIPART_STORES[k]);
     async function* entries(){for(const collection of collections){const digest=multipartDigest();let count=0;for await(const row of multipartStagedRows(stage,job.id,collection)){digest.update(JSON.stringify(row.data)+'\n');count++;yield row}multipartCheck(count===job.counts[collection]&&digest.value()===job.collectionDigests[collection],'validated staging changed or was removed; active restore group will roll back')}}
