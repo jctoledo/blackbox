@@ -6,7 +6,7 @@ Open **Saved data** while parked and expand **Summary · saved samples** on a re
 
 These values belong to the saved recording. They are separate from the live page-session MAX and Peaks, which reset when the page reloads or you choose Reset speed / force stats. Opening another drive does not transfer its results into an earlier recording.
 
-![Saved circuit summary in the actual phone dashboard; explicitly synthetic evidence](assets/recording-summary-v1.png)
+![Saved circuit summary in the actual phone dashboard; explicitly synthetic evidence](assets/recording-summary-v2.jpg)
 
 ## What qualifies
 

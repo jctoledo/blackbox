@@ -53,3 +53,7 @@ CRC checksums detect accidental corruption; they do not authenticate the author 
 Saved data shows a loading message while it reads retained recordings and tracks. Each panel refresh replays recording evidence once, reusing that snapshot for sizes, recording rows and per-recording backup choices. Large recordings still take time to read; the summary processes one chunk at a time.
 
 If that read fails, the panel removes old action rows and offers **Retry loading saved data**. Existing recordings and tracks are unchanged. A failed panel read does not mean the data was deleted. Backup and restore retain their own status and recovery controls.
+
+![Synthetic read-failure preview with Retry immediately below the Saved data heading](assets/saved-data-retry-v1.jpg)
+
+Synthetic read-failure example. Retry reads the saved data again; it does not reset or replace recordings.
