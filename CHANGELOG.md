@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Session, GPS and Runs CSV exports read one stored chunk at a time instead of loading and repeatedly copying a whole recording. CSV bytes, units and pending-tail behavior remain compatible; download bytes still require browser memory.
 - Recording saves and save-age labels use monotonic elapsed time, so phone clock corrections cannot postpone persistence until the pending-data cap or trigger premature saves. Raw calendar timestamps remain intact.
 
 ### Changed
