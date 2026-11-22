@@ -172,3 +172,10 @@ The landscape Runs chooser uses readable in-page options and two unit-dependent 
 The combined source tree passed [lat CI44962405419](https://github.com/jctoledo/blackbox/actions/runs/44962405419), including both receiver builds and software regressions. Browser checks covered populated summaries, pending-data exclusion, reload, units, compact warning/suggestion rows and focus/dismissal. A real file-picker import attempt stalled in the automation tool and remains unverified; actual Android/iPhone import, USB flash/boot and installed driving evidence are still acceptance work.
 
 The practical next step is the documented M9N ordinary drive: stationary baselines, an uninterrupted foreground recording, exports/backup, and preserved antenna/mount/phone notes. It can expose cadence, storage, frame and dropout problems. Reference-timed crossings, labelled rolling positives/negatives, tilt experiments and independent force evidence are still required for physical accuracy, detection F1 or commercial-parity claims. Quarter-mile timing, slope correction and adaptive coaching remain R&D.
+
+
+## Long numeric timing display
+
+Landscape elapsed values overflowed their column at large minute counts: browser QA reproduced `1000:00.123` crossing into the adjacent delta area at 600×320. Length-aware font caps now use the timing card width for elapsed, history and numeric delta values; a small observer updates character counts only when displayed length changes, without reading layout. Normal font sizes remain the upper limit, including the 16 px history size in warning-reduced cards. The time formatter, precision, raw recording and protocol remain unchanged.
+
+Browser review checked normal 844×390 and 667×375 views, offline warning plus Controls at 667×375, and forced maximum uint32-millisecond text `71582:47.295` at 600×320 with Controls visible/hidden and 667×375 with Controls hidden. Full digits remained inside their columns. These are synthetic formatter-input layout checks, not evidence of a real 49-day recording or device uptime. All 226 existing browser regressions passed on lat; the public demo was regenerated there from production UI.
