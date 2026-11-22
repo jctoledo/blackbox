@@ -20,6 +20,8 @@ Start with an ordinary drive after the bench checks. The aim is to establish tha
 
 Leave the interface alone. Changing Speed/G-meter/Peaks/Runs does not control which data is recorded or which rolling detectors run. Missing interval results are normal if an ordinary trip never supplies the required thresholds and lead-in evidence.
 
+A nearby saved track may appear in a separate suggestion row. It does not arm timing or start recording. **Dismiss** suppresses that track until this page reloads; an untouched suggestion expires and waits before returning. Review or activate it while parked. Suggestions withdraw when GPS is stale or track setup changes.
+
 A passenger may note approximate times of a disconnect, unexpected value or missed start. Otherwise make notes only after stopping. Keep the phone foregrounded; screen lock or background suspension can create collection gaps.
 
 Recording a route and timing a stage are separate operations. For an initial long highway trip, ordinary session logging is enough. Controlled start/finish testing can follow after the basic capture is sound.

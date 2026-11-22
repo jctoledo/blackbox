@@ -321,18 +321,18 @@ body{font-family:Inter,-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Di
 @keyframes successPop{0%{transform:scale(0.5);opacity:0}100%{transform:scale(1);opacity:1}}
 .bbRecordSuccessTitle{font-size:24px;font-weight:700;color:var(--text);margin-bottom:8px;letter-spacing:-0.01em}
 .bbRecordSuccessStats{font-size:14px;color:var(--text-secondary);line-height:1.4}
-.bbToast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--surface);border-radius:12px;padding:12px 16px;box-shadow:0 4px 20px rgba(0,0,0,.25);display:flex;align-items:center;gap:12px;z-index:10001;animation:bbToastSlideIn 0.3s ease-out;max-width:calc(100vw - 32px)}
-@keyframes bbToastSlideIn{from{opacity:0;transform:translateX(-50%) translateY(20px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
-.bbToast.dismissing{animation:bbToastSlideOut 0.2s ease-in forwards}
-@keyframes bbToastSlideOut{from{opacity:1;transform:translateX(-50%) translateY(0)}to{opacity:0;transform:translateX(-50%) translateY(20px)}}
-.bbToastIcon{font-size:24px;flex-shrink:0}
-.bbToastText{flex:1;min-width:0}
-.bbToastText strong{display:block;font-size:14px;font-weight:600;margin-bottom:2px}
-.bbToastText span{font-size:12px;color:var(--text-secondary);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.bbToastActions{display:flex;gap:8px;flex-shrink:0}
-.bbToastBtn{padding:8px 14px;border-radius:8px;border:none;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit}
-.bbToastBtn.primary{background:var(--ok);color:#fff}
-.bbToastBtn.secondary{background:var(--divider);color:var(--text)}
+/* Track suggestions reserve layout space; they never overlay instruments. */
+.bbNoticeStack{display:none;flex-direction:column;gap:8px;min-width:0}.bbNoticeStack:has(> :not([hidden])){display:flex}.bbNoticeStack>*{flex-shrink:0}
+.bbTrackSuggestion{display:flex;align-items:center;gap:12px;min-width:0;border:1px solid var(--divider);border-radius:6px;background:var(--surface);padding:4px 10px}
+.bbTrackSuggestionText{flex:1;min-width:0;font-size:12px;line-height:1.3}.bbTrackSuggestionText strong{font-weight:600;display:block}.bbTrackSuggestionText span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bbTrackSuggestionActions{display:flex;gap:8px;flex-shrink:0}.bbToastBtn{min-height:44px;padding:8px 14px;border-radius:6px;border:1px solid var(--divider);font:600 12px Inter,sans-serif;cursor:pointer}.bbToastBtn.primary{background:var(--ok);color:var(--bg)}.bbToastBtn.secondary{background:var(--surface);color:var(--text)}
+body.cluster-view .bbNoticeStack{grid-column:1/-1;max-height:88px;overflow-y:auto;overscroll-behavior:contain;gap:6px}
+body.cluster-view .bbNoticeStack .bbConnectionNotice,body.cluster-view .bbNoticeStack .bbRecordingNotice{max-height:none;overflow:visible}
+body.cluster-view .bbTrackSuggestion{grid-column:1/-1;padding:0 10px;gap:8px}
+body.cluster-view.track-suggestion-visible .bbConnectionNotice,body.cluster-view.track-suggestion-visible .bbRecordingNotice{padding-top:4px;padding-bottom:4px}
+
+@media(max-width:420px){.bbTrackSuggestion{gap:8px;padding:4px 8px}.bbToastBtn{padding:8px 10px}}
+
 /* Instrument system: carbon, signal lime, and legible measured values. */
 :root{--bg:#edf0f2;--surface:#fff;--text:#111820;--text-secondary:#3d4a55;--text-tertiary:#596873;--divider:#d4dce1;--ok:#287121;--amber:#995100;--red:#c73526}
 .dark{--bg:#090d12;--surface:#111820;--text:#f4f7f9;--text-secondary:#becbd5;--text-tertiary:#94a6b5;--divider:#2a3845;--ok:#d7ff45;--amber:#ffbc67;--red:#ff786b}
@@ -496,6 +496,11 @@ body.cluster-view .bbDrivePanel{flex:1;min-height:0;display:grid;grid-template-r
     body.cluster-view .bbDriveActions button{padding:6px 8px}
 }
 @media(max-width:380px){.bbDriveMetrics{gap:8px}.bbDriveNumber{font-size:27px}}
+@container cluster-card (max-height:150px){
+    body.cluster-view .bbApp .bbGTop{grid-template-rows:minmax(0,1fr)}
+    body.cluster-view .bbApp .bbGTopRight,body.cluster-view .bbSpeedMaximum{display:none}
+    body.cluster-view .bbPeakGrid{padding-bottom:4px;gap:4px}body.cluster-view .bbPeakGrid dd{font-size:20px}
+}
 </style></head>
 <body>
 
@@ -519,10 +524,13 @@ body.cluster-view .bbDrivePanel{flex:1;min-height:0;display:grid;grid-template-r
     </div>
 </header>
 <main class="bbApp">
-    <div id="connection-notice" class="bbConnectionNotice" role="status" hidden></div>
+    <div class="bbNoticeStack" tabindex="0" role="region" aria-label="Connection, recording and track notices">
+        <div id="connection-notice" class="bbConnectionNotice" role="status" hidden></div>
+        <div id="recording-notice" class="bbRecordingNotice" role="status" hidden></div>
+        <section id="track-suggestion" class="bbTrackSuggestion" aria-label="Track suggestion" hidden><div class="bbTrackSuggestionText" role="status"><strong>Track nearby</strong><span id="track-suggestion-name"></span></div><div class="bbTrackSuggestionActions"><button id="track-suggestion-activate" class="bbToastBtn primary">Activate</button><button id="track-suggestion-dismiss" class="bbToastBtn secondary">Dismiss</button></div></section>
+    </div>
     <div class="bbQuickActions" aria-label="Session controls"><button id="quick-tracks">Tracks</button><button id="quick-record">Record session</button><button id="quick-data">Saved data</button><button id="analysis-mode" aria-pressed="false" aria-controls="g-card">Analysis</button><button id="drive-mode" aria-pressed="false">Drive view</button></div>
     <div id="save-status" class="bbSaveStatus" role="status" hidden></div>
-    <div id="recording-notice" class="bbRecordingNotice" role="status" hidden></div>
     <section class="bbCard bbLapCard inactive" id="lap-section">
         <div class="bbClusterHeader"><span class="bbClusterHealth"><span id="cluster-link">Connecting</span><span id="cluster-gps">GPS —</span><span id="cluster-rec">REC OFF</span></span><button id="cluster-controls" aria-expanded="false">Controls</button></div>
         <div class="bbDrivePanel" id="drive-panel">
@@ -1426,24 +1434,30 @@ async function getCombinedStorageStats(){
 }
 
 async function deleteTrackWithRef(trackId){
-    if(activeTrack&&activeTrack.id===trackId&&await deactivateTrack()===false)throw new Error('Track retained: device timing is still active');
-    if(!trackDb)await openTrackDB();
-    await commitTrackWrite(['tracks','reference_laps','lap_history'],tx=>{
-        tx.objectStore('tracks').delete(trackId);
-        for(const name of ['reference_laps','lap_history']){
-            const request=tx.objectStore(name).index('trackId').openCursor(IDBKeyRange.only(trackId));
-            request.onsuccess=()=>{const cursor=request.result;if(cursor){cursor.delete();cursor.continue()}};
-        }
-    });
+    trackAutoDetector.beginTrackChange();
+    try{
+        if(activeTrack&&activeTrack.id===trackId&&await deactivateTrack()===false)throw new Error('Track retained: device timing is still active');
+        if(!trackDb)await openTrackDB();
+        await commitTrackWrite(['tracks','reference_laps','lap_history'],tx=>{
+            tx.objectStore('tracks').delete(trackId);
+            for(const name of ['reference_laps','lap_history']){
+                const request=tx.objectStore(name).index('trackId').openCursor(IDBKeyRange.only(trackId));
+                request.onsuccess=()=>{const cursor=request.result;if(cursor){cursor.delete();cursor.continue()}};
+            }
+        });
+    }finally{trackAutoDetector.endTrackChange()}
 }
 
 async function clearAllTracks(){
-    if(activeTrack&&await deactivateTrack()===false)throw new Error('Tracks retained: device timing is still active');
-    if(!trackDb)await openTrackDB();
-    await commitTrackWrite(['tracks','reference_laps','lap_history'],tx=>{
-        for(const name of ['tracks','reference_laps','lap_history'])tx.objectStore(name).clear();
-    });
-    clearSession();
+    trackAutoDetector.beginTrackChange();
+    try{
+        if(activeTrack&&await deactivateTrack()===false)throw new Error('Tracks retained: device timing is still active');
+        if(!trackDb)await openTrackDB();
+        await commitTrackWrite(['tracks','reference_laps','lap_history'],tx=>{
+            for(const name of ['tracks','reference_laps','lap_history'])tx.objectStore(name).clear();
+        });
+        clearSession();
+    }finally{trackAutoDetector.endTrackChange()}
 }
 
 function formatBytes(bytes){
@@ -1522,7 +1536,7 @@ function updateJsGpsRef(lat,lon){if(jsGpsRef||lat===0||lon===0)return;jsGpsRefSa
 async function fetchFirmwareGpsRef(){if(firmwareGpsRef||firmwareGpsRefFetching)return;firmwareGpsRefFetching=true;try{const r=await requestDevice('/api/diagnostics');const d=await r.json();if(d.gps&&d.gps.ref_lat&&d.gps.ref_lon&&d.gps.ref_lat!==0){firmwareGpsRef={lat:d.gps.ref_lat,lon:d.gps.ref_lon};console.log('Firmware GPS ref:',firmwareGpsRef)}}catch(e){console.warn('Failed to fetch firmware GPS ref:',e)}finally{firmwareGpsRefFetching=false}}
 // Use firmware GPS reference for coordinates (fall back to jsGpsRef if not available)
 function getGpsRef(){return firmwareGpsRef||jsGpsRef}
-function gpsToLocal(lat,lon){const ref=getGpsRef();if(!ref)return null;const latRad=ref.lat*Math.PI/180;return{x:(lon-ref.lon)*Math.cos(latRad)*111320,y:(lat-ref.lat)*111320}}
+function gpsToLocal(lat,lon,ref=getGpsRef()){if(!ref)return null;const latRad=ref.lat*Math.PI/180;return{x:(lon-ref.lon)*Math.cos(latRad)*111320,y:(lat-ref.lat)*111320}}
 function localToGps(x,y){const ref=getGpsRef();if(!ref)return null;const latRad=ref.lat*Math.PI/180;return{lat:ref.lat+y/111320,lon:ref.lon+x/(111320*Math.cos(latRad))}}
 function transformCoord(x,y,fromRef,toRef){const fLatRad=fromRef.lat*Math.PI/180;const lon=fromRef.lon+x/(111320*Math.cos(fLatRad));const lat=fromRef.lat+y/111320;const tLatRad=toRef.lat*Math.PI/180;return{x:(lon-toRef.lon)*Math.cos(tLatRad)*111320,y:(lat-toRef.lat)*111320}}
 function transformLine(line,fromRef,toRef){const p1=transformCoord(line.p1[0],line.p1[1],fromRef,toRef);const p2=transformCoord(line.p2[0],line.p2[1],fromRef,toRef);return{p1:[p1.x,p1.y],p2:[p2.x,p2.y],direction:line.direction}}
@@ -1561,19 +1575,42 @@ function _testGpsCoordinates(){
 
 // Track Auto-Detection
 class TrackAutoDetector{
-    constructor(){this.lastCheck=0;this.checkInterval=3000;this.candidateTrack=null;this.matchCount=0;this.requiredMatches=2;this.activeToast=null}
-    async check(x,y,heading){
-        const now=Date.now();if(now-this.lastCheck<this.checkInterval)return null;this.lastCheck=now;
-        if(activeTrack){this.reset();return null}
-        if(this.activeToast)return null;
-        const tracks=await getAllTracks();let bestMatch=null,bestScore=0;
-        for(const t of tracks){if(t.isDemo)continue;const sc=this.scoreMatch(x,y,heading,t);if(sc>bestScore&&sc>0.5){bestScore=sc;bestMatch=t}}
-        if(bestMatch){if(this.candidateTrack&&this.candidateTrack.id===bestMatch.id)this.matchCount++;else{this.candidateTrack=bestMatch;this.matchCount=1}if(this.matchCount>=this.requiredMatches)return{track:bestMatch,confidence:bestScore}}else this.reset();
-        return null
+    constructor(){this.lastCheck=-Infinity;this.checkInterval=3000;this.candidateTrack=null;this.matchCount=0;this.requiredMatches=2;this.activeToast=null;this.generation=0;this.pending=null;this.trackChanges=0;this.dismissed=new Set();this.cooldowns=new Map();this.maxDismissed=256;this.cooldownMs=60000}
+    currentContext(){
+        const p=currentPos,now=performance.now(),age=p?now-p.receivedAtMs:NaN;
+        if(activeTrack||trackRecorder||this.trackChanges||!p?.valid||!Number.isFinite(p.gpsAgeMs)||p.gpsAgeMs<0||!Number.isFinite(age)||age<0||p.gpsAgeMs+age>300)return null;
+        const heading=p.validGpsCourse?p.gpsCourse:p.yaw;
+        return [p.x,p.y,heading].every(Number.isFinite)?{x:p.x,y:p.y,heading,origin:p.coordinateOrigin}:null;
     }
-    scoreMatch(x,y,heading,track){
-        // Skip tracks from different sessions if we can't transform
-        const ref=getGpsRef();if(track.gpsOrigin&&!ref)return 0;
+    eligible(track){
+        const now=performance.now();for(const [id,until] of this.cooldowns)if(until<=now)this.cooldowns.delete(id);
+        return this.dismissed.size<this.maxDismissed&&!track.isDemo&&!this.dismissed.has(track.id)&&!this.cooldowns.has(track.id);
+    }
+    canPresent(track,generation=this.generation){
+        const context=this.currentContext();return generation===this.generation&&context&&this.eligible(track)&&this.scoreMatch(context.x,context.y,context.heading,track,context.origin)>0.5;
+    }
+    async check(){
+        const context=this.currentContext();
+        if(!context){this.withdraw();return null}
+        if(this.activeToast){if(!this.canPresent(this.activeToast._detectedTrack))this.withdraw();else return null}
+        const now=performance.now();if(this.pending!==null||now-this.lastCheck<this.checkInterval)return null;this.lastCheck=now;
+        const request=++this.generation;this.pending=request;
+        try{
+            const tracks=await getAllTracks(),current=this.currentContext();
+            if(request!==this.generation)return null;
+            if(!current){this.withdraw();return null}
+            let bestMatch=null,bestScore=0;
+            for(const track of tracks){if(!this.eligible(track))continue;const score=this.scoreMatch(current.x,current.y,current.heading,track,current.origin);if(score>bestScore&&score>0.5){bestScore=score;bestMatch=track}}
+            if(bestMatch){
+                if(this.candidateTrack?.id===bestMatch.id)this.matchCount++;else{this.candidateTrack=bestMatch;this.matchCount=1}
+                if(this.matchCount>=this.requiredMatches)return{track:bestMatch,confidence:bestScore,generation:request};
+            }else this.reset();
+            return null;
+        }finally{if(this.pending===request)this.pending=null}
+    }
+    scoreMatch(x,y,heading,track,pointOrigin){
+        // The point and its origin are one sample; the live GPS origin may change during lookup.
+        const ref=pointOrigin;if(track.gpsOrigin&&!ref)return 0;
         // Transform bounds check if needed
         let bx=x,by=y;
         if(track.gpsOrigin&&ref){const t=transformCoord(x,y,ref,track.gpsOrigin);bx=t.x;by=t.y}
@@ -1586,29 +1623,46 @@ class TrackAutoDetector{
         const headScore=Math.max(0,1-hdiff/Math.PI);
         return distScore*0.6+headScore*0.4
     }
-    reset(){this.candidateTrack=null;this.matchCount=0}
+    reset(){this.generation++;this.pending=null;this.candidateTrack=null;this.matchCount=0}
+    withdraw(){if(this.activeToast)dismissActiveToast('context');else this.reset()}
+    beginTrackChange(){this.trackChanges++;this.withdraw()}
+    endTrackChange(){this.trackChanges=Math.max(0,this.trackChanges-1);this.reset()}
     setActiveToast(t){this.activeToast=t}
     clearActiveToast(){this.activeToast=null}
 }
 const trackAutoDetector=new TrackAutoDetector();
 
-function showTrackDetectedToast(track){
-    dismissActiveToast();
-    const t=document.createElement('div');t.className='bbToast';
-    t.innerHTML='<div class=\"bbToastIcon\"></div><div class=\"bbToastText\"><strong>Track detected</strong><span>'+escHtml(track.name)+'</span></div><div class=\"bbToastActions\"><button class=\"bbToastBtn primary\" onclick=\"activateDetectedTrack()\">Activate</button><button class=\"bbToastBtn secondary\" onclick=\"dismissActiveToast()\">Dismiss</button></div>';
-    document.body.appendChild(t);trackAutoDetector.setActiveToast(t);t._detectedTrack=track;
-    t._dismissTimeout=setTimeout(()=>dismissActiveToast(),10000)
+function showTrackDetectedToast(track,generation=trackAutoDetector.generation){
+    if(!trackAutoDetector.canPresent(track,generation))return false;
+    if(trackAutoDetector.activeToast?._detectedTrack?.id===track.id)return true;
+    dismissActiveToast('context');
+    const row=$('track-suggestion');row._detectedTrack=track;
+    $('track-suggestion-name').textContent=track.name;$('track-suggestion-name').setAttribute('title',track.name);
+    $('track-suggestion-activate').setAttribute('aria-label','Activate '+track.name);$('track-suggestion-dismiss').setAttribute('aria-label','Dismiss '+track.name);
+    row.hidden=false;document.body.classList.add('track-suggestion-visible');trackAutoDetector.setActiveToast(row);
+    row._dismissTimeout=setTimeout(()=>{if(row._detectedTrack?.id===track.id)dismissActiveToast('timeout')},10000);
+    return true;
 }
-function dismissActiveToast(){
-    const t=trackAutoDetector.activeToast;if(!t)return;
-    if(t._dismissTimeout)clearTimeout(t._dismissTimeout);
-    t.classList.add('dismissing');setTimeout(()=>{if(t.parentNode)t.parentNode.removeChild(t)},200);
-    trackAutoDetector.clearActiveToast();trackAutoDetector.reset()
+function dismissActiveToast(reason='dismiss'){
+    const row=trackAutoDetector.activeToast;if(!row)return;
+    const track=row._detectedTrack;
+    if(reason==='dismiss'&&trackAutoDetector.dismissed.size<trackAutoDetector.maxDismissed)trackAutoDetector.dismissed.add(track.id);
+    if(reason==='timeout'){
+        if(trackAutoDetector.cooldowns.size>=trackAutoDetector.maxDismissed)trackAutoDetector.cooldowns.delete(trackAutoDetector.cooldowns.keys().next().value);
+        trackAutoDetector.cooldowns.set(track.id,performance.now()+trackAutoDetector.cooldownMs);
+    }
+    clearTimeout(row._dismissTimeout);const focused=row.contains(document.activeElement);row.hidden=true;row._detectedTrack=null;
+    document.body.classList.remove('track-suggestion-visible');trackAutoDetector.clearActiveToast();trackAutoDetector.reset();
+    if(focused)$(document.body.classList.contains('cluster-view')?'cluster-controls':'quick-tracks').focus({preventScroll:true});
 }
 async function activateDetectedTrack(){
-    const t=trackAutoDetector.activeToast;if(!t||!t._detectedTrack)return;
-    const track=t._detectedTrack;dismissActiveToast();await activateTrack(track)
+    const row=trackAutoDetector.activeToast;if(!row)return;
+    const track=row._detectedTrack;if(!trackAutoDetector.canPresent(track)){dismissActiveToast('context');return}
+    dismissActiveToast('activate');await activateTrack(track);
 }
+$('track-suggestion-activate').onclick=activateDetectedTrack;
+$('track-suggestion-dismiss').onclick=()=>dismissActiveToast();
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&trackAutoDetector.activeToast?.contains(document.activeElement)){event.preventDefault();dismissActiveToast()}});
 
 function commitTrackWrite(stores,write,result){
     return new Promise((resolve,reject)=>{
@@ -1811,13 +1865,16 @@ async function saveNewRefLap(trackId,lapTimeMs,tracker){
 }
 
 async function saveTrack(track){
-    if(!trackDb)await openTrackDB();
-    track.modified=Date.now();
-    return new Promise((res,rej)=>{
-        const tx=trackDb.transaction('tracks','readwrite');
-        tx.oncomplete=()=>res(track);tx.onabort=()=>rej(tx.error||new Error('Track storage failed'));tx.onerror=()=>rej(tx.error);
-        tx.objectStore('tracks').put(track);
-    });
+    trackAutoDetector.beginTrackChange();
+    try{
+        if(!trackDb)await openTrackDB();
+        track.modified=Date.now();
+        return await new Promise((res,rej)=>{
+            const tx=trackDb.transaction('tracks','readwrite');
+            tx.oncomplete=()=>res(track);tx.onabort=()=>rej(tx.error||new Error('Track storage failed'));tx.onerror=()=>rej(tx.error);
+            tx.objectStore('tracks').put(track);
+        });
+    }finally{trackAutoDetector.endTrackChange()}
 }
 
 async function getTrack(id){
@@ -1839,12 +1896,15 @@ async function getAllTracks(){
 }
 
 async function deleteTrackFromDB(id){
-    if(!trackDb)await openTrackDB();
-    return new Promise((res,rej)=>{
-        const tx=trackDb.transaction('tracks','readwrite');
-        const r=tx.objectStore('tracks').delete(id);
-        r.onsuccess=()=>res();r.onerror=()=>rej(r.error);
-    });
+    trackAutoDetector.beginTrackChange();
+    try{
+        if(!trackDb)await openTrackDB();
+        return await new Promise((res,rej)=>{
+            const tx=trackDb.transaction('tracks','readwrite');
+            const r=tx.objectStore('tracks').delete(id);
+            r.onsuccess=()=>res();r.onerror=()=>rej(r.error);
+        });
+    }finally{trackAutoDetector.endTrackChange()}
 }
 
 function genTrackId(){return 'track_'+Date.now()+'_'+Math.random().toString(36).substr(2,9)}
@@ -2075,6 +2135,7 @@ async function activateTrack(track){
             '&p2_lat='+p2.lat.toFixed(7)+'&p2_lon='+p2.lon.toFixed(7)+
             '&dir='+startDir.toFixed(4);
     }
+    trackAutoDetector.beginTrackChange();
     try{
         const r=await requestDevice(url);
         const j=await r.json();
@@ -2115,11 +2176,12 @@ async function activateTrack(track){
         $('lap-delta').className='bbLapHistValue bbNum delta';
         updateActiveTrackDisplay();
         console.log('Track activated:',track.name,'Type:',track.type);
-    }catch(e){alert('Failed to configure lap timer: '+e.message)}
+    }catch(e){alert('Failed to configure lap timer: '+e.message)}finally{trackAutoDetector.endTrackChange()}
 }
 
 async function deactivateTrack(){
-    try{const r=await requestDevice('/api/laptimer/configure?type=clear');if(!r.ok)throw new Error('Device rejected the request');const j=await r.json();if(j.error)throw new Error(j.error);expectedLapRevision=j.revision??null}catch(e){alert('Could not stop device timing. Reconnect and retry. '+e.message);return false}
+    trackAutoDetector.beginTrackChange();
+    try{const r=await requestDevice('/api/laptimer/configure?type=clear');if(!r.ok)throw new Error('Device rejected the request');const j=await r.json();if(j.error)throw new Error(j.error);expectedLapRevision=j.revision??null}catch(e){alert('Could not stop device timing. Reconnect and retry. '+e.message);return false}finally{trackAutoDetector.endTrackChange()}
     activeTrack=null;referenceLap=null;clearSession();$('lap-result').hidden=true;lapResultGeneration++;
     if(lapTracker)lapTracker.reset();
     p2pNeedsWarmup=false;
@@ -2138,6 +2200,7 @@ async function deactivateTrack(){
 
 // Track Recording Functions
 function startTrackRecording(trackType='loop'){
+    trackAutoDetector.withdraw();
     if(!currentPos||!currentPos.valid){alert('No fresh GPS position. Wait outdoors for a fix before creating a track.');return false}
     const ref=getGpsRef();if(!ref){alert('GPS is still starting. Wait for a fresh fix, then try again.');return false}
     if(!trackRecorder)trackRecorder=new TrackRecorder();
@@ -2825,7 +2888,7 @@ const telemetryStartedAt=performance.now();
 let lastTelemetryAt=null,telemetryUnavailable=false;
 function checkTelemetryFreshness(){
     const age=performance.now()-(lastTelemetryAt??telemetryStartedAt);
-    if(age>300)clearForces('No fresh force data');
+    if(age>300){clearForces('No fresh force data');if(typeof trackAutoDetector!=='undefined')trackAutoDetector.withdraw()}
     if(age>1500&&!telemetryUnavailable){telemetryUnavailable=true;markTelemetryUnavailable('No fresh data')}
 }
 // End receipt freshness watchdog.
@@ -2857,22 +2920,16 @@ function process(buf,timing=null){
     // Update position for track manager and recording
     // ARCHITECTURE: Use GPS-derived local coordinates relative to firmware's GPS origin (via gpsToLocal)
     // This ensures dashboard coords match firmware's EKF coordinate frame for timing line crossing.
-    let localX=ekfX,localY=ekfY; // fallback to EKF if GPS ref not ready
-    const ref=getGpsRef();if(ref&&gpsOk===1&&lat&&lon){const local=gpsToLocal(lat,lon);if(local){localX=local.x;localY=local.y}}
+    let localX=ekfX,localY=ekfY,coordinateOrigin=null; // fallback to EKF if GPS ref not ready
+    const ref=getGpsRef();if(ref&&gpsOk===1){const local=gpsToLocal(lat,lon,ref);if(local){localX=local.x;localY=local.y;coordinateOrigin={lat:ref.lat,lon:ref.lon}}}
     const validGpsCourse=Number.isFinite(gpsCourse)&&sp>2.0;
-    currentPos={gpsAgeMs:timing?.gps_age_ms,x:localX,y:localY,yaw:ekfYaw,gpsCourse:gpsCourse,validGpsCourse:validGpsCourse,speed:sp,valid:gpsOk===1,sigma:posSigma,lat:lat,lon:lon};
+    currentPos={coordinateOrigin,receivedAtMs:performance.now(),gpsAgeMs:timing?.gps_age_ms,x:localX,y:localY,yaw:ekfYaw,gpsCourse:gpsCourse,validGpsCourse:validGpsCourse,speed:sp,valid:gpsOk===1,sigma:posSigma,lat:lat,lon:lon};
     updateTrackRecording();
     updateStartLineIndicator();
     updateFinishLineIndicator();
 
-    // Track auto-detection (only when no active track and not recording)
-    // Use GPS course for heading when valid (more reliable than EKF yaw)
-    if(!activeTrack&&!trackRecorder&&currentPos.valid){
-        const detHeading=currentPos.validGpsCourse?currentPos.gpsCourse:currentPos.yaw;
-        trackAutoDetector.check(currentPos.x,currentPos.y,detHeading).then(detected=>{
-            if(detected)showTrackDetectedToast(detected.track)
-        }).catch(()=>{})
-    }
+    // Detection is a suggestion only; async lookup and presentation recheck fresh current context.
+    trackAutoDetector.check().then(detected=>{if(detected)showTrackDetectedToast(detected.track,detected.generation)}).catch(()=>{});
 
     const now=Date.now();
     if(lastT&&now-lastT>250){trail=[];emaGx=emaGy=0;effortPeaks.update(0,0,false)}
@@ -2974,6 +3031,7 @@ async function requestDevice(url,{timeoutMs=3000,maxBytes=64*1024,...options}={}
 }
 function markTelemetryUnavailable(label){
     telemetryUnavailable=true;
+    if(typeof trackAutoDetector!=='undefined')trackAutoDetector.withdraw();
     clearForces('No live force data');
     $('lap-result').hidden=true;lapResultGeneration++;
     if(lapTimerActive){$('lap-state').textContent='Timing unconfirmed';$('lap-state').classList.remove('timing');$('lap-section').classList.remove('timing')}
