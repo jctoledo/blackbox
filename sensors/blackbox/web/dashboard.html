@@ -2098,7 +2098,18 @@ async function clearTrackHistoryConfirm(id){
     }
 }
 
-async function activateTrack(track){
+// Track command ownership. Configuration and its UI publication have one ordered owner.
+let trackCommandTail=Promise.resolve();
+function queueTrackCommand(command){
+    const result=trackCommandTail.then(command);
+    // A rejected command must not prevent later selections or Stop from running.
+    trackCommandTail=result.catch(()=>{});
+    return result;
+}
+async function activateTrack(track){return queueTrackCommand(()=>activateTrackCommand(track))}
+async function deactivateTrack(){return queueTrackCommand(()=>deactivateTrackCommand())}
+
+async function activateTrackCommand(track){
     const isP2P=track.type==='point_to_point';
     // Track must have gpsOrigin to convert timing line to GPS coordinates
     if(!track.gpsOrigin){alert('Track missing GPS origin. Cannot activate.');return}
@@ -2140,14 +2151,16 @@ async function activateTrack(track){
         const r=await requestDevice(url);
         const j=await r.json();
         if(!r.ok||j.error){alert('Failed to configure lap timer: '+(j.error||r.status));return}
+        // Do not expose a new owner with the previous track's reference while storage waits.
+        let loadedReference=null;
+        try{loadedReference=await getRefLap(track.id)}catch(e){console.warn('Reference lap unavailable:',e)}
         expectedLapRevision=j.revision??null;
-        activeTrack={...track,startLine:line,finishLine:finLine};$('lap-result').hidden=true;lapResultGeneration++;
+        activeTrack={...track,startLine:line,finishLine:finLine};referenceLap=loadedReference;
+        $('lap-result').hidden=true;lapResultGeneration++;
         suppressStartLineIndicator=false;
         p2pNeedsWarmup=isP2P&&track.isNew;
-        // Start new session for lap history
+        // Publish the history owner, reference, tracker and labels without another await.
         startNewSession();
-        // Load reference lap for delta calculation
-        try{referenceLap=await getRefLap(track.id);if(referenceLap)console.log('Reference lap loaded:',fmtLapTime(referenceLap.lapTimeMs))}catch(e){referenceLap=null}
         // Initialize lap tracker
         if(!lapTracker)lapTracker=new LapTracker();lapTracker.reset();lastDeltaMs=0;deltaTrend=0;
         // Update delta bar display
@@ -2179,7 +2192,7 @@ async function activateTrack(track){
     }catch(e){alert('Failed to configure lap timer: '+e.message)}finally{trackAutoDetector.endTrackChange()}
 }
 
-async function deactivateTrack(){
+async function deactivateTrackCommand(){
     trackAutoDetector.beginTrackChange();
     try{const r=await requestDevice('/api/laptimer/configure?type=clear');if(!r.ok)throw new Error('Device rejected the request');const j=await r.json();if(j.error)throw new Error(j.error);expectedLapRevision=j.revision??null}catch(e){alert('Could not stop device timing. Reconnect and retry. '+e.message);return false}finally{trackAutoDetector.endTrackChange()}
     activeTrack=null;referenceLap=null;clearSession();$('lap-result').hidden=true;lapResultGeneration++;
