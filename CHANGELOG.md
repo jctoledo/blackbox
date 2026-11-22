@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Convert mathematical estimator yaw to compass basis before learning the display-heading reference offset, preserving the correct turn sense (#132). Estimator and timing frames remain unchanged.
 - G-meter filtering/trails, page SESSION and track-capture elapsed displays use monotonic time; phone calendar corrections no longer corrupt forces or produce negative elapsed values. Real frame gaps reset motion history (#142).
 - Route capture and browser GPS origins accept valid zero latitude/longitude; missing fixes remain unavailable, and uninitialized firmware origin placeholders cannot become real coordinates (#145).
+- Session, GPS and Runs CSV exports read one stored chunk at a time instead of loading and repeatedly copying a whole recording. CSV bytes, units and pending-tail behavior remain compatible; download bytes still require browser memory.
 - Recording saves and save-age labels use monotonic elapsed time, so phone clock corrections cannot postpone persistence until the pending-data cap or trigger premature saves. Raw calendar timestamps remain intact.
 - Serialize track arming, Stop and track deletion commands, publishing the selected track, reference and revision together after storage lookup so rapid selections cannot mix timing owners (#127).
 - Keep long elapsed, history and numeric delta values inside their landscape columns without dropping digits or milliseconds; ordinary typography and compact warning layouts retain their existing sizes (#141).

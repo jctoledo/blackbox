@@ -1232,9 +1232,9 @@ async function collectGpsLog(){
     })();
     try{await gpsRequest}finally{gpsRequest=null}
 }
-function gpsSamplesToCSV(samples){
+function gpsSamplesToCSV(samples,includeHeader=true){
     const keys=['t','gpsBootId','gpsSeq','gpsHostUs','gpsUtcUs','gpsDate','gpsFractionDigits','gpsActive','gpsAccepted','lat','lon','sp','gpsCourse','gpsMissing','gpsBoundary','gpsSynthetic'];
-    return 'browser_received_ms,boot_id,rmc_seq,host_parse_us,receiver_utc_us_of_day,receiver_date_ddmmyy,utc_fractional_digits,rmc_active,fix_accepted,gps_lat,gps_lon,speed_mps,course_rad,missing_before,boundary,synthetic\n'+samples.filter(r=>r.rowType===1).map(r=>keys.map(k=>Number.isFinite(r[k])?r[k]:'').join(',')).join('\n')+'\n';
+    return (includeHeader?'browser_received_ms,boot_id,rmc_seq,host_parse_us,receiver_utc_us_of_day,receiver_date_ddmmyy,utc_fractional_digits,rmc_active,fix_accepted,gps_lat,gps_lon,speed_mps,course_rad,missing_before,boundary,synthetic\n':'')+samples.filter(r=>r.rowType===1).map(r=>keys.map(k=>Number.isFinite(r[k])?r[k]:'').join(',')).join('\n')+'\n';
 }
 
 function driveDuration(ms){
@@ -1297,9 +1297,9 @@ function updateRecUI(){
     const drive=recordingContext?.driveSession?.snapshot();$('rec-duration').textContent=drive?fmtTime(drive.elapsedMs):'--';
 }
 
-function samplesToCSV(samples){
+function samplesToCSV(samples,includeHeader=true){
     const keys=['t', 'sp', 'ax', 'ay', 'wz', 'mo', 'latg', 'lng', 'lat', 'lon', 'gpsOk', 'ekfX', 'ekfY', 'ekfYaw', 'gpsCourse', 'lon_imu', 'lon_gps', 'gps_wt', 'pitch_c', 'pitch_cf', 'roll_c', 'roll_cf', 'tilt_x', 'tilt_y', 'deviceTimeMs', 'lapTimeMs', 'lapCnt', 'lapFlags', 'lastLapMs', 'bestLapMs', 'gpsAgeMs', 'imuAgeMs', 'timingRevision', 'gpsBootId', 'gpsSeq', 'gpsHostUs', 'gpsUtcUs', 'gpsDate', 'gpsFractionDigits', 'gpsSynthetic'];
-    return 'time,speed,ax,ay,wz,mode,lat_g,lon_g,gps_lat,gps_lon,gps_valid,ekf_x,ekf_y,ekf_yaw,gps_course,lon_imu,lon_gps,gps_weight,pitch_corr,pitch_conf,roll_corr,roll_conf,tilt_x,tilt_y,device_time_ms,lap_time_ms,lap_count,lap_flags,last_lap_ms,best_lap_ms,gps_age_ms,imu_age_ms,timing_revision,gps_boot_id,gps_rmc_seq,gps_host_parse_us,gps_receiver_utc_us_of_day,gps_receiver_date_ddmmyy,gps_utc_fractional_digits,synthetic\n'+samples.filter(r=>r.rowType!==1).map(r=>keys.map(k=>Number.isFinite(r[k])?r[k]:'').join(',')).join('\n')+'\n';
+    return (includeHeader?'time,speed,ax,ay,wz,mode,lat_g,lon_g,gps_lat,gps_lon,gps_valid,ekf_x,ekf_y,ekf_yaw,gps_course,lon_imu,lon_gps,gps_weight,pitch_corr,pitch_conf,roll_corr,roll_conf,tilt_x,tilt_y,device_time_ms,lap_time_ms,lap_count,lap_flags,last_lap_ms,best_lap_ms,gps_age_ms,imu_age_ms,timing_revision,gps_boot_id,gps_rmc_seq,gps_host_parse_us,gps_receiver_utc_us_of_day,gps_receiver_date_ddmmyy,gps_utc_fractional_digits,synthetic\n':'')+samples.filter(r=>r.rowType!==1).map(r=>keys.map(k=>Number.isFinite(r[k])?r[k]:'').join(',')).join('\n')+'\n';
 }
 
 async function exportCSV(){
@@ -1387,20 +1387,41 @@ async function exportSessionById(targetId,gpsOnly=false,runsOnly=false){
     if(!db)await openDB();
     if(chunkWrite){try{await chunkWrite}catch(e){console.warn('Exporting pending samples after storage failure',e)}}
     const pending=targetId===sessionId?chunkBuffer.slice():[];
-    const tx=db.transaction(['sessions','chunks'],'readonly');
-    const session=await idbPromise(tx.objectStore('sessions').get(targetId));
-    if(!session)throw new Error('Session not found');
-    const idx=tx.objectStore('chunks').index('sessionId');
-    const chunks=await idbPromise(idx.getAll(targetId));
-    chunks.sort((a,b)=>a.chunkIndex-b.chunkIndex);
-    if(!chunks.length&&!pending.length)throw new Error('No data in recording');
-    let allData=[];chunks.forEach(c=>allData=allData.concat(c.data||[]));allData=allData.concat(pending);
-    const exported=allData.filter(r=>gpsOnly?r.rowType===1:r.rowType!==1);
-    if(!exported.length)throw Error(gpsOnly?'No GPS timestamp evidence in this recording. Use updated firmware and record while connected.':'No dashboard samples in recording');
-    const csv=runsOnly?runsToCSV(allData):gpsOnly?gpsSamplesToCSV(exported):samplesToCSV(exported);
-    const b=new Blob([csv],{type:'text/csv'}),u=URL.createObjectURL(b),a=document.createElement('a');
+    const serialize=gpsOnly?gpsSamplesToCSV:samplesToCSV;
+    // Output bytes remain in memory, but no whole-recording raw row array is built.
+    const parts=runsOnly?[]:[serialize([]).slice(0,-1)],detectors=runsOnly?createRunExportDetectors():null;
+    let session,sampleCount=0,matching=0,chunkCount=0;
+    const append=rows=>{
+        sampleCount+=rows.length;
+        if(runsOnly){for(const row of rows){if(gpsOnly?row.rowType===1:row.rowType!==1)matching++;for(const detector of detectors)detector.update(row)}}
+        else{const selected=rows.filter(row=>gpsOnly?row.rowType===1:row.rowType!==1);matching+=selected.length;if(selected.length)parts.push(serialize(selected,false))}
+    };
+    await new Promise((resolve,reject)=>{
+        const tx=db.transaction(['sessions','chunks'],'readonly');
+        let failure=null;
+        const fail=error=>{failure=error;try{tx.abort()}catch{reject(error)}};
+        tx.oncomplete=resolve;tx.onerror=tx.onabort=()=>reject(failure||tx.error||Error('Recording export failed'));
+        const request=tx.objectStore('sessions').get(targetId);
+        request.onsuccess=()=>{
+            try{
+                session=request.result;if(!session){fail(Error('Session not found'));return}
+                // The composite primary key is [sessionId,chunkIndex]; a prefix range
+                // visits only this recording, in numeric chunk order, in this snapshot.
+                const cursorRequest=tx.objectStore('chunks').openCursor(IDBKeyRange.bound([targetId],[targetId,[]]));
+                cursorRequest.onsuccess=()=>{
+                    const cursor=cursorRequest.result;if(!cursor)return;
+                    try{chunkCount++;append(cursor.value.data||[]);cursor.continue()}catch(error){fail(error)}
+                };
+            }catch(error){fail(error)}
+        };
+    });
+    append(pending);
+    if(!chunkCount&&!pending.length)throw new Error('No data in recording');
+    if(!matching)throw Error(gpsOnly?'No GPS timestamp evidence in this recording. Use updated firmware and record while connected.':'No dashboard samples in recording');
+    if(runsOnly)parts.push(runExportToCSV(detectors));
+    const b=new Blob(parts,{type:'text/csv'}),u=URL.createObjectURL(b),a=document.createElement('a');
     a.href=u;a.download=(runsOnly?'blackbox_runs_':gpsOnly?'blackbox_gps_':'blackbox_')+new Date(targetId).toISOString().slice(0,19).replace(/[T:]/g,'-')+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(u),30000);
-    return{session,sampleCount:allData.length};
+    return{session,sampleCount};
 }
 
 async function clearAllRecordings(){
@@ -2612,10 +2633,13 @@ function renderPerformanceRuns(){
     $('run-status').textContent=rec?selectedRunDetector.status:last?(last.synthetic?'SIM example · see Saved data':'Recording stopped'):'Record to collect receiver timestamps';
 }
 function runsToCSV(rows){
-    const detectors=runIntervals.map(interval=>new RollingRuns(interval));for(const row of rows)for(const d of detectors)d.update(row);
+    const detectors=createRunExportDetectors();for(const row of rows)for(const d of detectors)d.update(row);
+    return runExportToCSV(detectors);
+}
+function createRunExportDetectors(){return runIntervals.map(interval=>new RollingRuns(interval))}
+function runExportToCSV(detectors){
     for(const d of detectors)if(d.attempt)d.abort('Recording ended before completion');
     const detector={results:detectors.flatMap(d=>d.results),dropped:detectors.reduce((n,d)=>n+d.dropped,0)};
-    if(detector.attempt)detector.abort('Recording ended before completion');
     const header='interval,status,reason,seconds,start_utc_us,end_utc_us,start_seq,end_seq,boot_id,date_ddmmyy,synthetic';
     if(detector.dropped)throw Error('More than 1000 attempts: export GPS CSV for full evidence instead.');
     if(!detector.results.length)throw Error('No rolling interval attempts found in GPS evidence. No result has been invented.');

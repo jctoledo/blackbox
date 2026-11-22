@@ -179,9 +179,12 @@ test('stage completion preserves its exact result while the device re-arms',()=>
 });
 
 test('emergency export includes committed and unsaved rows without another write',async()=>{
- let csv='',clicked=false;const c={console,Number,Date,setTimeout:()=>{},db:{transaction:()=>({objectStore:name=>name==='sessions'?{get:()=>({result:{sessionId:10}})}:{index:()=>({getAll:()=>({result:[{chunkIndex:0,data:[{t:1,sp:10}]}]})})}})},idbPromise:async r=>r.result,chunkWrite:null,chunkBuffer:[{t:2,sp:11}],sessionId:10,Blob:class{constructor(parts){csv=parts.join('')}},URL:{createObjectURL:()=>'/synthetic.csv'},document:{createElement:()=>({click(){clicked=true}})}};
+ const {indexedDB,IDBKeyRange}=require('fake-indexeddb');
+ const db=await new Promise((resolve,reject)=>{const request=indexedDB.open('dashboard-emergency-export');request.onupgradeneeded=()=>{request.result.createObjectStore('sessions',{keyPath:'sessionId'});request.result.createObjectStore('chunks',{keyPath:['sessionId','chunkIndex']})};request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)});
+ await new Promise((resolve,reject)=>{const tx=db.transaction(['sessions','chunks'],'readwrite');tx.objectStore('sessions').put({sessionId:10});tx.objectStore('chunks').put({sessionId:10,chunkIndex:0,data:[{t:1,sp:10}]});tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)});
+ let csv='',clicked=false;const c={console,Number,Date,IDBKeyRange,setTimeout:()=>{},db,chunkWrite:null,chunkBuffer:[{t:2,sp:11}],sessionId:10,Blob:class{constructor(parts){csv=parts.join('')}},URL:{createObjectURL:()=>'/synthetic.csv'},document:{createElement:()=>({click(){clicked=true}})}};
  vm.createContext(c);vm.runInContext(section('function samplesToCSV(', 'async function exportCSV(')+section('async function exportSessionById(', 'function formatBytes('),c);
- const result=await c.exportSessionById(10);assert.equal(result.sampleCount,2);assert.equal(clicked,true);assert.equal(csv.trim().split('\n').length,3);assert.equal(c.chunkBuffer.length,1);
+ const result=await c.exportSessionById(10);assert.equal(result.sampleCount,2);assert.equal(clicked,true);assert.equal(csv.trim().split('\n').length,3);assert.equal(c.chunkBuffer.length,1);db.close();
 });
 
 

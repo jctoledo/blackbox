@@ -142,6 +142,10 @@ Recordings and tracks use separate IndexedDB databases. Each group commits atomi
 
 The maximum supported JSON file is **100 MiB**. For larger libraries, use **Backup contents** to select one recording, all recordings, or tracks only. A single recording over that limit still needs CSV export for analysis; CSV is not a restorable backup. Backups contain precise location history and are not encrypted. The CRC checksum detects accidental damage; it is not proof of who created a file. Browser eviction and hardware failure still require an external copy to protect your data.
 
+Session, GPS and Runs CSV exports read saved chunks in numeric order within one readonly database snapshot, then include the current recording's captured pending tail once. Export does not stop recording or save/delete data. A failed database read, transaction abort or serialization error prevents the download. CSV headers, units, row order and missing-value blanks are unchanged.
+
+CSV export retains at most one stored raw chunk plus the captured pending tail, with temporary row references and formatting work bounded by that chunk. It no longer builds a whole-recording raw array or repeatedly copies its references. The formatted output parts and download Blob still consume memory proportional to output size; this is not zero-copy streaming or a measured phone capacity guarantee. Runs keep the existing bounded detector results and refuse export if more than 1000 attempts per interval would be truncated. The 100 MiB JSON backup limit is unchanged. CSV is analysis evidence, not a restorable backup; multipart/streaming backups and native-phone acceptance remain separate work (#138).
+
 If an incomplete legacy track prevents a full backup, choose **Recordings only** to protect the sessions independently. Use the existing track JSON export to retain the problematic track for repair; do not delete it merely to make a backup pass validation.
 
 
