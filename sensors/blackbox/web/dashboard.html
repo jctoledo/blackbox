@@ -1974,8 +1974,7 @@ async function renderTrackList(){
 
 async function handleTrackAction(action,id){
     if(action==='use'){
-        const t=await getTrack(id);
-        if(t)await activateTrack(t);
+        await activateSavedTrack(id);
         closeTrackModal();
     }else if(action==='delete'){
         if(confirm('Delete this track and all lap history?')){
@@ -2107,6 +2106,7 @@ function queueTrackCommand(command){
     return result;
 }
 async function activateTrack(track){return queueTrackCommand(()=>activateTrackCommand(track))}
+async function activateSavedTrack(id){return queueTrackCommand(async()=>{const track=await getTrack(id);if(track)return activateTrackCommand(track)})}
 async function deactivateTrack(){return queueTrackCommand(()=>deactivateTrackCommand())}
 
 async function activateTrackCommand(track){

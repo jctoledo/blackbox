@@ -42,3 +42,11 @@ test('failed Stop preserves active owner and allows a subsequent activation',asy
  assert.equal(f.c.activeTrack.id,'original');assert.equal(f.c.referenceLap.id,'ref-original');assert.equal(f.c.expectedLapRevision,9);assert.match(f.alerts[0],/Could not stop/);assert.equal(f.requests.length,2);
  f.ack(1,11);await settle();f.lookups[0].resolve(null);await a;assert.equal(f.c.activeTrack.id,'A');assert.equal(f.c.referenceLap,null);assert.equal(f.changes(),0);
 });
+
+test('saved-track lookup preserves the order of driver selections before configuration',async()=>{
+ const f=fixture(),reads=[];f.c.getTrack=id=>{const pending=deferred();reads.push({id,...pending});return pending.promise};
+ const a=f.c.activateSavedTrack('A'),b=f.c.activateSavedTrack('B');await settle();assert.equal(reads.length,1);assert.equal(reads[0].id,'A');assert.equal(f.requests.length,0);
+ reads[0].resolve(track('A'));await settle();f.ack(0,10);await settle();f.lookups[0].resolve({id:'ref-A'});await a;await settle();assert.equal(reads.length,2);assert.equal(reads[1].id,'B');
+ reads[1].resolve(track('B'));await settle();f.ack(1,11);await settle();f.lookups[1].resolve({id:'ref-B'});await b;
+ assert.equal(f.c.activeTrack.id,'B');assert.equal(f.c.referenceLap.id,'ref-B');assert.equal(f.elements.get('lap-track-name').textContent,'Track B');assert.equal(f.changes(),0);
+});
