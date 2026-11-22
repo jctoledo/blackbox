@@ -19,6 +19,8 @@ Convert compass course to mathematical yaw with `π/2 − course` only at the re
 
 Local geographic conversion uses `north = Δlatitude × 111320` and `east = Δlongitude × 111320 × cos(reference latitude)`. This is a short-distance planar approximation, not an ellipsoidal survey conversion. It has no antimeridian/polar route support. Store the geographic origin with traces because the live local origin resets at boot.
 
+Zero latitude or longitude is a valid coordinate, not a missing-data sentinel. Browser route capture validates finite geographic values and tracks missing GPS separately from its finite local-position fallback. Firmware-origin adoption uses the explicit warmup flag for zero-valued origins; legacy responses without that flag need nonzero coordinates, or the browser can establish an origin from validated fixes. Exact polar origins are excluded from the local projection. GPS distance does not bridge unavailable coordinate evidence.
+
 ## Estimator prediction
 
 The state is `[x, y, ψ, vx, vy, bax, bay]`; position, velocity and learned residual biases share the earth frame. After gravity removal and rotation:
@@ -47,6 +49,8 @@ They are not interchangeable during general roll/pitch motion. Telemetry v4 `wz`
 remains raw sensor-body Z rate for compatibility.
 
 Measured lateral acceleration already produces curved motion. The current code does not switch between CTRA and CA models or add another centripetal acceleration. GPS updates correct position/velocity; stationary updates constrain velocity and learn biases. The separate orientation-correction/display path does not retroactively correct every EKF input.
+
+For the dashboard heading, `HeadingAligner` first converts mathematical EKF yaw to clockwise compass basis with `π/2 − yaw`, then learns a residual GPS-course reference offset while moving with fresh course evidence. A constant offset alone cannot reverse the angular direction. Before learning, the output has compass turn sense but an unverified absolute reference. This display conversion does not change EKF prediction, acceleration transforms or raw-GPS crossing directions; magnetometer/mount signs and absolute heading still require the controlled bench/turn checks.
 
 ## Covariance and measurement updates
 

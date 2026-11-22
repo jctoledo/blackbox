@@ -170,3 +170,33 @@ test('capture completion during backup reads keeps the completed envelope instea
  await c.captureRecordingMetadata(c.db,c.recordingContext,async()=>({ok:true,json:async()=>metadataSnapshot()}));release();
  const result=await backup;assert.equal(result.data.sessions[0].recordingMetadata.status,'captured');assert.equal(result.data.sessions[0].recordingMetadata.snapshot.boot_id,1);
 });
+
+test('production missing GPS metadata remains portable from committed rows and recovery tails',async()=>{
+ for(const committed of [false,true]){
+  const c=context();c.db=await database();c.trackDb=await database(true);c.rec=true;c.sessionId=100;c.sessionStart=100;c.lastSaveTime=Date.now();c.now=Date.now();c.MAX_PENDING_SAMPLES=6000;c.CHUNK_INTERVAL=5000;c.recordingSaveDue=()=>false;c.d={getUint32:()=>123};c.timing={gps_event:null,gps_boot_id:1};c.fusion={};
+  for(const key of ['lapTimeMs','lapCnt','lapFlags','sp','ax','ay','wz','mo','latg','lng','lat','lon','gpsOk','ekfX','ekfY','ekfYaw','gpsCourse'])c[key]=0;
+  vm.runInContext(slice('    // Recording\n    if(rec){','\n}\n\n// Read the complete bounded body'),c);c.rec=false;
+  const original=c.chunkBuffer[0];assert.equal(Object.hasOwn(original,'gpsSeq'),true);assert.equal(original.gpsSeq,undefined);
+  await c.addBackupStores(c.db,{sessions:[{sessionId:100,startTime:100,status:'complete'}],...(committed?{chunks:[{sessionId:100,chunkIndex:0,data:c.chunkBuffer}]}:{})});
+  if(committed)c.chunkBuffer=[];
+  const value=await c.createBackup();assert.equal(value.data.chunks[0].data[0].gpsSeq,null);assert.equal(value.data.chunks[0].data[0].sp,0);assert.equal(original.gpsSeq,undefined);
+  const portable=JSON.parse(JSON.stringify(value));c.validateBackup(portable);const plan=c.makeRestorePlan(portable,portable.data.sessions,'optional-fields',1000);await c.executeRestore(plan,c.db,c.trackDb);c.chunkBuffer=[];c.sessionId=null;
+  assert.equal((await c.createBackup()).data.sessions.length,2);
+ }
+});
+test('maximum length track names stay backup-valid through repeated restored copies',async()=>{
+ const c=context(),value=fixture(c);value.data.tracks[0].name='T'.repeat(1000);value.checksum=c.backupChecksum(value.data);c.db=await database();c.trackDb=await database(true);
+ await c.addBackupStores(c.trackDb,{tracks:value.data.tracks});
+ let backup=value;
+ for(let generation=0;generation<3;generation++){
+  const plan=c.makeRestorePlan(backup,[],'names-'+generation,1000+generation);await c.executeRestore(plan,c.db,c.trackDb);backup=await c.createBackup('tracks');c.validateBackup(JSON.parse(JSON.stringify(backup)));
+  for(const track of backup.data.tracks){assert.ok(track.name.length<=1000);if(track.id!=='track-a')assert.ok(track.name.endsWith(' (restored)'))}
+ }
+ assert.equal(backup.data.tracks.find(t=>t.id==='track-a').name,'T'.repeat(1000));
+});
+test('portable backup projection rejects invalid numbers and objects rather than laundering them through JSON',async()=>{
+ for(const invalid of [NaN,Infinity,-Infinity,{nested:1}]){
+  const c=context();c.db=await database();c.trackDb=await database(true);c.sessionId=100;c.sessionStart=100;c.chunkBuffer=[{t:101,sp:invalid}];
+  await assert.rejects(c.createBackup(),/invalid sample value/);
+ }
+});

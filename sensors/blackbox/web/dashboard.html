@@ -416,14 +416,14 @@ body.cluster-view .bbInstrumentLabel,body.cluster-view .bbElapsedLabel{display:b
 body.cluster-view .bbApp .bbGTopRight{display:flex;justify-content:space-between;align-items:center;padding:0 18px;font:18px var(--mono);border-top:1px solid var(--divider)}
 body.cluster-view .bbLapCard.active .bbLapActive{display:flex;flex:1;min-height:0;flex-direction:column;position:static}
 body.cluster-view .bbLapMain{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);grid-template-rows:auto 1fr auto;gap:5px 14px;flex:1;min-height:0;padding:12px 18px 8px;text-align:left}
-body.cluster-view .bbElapsedLabel{grid-column:1;grid-row:1}body.cluster-view .bbLapTime{grid-column:1;grid-row:2;align-self:center;font-size:clamp(30px,5.5vw,56px);line-height:1.1;letter-spacing:-.065em;white-space:nowrap}
+body.cluster-view .bbElapsedLabel{grid-column:1;grid-row:1}body.cluster-view .bbLapTime{--timing-font:clamp(30px,5.5vw,56px);grid-column:1;grid-row:2;align-self:center;font-size:clamp(30px,5.5vw,56px);line-height:1.1;letter-spacing:-.065em;white-space:nowrap}
 body.cluster-view .bbReferenceLabel{grid-column:1;grid-row:3;font-size:10px;line-height:1.2;margin:0;color:var(--text-tertiary)}
 body.cluster-view .bbDeltaBar{grid-column:2;grid-row:1/4;align-self:stretch;justify-content:center;margin:0;padding-left:14px;border-left:1px solid var(--divider);gap:8px}
 body.cluster-view .bbDeltaBar::before{content:'DELTA';color:var(--text-tertiary);font:9px var(--mono);letter-spacing:.08em}
 body.cluster-view .bbDeltaText{font-size:clamp(24px,3.6vw,38px);line-height:1.1;white-space:nowrap}body.cluster-view .bbDeltaBar.no-ref .bbDeltaText{font-size:12px;white-space:normal;line-height:1.4}body.cluster-view .bbDeltaTrack{height:4px;width:100%}
 body.cluster-view .bbLapTrackName{display:none}body.cluster-view .bbLapMeta{position:absolute;top:15px;right:18px;margin:0;gap:8px}body.cluster-view .bbLapCount,body.cluster-view .bbLapState{font:10px var(--mono)}
 body.cluster-view .bbLapProgress{flex:none;padding:0 18px 8px;font:10px var(--mono)}body.cluster-view .bbLapProgress progress{height:3px;margin-top:4px}
-body.cluster-view .bbLapHistory{flex:0 0 52px;height:52px;padding:7px 10px;margin:0;border-top:1px solid var(--divider);align-items:center}body.cluster-view .bbLapHistLabel{font:9px var(--mono);letter-spacing:.06em}body.cluster-view .bbLapHistValue{font:500 18px/1.3 var(--mono);margin-top:3px}
+body.cluster-view .bbLapHistory{flex:0 0 52px;height:52px;padding:7px 10px;margin:0;border-top:1px solid var(--divider);align-items:center}body.cluster-view .bbLapHistLabel{font:9px var(--mono);letter-spacing:.06em}body.cluster-view .bbLapHistValue{--timing-font:18px;font:500 18px/1.3 var(--mono);margin-top:3px}
 body.cluster-view .bbLapResult,body.cluster-view .bbStartLineIndicator,body.cluster-view .bbFinishLineIndicator{position:absolute;bottom:52px;left:0;right:0;z-index:2;padding:7px 12px;font-size:12px;background:var(--surface)}body.cluster-view .bbLapResult{background:var(--ok)}
 body.cluster-view .bbLapCard.inactive{padding:0}body.cluster-view .bbLapSetup{padding:18px;flex:1;flex-direction:column;justify-content:center;align-items:flex-start;gap:14px}body.cluster-view .bbLapSetupText{font-size:18px}
 body.cluster-view.cluster-forces .bbApp .bbGTop,body.cluster-view.cluster-peaks .bbApp .bbGTop,body.cluster-view.cluster-runs .bbApp .bbGTop{display:none!important}
@@ -432,7 +432,7 @@ body.cluster-view.cluster-forces .bbApp .bbGPlotFrame{height:100%;max-height:170
 body.cluster-view .bbGExpand,body.cluster-view .bbPlotMeta{display:none!important}body.cluster-view .bbAxis{font-size:9px}
 body.cluster-view.cluster-forces .bbApp .bbGReadoutRow{display:flex!important;flex:0 0 52px;height:52px;padding:6px 8px;margin:0;border-top:1px solid var(--divider)}body.cluster-view .bbGReadoutCol{gap:3px}body.cluster-view .bbGReadoutLbl{font:9px var(--mono)}body.cluster-view .bbGReadoutVal{font:500 21px/1.1 var(--mono);margin:0}body.cluster-view .bbGDivider{height:28px}
 body.cluster-view.cluster-peaks .bbClusterPeaks{display:flex;flex:1;min-height:0;flex-direction:column}.bbPeakGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px 18px;flex:1;align-items:center}.bbPeakGrid dt{font:10px var(--mono);color:var(--text-tertiary);letter-spacing:.06em;margin-bottom:5px}.bbPeakGrid dd{font:500 clamp(20px,3.5vw,30px)/1 var(--mono);letter-spacing:-.06em}.bbPeakGrid small{font-size:12px;color:var(--text-secondary);letter-spacing:0}.bbPeakNote{display:flex;align-items:center;justify-content:center;flex:0 0 52px;border-top:1px solid var(--divider);font:10px/1.4 var(--mono);color:var(--text-tertiary);text-align:center;padding:6px 10px}
-@media(max-height:360px){body.cluster-view .bbTopbar{height:52px;min-height:52px}body.cluster-view .bbApp{padding-top:5px;gap:8px}body.cluster-view .bbLapMain{padding:8px 12px;gap:3px 10px}body.cluster-view .bbGTopLeft{padding:8px 12px}body.cluster-view .bbApp .bbSpeed{font-size:72px}body.cluster-view .bbLapTime{font-size:34px}body.cluster-view .bbLapProgress{font-size:9px;padding-bottom:5px}body.cluster-view .bbReferenceLabel{font-size:9px}body.cluster-view .bbLapHistValue{font-size:16px}body.cluster-view .bbLapMeta{right:12px}body.cluster-view .bbDeltaBar{padding-left:10px}body.cluster-view .bbDeltaBar::before{font-size:8px}body.cluster-view .bbStatusCluster{gap:6px;font-size:9px}}
+@media(max-height:360px){body.cluster-view .bbTopbar{height:52px;min-height:52px}body.cluster-view .bbApp{padding-top:5px;gap:8px}body.cluster-view .bbLapMain{padding:8px 12px;gap:3px 10px}body.cluster-view .bbGTopLeft{padding:8px 12px}body.cluster-view .bbApp .bbSpeed{font-size:72px}body.cluster-view .bbLapTime{--timing-font:34px;font-size:34px}body.cluster-view .bbLapProgress{font-size:9px;padding-bottom:5px}body.cluster-view .bbReferenceLabel{font-size:9px}body.cluster-view .bbLapHistValue{--timing-font:16px;font-size:16px}body.cluster-view .bbLapMeta{right:12px}body.cluster-view .bbDeltaBar{padding-left:10px}body.cluster-view .bbDeltaBar::before{font-size:8px}body.cluster-view .bbStatusCluster{gap:6px;font-size:9px}}
 
 .bbForceTools{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;font:9px var(--mono);color:var(--text-tertiary)}.bbForceTools button{white-space:nowrap;flex-shrink:0;min-height:44px;padding:0 8px;border:0;background:none;color:var(--text-secondary);font:inherit;cursor:pointer}
 body.cluster-view.cluster-forces .bbApp .bbGPlotWrap{flex-direction:column;padding:0 10px 4px;gap:0}body.cluster-view.cluster-forces .bbGPlotFrame{min-height:0;flex:1}body.cluster-view.cluster-forces .bbForceTools{flex:0 0 44px}body.cluster-view.cluster-forces .bbApp .bbGPlotFrame{height:calc(100% - 44px)}
@@ -460,10 +460,10 @@ body.cluster-view .bbLapCard,body.cluster-view .bbApp .bbGCard{container:cluster
 @container cluster-card (max-height:210px){
     body.cluster-view .bbLapMain{grid-template-rows:12px 12px minmax(0,1fr);padding:6px 10px;gap:2px 8px}
     body.cluster-view .bbLapMeta{grid-row:2;margin-top:0!important;gap:6px}
-    body.cluster-view .bbLapTime{grid-row:3;font-size:clamp(24px,18cqh,32px)}
+    body.cluster-view .bbLapTime{--timing-font:clamp(24px,18cqh,32px);grid-row:3;font-size:clamp(24px,18cqh,32px)}
     body.cluster-view .bbReferenceLabel,body.cluster-view .bbLapProgress{display:none}
     body.cluster-view .bbLapHistory{flex-basis:42px;height:42px;padding:4px 8px}
-    body.cluster-view .bbLapHistValue{font-size:16px}
+    body.cluster-view .bbLapHistValue{--timing-font:16px;font-size:16px}
     body.cluster-view .bbLapResult,body.cluster-view .bbStartLineIndicator,body.cluster-view .bbFinishLineIndicator{bottom:42px}
     body.cluster-view .bbApp .bbGTop{grid-template-rows:minmax(0,1fr) 42px}
     body.cluster-view .bbGTopLeft{padding:44px 10px 4px}
@@ -501,6 +501,12 @@ body.cluster-view .bbDrivePanel{flex:1;min-height:0;display:grid;grid-template-r
     body.cluster-view .bbApp .bbGTopRight,body.cluster-view .bbSpeedMaximum{display:none}
     body.cluster-view .bbPeakGrid{padding-bottom:4px;gap:4px}body.cluster-view .bbPeakGrid dd{font-size:20px}
 }
+/* Keep the complete numeric value inside its landscape column at long durations.
+   cqw belongs to the timing card; budgets leave room for labels, gaps and dividers. */
+body.cluster-view .bbLapTime{min-width:0;font-size:min(var(--timing-font),calc(80cqw / var(--timing-chars,8)))}
+body.cluster-view .bbLapHistItem{min-width:0}
+body.cluster-view .bbLapHistValue{white-space:nowrap;font-size:min(var(--timing-font),calc(50cqw / var(--timing-chars,8)))}
+body.cluster-view .bbDeltaBar:not(.no-ref) .bbDeltaText{font-size:min(clamp(24px,3.6vw,38px),calc(55cqw / var(--timing-chars,6)))}
 </style></head>
 <body>
 
@@ -1226,9 +1232,9 @@ async function collectGpsLog(){
     })();
     try{await gpsRequest}finally{gpsRequest=null}
 }
-function gpsSamplesToCSV(samples){
+function gpsSamplesToCSV(samples,includeHeader=true){
     const keys=['t','gpsBootId','gpsSeq','gpsHostUs','gpsUtcUs','gpsDate','gpsFractionDigits','gpsActive','gpsAccepted','lat','lon','sp','gpsCourse','gpsMissing','gpsBoundary','gpsSynthetic'];
-    return 'browser_received_ms,boot_id,rmc_seq,host_parse_us,receiver_utc_us_of_day,receiver_date_ddmmyy,utc_fractional_digits,rmc_active,fix_accepted,gps_lat,gps_lon,speed_mps,course_rad,missing_before,boundary,synthetic\n'+samples.filter(r=>r.rowType===1).map(r=>keys.map(k=>Number.isFinite(r[k])?r[k]:'').join(',')).join('\n')+'\n';
+    return (includeHeader?'browser_received_ms,boot_id,rmc_seq,host_parse_us,receiver_utc_us_of_day,receiver_date_ddmmyy,utc_fractional_digits,rmc_active,fix_accepted,gps_lat,gps_lon,speed_mps,course_rad,missing_before,boundary,synthetic\n':'')+samples.filter(r=>r.rowType===1).map(r=>keys.map(k=>Number.isFinite(r[k])?r[k]:'').join(',')).join('\n')+'\n';
 }
 
 function driveDuration(ms){
@@ -1291,9 +1297,9 @@ function updateRecUI(){
     const drive=recordingContext?.driveSession?.snapshot();$('rec-duration').textContent=drive?fmtTime(drive.elapsedMs):'--';
 }
 
-function samplesToCSV(samples){
+function samplesToCSV(samples,includeHeader=true){
     const keys=['t', 'sp', 'ax', 'ay', 'wz', 'mo', 'latg', 'lng', 'lat', 'lon', 'gpsOk', 'ekfX', 'ekfY', 'ekfYaw', 'gpsCourse', 'lon_imu', 'lon_gps', 'gps_wt', 'pitch_c', 'pitch_cf', 'roll_c', 'roll_cf', 'tilt_x', 'tilt_y', 'deviceTimeMs', 'lapTimeMs', 'lapCnt', 'lapFlags', 'lastLapMs', 'bestLapMs', 'gpsAgeMs', 'imuAgeMs', 'timingRevision', 'gpsBootId', 'gpsSeq', 'gpsHostUs', 'gpsUtcUs', 'gpsDate', 'gpsFractionDigits', 'gpsSynthetic'];
-    return 'time,speed,ax,ay,wz,mode,lat_g,lon_g,gps_lat,gps_lon,gps_valid,ekf_x,ekf_y,ekf_yaw,gps_course,lon_imu,lon_gps,gps_weight,pitch_corr,pitch_conf,roll_corr,roll_conf,tilt_x,tilt_y,device_time_ms,lap_time_ms,lap_count,lap_flags,last_lap_ms,best_lap_ms,gps_age_ms,imu_age_ms,timing_revision,gps_boot_id,gps_rmc_seq,gps_host_parse_us,gps_receiver_utc_us_of_day,gps_receiver_date_ddmmyy,gps_utc_fractional_digits,synthetic\n'+samples.filter(r=>r.rowType!==1).map(r=>keys.map(k=>Number.isFinite(r[k])?r[k]:'').join(',')).join('\n')+'\n';
+    return (includeHeader?'time,speed,ax,ay,wz,mode,lat_g,lon_g,gps_lat,gps_lon,gps_valid,ekf_x,ekf_y,ekf_yaw,gps_course,lon_imu,lon_gps,gps_weight,pitch_corr,pitch_conf,roll_corr,roll_conf,tilt_x,tilt_y,device_time_ms,lap_time_ms,lap_count,lap_flags,last_lap_ms,best_lap_ms,gps_age_ms,imu_age_ms,timing_revision,gps_boot_id,gps_rmc_seq,gps_host_parse_us,gps_receiver_utc_us_of_day,gps_receiver_date_ddmmyy,gps_utc_fractional_digits,synthetic\n':'')+samples.filter(r=>r.rowType!==1).map(r=>keys.map(k=>Number.isFinite(r[k])?r[k]:'').join(',')).join('\n')+'\n';
 }
 
 async function exportCSV(){
@@ -1381,20 +1387,41 @@ async function exportSessionById(targetId,gpsOnly=false,runsOnly=false){
     if(!db)await openDB();
     if(chunkWrite){try{await chunkWrite}catch(e){console.warn('Exporting pending samples after storage failure',e)}}
     const pending=targetId===sessionId?chunkBuffer.slice():[];
-    const tx=db.transaction(['sessions','chunks'],'readonly');
-    const session=await idbPromise(tx.objectStore('sessions').get(targetId));
-    if(!session)throw new Error('Session not found');
-    const idx=tx.objectStore('chunks').index('sessionId');
-    const chunks=await idbPromise(idx.getAll(targetId));
-    chunks.sort((a,b)=>a.chunkIndex-b.chunkIndex);
-    if(!chunks.length&&!pending.length)throw new Error('No data in recording');
-    let allData=[];chunks.forEach(c=>allData=allData.concat(c.data||[]));allData=allData.concat(pending);
-    const exported=allData.filter(r=>gpsOnly?r.rowType===1:r.rowType!==1);
-    if(!exported.length)throw Error(gpsOnly?'No GPS timestamp evidence in this recording. Use updated firmware and record while connected.':'No dashboard samples in recording');
-    const csv=runsOnly?runsToCSV(allData):gpsOnly?gpsSamplesToCSV(exported):samplesToCSV(exported);
-    const b=new Blob([csv],{type:'text/csv'}),u=URL.createObjectURL(b),a=document.createElement('a');
+    const serialize=gpsOnly?gpsSamplesToCSV:samplesToCSV;
+    // Output bytes remain in memory, but no whole-recording raw row array is built.
+    const parts=runsOnly?[]:[serialize([]).slice(0,-1)],detectors=runsOnly?createRunExportDetectors():null;
+    let session,sampleCount=0,matching=0,chunkCount=0;
+    const append=rows=>{
+        sampleCount+=rows.length;
+        if(runsOnly){for(const row of rows){if(gpsOnly?row.rowType===1:row.rowType!==1)matching++;for(const detector of detectors)detector.update(row)}}
+        else{const selected=rows.filter(row=>gpsOnly?row.rowType===1:row.rowType!==1);matching+=selected.length;if(selected.length)parts.push(serialize(selected,false))}
+    };
+    await new Promise((resolve,reject)=>{
+        const tx=db.transaction(['sessions','chunks'],'readonly');
+        let failure=null;
+        const fail=error=>{failure=error;try{tx.abort()}catch{reject(error)}};
+        tx.oncomplete=resolve;tx.onerror=tx.onabort=()=>reject(failure||tx.error||Error('Recording export failed'));
+        const request=tx.objectStore('sessions').get(targetId);
+        request.onsuccess=()=>{
+            try{
+                session=request.result;if(!session){fail(Error('Session not found'));return}
+                // The composite primary key is [sessionId,chunkIndex]; a prefix range
+                // visits only this recording, in numeric chunk order, in this snapshot.
+                const cursorRequest=tx.objectStore('chunks').openCursor(IDBKeyRange.bound([targetId],[targetId,[]]));
+                cursorRequest.onsuccess=()=>{
+                    const cursor=cursorRequest.result;if(!cursor)return;
+                    try{chunkCount++;append(cursor.value.data||[]);cursor.continue()}catch(error){fail(error)}
+                };
+            }catch(error){fail(error)}
+        };
+    });
+    append(pending);
+    if(!chunkCount&&!pending.length)throw new Error('No data in recording');
+    if(!matching)throw Error(gpsOnly?'No GPS timestamp evidence in this recording. Use updated firmware and record while connected.':'No dashboard samples in recording');
+    if(runsOnly)parts.push(runExportToCSV(detectors));
+    const b=new Blob(parts,{type:'text/csv'}),u=URL.createObjectURL(b),a=document.createElement('a');
     a.href=u;a.download=(runsOnly?'blackbox_runs_':gpsOnly?'blackbox_gps_':'blackbox_')+new Date(targetId).toISOString().slice(0,19).replace(/[T:]/g,'-')+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(u),30000);
-    return{session,sampleCount:allData.length};
+    return{session,sampleCount};
 }
 
 async function clearAllRecordings(){
@@ -1436,10 +1463,11 @@ async function getCombinedStorageStats(){
     return{totalBytes:recStats.totalBytes+trackStats.totalBytes,recordingsBytes:recStats.totalBytes,tracksBytes:trackStats.totalBytes,sessionCount:recStats.sessionCount,trackCount:trackStats.tracks.length}
 }
 
-async function deleteTrackWithRef(trackId){
+async function deleteTrackWithRef(trackId){return queueTrackCommand(()=>deleteTrackCommand(trackId))}
+async function deleteTrackCommand(trackId){
     trackAutoDetector.beginTrackChange();
     try{
-        if(activeTrack&&activeTrack.id===trackId&&await deactivateTrack()===false)throw new Error('Track retained: device timing is still active');
+        if(activeTrack&&activeTrack.id===trackId&&await deactivateTrackCommand()===false)throw new Error('Track retained: device timing is still active');
         if(!trackDb)await openTrackDB();
         await commitTrackWrite(['tracks','reference_laps','lap_history'],tx=>{
             tx.objectStore('tracks').delete(trackId);
@@ -1451,10 +1479,11 @@ async function deleteTrackWithRef(trackId){
     }finally{trackAutoDetector.endTrackChange()}
 }
 
-async function clearAllTracks(){
+async function clearAllTracks(){return queueTrackCommand(()=>clearAllTracksCommand())}
+async function clearAllTracksCommand(){
     trackAutoDetector.beginTrackChange();
     try{
-        if(activeTrack&&await deactivateTrack()===false)throw new Error('Tracks retained: device timing is still active');
+        if(activeTrack&&await deactivateTrackCommand()===false)throw new Error('Tracks retained: device timing is still active');
         if(!trackDb)await openTrackDB();
         await commitTrackWrite(['tracks','reference_laps','lap_history'],tx=>{
             for(const name of ['tracks','reference_laps','lap_history'])tx.objectStore(name).clear();
@@ -1489,28 +1518,34 @@ function formatDuration(ms){
 // TrackRecorder - Adaptive sampling for track recording with corner state machine
 // ARCHITECTURE: Uses GPS lat/lon as ground truth for position. Computes local coordinates
 // from GPS using gpsRef (stored at recording start), NOT EKF x,y which are session-specific.
+function validGpsCoordinates(lat,lon){return Number.isFinite(lat)&&Math.abs(lat)<=90&&Number.isFinite(lon)&&Math.abs(lon)<=180}
+function validGpsOrigin(ref){return !!ref&&validGpsCoordinates(ref.lat,ref.lon)&&Math.abs(ref.lat)<90}
+function gpsCapturePoint(pos){return pos?.valid!==false&&validGpsCoordinates(pos?.lat,pos?.lon)?{lat:pos.lat,lon:pos.lon}:null}
 class TrackRecorder{
     constructor(){this.config={minDistance:2,maxDistance:30,headingThreshold:0.15,cornerEntryThreshold:0.025,cornerExitThreshold:0.012,minCornerLength:3,minLoopDistance:150,closeProximity:12};this.reset()}
-    reset(){this.recording=false;this.trackType='loop';this.gpsRef=null;this.startPos=null;this.startGps=null;this.startHeading=0;this.startTime=0;this.keyPoints=[];this.rawSamples=[];this.lastPos=null;this.lastGps=null;this.lastSigma=3.0;this.totalDistance=0;this.gpsDistance=0;this.loopDetected=false;this.inCorner=false;this.cornerCount=0;this.cornerEntryDist=0;this.speedGate=false}
+    reset(){this.recording=false;this.trackType='loop';this.gpsRef=null;this.startPos=null;this.startGps=null;this.startHeading=0;this.startMono=null;this.keyPoints=[];this.rawSamples=[];this.lastPos=null;this.lastGps=null;this.lastSigma=3.0;this.totalDistance=0;this.gpsDistance=0;this.loopDetected=false;this.inCorner=false;this.cornerCount=0;this.cornerEntryDist=0;this.speedGate=false}
     // Convert GPS lat/lon to local coordinates using gpsRef
-    _gpsToLocal(lat,lon){if(!this.gpsRef||!lat||!lon||lat===0||lon===0)return null;const latRad=this.gpsRef.lat*Math.PI/180;return{x:(lon-this.gpsRef.lon)*Math.cos(latRad)*111320,y:(lat-this.gpsRef.lat)*111320}}
-    start(pos,trackType='loop',gpsRef=null){if(this.recording)return false;this.reset();this.recording=true;this.trackType=trackType;this.gpsRef=gpsRef;
+    _gpsToLocal(lat,lon){if(!validGpsOrigin(this.gpsRef)||!validGpsCoordinates(lat,lon))return null;const latRad=this.gpsRef.lat*Math.PI/180;return{x:(lon-this.gpsRef.lon)*Math.cos(latRad)*111320,y:(lat-this.gpsRef.lat)*111320}}
+    start(pos,trackType='loop',gpsRef=null){if(this.recording)return false;this.reset();this.recording=true;this.trackType=trackType;this.gpsRef=validGpsOrigin(gpsRef)?gpsRef:null;
         // Compute local coords from GPS (preferred) or fall back to EKF if no gpsRef
-        let localX=pos.x,localY=pos.y;
-        if(gpsRef&&pos.lat&&pos.lon){const local=this._gpsToLocal(pos.lat,pos.lon);if(local){localX=local.x;localY=local.y}}
-        this.startPos={x:localX,y:localY};this.startGps={lat:pos.lat||0,lon:pos.lon||0};this.startHeading=pos.heading||0;this.startTime=Date.now();this.keyPoints.push({x:localX,y:localY,lat:pos.lat||0,lon:pos.lon||0,heading:pos.heading||0,speed:pos.speed||0,sigma:pos.sigma||3.0,t:Date.now(),curvature:0,isCorner:false});this.lastPos={x:localX,y:localY,heading:pos.heading||0};this.lastGps={lat:pos.lat||0,lon:pos.lon||0};return true}
+        let localX=pos.x,localY=pos.y;const gps=gpsCapturePoint(pos);
+        if(this.gpsRef&&gps){const local=this._gpsToLocal(pos.lat,pos.lon);if(local){localX=local.x;localY=local.y}}
+        if(!Number.isFinite(localX)||!Number.isFinite(localY)){this.recording=false;return false}
+        this.startPos={x:localX,y:localY};this.startGps=gps;this.startHeading=pos.heading||0;this.startMono=performance.now();this.keyPoints.push({x:localX,y:localY,lat:gps?.lat??null,lon:gps?.lon??null,heading:pos.heading||0,speed:pos.speed||0,sigma:pos.sigma||3.0,t:Date.now(),curvature:0,isCorner:false});this.lastPos={x:localX,y:localY,heading:pos.heading||0};this.lastGps=gps;return true}
     _gpsDistanceMeters(lat1,lon1,lat2,lon2){const latRad=lat1*Math.PI/180;const dy=(lat2-lat1)*111320;const dx=(lon2-lon1)*Math.cos(latRad)*111320;return Math.sqrt(dx*dx+dy*dy)}
     addSample(pos){if(!this.recording||!this.lastPos)return{stored:false};
     // Compute local coords from GPS (preferred) or fall back to EKF
-    let localX=pos.x,localY=pos.y;
-    if(this.gpsRef&&pos.lat&&pos.lon){const local=this._gpsToLocal(pos.lat,pos.lon);if(local){localX=local.x;localY=local.y}}
-    // Check loop closure using GPS coordinates (EKF position can diverge, GPS is ground truth)
-    if(this.trackType==='loop'&&this.gpsDistance>=this.config.minLoopDistance&&this.startGps&&pos.lat&&pos.lon){const dts=this._gpsDistanceMeters(pos.lat,pos.lon,this.startGps.lat,this.startGps.lon);if(dts<this.config.closeProximity){this.loopDetected=true;return{stored:true,loopDetected:true,stats:this.getStats()}}}
+    let localX=pos.x,localY=pos.y;const gps=gpsCapturePoint(pos);
+    if(this.gpsRef&&gps){const local=this._gpsToLocal(pos.lat,pos.lon);if(local){localX=local.x;localY=local.y}}
+    if(!gps)this.lastGps=null; // Never bridge missing/invalid GPS with a later fix.
+    if(!Number.isFinite(localX)||!Number.isFinite(localY))return{stored:false,stats:this.getStats()};
+    // Check loop closure using receiver coordinates; finite zero is a valid position.
+    if(this.trackType==='loop'&&this.gpsDistance>=this.config.minLoopDistance&&this.startGps&&gps){const dts=this._gpsDistanceMeters(pos.lat,pos.lon,this.startGps.lat,this.startGps.lon);if(dts<this.config.closeProximity){this.loopDetected=true;return{stored:true,loopDetected:true,stats:this.getStats()}}}
     // Speed gate - skip samples while stationary (but loop check already ran above)
-    const spd=pos.speed||0;if(!this.speedGate){if(spd<2.0)return{stored:false,stats:this.getStats()};this.speedGate=true;this.lastPos={x:localX,y:localY,heading:pos.heading||0};this.lastGps={lat:pos.lat||0,lon:pos.lon||0};if(this.keyPoints.length<=1){this.startHeading=pos.heading||0}}else{if(spd<0.5){this.speedGate=false;return{stored:false,stats:this.getStats()}}}const sigma=pos.sigma||3.0;this.lastSigma=sigma;const dx=localX-this.lastPos.x,dy=localY-this.lastPos.y,dist=Math.sqrt(dx*dx+dy*dy);if(dist<0.5)return{stored:false,stats:this.getStats()};const speedBasedMinDist=Math.max(this.config.minDistance,pos.speed*0.1);const headingChange=Math.abs(this._wrapAngle(pos.heading-this.lastPos.heading));const shouldStore=dist>=speedBasedMinDist||headingChange>=this.config.headingThreshold||dist>=this.config.maxDistance;if(!shouldStore)return{stored:false,stats:this.getStats()};const curvature=dist>0.1?headingChange/dist:0;let isCorner=false;if(!this.inCorner){if(curvature>this.config.cornerEntryThreshold){this.inCorner=true;this.cornerEntryDist=this.totalDistance;isCorner=true}}else{isCorner=true;if(curvature<this.config.cornerExitThreshold){const cornerLength=this.totalDistance-this.cornerEntryDist;if(cornerLength>=this.config.minCornerLength)this.cornerCount++;this.inCorner=false}}this.keyPoints.push({x:localX,y:localY,lat:pos.lat||0,lon:pos.lon||0,heading:pos.heading||0,speed:pos.speed||0,sigma:sigma,t:Date.now(),curvature:curvature,isCorner:isCorner});this.totalDistance+=dist;if(this.lastGps&&pos.lat&&pos.lon){this.gpsDistance+=this._gpsDistanceMeters(pos.lat,pos.lon,this.lastGps.lat,this.lastGps.lon)}this.lastPos={x:localX,y:localY,heading:pos.heading||0};this.lastGps={lat:pos.lat||0,lon:pos.lon||0};if(this.trackType==='loop'){const lr=this._checkLoopClosure(pos);if(lr.detected){this.loopDetected=true;return{stored:true,loopDetected:true,stats:this.getStats()}}}return{stored:true,curvature:curvature,isCorner:isCorner,stats:this.getStats()}}
-    _checkLoopClosure(pos){if(this.gpsDistance<this.config.minLoopDistance)return{detected:false};if(!this.startGps||!pos.lat||!pos.lon)return{detected:false};const dts=this._gpsDistanceMeters(pos.lat,pos.lon,this.startGps.lat,this.startGps.lon);return dts<this.config.closeProximity?{detected:true}:{detected:false}}
+    const spd=pos.speed||0;if(!this.speedGate){if(spd<2.0)return{stored:false,stats:this.getStats()};this.speedGate=true;this.lastPos={x:localX,y:localY,heading:pos.heading||0};this.lastGps=gps;if(this.keyPoints.length<=1){this.startHeading=pos.heading||0}}else{if(spd<0.5){this.speedGate=false;return{stored:false,stats:this.getStats()}}}const sigma=pos.sigma||3.0;this.lastSigma=sigma;const dx=localX-this.lastPos.x,dy=localY-this.lastPos.y,dist=Math.sqrt(dx*dx+dy*dy);if(dist<0.5)return{stored:false,stats:this.getStats()};const speedBasedMinDist=Math.max(this.config.minDistance,pos.speed*0.1);const headingChange=Math.abs(this._wrapAngle(pos.heading-this.lastPos.heading));const shouldStore=dist>=speedBasedMinDist||headingChange>=this.config.headingThreshold||dist>=this.config.maxDistance;if(!shouldStore)return{stored:false,stats:this.getStats()};const curvature=dist>0.1?headingChange/dist:0;let isCorner=false;if(!this.inCorner){if(curvature>this.config.cornerEntryThreshold){this.inCorner=true;this.cornerEntryDist=this.totalDistance;isCorner=true}}else{isCorner=true;if(curvature<this.config.cornerExitThreshold){const cornerLength=this.totalDistance-this.cornerEntryDist;if(cornerLength>=this.config.minCornerLength)this.cornerCount++;this.inCorner=false}}this.keyPoints.push({x:localX,y:localY,lat:gps?.lat??null,lon:gps?.lon??null,heading:pos.heading||0,speed:pos.speed||0,sigma:sigma,t:Date.now(),curvature:curvature,isCorner:isCorner});this.totalDistance+=dist;if(this.lastGps&&gps){this.gpsDistance+=this._gpsDistanceMeters(pos.lat,pos.lon,this.lastGps.lat,this.lastGps.lon)}this.lastPos={x:localX,y:localY,heading:pos.heading||0};this.lastGps=gps;if(this.trackType==='loop'){const lr=this._checkLoopClosure(pos);if(lr.detected){this.loopDetected=true;return{stored:true,loopDetected:true,stats:this.getStats()}}}return{stored:true,curvature:curvature,isCorner:isCorner,stats:this.getStats()}}
+    _checkLoopClosure(pos){if(this.gpsDistance<this.config.minLoopDistance)return{detected:false};if(!this.startGps||!gpsCapturePoint(pos))return{detected:false};const dts=this._gpsDistanceMeters(pos.lat,pos.lon,this.startGps.lat,this.startGps.lon);return dts<this.config.closeProximity?{detected:true}:{detected:false}}
     _wrapAngle(a){while(a>Math.PI)a-=2*Math.PI;while(a<-Math.PI)a+=2*Math.PI;return a}
-    getStats(){const displayCorners=this.inCorner?this.cornerCount+1:this.cornerCount;return{recording:this.recording,trackType:this.trackType,keyPointCount:this.keyPoints.length,totalDistance:this.totalDistance,loopDetected:this.loopDetected,elapsedMs:this.recording?Date.now()-this.startTime:0,gpsQuality:this._gpsQualityRating(this.lastSigma),corners:displayCorners,inCorner:this.inCorner}}
+    getStats(){const displayCorners=this.inCorner?this.cornerCount+1:this.cornerCount;return{recording:this.recording,trackType:this.trackType,keyPointCount:this.keyPoints.length,totalDistance:this.totalDistance,loopDetected:this.loopDetected,elapsedMs:this.recording?Math.max(0,performance.now()-this.startMono):0,gpsQuality:this._gpsQualityRating(this.lastSigma),corners:displayCorners,inCorner:this.inCorner}}
     _gpsQualityRating(sigma){if(sigma<2.5)return'excellent';if(sigma<4.0)return'good';if(sigma<6.0)return'fair';return'poor'}
     cancel(){this.recording=false}
     // Finish recording - uses this.gpsRef (set at start) as the coordinate reference
@@ -1535,8 +1570,8 @@ let currentSessionId=null,currentSessionStart=null;
 // - Converting GPS to local coords for track map display
 // - Track auto-detection (matching current position to saved tracks)
 let jsGpsRef=null,jsGpsRefSamples=[],firmwareGpsRef=null,firmwareGpsRefFetching=false;
-function updateJsGpsRef(lat,lon){if(jsGpsRef||lat===0||lon===0)return;jsGpsRefSamples.push({lat,lon});if(jsGpsRefSamples.length>=5){const avgLat=jsGpsRefSamples.reduce((s,p)=>s+p.lat,0)/5;const avgLon=jsGpsRefSamples.reduce((s,p)=>s+p.lon,0)/5;jsGpsRef={lat:avgLat,lon:avgLon}}}
-async function fetchFirmwareGpsRef(){if(firmwareGpsRef||firmwareGpsRefFetching)return;firmwareGpsRefFetching=true;try{const r=await requestDevice('/api/diagnostics');const d=await r.json();if(d.gps&&d.gps.ref_lat&&d.gps.ref_lon&&d.gps.ref_lat!==0){firmwareGpsRef={lat:d.gps.ref_lat,lon:d.gps.ref_lon};console.log('Firmware GPS ref:',firmwareGpsRef)}}catch(e){console.warn('Failed to fetch firmware GPS ref:',e)}finally{firmwareGpsRefFetching=false}}
+function updateJsGpsRef(lat,lon){if(jsGpsRef||!validGpsOrigin({lat,lon}))return;jsGpsRefSamples.push({lat,lon});if(jsGpsRefSamples.length>=5){const avgLat=jsGpsRefSamples.reduce((s,p)=>s+p.lat,0)/5;const avgLon=jsGpsRefSamples.reduce((s,p)=>s+p.lon,0)/5;jsGpsRef={lat:avgLat,lon:avgLon}}}
+async function fetchFirmwareGpsRef(){if(firmwareGpsRef||firmwareGpsRefFetching)return;firmwareGpsRefFetching=true;try{const r=await requestDevice('/api/diagnostics');const d=await r.json();if(d.gps&&validGpsOrigin({lat:d.gps.ref_lat,lon:d.gps.ref_lon})&&(d.gps.warmup===true||(d.gps.warmup===undefined&&d.gps.ref_lat!==0&&d.gps.ref_lon!==0))){firmwareGpsRef={lat:d.gps.ref_lat,lon:d.gps.ref_lon};console.log('Firmware GPS ref:',firmwareGpsRef)}}catch(e){console.warn('Failed to fetch firmware GPS ref:',e)}finally{firmwareGpsRefFetching=false}}
 // Use firmware GPS reference for coordinates (fall back to jsGpsRef if not available)
 function getGpsRef(){return firmwareGpsRef||jsGpsRef}
 function gpsToLocal(lat,lon,ref=getGpsRef()){if(!ref)return null;const latRad=ref.lat*Math.PI/180;return{x:(lon-ref.lon)*Math.cos(latRad)*111320,y:(lat-ref.lat)*111320}}
@@ -1977,8 +2012,7 @@ async function renderTrackList(){
 
 async function handleTrackAction(action,id){
     if(action==='use'){
-        const t=await getTrack(id);
-        if(t)await activateTrack(t);
+        await activateSavedTrack(id);
         closeTrackModal();
     }else if(action==='delete'){
         if(confirm('Delete this track and all lap history?')){
@@ -2101,7 +2135,26 @@ async function clearTrackHistoryConfirm(id){
     }
 }
 
-async function activateTrack(track){
+// Track command ownership. Configuration and its UI publication have one ordered owner.
+let trackCommandTail=Promise.resolve();
+function queueTrackCommand(command){
+    const result=trackCommandTail.then(command);
+    // A rejected command must not prevent later selections or Stop from running.
+    trackCommandTail=result.catch(()=>{});
+    return result;
+}
+async function activateTrack(track){return activateSavedTrack(track.id)}
+async function activateSavedTrack(id){return queueTrackCommand(async()=>{
+    // Suggestions and route-save continuations can hold an object across queued deletion.
+    // Only the currently saved row may configure timing, including its saved isNew state.
+    let track;
+    try{track=await getTrack(id)}catch(error){alert('Could not load the saved track. '+error.message);return false}
+    if(!track){alert('This track is no longer saved. Choose another track.');return false}
+    return activateTrackCommand(track);
+})}
+async function deactivateTrack(){return queueTrackCommand(()=>deactivateTrackCommand())}
+
+async function activateTrackCommand(track){
     const isP2P=track.type==='point_to_point';
     // Track must have gpsOrigin to convert timing line to GPS coordinates
     if(!track.gpsOrigin){alert('Track missing GPS origin. Cannot activate.');return}
@@ -2143,14 +2196,16 @@ async function activateTrack(track){
         const r=await requestDevice(url);
         const j=await r.json();
         if(!r.ok||j.error){alert('Failed to configure lap timer: '+(j.error||r.status));return}
+        // Do not expose a new owner with the previous track's reference while storage waits.
+        let loadedReference=null;
+        try{loadedReference=await getRefLap(track.id)}catch(e){console.warn('Reference lap unavailable:',e)}
         expectedLapRevision=j.revision??null;
-        activeTrack={...track,startLine:line,finishLine:finLine};$('lap-result').hidden=true;lapResultGeneration++;
+        activeTrack={...track,startLine:line,finishLine:finLine};referenceLap=loadedReference;
+        $('lap-result').hidden=true;lapResultGeneration++;
         suppressStartLineIndicator=false;
         p2pNeedsWarmup=isP2P&&track.isNew;
-        // Start new session for lap history
+        // Publish the history owner, reference, tracker and labels without another await.
         startNewSession();
-        // Load reference lap for delta calculation
-        try{referenceLap=await getRefLap(track.id);if(referenceLap)console.log('Reference lap loaded:',fmtLapTime(referenceLap.lapTimeMs))}catch(e){referenceLap=null}
         // Initialize lap tracker
         if(!lapTracker)lapTracker=new LapTracker();lapTracker.reset();lastDeltaMs=0;deltaTrend=0;
         // Update delta bar display
@@ -2182,7 +2237,7 @@ async function activateTrack(track){
     }catch(e){alert('Failed to configure lap timer: '+e.message)}finally{trackAutoDetector.endTrackChange()}
 }
 
-async function deactivateTrack(){
+async function deactivateTrackCommand(){
     trackAutoDetector.beginTrackChange();
     try{const r=await requestDevice('/api/laptimer/configure?type=clear');if(!r.ok)throw new Error('Device rejected the request');const j=await r.json();if(j.error)throw new Error(j.error);expectedLapRevision=j.revision??null}catch(e){alert('Could not stop device timing. Reconnect and retry. '+e.message);return false}finally{trackAutoDetector.endTrackChange()}
     activeTrack=null;referenceLap=null;clearSession();$('lap-result').hidden=true;lapResultGeneration++;
@@ -2452,7 +2507,7 @@ function forcesUsable(gps,age,imuAge){return gps===1&&Number.isFinite(age)&&age>
 // Moving-sample heuristic, not a force-accuracy guarantee; callers supply metres per second.
 const SUSTAINED_EFFORT_MIN_SPEED_MPS=10/3.6;
 function sustainedEffortUsable(speedMps,gps,gpsAge,imuAge){return Number.isFinite(speedMps)&&speedMps>=SUSTAINED_EFFORT_MIN_SPEED_MPS&&forcesUsable(gps,gpsAge,imuAge)}
-function clearForces(label){trail=[];emaGx=emaGy=0;lastT=0;effortPeaks.update(0,0,false);$('force-status').textContent=label;$('lat-g').textContent=$('lon-g').textContent='—';$('maneuver').textContent='—';$('maneuver').style.color=MODE_COLORS[0];currentModeColor=getModeColorHex(0);drawG()}
+function clearForces(label){trail=[];emaGx=emaGy=0;lastT=null;effortPeaks.update(0,0,false);$('force-status').textContent=label;$('lat-g').textContent=$('lon-g').textContent='—';$('maneuver').textContent='—';$('maneuver').style.color=MODE_COLORS[0];currentModeColor=getModeColorHex(0);drawG()}
 
 function hexToRgba(hex,a){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return`rgba(${r},${g},${b},${a})`}
 function downsampleTrail(points,maxPoints){
@@ -2479,7 +2534,7 @@ function drawG(){
     // Center reference dot
     ctx.fillStyle=isDark?'rgba(255,255,255,0.12)':'rgba(0,0,0,0.08)';
     ctx.beginPath();ctx.arc(cx,cy,3,0,Math.PI*2);ctx.fill();
-    const now=Date.now(),recentTrail=trail.filter(p=>now-p.t<TRAIL_DURATION_MS);
+    const now=performance.now(),recentTrail=trail.filter(p=>now-p.t<TRAIL_DURATION_MS);
     const displayTrail=downsampleTrail(recentTrail,TRAIL_MAX_POINTS);
     if(displayTrail.length>1){
         ctx.lineCap='round';ctx.lineJoin='round';
@@ -2578,10 +2633,13 @@ function renderPerformanceRuns(){
     $('run-status').textContent=rec?selectedRunDetector.status:last?(last.synthetic?'SIM example · see Saved data':'Recording stopped'):'Record to collect receiver timestamps';
 }
 function runsToCSV(rows){
-    const detectors=runIntervals.map(interval=>new RollingRuns(interval));for(const row of rows)for(const d of detectors)d.update(row);
+    const detectors=createRunExportDetectors();for(const row of rows)for(const d of detectors)d.update(row);
+    return runExportToCSV(detectors);
+}
+function createRunExportDetectors(){return runIntervals.map(interval=>new RollingRuns(interval))}
+function runExportToCSV(detectors){
     for(const d of detectors)if(d.attempt)d.abort('Recording ended before completion');
     const detector={results:detectors.flatMap(d=>d.results),dropped:detectors.reduce((n,d)=>n+d.dropped,0)};
-    if(detector.attempt)detector.abort('Recording ended before completion');
     const header='interval,status,reason,seconds,start_utc_us,end_utc_us,start_seq,end_seq,boot_id,date_ddmmyy,synthetic';
     if(detector.dropped)throw Error('More than 1000 attempts: export GPS CSV for full evidence instead.');
     if(!detector.results.length)throw Error('No rolling interval attempts found in GPS evidence. No result has been invented.');
@@ -2716,7 +2774,7 @@ $('g-card').addEventListener('touchend',event=>{
 if(typeof ResizeObserver!=='undefined')new ResizeObserver(()=>{resize();drawG()}).observe(cv.parentElement);
 
 let maximumFreshSpeed=null;
-let speed_ema=0,displaySessionStart=Date.now();
+let speed_ema=0,displaySessionStart=performance.now();
 // Speed display preferences. Stored/data-processing units remain unchanged.
 let speedUnit='km/h';try{if(localStorage.getItem('blackbox-speed-unit')==='mph')speedUnit='mph'}catch{}
 function speedForDisplay(kmh,unit=speedUnit){return Math.round(kmh/(unit==='mph'?1.609344:1))}
@@ -2732,7 +2790,7 @@ $('menu-units').onclick=()=>{speedUnit=speedUnit==='mph'?'km/h':'mph';try{localS
 renderSpeedUnits();
 // End speed display preferences.
 
-let emaGx=0,emaGy=0,lastT=0;
+let emaGx=0,emaGy=0,lastT=null;
 const EMA_TAU=0.07;
 let lastGpsState=0;
 let fusion={lon_imu:0,lon_gps:0,gps_wt:0,gps_rate:0,pitch_c:0,pitch_cf:0,roll_c:0,roll_cf:0,tilt_x:0,tilt_y:0};
@@ -2878,7 +2936,7 @@ function resetState(){
     $('speed').classList.remove('peak');
     trail=[];currentScale=1;
     $('range-val').textContent='Scale '+currentScale.toFixed(1)+' g';
-    emaGx=emaGy=0;displaySessionStart=Date.now();effortPeaks.reset();
+    emaGx=emaGy=0;lastT=null;displaySessionStart=performance.now();effortPeaks.reset();
     $('speed-maximum').textContent='—';
     for(const id of ['effort-accel','effort-brake','effort-left','effort-right'])$(id).textContent='—';
     drawG();
@@ -2934,10 +2992,12 @@ function process(buf,timing=null){
     // Detection is a suggestion only; async lookup and presentation recheck fresh current context.
     trackAutoDetector.check().then(detected=>{if(detected)showTrackDetectedToast(detected.track,detected.generation)}).catch(()=>{});
 
-    const now=Date.now();
-    if(lastT&&now-lastT>250){trail=[];emaGx=emaGy=0;effortPeaks.update(0,0,false)}
-    const dt=lastT?Math.min((now-lastT)/1000,0.2):0.033;
-    lastT=now;
+    const now=Date.now(); // Preserve calendar receipt time in raw recording rows.
+    const motionNow=performance.now(),motionElapsed=lastT===null?null:motionNow-lastT;
+    const motionGap=motionElapsed!==null&&(motionElapsed<0||motionElapsed>250);
+    if(motionGap){trail=[];emaGx=emaGy=0;effortPeaks.update(0,0,false)}
+    const dt=motionElapsed===null||motionGap?0.033:Math.min(motionElapsed/1000,0.2);
+    lastT=motionNow;
     const alpha=1-Math.exp(-dt/EMA_TAU);
     emaGx=alpha*latg+(1-alpha)*emaGx;
     emaGy=alpha*lng+(1-alpha)*emaGy;
@@ -2982,7 +3042,7 @@ function process(buf,timing=null){
     // Vehicle acceleration convention: right = positive lateral, accel = positive
     // longitudinal; braking is drawn upward, matching the plot's text labels.
     if(forcesUsable(gpsOk,timing?.gps_age_ms,timing?.imu_age_ms)){
-        trail.push({x:gx,y:-gy,t:now});trail=trail.filter(p=>now-p.t<TRAIL_DURATION_MS);
+        trail.push({x:gx,y:-gy,t:motionNow});trail=trail.filter(p=>motionNow-p.t<TRAIL_DURATION_MS);
         $('force-status').textContent=Math.hypot(gx,gy)>currentScale?'Over scale · tap scale':'';
     }else clearForces(gpsOk!==1||!Number.isFinite(timing?.gps_age_ms)||timing.gps_age_ms>300?'Waiting for fresh GPS':!Number.isFinite(timing?.imu_age_ms)?'IMU freshness unavailable':'Waiting for fresh IMU');
 
@@ -3245,6 +3305,12 @@ function readRecordingBackup(scope){
         session.onsuccess=()=>{if(session.result)result.sessions=[session.result]};chunks.onsuccess=()=>{result.chunks=chunks.result};
     });
 }
+function portableRecordingChunk(chunk){
+    // IndexedDB preserves explicit undefined properties from optional telemetry
+    // fields. JSON does not; encode missing evidence as null before validation.
+    // Leave nonfinite numbers and other invalid values for the validator to reject.
+    return{...chunk,data:chunk.data.map(row=>Object.fromEntries(Object.entries(row).map(([key,value])=>[key,value===undefined?null:value])))};
+}
 async function createBackup(scope='all'){
     backupIdle();
     // A visibility-change save may detach the buffer while database reads wait.
@@ -3264,17 +3330,17 @@ async function createBackup(scope='all'){
     if(existing&&metadata&&(metadata.status!=='pending'||!existing.recordingMetadata||existing.recordingMetadata.status==='pending'))existing.recordingMetadata=metadata;
     if(existing&&drive)existing.drive=recoverDrive(drive);
     for(const row of recording.sessions){const failed=failedRecordingMetadata.get(row.sessionId);if(failed)row.recordingMetadata=failed}
-    const value={format:BACKUP_FORMAT,version:BACKUP_VERSION,createdAt:new Date().toISOString(),data:{sessions:recording.sessions,chunks:recording.chunks,tracks:track.tracks,references:track.reference_laps.map(portableReference),history:track.lap_history}};
+    const value={format:BACKUP_FORMAT,version:BACKUP_VERSION,createdAt:new Date().toISOString(),data:{sessions:recording.sessions,chunks:recording.chunks.map(portableRecordingChunk),tracks:track.tracks,references:track.reference_laps.map(portableReference),history:track.lap_history}};
     value.checksum=backupChecksum(value.data);validateBackup(value);return value;
 }
 function makeRestorePlan(value,existingSessions,token,now){
     const summary=validateBackup(value),data=value.data,used=new Set(existingSessions.map(s=>s.sessionId)),ids=new Map();let next=existingSessions.reduce((highest,s)=>Math.max(highest,s.sessionId),now);
     for(const session of data.sessions){do{next++}while(used.has(next));backupCheck(Number.isSafeInteger(next),'session ID capacity exceeded');ids.set(session.sessionId,next);used.add(next)}
-    const trackIds=new Map(data.tracks.map((t,i)=>[t.id,'restore_'+token+'_'+i]));
+    const trackIds=new Map(data.tracks.map((t,i)=>[t.id,'restore_'+token+'_'+i])),restoredSuffix=' (restored)';
     return{summary,recordingsDone:false,tracksDone:false,
         sessions:data.sessions.map(s=>({...s,...(s.drive?{drive:recoverDrive(s.drive)}:{}),sessionId:ids.get(s.sessionId),status:'complete',restoredFrom:s.sessionId,restoredAt:now})),
         chunks:data.chunks.map(c=>({...c,sessionId:ids.get(c.sessionId)})),
-        tracks:data.tracks.map(t=>({...t,id:trackIds.get(t.id),name:t.name+' (restored)',modified:now})),
+        tracks:data.tracks.map(t=>({...t,id:trackIds.get(t.id),name:t.name.slice(0,1000-restoredSuffix.length)+restoredSuffix,modified:now})),
         references:data.references.map((r,i)=>({...r,id:'restore_ref_'+token+'_'+i,trackId:trackIds.get(r.trackId),samples:new Float32Array(r.samples).buffer})),
         history:data.history.map((l,i)=>({...l,id:'restore_lap_'+token+'_'+i,trackId:trackIds.get(l.trackId),sessionId:'restore_session_'+token+'_'+l.sessionId}))};
 }
@@ -3609,13 +3675,27 @@ $('drive-tracks').onclick=()=>openTrackModal();
 $('drive-data').onclick=()=>openDataModal();
 $('quick-data').onclick=openDataModal;
 
+// Numeric width changes only at digit boundaries; no layout reads or text truncation.
+const timingDigits=new Map();
+function sizeTimingDigits(element){
+    const length=Math.max(1,element.textContent.length);
+    if(timingDigits.get(element)===length)return;
+    timingDigits.set(element,length);element.style.setProperty('--timing-chars',String(length));
+}
+const timingDigitObserver=new MutationObserver(records=>{
+    for(const record of records){const element=record.target.nodeType===3?record.target.parentElement:record.target;if(timingDigits.has(element))sizeTimingDigits(element)}
+});
+for(const id of ['lap-time','best-lap','last-lap','lap-delta','delta-text']){
+    const element=$(id);sizeTimingDigits(element);timingDigitObserver.observe(element,{childList:true,characterData:true,subtree:true});
+}
+
 // Init
 setInterval(checkTelemetryFreshness,100);
 let lastRateUpdateAt=performance.now();
 setInterval(()=>{
     const rateNow=performance.now(),elapsed=rateNow-lastRateUpdateAt;
     $('hz').textContent=elapsed>0?(cnt*1000/elapsed).toFixed(1):'0';cnt=0;lastRateUpdateAt=rateNow;
-    $('session-time').textContent=fmtTime(Date.now()-displaySessionStart);
+    $('session-time').textContent=fmtTime(Math.max(0,performance.now()-displaySessionStart));
     if(lastGpsState){$('gpsDot').classList.add('on');$('gpsHz').textContent='GPS '+Math.round(fusion.gps_rate)}
     else{$('gpsDot').classList.remove('on');$('gpsHz').textContent='GPS --'}
     $('cluster-link').textContent=$('stxt').textContent;$('cluster-gps').textContent=$('gpsHz').textContent;$('cluster-rec').textContent=$('cluster-recording').textContent;$('cluster-rec').classList.toggle('recording',rec);

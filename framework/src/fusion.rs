@@ -759,8 +759,8 @@ fn wrap_angle(angle: f32) -> f32 {
 /// Problem: EKF yaw is measured from the heading at boot time (arbitrary reference).
 /// GPS course is absolute (0 = North, clockwise). Comparing them directly causes bugs.
 ///
-/// Solution: Learn the offset between them when GPS course is reliable (moving).
-/// Then always output `heading = ekf_yaw + offset` for a consistent absolute reference.
+/// Solution: First convert mathematical yaw to compass basis (`π/2 - yaw`),
+/// then learn the remaining reference offset when GPS course is usable (moving).
 ///
 /// ## When to learn
 /// - Speed > 5 m/s (GPS course is reliable)
@@ -768,12 +768,13 @@ fn wrap_angle(angle: f32) -> f32 {
 /// - After GPS warmup is complete
 ///
 /// ## How it works
-/// 1. When conditions are met, compute offset = GPS_course - EKF_yaw
-/// 2. Use EMA filter to smooth the offset (handles noise)
-/// 3. After initial learning, use smaller alpha for stability
-/// 4. Output aligned_heading = EKF_yaw + offset (always in absolute reference)
+/// 1. Convert EKF yaw (counterclockwise) to compass basis (clockwise)
+/// 2. When conditions are met, compute offset = GPS_course - compass_basis
+/// 3. Use EMA filter to smooth the offset (handles noise)
+/// 4. After initial learning, use smaller alpha for stability
+/// 5. Output aligned_heading = compass_basis + offset
 pub struct HeadingAligner {
-    /// Learned offset: GPS_course - EKF_yaw (radians)
+    /// Learned reference offset after converting yaw to compass basis (radians)
     offset: f32,
     /// Is the offset valid (learned at least once)?
     valid: bool,
@@ -817,7 +818,7 @@ impl HeadingAligner {
     /// Update offset learning (call at telemetry rate)
     ///
     /// # Arguments
-    /// * `ekf_yaw` - EKF yaw estimate in radians
+    /// * `ekf_yaw` - Mathematical EKF yaw in radians (positive counterclockwise)
     /// * `speed` - Vehicle speed in m/s
     /// * `dt` - Time step in seconds
     ///
@@ -831,9 +832,10 @@ impl HeadingAligner {
             return false;
         }
 
-        // Compute offset: GPS_course - EKF_yaw
+        // A reference offset cannot change handedness: convert before learning.
         // Handle wrap-around properly
-        let new_offset = angle_diff(self.last_gps_course, ekf_yaw);
+        let compass_basis = wrap_angle(core::f32::consts::FRAC_PI_2 - ekf_yaw);
+        let new_offset = angle_diff(self.last_gps_course, compass_basis);
 
         if !self.valid {
             // First learning - use new_offset directly
@@ -863,16 +865,18 @@ impl HeadingAligner {
     /// Get aligned heading (EKF yaw transformed to absolute reference)
     ///
     /// # Arguments
-    /// * `ekf_yaw` - Current EKF yaw estimate in radians
+    /// * `ekf_yaw` - Mathematical EKF yaw in radians (positive counterclockwise)
     ///
     /// # Returns
     /// Aligned heading in radians (0 = North, positive clockwise)
-    /// Returns ekf_yaw unchanged if offset not yet learned
+    /// Without learned alignment, returns the compass-basis conversion only;
+    /// its absolute reference is still unverified.
     pub fn get_aligned_heading(&self, ekf_yaw: f32) -> f32 {
+        let compass_basis = wrap_angle(core::f32::consts::FRAC_PI_2 - ekf_yaw);
         if self.valid {
-            wrap_angle(ekf_yaw + self.offset)
+            wrap_angle(compass_basis + self.offset)
         } else {
-            ekf_yaw
+            compass_basis
         }
     }
 
@@ -991,7 +995,7 @@ impl SensorFusion {
     /// * `az_raw` - Raw Z acceleration in body frame (m/s²)
     /// * `ahrs_roll_deg` - AHRS roll angle in degrees
     /// * `ahrs_pitch_deg` - AHRS pitch angle in degrees
-    /// * `yaw` - Vehicle yaw angle (rad, from EKF or magnetometer)
+    /// * `yaw` - Mathematical yaw angle (rad, positive counterclockwise)
     /// * `speed` - Vehicle speed (m/s)
     /// * `yaw_rate` - Earth-vertical angular velocity (rad/s), not body gyro Z
     /// * `dt` - Time step (seconds)
@@ -1292,7 +1296,8 @@ impl SensorFusion {
     /// Check if heading alignment is valid
     ///
     /// Returns true if the offset between EKF yaw and GPS course has been learned.
-    /// If false, get_aligned_heading() returns raw EKF yaw (arbitrary reference).
+    /// If false, get_aligned_heading() converts the yaw basis only; its absolute
+    /// reference remains unverified.
     pub fn is_heading_aligned(&self) -> bool {
         self.heading_aligner.is_valid()
     }
@@ -2297,8 +2302,7 @@ mod tests {
     fn test_heading_aligner_learns_offset() {
         let mut aligner = HeadingAligner::new();
 
-        // Simulate: GPS course = 0.5 rad (North-ish), EKF yaw = 0 rad
-        // Expected offset = 0.5 - 0 = 0.5 rad
+        // Yaw=0 has east-pointing compass basis π/2; GPS reports course 0.5.
         aligner.update_gps_course(0.5);
 
         // Update with EKF yaw at good speed
@@ -2307,8 +2311,8 @@ mod tests {
         assert!(learned, "Should learn on first update");
         assert!(aligner.is_valid());
         assert!(
-            (aligner.get_offset() - 0.5).abs() < 0.01,
-            "Offset should be ~0.5, got {}",
+            (aligner.get_offset() - (0.5 - core::f32::consts::FRAC_PI_2)).abs() < 0.01,
+            "Offset should account for the compass basis, got {}",
             aligner.get_offset()
         );
     }
@@ -2317,11 +2321,11 @@ mod tests {
     fn test_heading_aligner_aligned_heading() {
         let mut aligner = HeadingAligner::new();
 
-        // Learn offset: GPS=1.0, EKF=0.3 → offset=0.7
+        // Learn the remaining offset after converting EKF mathematical yaw.
         aligner.update_gps_course(1.0);
         aligner.update(0.3, 10.0, 0.05);
 
-        // Aligned heading should be EKF + offset
+        // Aligned heading should match the training GPS observation.
         let aligned = aligner.get_aligned_heading(0.3);
         assert!(
             (aligned - 1.0).abs() < 0.01,
@@ -2329,11 +2333,11 @@ mod tests {
             aligned
         );
 
-        // Different EKF yaw should also be offset
+        // Increasing mathematical yaw decreases clockwise compass heading.
         let aligned2 = aligner.get_aligned_heading(0.5);
         assert!(
-            (aligned2 - 1.2).abs() < 0.01,
-            "Aligned heading for 0.5 should be ~1.2: got {}",
+            (aligned2 - 0.8).abs() < 0.01,
+            "Aligned heading for 0.5 should be ~0.8: got {}",
             aligned2
         );
     }
@@ -2342,13 +2346,11 @@ mod tests {
     fn test_heading_aligner_handles_wrap_around() {
         let mut aligner = HeadingAligner::new();
 
-        // GPS course = -3.0 rad (near -π), EKF yaw = 3.0 rad (near +π)
-        // Both represent similar directions but wrap around
-        aligner.update_gps_course(-3.0);
-        aligner.update(3.0, 10.0, 0.05);
+        // GPS course near +π, compass-converted yaw near -π.
+        aligner.update_gps_course(3.0);
+        aligner.update(-1.7, 10.0, 0.05);
 
-        // Offset should be small (wrapping difference, not 6.0)
-        // angle_diff(-3.0, 3.0) = -3.0 - 3.0 + 2π = 0.28 rad
+        // The residual should be small across the compass wrap boundary.
         let offset = aligner.get_offset();
         assert!(
             offset.abs() < 1.0,
@@ -2404,7 +2406,7 @@ mod tests {
 
         // GPS course changes slightly (vehicle turned)
         aligner.update_gps_course(0.6);
-        aligner.update(0.1, 10.0, 0.05);
+        aligner.update(-0.1, 10.0, 0.05);
 
         // Offset should update via EMA
         let new_offset = aligner.get_offset();
@@ -2507,7 +2509,7 @@ mod tests {
         // Drive around (heading changes)
         for i in 0..100 {
             let gps_course = (i as f32 * 0.06) % (2.0 * core::f32::consts::PI); // Varies
-            let ekf_yaw = 2.0 + (i as f32 * 0.06) % (2.0 * core::f32::consts::PI);
+            let ekf_yaw = 2.0 - (i as f32 * 0.06) % (2.0 * core::f32::consts::PI);
             fusion.process_gps_heading(gps_course);
             fusion.process_imu(0.0, 0.0, G, 0.0, 0.0, ekf_yaw, 15.0, 0.3, 0.05, false);
         }
