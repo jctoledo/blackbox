@@ -173,7 +173,7 @@ test('capture completion during backup reads keeps the completed envelope instea
 
 test('production missing GPS metadata remains portable from committed rows and recovery tails',async()=>{
  for(const committed of [false,true]){
-  const c=context();c.db=await database();c.trackDb=await database(true);c.rec=true;c.sessionId=100;c.sessionStart=100;c.lastSaveTime=Date.now();c.now=Date.now();c.MAX_PENDING_SAMPLES=6000;c.CHUNK_INTERVAL=5000;c.d={getUint32:()=>123};c.timing={gps_event:null,gps_boot_id:1};c.fusion={};
+  const c=context();c.db=await database();c.trackDb=await database(true);c.rec=true;c.sessionId=100;c.sessionStart=100;c.lastSaveTime=Date.now();c.now=Date.now();c.MAX_PENDING_SAMPLES=6000;c.CHUNK_INTERVAL=5000;c.recordingSaveDue=()=>false;c.d={getUint32:()=>123};c.timing={gps_event:null,gps_boot_id:1};c.fusion={};
   for(const key of ['lapTimeMs','lapCnt','lapFlags','sp','ax','ay','wz','mo','latg','lng','lat','lon','gpsOk','ekfX','ekfY','ekfYaw','gpsCourse'])c[key]=0;
   vm.runInContext(slice('    // Recording\n    if(rec){','\n}\n\n// Read the complete bounded body'),c);c.rec=false;
   const original=c.chunkBuffer[0];assert.equal(Object.hasOwn(original,'gpsSeq'),true);assert.equal(original.gpsSeq,undefined);
