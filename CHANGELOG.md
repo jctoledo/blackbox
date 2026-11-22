@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Renamed `neo6m` driver to `ublox-gps` to reflect support for multiple u-blox GPS modules (NEO-6M, NEO-M9N, etc.)
+- Updated driver documentation with UBX protocol examples and dynamic platform models
+
+### Removed
+- Obsolete documentation files (RELEASE.md, IMPLEMENTATION_SUMMARY.md, release-notes.md)
+
+## [0.0.4-rc.13] - 2026-11-21
+
+### Added
+- Maintainer-reviewed PR CI on lat publishes an exact-commit status with a build link; stale heads and fork sources are refused before execution. Existing main, release and website checks remain on lat.
+
 ### Fixed
 - Backups retain missing optional telemetry as null, including recordings started before GPS messages arrive and unsaved recovery tails; original browser data is unchanged. Restored track-copy names stay within the backup format's length limit so they can be backed up again.
 - Break gross GPS position jumps before they can start or finish timing; retain the raw receiver events for diagnosis. The generous displacement guard is heuristic and does not establish physical timing accuracy (#125).
@@ -18,13 +30,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Recording saves and save-age labels use monotonic elapsed time, so phone clock corrections cannot postpone persistence until the pending-data cap or trigger premature saves. Raw calendar timestamps remain intact.
 - Serialize track arming, Stop and track deletion commands, publishing the selected track, reference and revision together after storage lookup so rapid selections cannot mix timing owners (#127).
 - Keep long elapsed, history and numeric delta values inside their landscape columns without dropping digits or milliseconds; ordinary typography and compact warning layouts retain their existing sizes (#141).
-
-### Changed
-- Renamed `neo6m` driver to `ublox-gps` to reflect support for multiple u-blox GPS modules (NEO-6M, NEO-M9N, etc.)
-- Updated driver documentation with UBX protocol examples and dynamic platform models
-
-### Removed
-- Obsolete documentation files (RELEASE.md, IMPLEMENTATION_SUMMARY.md, release-notes.md)
 
 ## [0.0.4-rc.12] - 2026-11-21
 
