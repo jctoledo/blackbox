@@ -17,15 +17,41 @@ async function loadVerifiedFirmware(project, fetcher = fetch, cryptoApi = crypto
     if (digest !== manifest.sha256) throw new Error('Firmware checksum mismatch. No data was written.');
     return {manifest, blob:new Blob([data],{type:'application/octet-stream'})};
 }
-function createBlackboxFlasher(Flasher, project) {
-    return new Flasher({chip:'esp32c3',firmwareUrl:project.firmwareUrl,firmwareOffset:0});
+function flashTransportMode(nav, secure) {
+    if (!secure) return null;
+    // Android's native Web Serial can expose Bluetooth without exposing USB.
+    const android=/Android/i.test(nav.userAgent || '') || nav.userAgentData?.platform === 'Android';
+    if (android) return nav.usb ? 'usb' : null;
+    if (nav.usb && !nav.serial) return 'usb';
+    return nav.serial ? 'serial' : null;
 }
-if (typeof module !== 'undefined') module.exports={loadVerifiedFirmware,createBlackboxFlasher};
-if (typeof document !== 'undefined') {
+async function prepareFlashTransport(nav, secure, loadUsb=()=>import('./vendor/usb-serial.mjs')) {
+    const kind=flashTransportMode(nav,secure);
+    if (!kind) return null;
+    if (kind==='serial') return {kind,requestPort:()=>nav.serial.requestPort()};
+    // Preload before enabling Connect: USB permission needs the click's activation.
+    const {requestUsbSerialPort}=await loadUsb();
+    return {kind,requestPort:()=>requestUsbSerialPort()};
+}
+function createBlackboxFlasher(Flasher, project, transport) {
+    const flasher=new Flasher({chip:'esp32c3',firmwareUrl:project.firmwareUrl,firmwareOffset:0});
+    if (transport) {
+        // The pinned toolkit exposes DeviceConnection and accepts an existing port.
+        // Keep its state machine, chip detection and mismatch refusal intact.
+        const device=flasher.getDevice(),connect=device.connect.bind(device);
+        device.connect=async(chip,options={})=>{
+            const port=await transport.requestPort();
+            return connect(chip,{...options,port});
+        };
+    }
+    return flasher;
+}
+if (typeof module !== 'undefined') module.exports={loadVerifiedFirmware,createBlackboxFlasher,flashTransportMode,prepareFlashTransport};
+async function initializeBlackboxFlasher(prepareTransport=prepareFlashTransport) {
     const $=id=>document.getElementById(id);
     const select=$('project-select'),button=$('flash-button'),status=$('status-box');
     const Flasher=window.ESPWebFlash?.ESPFlasher;
-    const supported=!!navigator.serial&&!!Flasher&&!!window.isSecureContext;
+    let transport=null,supported=false;
     let flasher=null,firmware=null,selection=0,busy=false,completed=false;
     const message=(title,detail,state='')=>{
         status.className='status-box '+state;
@@ -55,7 +81,7 @@ if (typeof document !== 'undefined') {
         try{
             const verified=await loadVerifiedFirmware(project);
             if(generation!==selection)return;
-            firmware=verified;flasher=createBlackboxFlasher(Flasher,project);
+            firmware=verified;flasher=createBlackboxFlasher(Flasher,project,transport);
             flasher.addEventListener('log',e=>log(e.detail.message));
             flasher.addEventListener('progress',e=>message('Writing '+e.detail.percent+'%','Keep the USB cable connected.','flashing'));
             flasher.addEventListener('disconnected',()=>{if(!busy){message('Device disconnected','Reconnect to continue.');refresh();}});
@@ -70,20 +96,39 @@ if (typeof document !== 'undefined') {
         busy=true;refresh();
         try{
             if(!flasher.isConnected()){
-                message('Connecting','Select your ESP32-C3 serial port.');
+                message('Connecting',transport.kind==='usb'?'Select your ESP32-C3 USB device and allow access.':'Select your ESP32-C3 serial port.');
                 await flasher.connect();
                 message('Ready to install '+firmware.manifest.version,'Flashing replaces the full device image, including saved device configuration. Browser recordings are unaffected.','connected');
             }else{
-                await flasher.flash({customFirmware:firmware.blob,firmwareOffset:0});
+                let wakeLock;
+                try {
+                    try {wakeLock=await navigator.wakeLock?.request('screen');} catch (_) { /* Keep-screen-on advice remains visible. */ }
+                    await flasher.flash({customFirmware:firmware.blob,firmwareOffset:0});
+                } finally {try {await wakeLock?.release();} catch (_) { /* Best effort. */ }}
                 completed=true;
                 message('Firmware installed','Press RESET or reconnect USB. Keep the unit still during calibration.','success');
                 await flasher.disconnect();
             }
-        }catch(e){message('Could not finish',e.message.includes('imeout')?'Hold BOOT, tap RESET, release BOOT, and retry. Close other serial monitors.':e.message,'error');log(e.message);}
+        }catch(e){
+            await flasher.disconnect();
+            const detail=e.name==='NotFoundError'?'No device selected. Tap Connect device to try again.':
+                e.name==='NotAllowedError'||e.name==='SecurityError'?'USB access was denied. Allow this website to access the ESP, then reconnect.':
+                e.message.includes('imeout')?'Hold BOOT, tap RESET, release BOOT, and retry. Close other serial monitors.':
+                e.message+' Check the USB data cable and phone USB host/OTG support, then reconnect.';
+            message('Could not finish',detail,'error');log(e.message);
+        }
         finally{busy=false;refresh();}
     });
     $('dev-toggle').addEventListener('click',()=>$('dev-panel').classList.toggle('active'));
     window.addEventListener('scroll',()=>$('nav').classList.toggle('scrolled',window.scrollY>50));
-    if(!supported)message('Browser flashing unavailable',!navigator.serial?'Use desktop Chrome or Edge with Web Serial. You can also download the release and flash from the command line.':'The flashing library could not load, or this page is not secure. Reload over HTTPS.','error');
+    refresh();
+    message('Loading USB support','Keep this page open while the installer loads.');
+    try {
+        transport=await prepareTransport(navigator,window.isSecureContext);
+        supported=!!transport&&!!Flasher;
+        if (supported) message('Ready to install',transport.kind==='usb'?'Android USB ready. Select the NEO-M9N firmware for an M9N receiver.':'Select firmware to begin.');
+        else message('Browser flashing unavailable',!window.isSecureContext?'Open this installer over HTTPS.':!Flasher?'The flashing library could not load. Reload and try again.':'Use Android Chrome with USB host/OTG, or desktop Chrome/Edge. iPhone USB flashing is not supported.','error');
+    } catch(e) {message('USB support could not load','Check your internet connection and reload this page.','error');log(e.message);}
     refresh();
 }
+if (typeof document !== 'undefined') initializeBlackboxFlasher();

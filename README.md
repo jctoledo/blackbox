@@ -48,7 +48,7 @@ Active development. Automated physics, crossing replay, protocol, and browser re
 
 The installer writes a complete merged image at address `0x0`, including the device configuration area. It does not erase recordings stored in your browser. The download is served by this project’s Pages site, with SHA-256 verification before writing.
 
-*Use desktop Chrome or Edge with Web Serial. If connection times out: hold BOOT, tap RESET, release BOOT, and retry. Close other serial monitors. See the release notes before installing.*
+*Use Chrome on Android with USB host/OTG and a data-capable USB cable, or desktop Chrome/Edge with Web Serial. On Android, allow USB access and keep Chrome foregrounded with the screen awake. Select **NEO-M9N / 25 Hz** for the M9N receiver. Load the installer using mobile data or another internet connection before joining Blackbox Wi-Fi. If connection times out: hold BOOT, tap RESET, release BOOT, and retry. Close other serial monitors. See the release notes before installing.*
 
 ### Option B: Build from Source
 

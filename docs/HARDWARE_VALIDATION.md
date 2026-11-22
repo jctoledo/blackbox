@@ -29,6 +29,7 @@ Use this checklist for a specific board, wiring revision, GPS receiver, mounting
 - [ ] Cancel the serial-port picker, then retry. The page must remain usable.
 - [ ] Flash the correct ESP32-C3 using a data cable; record whether BOOT/RESET is required.
 - [ ] Reset after completion. Confirm firmware boots, the expected Wi-Fi mode appears, and the dashboard loads.
+- [ ] On Android Chrome with a USB host/OTG data cable, select the M9N image and confirm the USB picker appears even when native Web Serial exposes only Bluetooth. Record phone/OS/browser and board USB chip. Exercise picker cancellation, denied permission, unplug/reconnect and retry, then complete write/reset/boot and confirm the M9N firmware version. Check keep-screen-awake behavior; no phone/board pair is validated solely by driver or browser mocks.
 - [ ] Reconnect after an interrupted connection without writing to an unintended port.
 - [ ] If a different ESP chip is available, verify rejection before any erase/write. Do not use a valuable device merely to perform this negative test.
 
