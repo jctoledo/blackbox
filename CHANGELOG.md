@@ -15,6 +15,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Obsolete documentation files (RELEASE.md, IMPLEMENTATION_SUMMARY.md, release-notes.md)
 
+## [0.0.4-rc.17] - 2026-11-22
+
+### Fixed
+- Detect the M9N receiver's current UART baud, including previously saved and legacy 9600 settings, before configuration. Verify baud migration and ACK/read back a RAM-only startup profile; report failure instead of claiming GPS flash was saved.
+- Limit default M9N serial traffic to navigation-rate RMC plus roughly 1 Hz GGA/GSA, with GSV/GLL/VTG disabled and continuous operation selected. Keep the 25 Hz target while avoiding unnecessary default satellite-message traffic.
+- Increase GPS RX buffering, observe UART loss/error events, distinguish empty reads from errors, and break parser/timing continuity after known loss.
+
+### Added
+- Phone Diagnostics shows startup verification, selected UART baud, UART errors, checksum rejects and active/inactive RMC counts. Recording details preserve verified startup metadata.
+
+### Validation
+- Software and simulated receiver checks do not establish physical phone/receiver/antenna acceptance or prove that every reported drive dropout had the same cause.
+
 ## [0.0.4-rc.16] - 2026-11-22
 
 ### Fixed

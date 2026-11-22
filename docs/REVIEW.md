@@ -295,3 +295,13 @@ The integrated production preview was checked at 390×844, 667×375, 844×390 an
 Fresh demo startup was additionally verified with the actual storage guard, which caught the initialization-order integration defect described above. Native portrait/cluster, summary, recovery and Diagnostics screenshots are refreshed without stretching. The image check now reads JPEG as well as PNG dimensions, closing the previous PNG-only coverage gap. These are software/desktop-preview checks, not physical readability, phone endurance, sensor accuracy or mounting acceptance.
 
 The final focus edge test also starts a dialog with a visible but nonfocusable page body as its opener. The previous visible-only filter left focus in the hidden dialog; fallback now requires a keyboard-focusable control. This is a source/DOM focus invariant, not a claim about a particular phone browser.
+
+## M9N field dropout follow-up (2026-11-22)
+
+Two private Session/GPS CSV pairs showed continuous phone telemetry and fresh IMU data, intermittent 40 ms GPS epochs, and long periods of inactive RMC status. Every captured active RMC was accepted; no exported GPS-log sequence was missing. This does not rule out upstream UART loss. Unchanged wiring and a previously working locally built v0.0.3 warranted a firmware audit before attributing the problem to reception or car power.
+
+Local `target` artifacts were host builds; GPS compile settings were not recovered from shell/session history. The working local v0.0.3 configuration therefore remains unknown. Its published workflow defaults do not establish what the local build used.
+
+The M9N path assumed factory baud despite persistent prior configuration, never consumed ACK/readback, left message rates at receiver defaults while selecting high navigation rate, and silently lacked UART error evidence. rc.17 replaces that startup path with bounded baud discovery, verified RAM-only settings, a reduced default traffic profile and UART diagnostics. These correct concrete firmware weaknesses; they are not proof that receiver-declared invalid fixes were caused by UART saturation. Retain that distinction in follow-up measurements.
+
+Primary references: [NEO-M9N integration manual](https://content.u-blox.com/sites/default/files/NEO-M9N_Integrationmanual_UBX-19014286.pdf), especially configuration ACKs, default output traffic and UART bandwidth; [M9 SPG 4.04 interface description](https://content.u-blox.com/sites/default/files/u-blox-M9-SPG-4.04_InterfaceDescription_UBX-21022436.pdf) for configuration keys and VALSET/VALGET formats.

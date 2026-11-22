@@ -41,6 +41,7 @@
 
 #![cfg_attr(not(any(test, feature = "std")), no_std)]
 
+pub mod setup;
 pub mod ubx;
 
 // Import libm for no-std floating point operations
@@ -185,6 +186,7 @@ pub struct NmeaParser {
     /// Flag set when a new valid RMC fix is received (cleared by take_new_fix)
     new_fix_available: bool,
     rmc_timing: RmcTiming,
+    checksum_rejections: u32,
 }
 
 impl NmeaParser {
@@ -213,6 +215,7 @@ impl NmeaParser {
             position_based_speed: 0.0,
             new_fix_available: false,
             rmc_timing: RmcTiming::default(),
+            checksum_rejections: 0,
         }
     }
 
@@ -254,6 +257,18 @@ impl NmeaParser {
 
     pub fn rmc_timing(&self) -> RmcTiming {
         self.rmc_timing
+    }
+
+    pub fn checksum_rejections(&self) -> u32 {
+        self.checksum_rejections
+    }
+
+    /// Drop a partial sentence and retained validity after known UART data loss.
+    /// Reference/warmup history remains available; a new valid RMC can recover.
+    pub fn invalidate_stream(&mut self) {
+        self.line_len = 0;
+        self.last_fix.valid = false;
+        self.new_fix_available = false;
     }
 
     /// Get reference point (if warmup complete)
@@ -393,6 +408,7 @@ impl NmeaParser {
         // Validate NMEA checksum before parsing
         // Format: $GPRMC,...*XX where XX is hex checksum
         if !validate_nmea_checksum(line) {
+            self.checksum_rejections = self.checksum_rejections.saturating_add(1);
             #[cfg(feature = "logging")]
             warn!("NMEA checksum failed, rejecting: {}", line);
             return;

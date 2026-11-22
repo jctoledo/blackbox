@@ -676,6 +676,13 @@ body.cluster-view .bbDeltaBar:not(.no-ref) .bbDeltaText{font-size:min(clamp(24px
         <div class="bbRow"><span class="bbLbl">Satellites</span><span class="bbVal bbNum" id="gps-sats">--</span></div>
         <div class="bbRow"><span class="bbLbl">HDOP</span><span class="bbVal bbNum" id="gps-hdop">--</span></div>
         <div class="bbRow"><span class="bbLbl">Warmup</span><span class="bbVal" id="gps-warmup">--</span></div>
+        <div class="bbRow"><span class="bbLbl">Receiver setup</span><span class="bbVal" id="gps-setup">--</span></div>
+        <div class="bbRow"><span class="bbLbl">UART baud</span><span class="bbVal bbNum" id="gps-uart-baud">--</span></div>
+        <div class="bbRow"><span class="bbLbl">UART overflow / full</span><span class="bbVal bbNum" id="gps-uart-overflow">--</span></div>
+        <div class="bbRow"><span class="bbLbl">UART frame / parity</span><span class="bbVal bbNum" id="gps-uart-errors">--</span></div>
+        <div class="bbRow"><span class="bbLbl">UART read errors</span><span class="bbVal bbNum" id="gps-uart-reads">--</span></div>
+        <div class="bbRow"><span class="bbLbl">NMEA checksum rejects</span><span class="bbVal bbNum" id="gps-checksum-errors">--</span></div>
+        <div class="bbRow"><span class="bbLbl">RMC active / inactive</span><span class="bbVal bbNum" id="gps-rmc-status">--</span></div>
     </section>
     <section class="bbDiagCard">
         <div class="bbCardHead">EKF Health</div>
@@ -1071,12 +1078,12 @@ function projectRecordingSnapshot(value){
     if(!object(value)||value.version!==1||typeof value.simulated!=='boolean'||!integer(value.boot_id,0xffffffff)||!integer(value.captured_uptime_ms))fail();
     const {build:b,gps:g,imu:i,calibration:c}=value;
     if(![b,g,i,c].every(object)||!text(b.app_version)||!text(b.idf_version)||!(b.source_sha===null||typeof b.source_sha==='string'&&/^[a-fA-F0-9]{40}$/.test(b.source_sha))||b.target!=='esp32c3')fail();
-    if(!['NEO-6M','NEO-M9N','SIMULATED'].includes(g.configured_model)||g.configured_model==='SIMULATED'&&!value.simulated||!integer(g.configured_rate_hz,1000)||!g.configured_rate_hz||!integer(g.configured_uart_baud,10000000)||!g.configured_uart_baud||g.configuration_verified!==false)fail();
+    if(!['NEO-6M','NEO-M9N','SIMULATED'].includes(g.configured_model)||g.configured_model==='SIMULATED'&&!value.simulated||!integer(g.configured_rate_hz,1000)||!g.configured_rate_hz||!integer(g.configured_uart_baud,10000000)||!g.configured_uart_baud||typeof g.configuration_verified!=='boolean')fail();
     if(i.model!=='WT901'||i.transport!=='uart'||!(i.configured_uart_baud===null||integer(i.configured_uart_baud,10000000)&&i.configured_uart_baud>0)||!['pending','header_probe','fallback'].includes(i.baud_selection)||i.baud_selection==='pending'&&i.configured_uart_baud!==null||i.configured_output_rate_hz!==null)fail();
     const bias=c.accelerometer_bias_mps2,mount=c.mount_alignment;
     if(bias!==null&&(!object(bias)||!['x','y','z'].every(k=>Number.isFinite(bias[k])&&Math.abs(bias[k])<=3.4028234663852886e38)))fail();
     if(mount!==null&&(!object(mount)||typeof mount.is_calibrated!=='boolean'||!Number.isFinite(mount.yaw_offset_rad)||Math.abs(mount.yaw_offset_rad)>3.4028234663852886e38))fail();
-    return{version:1,simulated:value.simulated,boot_id:value.boot_id,captured_uptime_ms:value.captured_uptime_ms,build:{app_version:b.app_version,idf_version:b.idf_version,source_sha:b.source_sha,target:b.target},gps:{configured_model:g.configured_model,configured_rate_hz:g.configured_rate_hz,configured_uart_baud:g.configured_uart_baud,configuration_verified:false},imu:{model:i.model,transport:i.transport,configured_uart_baud:i.configured_uart_baud,baud_selection:i.baud_selection,configured_output_rate_hz:null},calibration:{accelerometer_bias_mps2:bias===null?null:{x:bias.x,y:bias.y,z:bias.z},mount_alignment:mount===null?null:{is_calibrated:mount.is_calibrated,yaw_offset_rad:mount.yaw_offset_rad}}};
+    return{version:1,simulated:value.simulated,boot_id:value.boot_id,captured_uptime_ms:value.captured_uptime_ms,build:{app_version:b.app_version,idf_version:b.idf_version,source_sha:b.source_sha,target:b.target},gps:{configured_model:g.configured_model,configured_rate_hz:g.configured_rate_hz,configured_uart_baud:g.configured_uart_baud,configuration_verified:g.configuration_verified},imu:{model:i.model,transport:i.transport,configured_uart_baud:i.configured_uart_baud,baud_selection:i.baud_selection,configured_output_rate_hz:null},calibration:{accelerometer_bias_mps2:bias===null?null:{x:bias.x,y:bias.y,z:bias.z},mount_alignment:mount===null?null:{is_calibrated:mount.is_calibrated,yaw_offset_rad:mount.yaw_offset_rad}}};
 }
 function projectRecordingMetadata(value){
     if(!value||!Number.isSafeInteger(value.requestedAt)||value.requestedAt<0)throw Error('Invalid recording metadata time');
@@ -3266,6 +3273,19 @@ async function poll(){
 }
 
 // Diagnostics polling
+// Startup readback and observed UART events; no continuous-verification claim.
+function renderGpsTransport(t){
+    const count=v=>Number.isSafeInteger(v)&&v>=0?String(v):'--';
+    const setup=$('gps-setup');
+    setup.textContent=!t?'Unavailable':t.configuration_verified?'Verified at startup':t.setup_error?'Failed: '+t.setup_error:'Not verified';
+    setup.className='bbVal '+(t?.configuration_verified?'ok':t?.setup_error?'err':'warn');
+    $('gps-uart-baud').textContent=t?.uart_baud?count(t.uart_baud):'--';
+    $('gps-uart-overflow').textContent=t?count(t.fifo_overflows)+' / '+count(t.buffer_full):'--';
+    $('gps-uart-errors').textContent=t?count(t.frame_errors)+' / '+count(t.parity_errors):'--';
+    $('gps-uart-reads').textContent=t?count(t.read_errors):'--';
+    $('gps-checksum-errors').textContent=t?count(t.checksum_rejections):'--';
+    $('gps-rmc-status').textContent=t?count(t.active_rmc)+' / '+count(t.inactive_rmc):'--';
+}
 function rateClass(actual,expected){const pct=actual/expected;if(pct>=0.9)return'ok';if(pct>=0.5)return'warn';return'err'}
 async function updateDiag(){
     try{
@@ -3289,6 +3309,7 @@ async function updateDiag(){
         $('ekf-per-gps').textContent=d.sensor_rates.ekf_per_gps.toFixed(1);
         $('gps-fix').textContent=d.gps.fix?'Valid':'No Fix';
         $('gps-fix').className='bbVal '+(d.gps.fix?'ok':'warn');
+        renderGpsTransport(d.gps_transport);
         $('gps-sats').textContent=d.gps.satellites;
         $('gps-sats').className='bbVal bbNum '+(d.gps.satellites>=4?'ok':(d.gps.satellites>=1?'warn':'err'));
         $('gps-hdop').textContent=d.gps.hdop.toFixed(1);

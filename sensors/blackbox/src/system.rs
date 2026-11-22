@@ -301,35 +301,53 @@ impl SensorManager {
         server: Option<&TelemetryServerState>,
         diagnostics: &crate::diagnostics::DiagnosticsState,
     ) -> bool {
-        let mut buf = [0u8; 64];
+        let Self {
+            gps_uart,
+            gps_parser,
+            gps_timing,
+            stationary,
+            ..
+        } = self;
         let mut new_fix = false;
-
-        while let Ok(n) = self.gps_uart.read(&mut buf, 0) {
-            if n == 0 {
-                break;
-            }
-            for &byte in buf.iter().take(n) {
-                let before = self.gps_parser.rmc_timing().sequence;
-                if crate::gps_ingest::feed_byte(&mut self.gps_parser, byte, diagnostics) {
+        let mut active = 0;
+        let mut inactive = 0;
+        let outcome = crate::gps_rx::drain(&mut crate::gps_setup::Receiver(gps_uart), |bytes| {
+            for &byte in bytes {
+                let before = gps_parser.rmc_timing().sequence;
+                if crate::gps_ingest::feed_byte(gps_parser, byte, diagnostics) {
                     new_fix = true;
-                    let timing = self.gps_parser.rmc_timing();
+                    let timing = gps_parser.rmc_timing();
                     if timing.sequence != before {
-                        let host_us = unsafe { esp_idf_svc::sys::esp_timer_get_time() as u64 };
-                        let fix = *self.gps_parser.last_fix();
-                        self.gps_timing.push(fix, host_us);
-                        if fix.valid {
-                            self.record_gps_fix((host_us / 1000) as u32);
+                        if timing.status_active {
+                            active += 1;
                         } else {
-                            // Invalid and recovered fixes can share one UART batch.
-                            self.stationary.invalidate();
+                            inactive += 1;
+                        }
+                        let host_us = unsafe { esp_idf_svc::sys::esp_timer_get_time() as u64 };
+                        let fix = *gps_parser.last_fix();
+                        gps_timing.push(fix, host_us);
+                        if fix.valid {
+                            stationary.record_gps_fix((host_us / 1000) as u32);
+                        } else {
+                            stationary.invalidate();
                         }
                         if let Some(server) = server {
-                            server.record_gps_event(timing, self.gps_parser.last_fix(), host_us);
+                            server.record_gps_event(timing, gps_parser.last_fix(), host_us);
                         }
                     }
                 }
             }
+        });
+        if outcome.loss {
+            gps_parser.invalidate_stream();
+            gps_timing.invalidate();
+            stationary.invalidate();
         }
+        let mut transport = outcome.counters;
+        transport.active_rmc = active;
+        transport.inactive_rmc = inactive;
+        transport.checksum_rejections = gps_parser.checksum_rejections();
+        diagnostics.record_gps_transport(transport);
         new_fix
     }
 
