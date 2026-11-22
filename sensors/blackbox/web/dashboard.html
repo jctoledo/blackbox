@@ -980,6 +980,8 @@ function driveCalendar(date){
     const day=Math.floor(date/10000),month=Math.floor(date/100)%100,year=2000+date%100,d=new Date(Date.UTC(year,month-1,day));
     return d.getUTCFullYear()===year&&d.getUTCMonth()===month-1&&d.getUTCDate()===day;
 }
+// Keep only the six scalars needed by the next interval, never a raw row.
+function driveAnchor(row){return{sp:row.sp,gpsUtcUs:row.gpsUtcUs,gpsBootId:row.gpsBootId,gpsDate:row.gpsDate,gpsSeq:row.gpsSeq,gpsHostUs:row.gpsHostUs}}
 class DriveSession{
     constructor(owner){
         this.owner=owner;this.previous=null;this.started=false;this.mono=null;this.wall=null;
@@ -1014,11 +1016,11 @@ class DriveSession{
             const valid=r.gpsActive===1&&r.gpsAccepted===1&&Number.isFinite(r.sp)&&r.sp>=0&&r.sp<=100&&Number.isSafeInteger(r.gpsHostUs)&&r.gpsHostUs>=0&&Number.isSafeInteger(r.gpsUtcUs)&&r.gpsUtcUs>=0&&r.gpsUtcUs<86400000000&&driveCalendar(r.gpsDate)&&Number.isInteger(r.gpsFractionDigits)&&r.gpsFractionDigits>=2&&r.gpsFractionDigits<=255&&Number.isSafeInteger(r.gpsBootId)&&r.gpsBootId>=0&&r.gpsBootId<=0xffffffff&&Number.isSafeInteger(r.gpsSeq)&&r.gpsSeq>0;
             if(!valid){s.rejected.invalid++;this.previous=null;continue}
             const p=this.previous;
-            if(!p){this.previous=r;continue}
+            if(!p){this.previous=driveAnchor(r);continue}
             const dt=(r.gpsUtcUs-p.gpsUtcUs)/1e6;
             const reason=r.gpsBootId!==p.gpsBootId||r.gpsDate!==p.gpsDate||r.gpsBoundary===2?'boundary':r.gpsSeq!==p.gpsSeq+1||r.gpsMissing>0?'sequence':r.gpsHostUs<=p.gpsHostUs||dt<.02||dt>.3?'clock':Math.abs(r.sp-p.sp)/dt>15?'implausible':null;
             if(reason){s.rejected[reason]++;this.previous=null;continue}
-            s.distanceM=(s.distanceM??0)+(p.sp+r.sp)*.5*dt;s.knownGpsSeconds+=dt;s.intervalCount++;this.previous=r;
+            s.distanceM=(s.distanceM??0)+(p.sp+r.sp)*.5*dt;s.knownGpsSeconds+=dt;s.intervalCount++;this.previous=driveAnchor(r);
         }
         if(initial)s.startAfterGpsRow=s.observedGpsRows;
         return true;
