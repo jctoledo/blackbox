@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Offline Session CSV analysis now separates browser/device cadence and quality-qualified observations, handles short/legacy recordings and omits route coordinates. Removed unsupported dashboard-derived ground-truth/classifier/calibration claims and maneuver recommendations.
+
 ### Changed
 - Renamed `neo6m` driver to `ublox-gps` to reflect support for multiple u-blox GPS modules (NEO-6M, NEO-M9N, etc.)
 - Updated driver documentation with UBX protocol examples and dynamic platform models

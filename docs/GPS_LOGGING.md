@@ -42,6 +42,18 @@ Session CSV gains `gps_boot_id`, `gps_rmc_seq`, `gps_host_parse_us`, `gps_receiv
 
 ## Analyze without publishing your route
 
+For the ordinary **Session CSV**, run:
+
+```sh
+python3 tools/python/analyze_telemetry.py blackbox_session_YOUR_SESSION.csv
+```
+
+This streams a versioned JSON observation report: browser intervals, same-boot device intervals, duplicates/reversals/gaps, sample provenance, GPS/IMU freshness exclusions, qualified speed in km/h and individual force estimates in g. It emits no filename, coordinates or absolute timestamps. Missing legacy quality stays unknown; speed/force statistics require the stated freshness gates. Counts are sample counts, not time shares. Device intervals include gaps; browser clock changes are counted instead of becoming a recording duration. These individual force statistics differ from the saved Summary's sustained half-second Peaks.
+
+The former script's dashboard-speed "ground truth", classifier precision/recall, calibration judgements and threshold recommendations have been removed. Repeated receiver snapshots, phone timing and correlated estimates cannot establish those conclusions. A single sample or an empty export now produces null interval statistics rather than an exception. Preserve raw CSVs privately; sharing a reduced report still reveals driving statistics.
+
+For the separate **GPS CSV**, run:
+
 ```sh
 python3 tools/python/analyze_gps_timestamps.py blackbox_gps_YOUR_SESSION.csv
 ```
