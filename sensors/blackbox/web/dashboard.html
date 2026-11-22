@@ -2107,8 +2107,15 @@ function queueTrackCommand(command){
     trackCommandTail=result.catch(()=>{});
     return result;
 }
-async function activateTrack(track){return queueTrackCommand(()=>activateTrackCommand(track))}
-async function activateSavedTrack(id){return queueTrackCommand(async()=>{const track=await getTrack(id);if(track)return activateTrackCommand(track)})}
+async function activateTrack(track){return activateSavedTrack(track.id)}
+async function activateSavedTrack(id){return queueTrackCommand(async()=>{
+    // Suggestions and route-save continuations can hold an object across queued deletion.
+    // Only the currently saved row may configure timing, including its saved isNew state.
+    let track;
+    try{track=await getTrack(id)}catch(error){alert('Could not load the saved track. '+error.message);return false}
+    if(!track){alert('This track is no longer saved. Choose another track.');return false}
+    return activateTrackCommand(track);
+})}
 async function deactivateTrack(){return queueTrackCommand(()=>deactivateTrackCommand())}
 
 async function activateTrackCommand(track){
