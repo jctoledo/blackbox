@@ -287,7 +287,7 @@ body{font-family:Inter,-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Di
 .bbRecordStartIcon{color:#ff3b30}
 .bbRecordStartLabel{font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px}
 .bbRecordStartDesc{font-size:11px;color:var(--text-tertiary);text-align:center;line-height:1.35}
-.bbRecordOverlay{position:fixed;bottom:0;left:0;right:0;background:var(--surface);padding:24px 20px;padding-bottom:calc(24px + env(safe-area-inset-bottom, 0px));border-radius:24px 24px 0 0;box-shadow:0 -8px 32px rgba(0,0,0,0.18);z-index:250;transform:translateY(100%);transition:transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);border-top:3px solid #ff3b30}
+.bbRecordOverlay{max-height:calc(100vh - env(safe-area-inset-top,0px));max-height:calc(100dvh - env(safe-area-inset-top,0px));overflow-y:auto;overscroll-behavior:contain;scroll-padding-block:16px;position:fixed;bottom:0;left:0;right:0;background:var(--surface);padding:24px 20px;padding-bottom:calc(24px + env(safe-area-inset-bottom, 0px));padding-left:max(20px,env(safe-area-inset-left,0px));padding-right:max(20px,env(safe-area-inset-right,0px));border-radius:24px 24px 0 0;box-shadow:0 -8px 32px rgba(0,0,0,0.18);z-index:250;transform:translateY(100%);transition:transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);border-top:3px solid #ff3b30}
 .bbRecordOverlay.active{transform:translateY(0)}
 .bbRecordState{animation:fadeIn 0.25s ease-out}
 @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
@@ -310,8 +310,8 @@ body{font-family:Inter,-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Di
 .bbRecordQualityFill.poor{background:var(--red)}
 .bbRecordQualityText{font-size:11px;font-weight:600;color:var(--text-secondary);min-width:60px;text-align:right;text-transform:uppercase;letter-spacing:0.02em}
 .bbRecordHint{text-align:center;font-size:13px;color:var(--text-tertiary);margin:0 0 18px 0;line-height:1.45}
-.bbRecordActions{display:flex;gap:10px}
-.bbRecordActionBtn{flex:1;padding:14px 20px;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;text-align:center;justify-content:center;align-items:center;transition:transform 0.1s, opacity 0.15s}
+.bbRecordActions{display:flex;flex-wrap:wrap;gap:10px}
+.bbRecordActionBtn{flex:1 1 140px;min-height:44px;min-width:0;padding:14px 20px;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;text-align:center;justify-content:center;align-items:center;transition:transform 0.1s, opacity 0.15s}
 .bbRecordActionBtn:active{transform:scale(0.97)}
 .bbRecordActionBtn.secondary{background:rgba(128,128,128,0.12);color:var(--text)}
 .bbRecordActionBtn.primary{background:var(--ok);color:#fff}
@@ -443,12 +443,14 @@ body.cluster-view .bbSpeed.peak{color:var(--text);text-shadow:none}
 .bbDisplayButton{min-height:44px;padding:8px 10px;border:1px solid var(--divider);border-radius:8px;background:var(--surface);color:var(--text);font:600 12px Inter,sans-serif;cursor:pointer}.bbDisplayButton[hidden]{display:none}.bbSetupText{font-size:14px;line-height:1.6;color:var(--text-secondary)}.bbSetupText p{margin:12px 0}.bbSetupText h3{color:var(--text);font-size:16px;margin:16px 0 6px}.bbSetupActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}.bbSetupActions button{min-height:44px;padding:10px 14px;border-radius:8px;border:1px solid var(--divider);background:var(--bg);color:var(--text);font:600 13px Inter,sans-serif}.bbSetupActions button:disabled{opacity:.45}.bbSetupStatus{border-left:3px solid var(--amber);padding:10px 12px;margin:14px 0;background:var(--bg);overflow-wrap:anywhere}
 @media(max-width:420px){.bbDisplayButton{font-size:11px;padding:8px}.bbTopbar{gap:6px}.bbStatusCluster{gap:6px}}
 
+.bbDrivePanel #drive-health[data-unavailable="true"],.bbClusterRuns #run-status[data-unavailable="true"]{color:var(--amber)}
+.bbPeakScope{position:absolute;top:16px;right:14px;font:9px var(--mono);color:var(--text-tertiary);white-space:nowrap;pointer-events:none}
 .bbInstrumentReveal{display:none}.bbSpeedMaximum{font:10px var(--mono);color:var(--text-tertiary);margin-top:6px}
 body.cluster-view .bbInstrumentReveal{display:block;position:absolute;top:0;left:6px;z-index:4;min-height:44px;padding:0 10px;border:0;background:transparent;color:var(--text-secondary);font:10px var(--mono);cursor:pointer}
 body.cluster-view .bbClusterTabs{display:none;position:absolute;top:44px;left:6px;right:6px;height:44px;z-index:5;background:var(--surface);border:1px solid var(--divider);border-radius:8px}
 body.cluster-view.instrument-picker .bbClusterTabs{display:flex}
 body.cluster-view .bbGTopLeft{padding-top:48px}body.cluster-view .bbGTopLeft>.bbInstrumentLabel{display:none}
-body.cluster-view .bbPeakGrid{padding-top:48px;gap:16px}body.cluster-view .bbPeakGrid dd{font-size:clamp(28px,5vw,44px)}
+body.cluster-view .bbPeakGrid{padding-top:48px;gap:16px}body.cluster-view .bbPeakGrid dd{font-size:clamp(28px,5vw,44px)}body.cluster-view .bbClusterPeaks .bbPeakGrid dd{font-size:clamp(24px,14cqw,44px);white-space:nowrap}
 body.cluster-view.cluster-forces .bbApp .bbGPlotWrap{padding:0 4px;position:relative;inset:auto;container-type:size;display:block}
 body.cluster-view.cluster-forces .bbApp .bbGPlotFrame{position:absolute;width:min(100cqw,calc(100cqh - 32px));height:min(100cqw,calc(100cqh - 32px));max-height:none;max-width:none;transition:none;top:32px;left:50%;transform:translateX(-50%);margin:0}
 body.cluster-view.cluster-forces .bbForceTools{position:absolute;top:0;right:4px;width:auto;z-index:4}body.cluster-view.cluster-forces #force-status{position:absolute;top:44px;right:0;white-space:nowrap;font-size:9px}
@@ -588,13 +590,13 @@ body.cluster-view .bbDeltaBar:not(.no-ref) .bbDeltaText{font-size:min(clamp(24px
     </section>
     <section class="bbCard bbGCard" id="g-card">
         <button class="bbInstrumentReveal" id="instrument-reveal" aria-expanded="false" aria-label="Choose instrument">Speed ···</button><div class="bbClusterTabs" role="group" aria-label="Cluster instrument"><button id="cluster-speed" aria-pressed="true">Speed</button><button id="cluster-forces" aria-pressed="false">G-meter</button><button id="cluster-peaks" aria-pressed="false">Peaks</button><button id="cluster-runs" aria-pressed="false">Runs</button></div>
-        <div class="bbClusterRuns"><div class="bbRunTitle"><div class="bbRunChooser" id="run-chooser"><button class="bbRunChoice" id="run-interval" aria-label="Run interval: 80–120 km/h" aria-expanded="false" aria-controls="run-options">80–120 km/h</button><div class="bbRunOptions" id="run-options" role="group" aria-label="Run interval choices" hidden><button class="bbRunChoice" id="run-lower" aria-pressed="false">50–100 km/h</button><button class="bbRunChoice" id="run-overtaking" aria-pressed="true">80–120 km/h</button></div></div></div><dl class="bbPeakGrid"><div><dt>LAST</dt><dd id="run-last">—</dd></div><div><dt>BEST</dt><dd id="run-best">—</dd></div></dl><p id="run-status">Record to collect receiver timestamps</p><button class="bbRunAction" id="run-record">Record session</button><div class="bbPeakNote">GPS estimate · uncorrected<br>No distance rollout</div></div><div class="bbClusterPeaks" title="Strongest 0.5-second averages, moving samples this page session"><dl class="bbPeakGrid"><div><dt>ACCEL</dt><dd><span id="effort-accel">—</span><small> g</small></dd></div><div><dt>BRAKING</dt><dd><span id="effort-brake">—</span><small> g</small></dd></div><div><dt>LEFT</dt><dd><span id="effort-left">—</span><small> g</small></dd></div><div><dt>RIGHT</dt><dd><span id="effort-right">—</span><small> g</small></dd></div></dl></div>
+        <div class="bbClusterRuns"><div class="bbRunTitle"><div class="bbRunChooser" id="run-chooser"><button class="bbRunChoice" id="run-interval" aria-label="Run interval: 80–120 km/h" aria-expanded="false" aria-controls="run-options">80–120 km/h</button><div class="bbRunOptions" id="run-options" role="group" aria-label="Run interval choices" hidden><button class="bbRunChoice" id="run-lower" aria-pressed="false">50–100 km/h</button><button class="bbRunChoice" id="run-overtaking" aria-pressed="true">80–120 km/h</button></div></div></div><dl class="bbPeakGrid"><div><dt>LAST</dt><dd id="run-last">—</dd></div><div><dt>BEST</dt><dd id="run-best">—</dd></div></dl><p id="run-status" role="status">Record to collect receiver timestamps</p><button class="bbRunAction" id="run-record">Record session</button><div class="bbPeakNote">GPS estimate · uncorrected<br>No distance rollout</div></div><div class="bbClusterPeaks" title="Strongest 0.5-second averages, moving samples this page session"><span class="bbPeakScope">0.5 s avg · page</span><dl class="bbPeakGrid"><div><dt>ACCEL</dt><dd><span id="effort-accel">—</span><small> g</small></dd></div><div><dt>BRAKING</dt><dd><span id="effort-brake">—</span><small> g</small></dd></div><div><dt>LEFT</dt><dd><span id="effort-left">—</span><small> g</small></dd></div><div><dt>RIGHT</dt><dd><span id="effort-right">—</span><small> g</small></dd></div></dl></div>
         <div class="bbGTop">
             <div class="bbGTopLeft">
-                <div class="bbInstrumentLabel">Speed</div><div class="bbSpeedMaximum" title="Maximum speed estimate with fresh GPS, this page session">MAX <span id="speed-maximum">—</span> <span id="speed-maximum-unit">km/h</span></div><div class="bbSpeedLine"><span class="bbSpeed bbNum" id="speed">0</span><span class="bbUnit" id="speed-unit">km/h</span></div>
+                <div class="bbInstrumentLabel">Speed</div><div class="bbSpeedMaximum" title="Maximum speed estimate with fresh GPS, this page session">PAGE MAX <span id="speed-maximum">—</span> <span id="speed-maximum-unit">km/h</span></div><div class="bbSpeedLine"><span class="bbSpeed bbNum" id="speed">0</span><span class="bbUnit" id="speed-unit">km/h</span></div>
                 <div class="bbManeuver" id="maneuver">—</div>
             </div>
-            <div class="bbGTopRight"><div class="bbInstrumentLabel">Session</div><span class="bbNum" id="session-time">0:00</span></div>
+            <div class="bbGTopRight"><div class="bbInstrumentLabel">Page time</div><span class="bbNum" id="session-time">0:00</span></div>
         </div>
         <div class="bbGPlotWrap"><div class="bbForceTools"><button id="range-val" title="Cycle plot scale: 0.5, 1 or 2 g">Scale 1.0 g</button><span id="force-status">Waiting for fresh GPS</span></div>
             <div class="bbGPlotFrame">
@@ -729,7 +731,7 @@ body.cluster-view .bbDeltaBar:not(.no-ref) .bbDeltaText{font-size:min(clamp(24px
         <button class="bbMenuItem" id="menu-data">Data</button>
         <button class="bbMenuItem" id="menu-rec">Record session</button>
         <button class="bbMenuItem" id="menu-export">Export CSV</button>
-        <button class="bbMenuItem destructive" id="menu-clear" title="Resets page speed and force statistics; recording and lap history continue">Reset speed / force stats</button>
+        <button class="bbMenuItem destructive" id="menu-clear" title="Resets page speed, force statistics and page time; recording and lap history continue">Reset speed / force stats</button>
     </div>
 </div>
 
@@ -1165,7 +1167,7 @@ async function startRecording(){
         const started=Date.now(),metadata={status:'pending',requestedAt:started},id=await createRecordingSession(started,metadata);
         const owner={sessionId:id,recordingMetadata:metadata,driveSession:new DriveSession(id)};recordingContext=owner;
         owner.driveSession.apply({owner:id,type:'start',...recordingClock()});latestDriveRecording=null;
-        if(typeof resetPerformanceRuns==='function')resetPerformanceRuns();gpsCursor=null;gpsLogStatus='Waiting for GPS timestamp log…';sessionId=id;sessionStart=started;chunkIndex=0;lastSaveMono=null;rec=true;recordingError='';
+        resetGpsLogHealth(id);if(typeof resetPerformanceRuns==='function')resetPerformanceRuns();gpsCursor=null;gpsLogStatus='Waiting for GPS timestamp log…';sessionId=id;sessionStart=started;chunkIndex=0;lastSaveMono=null;rec=true;recordingError='';
         void captureRecordingMetadata(db,owner);
     }catch(e){recordingError='Storage error — recording not started';console.error(e)}
     finally{recordingBusy=false;updateRecUI()}
@@ -1228,6 +1230,24 @@ function gpsRows(batch,cursor,receivedAt){
     }
     return{rows,cursor:next};
 }
+// GPS log health core. Transport loss alone does not invalidate receiver evidence.
+const GPS_LOG_UI_FRESH_MS=2500;
+let gpsLogHealth={owner:null,state:'waiting',lastRowsMono:null};
+function resetGpsLogHealth(owner){gpsLogHealth={owner,state:'waiting',lastRowsMono:null}}
+function noteGpsLogHealth(owner,state,hasRows,now=null){
+    if(gpsLogHealth.owner!==owner)return;
+    gpsLogHealth.state=state;
+    if(hasRows){const at=now??performance.now();if(Number.isFinite(at))gpsLogHealth.lastRowsMono=at}
+}
+function gpsLogReadiness(now=performance.now()){
+    if(gpsLogHealth.owner!==sessionId)return 'Waiting for GPS timestamps';
+    if(gpsLogHealth.state==='unavailable')return 'GPS log unavailable · retrying';
+    const at=gpsLogHealth.lastRowsMono;
+    if(at===null)return 'Waiting for GPS timestamps';
+    if(!Number.isFinite(now)||now<at||now-at>GPS_LOG_UI_FRESH_MS)return 'Waiting for fresh GPS timestamps';
+    return null;
+}
+// End GPS log health core.
 async function collectGpsLog(){
     if(gpsRequest)return gpsRequest;
     if(!rec)return;
@@ -1240,10 +1260,10 @@ async function collectGpsLog(){
             if(recording!==sessionId||!rec&&!recordingBusy)return;
             const result=gpsRows(batch,gpsCursor,Date.now());
             if(chunkBuffer.length+result.rows.length>MAX_PENDING_SAMPLES){checkpointDrive(recordingContext,'interrupt');rec=false;recordingError='Recording stopped: too many unsaved samples. Keep this tab open and export.';return}
-            chunkBuffer.push(...result.rows);recordingContext?.driveSession?.apply({owner:recording,type:'gps',rows:result.rows});gpsCursor=result.cursor;if(typeof updatePerformanceRuns==='function')updatePerformanceRuns(result.rows);
-            gpsLogStatus=batch.events.length?'GPS timestamps captured with this recording. Export GPS CSV from Saved data.':'GPS log connected; waiting for receiver messages.';
+            chunkBuffer.push(...result.rows);recordingContext?.driveSession?.apply({owner:recording,type:'gps',rows:result.rows});gpsCursor=result.cursor;noteGpsLogHealth(recording,'connected',result.rows.length>0);if(typeof updatePerformanceRuns==='function')updatePerformanceRuns(result.rows);
+            gpsLogStatus=result.rows.length?'GPS timestamps captured with this recording. Export GPS CSV from Saved data.':'GPS log connected; waiting for new receiver timestamps.';
             if(chunkBuffer.length&&recordingSaveDue()&&!chunkWrite)await saveChunk();
-        }catch(error){gpsLogStatus='GPS timestamp log unavailable. Dashboard recording continues; check connection and firmware.';console.warn(error)}
+        }catch(error){if(recording===sessionId&&(rec||recordingBusy)){noteGpsLogHealth(recording,'unavailable',false);gpsLogStatus='GPS timestamp log unavailable. Dashboard recording continues; check connection and firmware.'}console.warn(error)}
         finally{updateRecUI()}
     })();
     try{await gpsRequest}finally{gpsRequest=null}
@@ -1272,7 +1292,9 @@ function renderDrive(){
     $('drive-coverage').textContent=state?(state.distanceM===null?'GPS distance unavailable':state.knownGpsSeconds.toFixed(1)+' s GPS observed · partial')+(gaps?' · excluded: '+exclusions:'')+(state.durationStatus==='uncertain'?' · duration uncertain':state.durationStatus==='checkpoint'?' · duration lower bound':''):'GPS distance uses qualified receiver evidence';
     const live=driveReadiness.at!==null&&performance.now()-driveReadiness.at<=1500;
     const storage=recordingError||(!db?'Storage unavailable':chunkWrite?'Saving…':chunkBuffer.length?'Data pending save':sessionId&&lastSaveMono!==null?'Saved in this browser':'Browser storage ready');
-    $('drive-health').textContent=rec||!state?[live?'Connected':'No fresh telemetry',live&&driveReadiness.gps?'GPS ready':'GPS waiting',live&&driveReadiness.imu?'IMU ready':'IMU waiting',storage].join(' · '):storage;
+    const evidenceHealth=rec?gpsLogReadiness():null;
+    const health=rec||!state?[live?'Connected':'No fresh telemetry',live&&driveReadiness.gps?'GPS ready':'GPS waiting',live&&driveReadiness.imu?'IMU ready':'IMU waiting',...(evidenceHealth?[evidenceHealth]:[]),storage].join(' · '):storage;
+    const healthElement=$('drive-health');if(healthElement.textContent!==health)healthElement.textContent=health;healthElement.setAttribute('data-unavailable',evidenceHealth?'true':'false');
     const button=$('drive-record');button.textContent=rec?'Stop recording':state||historical?'Record new session':'Record session';button.disabled=recordingBusy;button.classList.toggle('recording',rec);
 }
 async function loadLatestDrive(database,sessions){
@@ -2701,7 +2723,8 @@ function renderPerformanceRuns(){
     const accepted=selectedRunDetector.results.filter(r=>r.status==='accepted'),last=accepted.at(-1),best=accepted.length?Math.min(...accepted.map(r=>r.seconds)):null;
     $('run-last').textContent=last?last.seconds.toFixed(2)+' s':'—';$('run-best').textContent=best===null?'—':best.toFixed(2)+' s';
     $('run-record').textContent=rec?'Stop recording':'Record session';$('run-record').disabled=recordingBusy;
-    $('run-status').textContent=rec?selectedRunDetector.status:last?(last.synthetic?'SIM example · see Saved data':'Recording stopped'):'Record to collect receiver timestamps';
+    const readiness=rec?gpsLogReadiness():null,status=readiness||(rec?selectedRunDetector.status:last?(last.synthetic?'SIM example · see Saved data':'Recording stopped'):'Record to collect receiver timestamps');
+    const statusElement=$('run-status');if(statusElement.textContent!==status)statusElement.textContent=status;statusElement.setAttribute('data-unavailable',readiness?'true':'false');
 }
 function runsToCSV(rows){
     const detectors=createRunExportDetectors();for(const row of rows)for(const d of detectors)d.update(row);
@@ -3275,6 +3298,7 @@ async function updateDiag(){
 // Menu
 $('menu-btn').onclick=()=>$('menu-overlay').classList.add('open');
 $('menu-overlay').onclick=e=>{if(e.target===$('menu-overlay'))$('menu-overlay').classList.remove('open')};
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&$('menu-overlay').classList.contains('open')){event.preventDefault();$('menu-overlay').classList.remove('open');$('menu-btn').focus()}});
 
 $('menu-rec').onclick=$('diag-rec').onclick=async()=>{
     $('menu-overlay').classList.remove('open');

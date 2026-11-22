@@ -13,6 +13,12 @@ Tap the instrument name to reveal the picker and select Runs, or swipe horizonta
 
 This first implementation is an uncorrected GPS estimate. It is not a validated drag timer, and it does not yet implement standing-start 0–60 mph. Defining launch from noisy near-zero speed needs separate validation; a nonzero threshold must not silently be sold as a true zero-speed start. There is no distance rollout, slope correction, wind correction or vehicle-efficiency inference.
 
+## Receiver-log health
+
+Runs shows an amber status when its GPS timestamp log is unavailable or no new receiver events have arrived for more than 2.5 seconds. Ordinary dashboard telemetry can remain live during a log failure; it is a separate input. The display distinguishes waiting for initial timestamps, waiting for fresh timestamps and a failed log request. Last and best accepted results remain visible.
+
+This is a display-readiness interval, not a new timing gate. A temporary HTTP failure does not by itself invalidate a pending interval: the retained receiver window may still provide complete evidence after recovery. Existing sequence, epoch, quality and continuity rules decide the result. Late responses from a previous recording cannot replace the current recording's status. The demo menu's **Pause GPS timestamp log** control demonstrates this condition without stopping ordinary synthetic telemetry.
+
 ## Timing and rejection rules
 
 - Use receiver UTC epochs, never browser receipt times. Interpolate the start and finish between adjacent speed observations: `crossing = t0 + (threshold − speed0)/(speed1 − speed0) × (t1 − t0)`.
@@ -47,3 +53,7 @@ Replay known recordings and compare repeated controlled runs against independent
 Synthetic regressions cover exact crossing times, incomplete lead-in, threshold spikes, gaps, restarts and duplicate events. They do not establish real-drive precision, recall or F1. Hold out entire trips and use independently labelled positives and negatives before tuning or claiming detection quality.
 
 Check opened and closed chooser readability and touch/keyboard focus on physical Android and iPhone browsers, including short landscape cards. Desktop device emulation does not establish physical-phone behaviour.
+
+![Synthetic Runs and Drive preview with receiver timestamp logging unavailable and completed results retained](assets/gps-log-health-v1.jpg)
+
+This synthetic interruption leaves ordinary telemetry live. Runs retains completed estimates; Drive keeps the qualified distance partial rather than guessing across the missing log.

@@ -293,3 +293,7 @@ An EKF fallback is a research option, not an implemented or validated replacemen
 **Numeric precision:** timing-line calculations and HTTP GPS coordinates use f64. Binary v4 packets retain f32 latitude/longitude for compatibility, introducing location-dependent quantization that can reach meter scale. Numeric representation is separate from GPS measurement accuracy.
 
 **Local Conversion:** The `to_local()` function uses the timing line's p1 as reference, converting both line endpoints and vehicle position consistently. The intersection calculation uses f64 throughout.
+
+![Captured route retained after a synthetic browser storage failure](assets/track-save-recovery-v1.jpg)
+
+Synthetic recovery example: keep the tab open and retry Save or download the captured track. Download recovery JSON before closing an unsaved route. A saved track and confirmed arming are separate outcomes.

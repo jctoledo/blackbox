@@ -39,7 +39,7 @@
  });
  const durations=laps.map(lap=>lap[steps].time),superPeriod=durations.reduce((a,b)=>a+b,0);
  const start=performance.now()-(durations[0]-5000);
- let revision=0,armedCycle=null,paused=false,intervalStart=null,demoBoot=1,demoTrack=null;
+ let revision=0,armedCycle=null,paused=false,gpsLogPaused=false,intervalStart=null,demoBoot=1,demoTrack=null;
  const json=data=>Promise.resolve(new Response(JSON.stringify(data),{headers:{'Content-Type':'application/json','Cache-Control':'no-store'}}));
  function clock(elapsed){
   let cycle=Math.floor(elapsed/superPeriod)*laps.length,lapMs=elapsed%superPeriod,index=0;
@@ -145,6 +145,7 @@
   const timing=armedCycle!==null&&c.cycle>=armedCycle,count=timing?c.cycle-armedCycle:0;
   const completed=Array.from({length:Math.min(count,4)},(_,i)=>durations[((c.cycle-1-i)%4+4)%4]);
   if(url.pathname==='/api/gps-log'){
+   if(gpsLogPaused)return Promise.resolve(new Response('{"error":"Synthetic GPS log paused"}',{status:503}));
    const base=intervalStart??0,latest=Math.floor((elapsed-base)/40)+1;
    const events=Array.from({length:Math.min(64,latest)},(_,i)=>{
     const seq=Math.max(1,latest-63)+i,ms=base+(seq-1)*40,point=sampleMotion(ms);
@@ -184,6 +185,7 @@
    if(intervalStart===null&&demoTrack)await activateTrack(demoTrack);
    else if(typeof deactivateTrack==='function')await deactivateTrack();
   };
+  document.getElementById('demo-gps-log').onclick=event=>{gpsLogPaused=!gpsLogPaused;event.target.textContent=gpsLogPaused?'Resume GPS timestamp log':'Pause GPS timestamp log'};
   document.getElementById('demo-connection').onclick=event=>{paused=!paused;event.target.textContent=paused?'Restore connection':'Simulate disconnect'};
   try{
    await openTrackDB();
