@@ -8,7 +8,7 @@ async function fixture(){
  const elements=new Map(),alerts=[],downloads=[],events=new Map();let arms=0;
  const $=id=>{if(!elements.has(id)){const classes=new Set();elements.set(id,{id,textContent:'',hidden:false,disabled:false,style:{},classList:{add(...v){v.forEach(x=>classes.add(x))},remove(...v){v.forEach(x=>classes.delete(x))},contains:v=>classes.has(v)},focus(){}})}return elements.get(id)};
  const database=await new Promise((resolve,reject)=>{const r=indexedDB.open('track-recovery-'+(++serial));r.onerror=()=>reject(r.error);r.onsuccess=()=>resolve(r.result);r.onupgradeneeded=()=>{r.result.createObjectStore('tracks',{keyPath:'id'});r.result.createObjectStore('reference_laps',{keyPath:'id'}).createIndex('trackId','trackId',{unique:true})}});
- const c={console,Math,Number,Date,performance,Promise,Blob,Float32Array,ArrayBuffer,$,alerts,downloads,trackDb:database,trackRecorder:null,activeTrack:null,referenceLap:null,lapPersistenceError:'',referencePersistenceError:'',routeCapture:null,
+ const c={console,Math,Number,Date,performance,Promise,Blob,Float32Array,ArrayBuffer,$,alerts,downloads,trackDb:database,trackRecorder:null,activeTrack:null,referenceLap:null,lapPersistenceError:'',referencePersistenceError:'',referenceSaveGeneration:0,currentSessionId:'original-session',routeCapture:null,
   document:{addEventListener:(name,fn)=>events.set(name,fn),createElement:()=>({click(){downloads.push(this)},remove(){}}),body:{appendChild(){}}},window:{addEventListener:(name,fn)=>events.set(name,fn)},URL:{createObjectURL:blob=>{c.lastBlob=blob;return'blob:route'},revokeObjectURL(){}},setTimeout(){},
   alert:message=>alerts.push(message),confirm:()=>true,prompt:()=> 'Recovery circuit',closeTrackModal(){},renderTrackList(){},updateRecUI(){},validSpatialReference:()=>true,
   trackAutoDetector:{withdraw(){},beginTrackChange(){},endTrackChange(){}},getGpsRef:()=>({lat:37,lon:-122}),currentPos:{valid:true,x:0,y:0,lat:37,lon:-122,speed:20,yaw:0,sigma:2},
@@ -65,9 +65,9 @@ test('new-route add collision aborts without changing an original track',async()
  await f.c.finishTrackRecording();const rows=await f.rows();assert.equal(rows.length,1);assert.equal(rows[0].name,'Original stored track');assert.equal(f.arms(),0);assert.match(f.$('rec-save-status').textContent,/not saved/i);
 });
 test('reference transaction abort visibly warns and preserves prior stored and displayed reference',async()=>{
- const f=await fixture(),c=f.c;vm.runInContext(slice('function commitTrackWrite(', 'function openTrackDB(')+slice('async function saveRefLap(', 'async function getRefLap(')+slice('async function saveNewRefLap(', 'async function saveTrack('),c);
+ const f=await fixture(),c=f.c;vm.runInContext(slice('function commitTrackWrite(', 'function openTrackDB(')+slice('// Reference lap CRUD', 'async function getRefLap(')+slice('async function saveNewRefLap(', 'async function saveTrack('),c);
  const previous={id:'old-ref',trackId:'original',lapTimeMs:70000,samples:new ArrayBuffer(0)};
- await c.saveRefLap(previous);c.referenceLap=previous;c.activeTrack={id:'original',type:'loop'};
+ await new Promise((resolve,reject)=>{const tx=f.database.transaction('tracks','readwrite');tx.objectStore('tracks').put({id:'original'});tx.oncomplete=resolve;tx.onabort=()=>reject(tx.error)});await c.saveRefLap(previous);c.referenceLap=previous;c.activeTrack={id:'original',type:'loop'};
  c.updateRecUI=()=>{f.$('recording-notice').textContent=c.referencePersistenceError;f.$('recording-notice').hidden=!c.referencePersistenceError};
  const transaction=f.database.transaction.bind(f.database);let abort=true;
  f.database.transaction=(...args)=>{const tx=transaction(...args);if(abort&&args[1]==='readwrite'){const put=tx.objectStore('reference_laps').put.bind(tx.objectStore('reference_laps'));const store=tx.objectStore('reference_laps');store.put=(...values)=>{const request=put(...values);request.onsuccess=()=>tx.abort();return request}}return tx};

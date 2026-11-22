@@ -5,7 +5,7 @@ const settle=async()=>{for(let i=0;i<20;i++)await Promise.resolve()};
 const track=id=>({id,name:'Track '+id,type:'loop',gpsOrigin:{lat:37,lon:-122},startLine:{p1:[0,0],p2:[0,20],direction:0},lapCount:0});
 function fixture(){
  const requests=[],lookups=[],alerts=[],elements=new Map(),published=[],deletions=[],stored=new Map(['original','A','B'].map(id=>[id,track(id)]));let changes=0;
- const c={console,Promise,Math,activeTrack:track('original'),referenceLap:{id:'ref-original'},expectedLapRevision:9,lapResultGeneration:0,lapTracker:{reset(){}},lastDeltaMs:0,deltaTrend:0,prevLapFlags:0,prevLapTimeMs:0,prevLapCnt:0,lapTimerActive:true,p2pNeedsWarmup:false,suppressStartLineIndicator:false,
+ const c={console,Promise,Math,referencePersistenceError:'',updateRecUI(){},activeTrack:track('original'),referenceLap:{id:'ref-original'},expectedLapRevision:9,lapResultGeneration:0,lapTracker:{reset(){}},lastDeltaMs:0,deltaTrend:0,prevLapFlags:0,prevLapTimeMs:0,prevLapCnt:0,lapTimerActive:true,p2pNeedsWarmup:false,suppressStartLineIndicator:false,
   trackAutoDetector:{beginTrackChange(){changes++},endTrackChange(){changes--}},
   requestDevice(url){const pending=deferred();requests.push({url,...pending});return pending.promise},
   getTrack:async id=>stored.get(id),

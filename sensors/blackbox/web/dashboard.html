@@ -590,7 +590,7 @@ body.cluster-view .bbDeltaBar:not(.no-ref) .bbDeltaText{font-size:min(clamp(24px
     </section>
     <section class="bbCard bbGCard" id="g-card">
         <button class="bbInstrumentReveal" id="instrument-reveal" aria-expanded="false" aria-label="Choose instrument">Speed ···</button><div class="bbClusterTabs" role="group" aria-label="Cluster instrument"><button id="cluster-speed" aria-pressed="true">Speed</button><button id="cluster-forces" aria-pressed="false">G-meter</button><button id="cluster-peaks" aria-pressed="false">Peaks</button><button id="cluster-runs" aria-pressed="false">Runs</button></div>
-        <div class="bbClusterRuns"><div class="bbRunTitle"><div class="bbRunChooser" id="run-chooser"><button class="bbRunChoice" id="run-interval" aria-label="Run interval: 80–120 km/h" aria-expanded="false" aria-controls="run-options">80–120 km/h</button><div class="bbRunOptions" id="run-options" role="group" aria-label="Run interval choices" hidden><button class="bbRunChoice" id="run-lower" aria-pressed="false">50–100 km/h</button><button class="bbRunChoice" id="run-overtaking" aria-pressed="true">80–120 km/h</button></div></div></div><dl class="bbPeakGrid"><div><dt>LAST</dt><dd id="run-last">—</dd></div><div><dt>BEST</dt><dd id="run-best">—</dd></div></dl><p id="run-status" role="status">Record to collect receiver timestamps</p><button class="bbRunAction" id="run-record">Record session</button><div class="bbPeakNote">GPS estimate · uncorrected<br>No distance rollout</div></div><div class="bbClusterPeaks" title="Strongest 0.5-second averages, moving samples this page session"><span class="bbPeakScope">0.5 s avg · page</span><dl class="bbPeakGrid"><div><dt>ACCEL</dt><dd><span id="effort-accel">—</span><small> g</small></dd></div><div><dt>BRAKING</dt><dd><span id="effort-brake">—</span><small> g</small></dd></div><div><dt>LEFT</dt><dd><span id="effort-left">—</span><small> g</small></dd></div><div><dt>RIGHT</dt><dd><span id="effort-right">—</span><small> g</small></dd></div></dl></div>
+        <div class="bbClusterRuns"><div class="bbRunTitle"><div class="bbRunChooser" id="run-chooser"><button class="bbRunChoice" id="run-interval" aria-label="Run interval: 80–120 km/h" aria-expanded="false" aria-controls="run-options">80–120 km/h</button><div class="bbRunOptions" id="run-options" role="group" aria-label="Run interval choices" hidden><button class="bbRunChoice" id="run-lower" aria-pressed="false">50–100 km/h</button><button class="bbRunChoice" id="run-overtaking" aria-pressed="true">80–120 km/h</button></div></div></div><dl class="bbPeakGrid"><div><dt>LAST</dt><dd id="run-last">—</dd></div><div><dt>BEST</dt><dd id="run-best">—</dd></div></dl><p id="run-status" role="status">Record to collect receiver timestamps</p><button class="bbRunAction" id="run-record">Record session</button><div class="bbPeakNote">GPS estimate · uncorrected<br>No distance rollout</div></div><div class="bbClusterPeaks" title="Strongest sample-ending 0.5-second averages, moving samples this page session"><span class="bbPeakScope">0.5 s avg · page</span><dl class="bbPeakGrid"><div><dt>ACCEL</dt><dd><span id="effort-accel">—</span><small> g</small></dd></div><div><dt>BRAKING</dt><dd><span id="effort-brake">—</span><small> g</small></dd></div><div><dt>LEFT</dt><dd><span id="effort-left">—</span><small> g</small></dd></div><div><dt>RIGHT</dt><dd><span id="effort-right">—</span><small> g</small></dd></div></dl></div>
         <div class="bbGTop">
             <div class="bbGTopLeft">
                 <div class="bbInstrumentLabel">Speed</div><div class="bbSpeedMaximum" title="Maximum speed estimate with fresh GPS, this page session">PAGE MAX <span id="speed-maximum">—</span> <span id="speed-maximum-unit">km/h</span></div><div class="bbSpeedLine"><span class="bbSpeed bbNum" id="speed">0</span><span class="bbUnit" id="speed-unit">km/h</span></div>
@@ -1779,19 +1779,40 @@ function openTrackDB(){
     });
 }
 
-// Reference lap CRUD
+// Reference lap CRUD. Preserve invocation order across delayed database opening.
+let referenceWriteTail=Promise.resolve();
+function queueReferenceWrite(command){
+    const result=referenceWriteTail.then(command);referenceWriteTail=result.catch(()=>{});return result;
+}
 async function saveRefLap(ref){
-    if(!trackDb)await openTrackDB();
-    return commitTrackWrite('reference_laps',tx=>{
-        const store=tx.objectStore('reference_laps'),old=store.index('trackId').getKey(ref.trackId);
-        old.onsuccess=()=>{if(old.result!==undefined&&old.result!==ref.id)store.delete(old.result);store.put(ref)};
-    },ref);
+    return queueReferenceWrite(async()=>{
+        if(!trackDb)await openTrackDB();
+        return new Promise((resolve,reject)=>{
+            const tx=trackDb.transaction(['tracks','reference_laps'],'readwrite');let saved,failure;
+            tx.oncomplete=()=>resolve(saved);tx.onabort=tx.onerror=()=>reject(failure||tx.error||new Error('Reference storage failed'));
+            const track=tx.objectStore('tracks').get(ref.trackId);
+            track.onsuccess=()=>{
+                if(!track.result){failure=new Error('Track was deleted before its reference could be saved');tx.abort();return}
+                const store=tx.objectStore('reference_laps'),request=store.index('trackId').get(ref.trackId);
+                request.onsuccess=()=>{
+                    const previous=request.result;
+                    // Compare within the transaction: delayed candidates cannot replace a faster trace.
+                    if(previous&&validSpatialReference(previous.spatial,previous.lapTimeMs)&&previous.lapTimeMs<=ref.lapTimeMs){saved=previous;return}
+                    if(previous&&previous.id!==ref.id)store.delete(previous.id);
+                    store.put(ref);saved=ref;
+                };
+            };
+        });
+    });
 }
 async function getRefLap(trackId){if(!trackDb)await openTrackDB();return new Promise((res,rej)=>{const tx=trackDb.transaction('reference_laps','readonly');const r=tx.objectStore('reference_laps').index('trackId').get(trackId);r.onsuccess=()=>res(r.result||null);r.onerror=()=>rej(r.error)})}
 async function deleteRefLap(trackId){
-    if(!trackDb)await openTrackDB();
-    await commitTrackWrite('reference_laps',tx=>{const r=tx.objectStore('reference_laps').index('trackId').openCursor(IDBKeyRange.only(trackId));r.onsuccess=()=>{const c=r.result;if(c){c.delete();c.continue()}}});
-    if(activeTrack&&activeTrack.id===trackId){referenceLap=null;updateLapProgress(false);updateDeltaBar({deltaMs:null,hasRef:false});$('lap-section').classList.remove('has-ref')}
+    const owner=activeTrack;
+    return queueReferenceWrite(async()=>{
+        if(!trackDb)await openTrackDB();
+        await commitTrackWrite('reference_laps',tx=>{const r=tx.objectStore('reference_laps').index('trackId').openCursor(IDBKeyRange.only(trackId));r.onsuccess=()=>{const c=r.result;if(c){c.delete();c.continue()}}});
+        if(activeTrack===owner&&owner?.id===trackId){referenceLap=null;referencePersistenceError='';updateRecUI();updateLapProgress(false);updateDeltaBar({deltaMs:null,hasRef:false});$('lap-section').classList.remove('has-ref')}
+    });
 }
 
 // Session management for lap history
@@ -1936,12 +1957,22 @@ function fmtDelta(ms){const sign=ms>0?'+':'',sec=ms/1000;return sign+(Math.abs(s
 function updateDeltaBar(opts){const{deltaMs,trend=0,hasRef=false,isP2P=false}=opts;const bar=$('delta-bar'),fill=$('delta-fill'),txt=$('delta-text');if(!bar||!fill||!txt)return;if(!hasRef){bar.classList.add('no-ref');fill.className='bbDeltaFill';fill.style.width='0%';fill.style.left='50%';txt.textContent=isP2P?'Complete a reference run':'Complete a reference lap';txt.className='bbDeltaText';return}if(!Number.isFinite(deltaMs)){bar.classList.add('no-ref');fill.style.width='0%';txt.textContent=opts.reason||'Delta unavailable';txt.className='bbDeltaText';return}if(Math.abs(deltaMs)<5){bar.classList.remove('no-ref');fill.className='bbDeltaFill';fill.style.width='0%';fill.style.left='50%';txt.textContent='±0.00s';txt.className='bbDeltaText';return}bar.classList.remove('no-ref');const MAX=2000,abs=Math.abs(deltaMs),pct=Math.min(50,(abs/MAX)*50),ahead=deltaMs<0;if(ahead){fill.style.left=(50-pct)+'%';fill.style.width=pct+'%'}else{fill.style.left='50%';fill.style.width=pct+'%'}let fc='bbDeltaFill';if(abs>30)fc+=ahead?' ahead':' behind';if(abs>1000)fc+=ahead?' glow-ahead':' glow-behind';fill.className=fc;let ds=fmtDelta(deltaMs)+'s';if(trend<-5)ds+=' ▲';else if(trend>5)ds+=' ▼';txt.textContent=ds;txt.className='bbDeltaText'+(abs>30?(ahead?' ahead':' behind'):'')}
 
 async function saveNewRefLap(trackId,lapTimeMs,tracker){
+    const owner=activeTrack,session=currentSessionId,generation=++referenceSaveGeneration;
+    if(!owner||owner.id!==trackId)return;
+    const current=()=>activeTrack===owner&&currentSessionId===session;
     try{
-        const ref={id:'ref_'+Date.now()+'_'+Math.random().toString(36).substr(2,9),trackId,lapTimeMs,created:Date.now(),samples:tracker.toBinary(),sampleCount:tracker.samples.length,totalDistance:tracker.dist,spatial:{version:1,closed:activeTrack?.type==='loop',origin:tracker.spatialOrigin,points:tracker.spatialPoints.map(p=>({...p}))}};
+        const ref={id:'ref_'+Date.now()+'_'+Math.random().toString(36).substr(2,9),trackId,lapTimeMs,created:Date.now(),samples:tracker.toBinary(),sampleCount:tracker.samples.length,totalDistance:tracker.dist,spatial:{version:1,closed:owner.type==='loop',origin:tracker.spatialOrigin,points:tracker.spatialPoints.map(p=>({...p}))}};
         if(!validSpatialReference(ref.spatial,lapTimeMs))return;
-        await saveRefLap(ref);if(!activeTrack||activeTrack.id!==trackId)return;referenceLap=ref;referencePersistenceError='';updateRecUI();const sec=$('lap-section');if(sec)sec.classList.add('has-ref');console.log('Reference lap created:',fmtLapTime(lapTimeMs),'('+ref.sampleCount+' samples)');
-        console.log('Reference lap saved to IndexedDB')
-    }catch(e){referencePersistenceError='Reference could not be saved. Previous reference is unchanged. Keep this tab open, check browser storage, then complete another valid lap or run to retry.';updateRecUI();console.error('Failed to save ref lap:',e)}
+        const saved=await saveRefLap(ref);if(!current())return;
+        // A later/faster completion may already be displayed while this transaction waited.
+        if(!referenceLap||!validSpatialReference(referenceLap.spatial,referenceLap.lapTimeMs)||saved.lapTimeMs<referenceLap.lapTimeMs)referenceLap=saved;
+        if(generation===referenceSaveGeneration)referencePersistenceError='';
+        updateRecUI();const sec=$('lap-section');if(sec)sec.classList.add('has-ref');
+        console.log('Reference lap saved:',fmtLapTime(saved.lapTimeMs));
+    }catch(e){
+        if(current()&&generation===referenceSaveGeneration){referencePersistenceError='Reference could not be saved. Previous reference is unchanged. Keep this tab open, check browser storage, then complete another valid lap or run to retry.';updateRecUI()}
+        console.error('Failed to save ref lap:',e);
+    }
 }
 
 async function saveTrack(track,{create=false}={}){
@@ -2242,7 +2273,7 @@ async function activateTrackCommand(track){
         let loadedReference=null;
         try{loadedReference=await getRefLap(track.id)}catch(e){console.warn('Reference lap unavailable:',e)}
         expectedLapRevision=j.revision??null;
-        activeTrack={...track,startLine:line,finishLine:finLine};referenceLap=loadedReference;
+        activeTrack={...track,startLine:line,finishLine:finLine};referenceLap=loadedReference;referencePersistenceError='';updateRecUI();
         $('lap-result').hidden=true;lapResultGeneration++;
         suppressStartLineIndicator=false;
         p2pNeedsWarmup=isP2P&&track.isNew;
@@ -2282,7 +2313,7 @@ async function activateTrackCommand(track){
 async function deactivateTrackCommand(){
     trackAutoDetector.beginTrackChange();
     try{const r=await requestDevice('/api/laptimer/configure?type=clear');if(!r.ok)throw new Error('Device rejected the request');const j=await r.json();if(j.error)throw new Error(j.error);expectedLapRevision=j.revision??null}catch(e){alert('Could not stop device timing. Reconnect and retry. '+e.message);return false}finally{trackAutoDetector.endTrackChange()}
-    activeTrack=null;referenceLap=null;clearSession();$('lap-result').hidden=true;lapResultGeneration++;
+    activeTrack=null;referenceLap=null;referencePersistenceError='';updateRecUI();clearSession();$('lap-result').hidden=true;lapResultGeneration++;
     if(lapTracker)lapTracker.reset();
     p2pNeedsWarmup=false;
     // Deactivate lap timer UI
@@ -2901,7 +2932,7 @@ function updateLapProgress(active){
     $('lap-progress').hidden=value===null;
     if(value!==null){$('lap-progress-label').textContent=(activeTrack?.type==='point_to_point'?'Stage progress · ':'Lap progress · ')+value+'%';$('lap-progress-bar').value=value}
 }
-let lapPersistenceError='',referencePersistenceError='',lapResultGeneration=0;
+let lapPersistenceError='',referencePersistenceError='',lapResultGeneration=0,referenceSaveGeneration=0;
 function showLapResult(time,previousBest){
     const box=$('lap-result'),generation=++lapResultGeneration;
     const better=!previousBest||time<previousBest;
@@ -3830,7 +3861,7 @@ function recordingSummaryHTML(summary,pendingSamples=0){
     const provenance=p.synthetic?(p.real?'Includes synthetic and real-labelled samples':'Synthetic samples'):p.unknown?'Provenance partly unknown':'No synthetic marker';
     const exclusions=Object.entries(summary.excluded).filter(([,count])=>count).map(([reason,count])=>({gps:'GPS / speed',imu:'IMU age',moving:'below 10 km/h',force:'force value',clock:'device clock / boot'}[reason])+' '+count).join(', ');
     const rows=[['Maximum speed estimate',speed],['Acceleration',force(summary.forcePeaksG.accel)],['Braking',force(summary.forcePeaksG.brake)],['Left',force(summary.forcePeaksG.left)],['Right',force(summary.forcePeaksG.right)]];
-    return '<details class="bbRecordingSummary"><summary>Summary · saved samples</summary><div class="bbRecordingDetailsBody"><div class="bbDetailsGroup"><h4>Speed &amp; force estimates</h4><dl>'+rows.map(([label,value])=>'<dt>'+escHtml(label)+'</dt><dd>'+escHtml(value)+'</dd>').join('')+'</dl></div><p class="bbDetailsNote">Strongest 0.5 s averages · not instantaneous shocks or calibrated grip.</p><p class="bbDetailsNote">'+n.telemetry+' saved telemetry samples · '+n.speedQualified+' speed-qualified · '+n.forceQualified+' force-qualified · '+n.forceWindows+' complete windows. '+n.excluded+' excluded from force windows'+(exclusions?' ('+exclusions+')':'')+'.'+(pendingSamples?' '+pendingSamples+' samples pending save are excluded.':'')+'</p><p class="bbDetailsNote">'+c.gaps+' device gaps over 0.25 s · '+c.reboots+' reboot boundaries · '+c.clockReversals+' clock reversals · '+c.duplicates+' duplicate times.</p><p class="bbDetailsNote">'+escHtml(provenance)+(p.unknown?' · '+p.unknown+' samples have unknown provenance':'')+'. Raw CSV/backup evidence remains authoritative.</p></div></details>';
+    return '<details class="bbRecordingSummary"><summary>Summary · saved samples</summary><div class="bbRecordingDetailsBody"><div class="bbDetailsGroup"><h4>Speed &amp; force estimates</h4><dl>'+rows.map(([label,value])=>'<dt>'+escHtml(label)+'</dt><dd>'+escHtml(value)+'</dd>').join('')+'</dl></div><p class="bbDetailsNote">Strongest complete 0.5 s windows ending at saved samples · not instantaneous shocks or calibrated grip.</p><p class="bbDetailsNote">'+n.telemetry+' saved telemetry samples · '+n.speedQualified+' speed-qualified · '+n.forceQualified+' force-qualified · '+n.forceWindows+' complete windows. '+n.excluded+' excluded from force windows'+(exclusions?' ('+exclusions+')':'')+'.'+(pendingSamples?' '+pendingSamples+' samples pending save are excluded.':'')+'</p><p class="bbDetailsNote">'+c.gaps+' device gaps over 0.25 s · '+c.reboots+' reboot boundaries · '+c.clockReversals+' clock reversals · '+c.duplicates+' duplicate times.</p><p class="bbDetailsNote">'+escHtml(provenance)+(p.unknown?' · '+p.unknown+' samples have unknown provenance':'')+'. Raw CSV/backup evidence remains authoritative.</p></div></details>';
 }
 function recordingDetailsHTML(session){
     const m=session.recordingMetadata,show=v=>v===null?'Unknown':String(v);
