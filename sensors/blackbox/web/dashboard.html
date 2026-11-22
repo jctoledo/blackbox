@@ -3562,18 +3562,51 @@ async function multipartPromote(stage,job,database,group,options){
         fetch();pump();
     });
 }
+// Every group claim and transition is a compare-and-set in the staging database.
+// An overlapping tab can recover a proven commit, but cannot downgrade its ledger.
+function multipartUpdateJob(stage,id,update){return new Promise((resolve,reject)=>{
+    const tx=stage.transaction('jobs','readwrite');let result,failure;
+    tx.oncomplete=()=>resolve(result);tx.onabort=tx.onerror=()=>reject(failure||tx.error||Error('Restore ledger update failed'));
+    const store=tx.objectStore('jobs'),request=store.get(id);
+    request.onsuccess=()=>{try{multipartCheck(request.result,'restore staging was discarded; inspect saved copies before importing again');result=update(request.result);store.put(result)}catch(error){failure=error;tx.abort()}};
+})}
 async function executeMultipartRestore(id,options={}){
     backupIdle();multipartAbort(options.signal);const stage=await openMultipartStage();
-    try{let job=await multipartStageGet(stage,id);multipartCheck(job&&['ready','restoring','partial','complete'].includes(job.state),'choose and fully validate the archive first');if(job.counts.sessions&&!db)await openDB();if(job.counts.tracks&&!trackDb)await openTrackDB();await multipartMapping(stage,job,db);
-        for(const group of ['recordings','tracks']){multipartAbort(options.signal);const database=group==='recordings'?db:trackDb,presence=await multipartGroupPresence(database,job,group),prior=job.groups[group];
+    try{
+        let job=await multipartStageGet(stage,id);multipartCheck(job&&['ready','restoring','partial','complete'].includes(job.state),'choose and fully validate the archive first');
+        if(job.counts.sessions&&!db)await openDB();if(job.counts.tracks&&!trackDb)await openTrackDB();await multipartMapping(stage,job,db);
+        for(const group of ['recordings','tracks']){
+            multipartAbort(options.signal);job=await multipartStageGet(stage,id);multipartCheck(job,'restore staging was discarded');
+            const database=group==='recordings'?db:trackDb,presence=await multipartGroupPresence(database,job,group);
             multipartCheck(presence!=='conflict','restore IDs conflict or some copies were removed. Nothing will be overwritten; inspect the existing copies');
-            if(presence==='empty'||presence==='all'){job.groups[group]='committed';await multipartStagePut(stage,job);continue}
-            multipartCheck(prior!=='committed'&&prior!=='attempting','the previous commit is uncertain or copies were removed. No automatic re-add was attempted; inspect saved data before starting a new restore');
-            job.groups[group]='attempting';job.state='restoring';await multipartStagePut(stage,job);
-            try{await multipartPromote(stage,job,database,group,options)}catch(error){job.groups[group]=error.uncertain?'attempting':'aborted';job.state=job.groups.recordings==='committed'?'partial':'ready';try{await multipartStagePut(stage,job)}catch{}throw Error((job.groups.recordings==='committed'?'Recordings committed; remaining tracks were not committed. ':'The active group was rolled back. ')+'Originals are unchanged. Retry remaining data. '+error.message)}
-            job.groups[group]='committed';await multipartStagePut(stage,job);
+            if(presence==='empty'||presence==='all'){
+                job=await multipartUpdateJob(stage,id,current=>{multipartCheck(backupChecksum(current.mapping)===backupChecksum(job.mapping),'restore mapping changed');current.groups[group]='committed';return current});continue;
+            }
+            const attempt=multipartId();
+            job=await multipartUpdateJob(stage,id,current=>{
+                multipartCheck(backupChecksum(current.mapping)===backupChecksum(job.mapping),'restore mapping changed');
+                multipartCheck(current.groups[group]!=='committed'&&current.groups[group]!=='attempting','the previous commit is uncertain, another tab is restoring, or copies were removed. No automatic re-add was attempted; inspect saved data before starting a new restore');
+                current.groups[group]='attempting';current.attempts={...current.attempts,[group]:attempt};current.state='restoring';return current;
+            });
+            try{await multipartPromote(stage,job,database,group,options)}catch(error){
+                try{job=await multipartUpdateJob(stage,id,current=>{
+                    if(current.attempts?.[group]===attempt&&current.groups[group]==='attempting'){
+                        current.groups[group]=error.uncertain?'attempting':'aborted';current.state=current.groups.recordings==='committed'?'partial':error.uncertain?'restoring':'ready';
+                    }
+                    return current;
+                })}catch{}
+                throw Error((error.uncertain?'The group commit is uncertain; inspect saved copies before retrying. ':job.groups.recordings==='committed'?'Recordings committed; remaining tracks were not committed. ':'The active group was rolled back. ')+'Originals are unchanged. Retry remaining data only when its status is known. '+error.message);
+            }
+            // Destination commit is already durable. A ledger failure must never
+            // be reported as a rolled-back group or overwrite another tab's proof.
+            try{job=await multipartUpdateJob(stage,id,current=>{
+                multipartCheck(current.groups[group]==='committed'||current.groups[group]==='attempting'&&current.attempts?.[group]===attempt,'restore attempt ownership changed');
+                current.groups[group]='committed';return current;
+            })}catch(error){throw Error(group+' copies committed, but the restore acknowledgement could not be saved. '+(group==='recordings'?'Tracks may still remain. ':'Both database groups may be present. ')+'Originals are unchanged. Keep staging and resume to check the committed copies safely. '+error.message)}
         }
-        job.state='complete';await multipartStagePut(stage,job);return job;
+        try{job=await multipartUpdateJob(stage,id,current=>{multipartCheck(current.groups.recordings==='committed'&&current.groups.tracks==='committed','restore groups are not complete');current.state='complete';return current})}
+        catch(error){throw Error('Both restore groups committed, but completion could not be acknowledged. Originals are unchanged. Resume this staged restore to confirm the copies. '+error.message)}
+        return job;
     }finally{stage.close()}
 }
 // End multipart backup core.
