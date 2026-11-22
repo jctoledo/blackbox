@@ -827,6 +827,8 @@ body.cluster-view .bbDeltaBar:not(.no-ref) .bbDeltaText{font-size:min(clamp(24px
             <button class="bbModalClose" id="data-modal-close" aria-label="Close saved data">&times;</button>
         </div>
         <div class="bbModalBody">
+            <p id="data-load-status" role="status" style="font-size:13px;line-height:1.5;margin:0 0 12px"></p>
+            <button class="bbSessionBtn" id="data-retry" style="min-height:44px;margin-bottom:16px" hidden>Retry loading saved data</button>
             <div class="bbModalSection">
                 <div class="bbSectionTitle">Backup &amp; restore</div>
                 <p class="bbCreateTrackHint">Save recordings, tracks, references and history as numbered files plus a final manifest. Keep the complete set outside this browser. Stop recording first; track timing may continue.</p>
@@ -837,8 +839,6 @@ body.cluster-view .bbDeltaBar:not(.no-ref) .bbDeltaText{font-size:min(clamp(24px
                 <div id="backup-staged-row" hidden><label for="backup-staged">Resume or clean up a staged restore</label><select id="backup-staged" style="display:block;width:100%;min-height:44px;margin:8px 0;background:var(--bg);color:var(--text);border:1px solid var(--divider)"><option value="">Choose staged restore…</option></select><button class="bbSessionBtn" id="backup-discard-staged" disabled>Discard staging only</button></div>
                 <p id="backup-status" role="status" style="font-size:13px;line-height:1.5;overflow-wrap:anywhere">Restore adds copies; it never replaces existing data. Choose the manifest and all numbered parts together, in any order. Files contain location history. Parts are at most 8 MiB; version 1 single-file backups up to 100 MiB remain supported. Keep this tab in the foreground.</p>
             </div>
-            <p id="data-load-status" role="status" style="font-size:13px;line-height:1.5"></p>
-            <button class="bbSessionBtn" id="data-retry" style="min-height:44px" hidden>Retry loading saved data</button>
             <div class="bbStorageOverview">
                 <div class="bbStorageTotal"><div class="bbStorageLabel">Estimated data size</div><div class="bbStorageValue" id="data-total-size">—</div></div>
                 <div class="bbStorageBreakdown"><div class="bbStorageItem"><span class="bbStorageItemLabel">Recordings</span><span class="bbStorageItemValue" id="data-rec-size">—</span></div><div class="bbStorageItem"><span class="bbStorageItemLabel">Tracks</span><span class="bbStorageItemValue" id="data-track-size">—</span></div></div>
@@ -3894,7 +3894,7 @@ async function renderDataModal(){
         lockRenderedDataControls();return false;
     }
 }
-$('data-retry').onclick=()=>renderDataModal();
+$('data-retry').onclick=()=>{$('data-modal-close').focus();return renderDataModal()};
 
 function recordingRecoveryLabel(session){return session.sampleCount?'Interrupted · saved data available':'Interrupted · no saved samples'}
 function refreshRecordingDetails(owner){
