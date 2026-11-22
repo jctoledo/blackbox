@@ -40,7 +40,7 @@ class Page(HTMLParser):
 
 def main():
     """Check all published guides against local files and sitemap URLs."""
-    paths = [ROOT / 'index.html', *sorted((ROOT / 'guides').glob('*.html'))]
+    paths = [ROOT / 'index.html', ROOT / 'real-drive.html', *sorted((ROOT / 'guides').glob('*.html'))]
     assert len(paths) > 1, 'Run build_docs.py first'
     pages = {}
     for path in paths:
