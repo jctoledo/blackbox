@@ -44,7 +44,7 @@ def main():
     directory = ROOT / 'docs/guides'
     directory.mkdir(exist_ok=True)
     build_demo()
-    urls = [BASE, BASE + "demo.html"]
+    urls = [BASE, BASE + "demo.html", BASE + "real-drive.html"]
     for source, (slug, description) in PAGES.items():
         content = markdown.markdown((ROOT / 'docs' / source).read_text(),
                                     extensions=['fenced_code', 'tables', 'toc'])

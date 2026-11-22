@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Public real-drive replay with synchronized lap positions, playback, lap selection and GPS speed traces from an rc.17 M9N recording. Published geometry uses relative metres; raw location exports stay private. This is an export analysis, not a dashboard feature or an independent timing-accuracy test.
+
 ### Changed
 - Website USB flashing now supports Android Chrome through bundled USB serial drivers, with M9N selection guidance, permission/retry handling and a best-effort screen wake lock. Existing C3 chip, image checksum and merged-image offset checks remain in place; physical phone/board acceptance is still required.
 - Renamed `neo6m` driver to `ublox-gps` to reflect support for multiple u-blox GPS modules (NEO-6M, NEO-M9N, etc.)
