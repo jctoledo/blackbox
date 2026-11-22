@@ -14,7 +14,7 @@ Main CI validates host/browser regressions, documentation, both GPS firmware var
 ### Start here
 
 - **Build your first instrument:** [DIY GPS lap timer guide](docs/DIY_GPS_LAP_TIMER.md), then the [parts and assembly journal](docs/BUILD.md).
-- **Try the interface first:** [live synthetic dashboard](https://jctoledo.github.io/blackbox/demo.html?v=0.0.4-rc.12). Turn your phone sideways and choose Speed, G-meter, Peaks or Runs.
+- **Try the interface first:** [live synthetic dashboard](https://jctoledo.github.io/blackbox/demo.html?v=0.0.4-rc.13). Turn your phone sideways and choose Speed, G-meter, Peaks or Runs.
 - **Understand the measurements:** [GPS timing accuracy](docs/GPS_TIMING_ACCURACY.md) and [NEO-M9N logging](docs/M9N_GPS_LOGGER.md).
 - **Collect your first drive:** [short NEO-M9N recording plan](docs/FIRST_DRIVE.md), including photos, CSVs and backup.
 - **Help validate a build:** [hardware checklist](docs/HARDWARE_VALIDATION.md). Report setup problems with the exact firmware, hardware and reproduction steps; share private route logs privately.
@@ -169,7 +169,7 @@ Landscape offers Speed, G-meter, sustained Peaks and Runs, with timing or Drive 
 
 Choose **Menu → Speed units** for mph or km/h; the preference stays in this browser and applies to Speed and MAX. Drive distance follows the same preference in mi/km. Runs shows 30–60 / 45–70 mph or 50–100 / 80–120 km/h. These are purpose counterparts, not exact conversions: all four detectors keep independent literal results and export labels. Recording/export units do not change. Tap Controls for the toolbar; the G-meter uses a selectable fixed scale and clears when data becomes unavailable.
 
-![Landscape cluster with synthetic demo data](docs/dashboard-cluster-v9.png)
+![Landscape cluster with synthetic demo data](docs/dashboard-cluster-v10.png)
 
 
 ---
