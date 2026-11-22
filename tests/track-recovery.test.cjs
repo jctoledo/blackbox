@@ -26,7 +26,13 @@ test('an aborted route transaction retains one frozen identity for retry and por
  f.database.transaction=(...args)=>{const tx=original(...args);if(abort&&args[1]==='readwrite')queueMicrotask(()=>tx.abort());return tx};
  await f.c.finishTrackRecording();assert.equal((await f.rows()).length,0);assert.equal(f.$('record-overlay').classList.contains('active'),true);assert.equal(f.arms(),0);
  assert.match(f.$('rec-save-status').textContent,/not saved|could not be saved/i);
- await f.c.exportCapturedTrack();const exported=JSON.parse(await f.c.lastBlob.text());assert.equal(exported.version,2);assert.equal(exported.track.centerline.length,11);assert.equal(exported.referenceLap,null);assert.deepEqual(exported.lapHistory,[]);
+ // Exercise the actual importer against the emitted file; export must not touch storage.
+ const noExportWrites=f.database.transaction;f.database.transaction=()=>{throw Error('Recovery download must not access IndexedDB')};
+ await f.c.exportCapturedTrack();const exported=JSON.parse(await f.c.lastBlob.text());f.database.transaction=noExportWrites;
+ vm.runInContext(slice('// Versioned backup / restore.', 'function readBackupStores('),f.c);
+ const normalized=f.c.normalizeBackup(exported),imported=f.c.validateBackup(normalized);
+ assert.equal(imported.tracks,1);assert.equal(imported.recordings,0);assert.equal(imported.references,0);assert.equal(imported.laps,0);
+ assert.deepEqual(JSON.parse(JSON.stringify(normalized.data.tracks[0])),exported.track);assert.equal(exported.track.centerline.length,11);
  abort=false;await f.c.finishTrackRecording();const rows=await f.rows();assert.equal(rows.length,1);assert.equal(rows[0].id,exported.track.id);assert.equal(f.arms(),1);assert.equal(f.c.trackRecorder,null);
 });
 test('a committed route with failed arming retries arming without another storage write',async()=>{

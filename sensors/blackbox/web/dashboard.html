@@ -2336,7 +2336,7 @@ function cancelTrackRecording(){
 }
 function exportCapturedTrack(){
     const owner=routeCapture;if(!owner?.track||owner.busy)return;
-    const value={version:2,exportedAt:new Date().toISOString(),track:owner.track,lapHistory:[],referenceLap:null};
+    const value={version:2,exportedAt:new Date().toISOString(),track:owner.track,lapHistory:{sessions:[]},referenceLap:null};
     const url=URL.createObjectURL(new Blob([JSON.stringify(value,null,2)],{type:'application/json'}));
     const anchor=document.createElement('a');anchor.href=url;anchor.download='track_'+owner.track.id+'.json';
     document.body.appendChild(anchor);anchor.click();anchor.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
