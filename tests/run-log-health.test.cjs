@@ -6,7 +6,7 @@ const html=fs.readFileSync('sensors/blackbox/web/dashboard.html','utf8');
 const slice=(start,end)=>html.slice(html.indexOf(start),html.indexOf(end,html.indexOf(start)));
 function setup(){
  const elements=new Map(),c={console:{warn(){}},Number,Math,Date,Promise,performance:{now:()=>c.now},now:100,rec:true,recordingBusy:false,sessionId:7,gpsCursor:null,gpsRequest:null,gpsLogStatus:'Waiting for GPS timestamp log…',MAX_PENDING_SAMPLES:6000,chunkBuffer:[],chunkWrite:null,recordingContext:null,recordingSaveDue:()=>false,checkpointDrive(){},selectedRunDetector:{status:'Collecting interval · GPS time',attempt:{startUs:123},results:[{status:'accepted',seconds:1.25}]}};
- c.$=id=>{if(!elements.has(id))elements.set(id,{textContent:'',disabled:false,attrs:{},setAttribute(k,v){this.attrs[k]=v}});return elements.get(id)};
+ c.$=id=>{if(!elements.has(id))elements.set(id,{textContent:'',disabled:false,attrs:{},classList:{toggle(){}},setAttribute(k,v){this.attrs[k]=v}});return elements.get(id)};
  c.updatePerformanceRuns=()=>{};c.updateRecUI=()=>c.renderPerformanceRuns();
  vm.createContext(c);
  vm.runInContext(slice('function gpsRows(','function gpsSamplesToCSV('),c);vm.runInContext(slice('function renderPerformanceRuns(','function runsToCSV('),c);
@@ -28,4 +28,12 @@ test('a late failed GPS request from an old recording cannot replace the new own
  const {c,status}=setup();let reject;c.requestDevice=()=>new Promise((_,failure)=>reject=failure);const request=c.collectGpsLog();c.sessionId=8;c.resetGpsLogHealth?.(8);c.gpsLogStatus='New recording is waiting for receiver evidence';reject(Error('old owner timeout'));await request;
  assert.equal(c.gpsLogStatus,'New recording is waiting for receiver evidence');assert.doesNotMatch(status(),/unavailable/i);
  c.requestDevice=async()=>response(batch());await c.collectGpsLog();assert.match(status(),/Collecting interval/);c.rec=false;c.renderPerformanceRuns();assert.doesNotMatch(status(),/collecting|unavailable|waiting/i);
+});
+
+test('Drive exposes the same GPS-log health while ordinary sensor readiness remains true',async()=>{
+ const {c}=setup();Object.assign(c,{activeTrack:null,latestDriveRecording:null,driveReadiness:{at:100,gps:true,imu:true},db:{},recordingError:'',lastSaveMono:null,speedUnit:'km/h'});
+ vm.runInContext(slice('// Drive session core.','// End Drive session core.')+';recordingContext={sessionId:7,driveSession:new DriveSession(7)};recordingContext.driveSession.apply({owner:7,type:"start",mono:0,wall:0});',c);
+ vm.runInContext(slice('function driveDuration(','async function loadLatestDrive('),c);c.requestDevice=async()=>({ok:false});await c.collectGpsLog();c.renderDrive();
+ assert.match(c.$('drive-health').textContent,/Connected.*GPS ready.*GPS log unavailable/);assert.equal(c.$('drive-health').attrs['data-unavailable'],'true');
+ c.rec=false;c.renderDrive();assert.doesNotMatch(c.$('drive-health').textContent,/GPS log unavailable/);assert.equal(c.$('drive-health').attrs['data-unavailable'],'false');
 });

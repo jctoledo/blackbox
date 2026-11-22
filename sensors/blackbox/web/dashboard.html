@@ -287,7 +287,7 @@ body{font-family:Inter,-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Di
 .bbRecordStartIcon{color:#ff3b30}
 .bbRecordStartLabel{font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px}
 .bbRecordStartDesc{font-size:11px;color:var(--text-tertiary);text-align:center;line-height:1.35}
-.bbRecordOverlay{max-height:100vh;max-height:100dvh;overflow-y:auto;overscroll-behavior:contain;scroll-padding-block:16px;position:fixed;bottom:0;left:0;right:0;background:var(--surface);padding:24px 20px;padding-bottom:calc(24px + env(safe-area-inset-bottom, 0px));border-radius:24px 24px 0 0;box-shadow:0 -8px 32px rgba(0,0,0,0.18);z-index:250;transform:translateY(100%);transition:transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);border-top:3px solid #ff3b30}
+.bbRecordOverlay{max-height:calc(100vh - env(safe-area-inset-top,0px));max-height:calc(100dvh - env(safe-area-inset-top,0px));overflow-y:auto;overscroll-behavior:contain;scroll-padding-block:16px;position:fixed;bottom:0;left:0;right:0;background:var(--surface);padding:24px 20px;padding-bottom:calc(24px + env(safe-area-inset-bottom, 0px));padding-left:max(20px,env(safe-area-inset-left,0px));padding-right:max(20px,env(safe-area-inset-right,0px));border-radius:24px 24px 0 0;box-shadow:0 -8px 32px rgba(0,0,0,0.18);z-index:250;transform:translateY(100%);transition:transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);border-top:3px solid #ff3b30}
 .bbRecordOverlay.active{transform:translateY(0)}
 .bbRecordState{animation:fadeIn 0.25s ease-out}
 @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
@@ -443,7 +443,7 @@ body.cluster-view .bbSpeed.peak{color:var(--text);text-shadow:none}
 .bbDisplayButton{min-height:44px;padding:8px 10px;border:1px solid var(--divider);border-radius:8px;background:var(--surface);color:var(--text);font:600 12px Inter,sans-serif;cursor:pointer}.bbDisplayButton[hidden]{display:none}.bbSetupText{font-size:14px;line-height:1.6;color:var(--text-secondary)}.bbSetupText p{margin:12px 0}.bbSetupText h3{color:var(--text);font-size:16px;margin:16px 0 6px}.bbSetupActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}.bbSetupActions button{min-height:44px;padding:10px 14px;border-radius:8px;border:1px solid var(--divider);background:var(--bg);color:var(--text);font:600 13px Inter,sans-serif}.bbSetupActions button:disabled{opacity:.45}.bbSetupStatus{border-left:3px solid var(--amber);padding:10px 12px;margin:14px 0;background:var(--bg);overflow-wrap:anywhere}
 @media(max-width:420px){.bbDisplayButton{font-size:11px;padding:8px}.bbTopbar{gap:6px}.bbStatusCluster{gap:6px}}
 
-.bbClusterRuns #run-status[data-unavailable="true"]{color:var(--amber)}
+.bbDrivePanel #drive-health[data-unavailable="true"],.bbClusterRuns #run-status[data-unavailable="true"]{color:var(--amber)}
 .bbPeakScope{position:absolute;top:16px;right:14px;font:9px var(--mono);color:var(--text-tertiary);white-space:nowrap;pointer-events:none}
 .bbInstrumentReveal{display:none}.bbSpeedMaximum{font:10px var(--mono);color:var(--text-tertiary);margin-top:6px}
 body.cluster-view .bbInstrumentReveal{display:block;position:absolute;top:0;left:6px;z-index:4;min-height:44px;padding:0 10px;border:0;background:transparent;color:var(--text-secondary);font:10px var(--mono);cursor:pointer}
@@ -731,7 +731,7 @@ body.cluster-view .bbDeltaBar:not(.no-ref) .bbDeltaText{font-size:min(clamp(24px
         <button class="bbMenuItem" id="menu-data">Data</button>
         <button class="bbMenuItem" id="menu-rec">Record session</button>
         <button class="bbMenuItem" id="menu-export">Export CSV</button>
-        <button class="bbMenuItem destructive" id="menu-clear" title="Resets page speed and force statistics; recording and lap history continue">Reset speed / force stats</button>
+        <button class="bbMenuItem destructive" id="menu-clear" title="Resets page speed, force statistics and page time; recording and lap history continue">Reset speed / force stats</button>
     </div>
 </div>
 
@@ -1239,7 +1239,7 @@ function noteGpsLogHealth(owner,state,hasRows,now=null){
     gpsLogHealth.state=state;
     if(hasRows){const at=now??performance.now();if(Number.isFinite(at))gpsLogHealth.lastRowsMono=at}
 }
-function gpsRunReadiness(now=performance.now()){
+function gpsLogReadiness(now=performance.now()){
     if(gpsLogHealth.owner!==sessionId)return 'Waiting for GPS timestamps';
     if(gpsLogHealth.state==='unavailable')return 'GPS log unavailable · retrying';
     const at=gpsLogHealth.lastRowsMono;
@@ -1292,7 +1292,9 @@ function renderDrive(){
     $('drive-coverage').textContent=state?(state.distanceM===null?'GPS distance unavailable':state.knownGpsSeconds.toFixed(1)+' s GPS observed · partial')+(gaps?' · excluded: '+exclusions:'')+(state.durationStatus==='uncertain'?' · duration uncertain':state.durationStatus==='checkpoint'?' · duration lower bound':''):'GPS distance uses qualified receiver evidence';
     const live=driveReadiness.at!==null&&performance.now()-driveReadiness.at<=1500;
     const storage=recordingError||(!db?'Storage unavailable':chunkWrite?'Saving…':chunkBuffer.length?'Data pending save':sessionId&&lastSaveMono!==null?'Saved in this browser':'Browser storage ready');
-    $('drive-health').textContent=rec||!state?[live?'Connected':'No fresh telemetry',live&&driveReadiness.gps?'GPS ready':'GPS waiting',live&&driveReadiness.imu?'IMU ready':'IMU waiting',storage].join(' · '):storage;
+    const evidenceHealth=rec?gpsLogReadiness():null;
+    const health=rec||!state?[live?'Connected':'No fresh telemetry',live&&driveReadiness.gps?'GPS ready':'GPS waiting',live&&driveReadiness.imu?'IMU ready':'IMU waiting',...(evidenceHealth?[evidenceHealth]:[]),storage].join(' · '):storage;
+    const healthElement=$('drive-health');if(healthElement.textContent!==health)healthElement.textContent=health;healthElement.setAttribute('data-unavailable',evidenceHealth?'true':'false');
     const button=$('drive-record');button.textContent=rec?'Stop recording':state||historical?'Record new session':'Record session';button.disabled=recordingBusy;button.classList.toggle('recording',rec);
 }
 async function loadLatestDrive(database,sessions){
@@ -2721,7 +2723,7 @@ function renderPerformanceRuns(){
     const accepted=selectedRunDetector.results.filter(r=>r.status==='accepted'),last=accepted.at(-1),best=accepted.length?Math.min(...accepted.map(r=>r.seconds)):null;
     $('run-last').textContent=last?last.seconds.toFixed(2)+' s':'—';$('run-best').textContent=best===null?'—':best.toFixed(2)+' s';
     $('run-record').textContent=rec?'Stop recording':'Record session';$('run-record').disabled=recordingBusy;
-    const readiness=rec?gpsRunReadiness():null,status=readiness||(rec?selectedRunDetector.status:last?(last.synthetic?'SIM example · see Saved data':'Recording stopped'):'Record to collect receiver timestamps');
+    const readiness=rec?gpsLogReadiness():null,status=readiness||(rec?selectedRunDetector.status:last?(last.synthetic?'SIM example · see Saved data':'Recording stopped'):'Record to collect receiver timestamps');
     const statusElement=$('run-status');if(statusElement.textContent!==status)statusElement.textContent=status;statusElement.setAttribute('data-unavailable',readiness?'true':'false');
 }
 function runsToCSV(rows){
@@ -3296,6 +3298,7 @@ async function updateDiag(){
 // Menu
 $('menu-btn').onclick=()=>$('menu-overlay').classList.add('open');
 $('menu-overlay').onclick=e=>{if(e.target===$('menu-overlay'))$('menu-overlay').classList.remove('open')};
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&$('menu-overlay').classList.contains('open')){event.preventDefault();$('menu-overlay').classList.remove('open');$('menu-btn').focus()}});
 
 $('menu-rec').onclick=$('diag-rec').onclick=async()=>{
     $('menu-overlay').classList.remove('open');
