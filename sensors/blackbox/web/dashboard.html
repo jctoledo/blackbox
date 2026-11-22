@@ -2031,7 +2031,7 @@ const modalReturnFocus=new Map();
 function revealModal(id,closeId){modalReturnFocus.set(id,document.activeElement);$(id).classList.add('open');$(closeId).focus()}
 function focusVisibleControl(preferred){
     // A menu item or portrait control may be hidden after closing or rotating.
-    const target=[preferred,$('menu-btn'),$('cluster-controls'),$('link-dashboard')].find(el=>el&&!el.disabled&&!el.hidden&&el.getClientRects().length&&getComputedStyle(el).visibility==='visible');
+    const target=[preferred,$('menu-btn'),$('cluster-controls'),$('link-dashboard')].find(el=>el&&el.tabIndex>=0&&!el.disabled&&!el.hidden&&el.getClientRects().length&&getComputedStyle(el).visibility==='visible');
     target?.focus();
 }
 function hideModal(id){
