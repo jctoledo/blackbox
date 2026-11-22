@@ -87,7 +87,11 @@ Configured GPS/IMU settings are not measured delivered rates, and one snapshot d
 
 ## Which browser supports USB flashing?
 
-Use a desktop browser exposing Web Serial over HTTPS, such as compatible Chrome or Edge. The page detects support and verifies the selected image's chip header, size, and SHA-256 before enabling connection. A data-capable cable and the correct board boot mode are still required. Physical write/reset/boot testing remains part of hardware acceptance.
+Use **Chrome on Android** with USB host/OTG, or desktop Chrome/Edge with Web Serial, over HTTPS. Android uses bundled WebUSB serial drivers, including when Chrome's native serial picker only exposes Bluetooth. Drivers cover C3 native USB CDC-ACM and common CP210x, CH340/CH341 and FTDI bridges. Individual phone/board combinations still require physical write/reset/boot testing; iPhone USB flashing is not supported.
+
+On Android, connect the C3 with a data-capable USB cable or OTG adapter, select **NEO-M9N / 25 Hz** for an M9N receiver, tap **Connect device**, select the USB device and allow access, then tap **Flash firmware**. Keep Chrome foregrounded and the screen awake until completion. The phone must power the board. Load the installer and firmware using mobile data or another internet connection before switching to Blackbox Wi-Fi for the dashboard. If no device appears, check USB host/OTG support and the cable; for a connection timeout, hold BOOT, tap RESET, release BOOT and retry.
+
+The page verifies the selected image's chip header, size, and SHA-256 before enabling connection and rejects a connected chip other than ESP32-C3 before writing. The default GPIO18/19 IMU wiring conflicts with C3 native USB: confirm the board routing and do not share those signals while flashing.
 
 The merged image writes at address zero and replaces the full flash image, including device configuration. Browser-local recordings live separately. Use the release notes and back up the current setup before changing firmware.
 

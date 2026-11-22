@@ -269,12 +269,13 @@
         <div class="flasher">
             <div class="section-head">
                 <h2>Flash firmware</h2>
-                <p>Published release via USB. Use desktop Chrome or Edge with Web Serial.</p>
+                <p>Published release via USB. Use Chrome on Android with a USB data cable, or desktop Chrome/Edge.</p>
             </div>
 
             <div class="flasher-grid">
                 <div class="flasher-panel">
-                    <h3>Install a release</h3><p class="release-note">Choose the GPS variant that matches your receiver. Release candidates contain newer fixes and still need hardware validation. <a href="https://github.com/jctoledo/blackbox/releases">Read release notes</a></p>
+                    <h3>Install a release</h3><p class="release-note">For an M9N receiver, select <strong>NEO-M9N / 25 Hz</strong>. Choose NEO-6M only for a 6M receiver. Release candidates contain newer fixes and still need hardware validation. <a href="https://github.com/jctoledo/blackbox/releases">Read release notes</a></p>
+                    <p class="release-note">Android: connect the ESP32-C3 directly with a data-capable USB cable (or USB OTG adapter), allow USB access, and keep Chrome open with the screen awake until installation finishes. Your phone must support USB host/OTG and power the board. Use mobile data or another internet connection to load the installer and firmware before joining Blackbox Wi-Fi. iPhone USB flashing is not supported.</p>
                     <div class="form-group">
                         <label for="project-select">Firmware</label>
                         <select id="project-select">
@@ -285,7 +286,7 @@
                         <ol class="steps-list">
                             <li>Connect ESP32-C3 via USB</li>
                             <li>Hold BOOT button if needed</li>
-                            <li>Click Connect, select port</li>
+                            <li>Tap Connect device, select your ESP USB device or serial port, and allow access</li>
                             <li>Click Flash (replaces the device firmware)</li>
                         </ol>
                     </div>
@@ -337,6 +338,6 @@
     <script src="site-motion.js?v=circuit-1"></script>
     <script src="projects-config.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/adam-weber/esp-webflash-toolkit@c9b61384b1217545bdb70e7762e4e4fa36dfdc7c/dist/esp-webflash-toolkit.min.js"></script>
-    <script src="flasher.js"></script>
+    <script src="flasher.js?v=android-usb-1"></script>
 </body>
 </html>
