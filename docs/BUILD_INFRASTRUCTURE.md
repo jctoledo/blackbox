@@ -63,3 +63,9 @@ Firmware source `5ec5b47`, four-CPU/8-GiB container, pinned nightly/ESP-IDF conf
 These are this container's observations, not a build-time guarantee. Firmware compilation remains in every clean job; the reusable SDK/tool installation was approximately 3.4 GiB. An earlier external-firmware-target trial was rejected after its application-version lookup changed. Its fast repeat times are not a result of the adopted design.
 
 Both receiver builds retained the expected SDK defaults, compile-time receiver settings, C3 headers and partition layout. Tagged and untagged app descriptors matched their actual Git descriptions. The release workflow additionally checks the packaged application version against the requested tag before upload using `scripts/check_release_image.py`; it fails rather than publishing a mislabeled image.
+
+## Reviewed-PR acceptance, 2026-11-21
+
+The first live negative exercise deliberately dispatched PR #147 with an obsolete reviewed SHA. [Run 44974417467](https://github.com/jctoledo/blackbox/actions/runs/44974417467) failed authorization with the expected head mismatch error; validation and reporting were skipped, so no PR source ran. This intentional failure checks the trust contract.
+
+The positive exercise pinned `9ee9e212aa9212110cc8c6cfd453e28cabd73c7d`. [Run 44975026545](https://github.com/jctoledo/blackbox/actions/runs/44975026545) published pending, ran the full existing CI and published success. Both the commit-status API and `gh pr checks 147` exposed `lat/reviewed-ci` with that run's attempt URL. GitHub's job API reported `blackbox-lat` for authorization, validation and reporting. The resulting main merge `6861161` has the identical tested source tree. This verifies one real successful dispatch and one stale-head refusal; cancellation and runner-loss reporting remain best effort as described above.
