@@ -19,6 +19,8 @@ Convert compass course to mathematical yaw with `π/2 − course` only at the re
 
 Local geographic conversion uses `north = Δlatitude × 111320` and `east = Δlongitude × 111320 × cos(reference latitude)`. This is a short-distance planar approximation, not an ellipsoidal survey conversion. It has no antimeridian/polar route support. Store the geographic origin with traces because the live local origin resets at boot.
 
+Zero latitude or longitude is a valid coordinate, not a missing-data sentinel. Browser route capture validates finite geographic values and tracks missing GPS separately from its finite local-position fallback. Firmware-origin adoption uses the explicit warmup flag for zero-valued origins; legacy responses without that flag need nonzero coordinates, or the browser can establish an origin from validated fixes. Exact polar origins are excluded from the local projection. GPS distance does not bridge unavailable coordinate evidence.
+
 ## Estimator prediction
 
 The state is `[x, y, ψ, vx, vy, bax, bay]`; position, velocity and learned residual biases share the earth frame. After gravity removal and rotation:

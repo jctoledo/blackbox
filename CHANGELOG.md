@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Route capture and browser GPS origins accept valid zero latitude/longitude; missing fixes remain unavailable, and uninitialized firmware origin placeholders cannot become real coordinates (#145).
 - Recording saves and save-age labels use monotonic elapsed time, so phone clock corrections cannot postpone persistence until the pending-data cap or trigger premature saves. Raw calendar timestamps remain intact.
 
 ### Changed
