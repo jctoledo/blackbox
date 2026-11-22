@@ -13,7 +13,7 @@
 - [How Blackbox works](https://jctoledo.github.io/blackbox/guides/engineering-review.html): architecture, timing, local data ownership, and verification.
 
 ## Capabilities and evidence
-Blackbox supports circuit/stage timing, interpolated fresh-fix crossings, position-matched references, CSV export, and validated backup/restore. Configuration targets are 25 Hz GPS with NEO-M9N (5 Hz with NEO-6M) and configurable WT901 output up to 200 Hz. No project subscription or cloud account is required.
+Blackbox supports circuit/stage timing, interpolated fresh-fix crossings, position-matched references, recording-backed Drive duration/partial GPS distance, saved speed and sustained-force summaries, CSV export, and software-validated backup/restore. Configuration targets are 25 Hz GPS with NEO-M9N (5 Hz with NEO-6M) and configurable WT901 output up to 200 Hz. No project subscription or cloud account is required.
 
 - [Build or buy comparison](https://jctoledo.github.io/blackbox/guides/comparison.html): documented capabilities alongside RaceBox, RaceChrono Pro, and Performance Box Touch; cost assumptions and proposed features are separate from delivered features.
 
@@ -44,3 +44,5 @@ This file is a convenient reading index, not a crawler directive or a guarantee 
 - [First drive](https://jctoledo.github.io/blackbox/guides/first-drive.html): concise NEO-M9N setup, parked baselines, ordinary-drive recording, exports and photo plan.
 
 - [Drive recording](https://jctoledo.github.io/blackbox/guides/drive-recording.html): no-track readiness, monotonic recording duration, partial receiver-speed GPS distance and recoverable checkpoints.
+
+- [Saved recording summary](https://jctoledo.github.io/blackbox/guides/recording-summary.html): qualified maximum speed, sustained half-second force estimates, saved-only scope, continuity and synthetic provenance; recomputed from retained rows after reload/restore.

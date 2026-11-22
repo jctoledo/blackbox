@@ -210,3 +210,17 @@ validated bank/grade compensation or tyre loads from these checks.
 - [ ] At 390 px portrait and short landscape widths, confirm a long track name and 44 px Activate/Dismiss controls occupy a separate row. With Controls, connection and recovery notices expanded, Drive state and Stop remain reachable without any suggestion over the instruments.
 - [ ] Dismiss a nearby saved track and verify it stays suppressed until page reload; another track remains eligible. Let a suggestion expire and check it waits before returning. Disconnect GPS/Wi-Fi or change the active track during lookup and verify stale suggestions disappear.
 - [ ] Use keyboard focus and Activate/Dismiss, including Escape from the suggestion; verify only explicit Activate changes timing and suggestions never start or stop recording.
+
+
+## Drive recording and backup acceptance on both phones
+
+Run these checks while parked on the actual Android browser and iPhone Safari/Home Screen launch you intend to use. Keep the original recording/browser data and an external backup throughout. Software transaction/replay regressions have passed; a browser-tool file-picker stall leaves the latest real GUI import attempt unverified. Record each phone's observed result rather than treating desktop emulation as acceptance.
+
+- [ ] With no selected track, start **Record session** and confirm REC, saving status and Drive duration. Check GPS distance is unavailable until qualified intervals arrive; a known stationary zero must not be confused with missing evidence.
+- [ ] Rotate and switch instruments/units, then select a track and return to no-track Drive. Capture must continue under the same recording. Check mi/km display changes without changing stored metres; Runs retains the selected lower-speed/overtaking category and each preset's own results.
+- [ ] While parked, stop and note duration/distance immediately. Wait through final saving and verify neither metric grows. Reload: no automatic recording; a completed summary stays frozen and an interrupted checkpoint is labelled as a lower bound. Missing legacy fields remain unknown.
+- [ ] In **Saved data → Summary · saved samples**, compare maximum qualified speed and half-second force estimates before/after reload. Pending samples must be explicitly excluded until committed. Keep Session CSV, GPS CSV and **Download details JSON** together.
+- [ ] Download a full backup and confirm the actual file exists outside browser storage. On the other phone/browser, choose it, review the counts, and **Restore as new copies**. Existing recordings/tracks must remain intact. Compare telemetry/GPS counts, metadata, stopped/interrupted meaning, Drive enrollment/Stop fences, frozen duration and partial distance. The recalculated saved Summary must match the retained rows after another reload; no cached or current-device value should fill missing history.
+- [ ] Repeat in the intended Home Screen launch if storage is separate. Check track/reference/history counts too when included. Keep the source data and backup until every required destination works; an import error or partial-database retry must stay visible.
+
+These are recovery and usability checks. They do not establish GPS distance accuracy, background recording, force calibration or timing error. Use the ordinary-drive plan first; controlled crossing and mounting experiments remain separate.
