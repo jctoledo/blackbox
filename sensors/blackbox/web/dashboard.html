@@ -1967,7 +1967,7 @@ function wrapAngle(a){while(a>Math.PI)a-=2*Math.PI;while(a<-Math.PI)a+=2*Math.PI
 // Track Manager UI
 const modalReturnFocus=new Map();
 function revealModal(id,closeId){modalReturnFocus.set(id,document.activeElement);$(id).classList.add('open');$(closeId).focus()}
-function hideModal(id){$(id).classList.remove('open');modalReturnFocus.get(id)?.focus();modalReturnFocus.delete(id)}
+function hideModal(id){if(id==='data-modal'&&backupBusy)return;$(id).classList.remove('open');modalReturnFocus.get(id)?.focus();modalReturnFocus.delete(id)}
 document.addEventListener('keydown',event=>{
     const modal=document.querySelector('.bbModal.open');if(!modal)return;
     if(event.key==='Escape'){event.preventDefault();hideModal(modal.id);return}
