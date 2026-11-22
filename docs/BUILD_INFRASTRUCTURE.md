@@ -8,6 +8,18 @@ The dedicated `blackbox-lat` runner runs in its existing container, limited to f
 
 One runner serializes its jobs. Another runner in a separate container gets separate storage. Sharing this cache between concurrent runners would require an additional locking design covering build and packaging; adding a cross-workflow concurrency group can also replace pending runs, so it is not a harmless substitute.
 
+## Reviewed PR controller
+
+`.github/workflows/reviewed-pr.yml` accepts a PR number and full reviewed head SHA only through an explicit dispatch from `main`. The trusted controller refuses a non-main dispatch, then uses GitHub's PR API to require an open same-repository PR targeting main and an equal current head. No PR open/update event schedules code. The same guard runs again immediately before immutable checkout in reusable `ci.yml`; checkout credentials are disabled and `HEAD` is checked against the reviewed SHA. Main push and ordinary manual branch behavior are preserved. The [contribution guide](../CONTRIBUTING.md#reviewed-pr-validation) gives exact dispatch commands.
+
+The wrapper and guard/status helper come from the dispatch's main commit. Its authorization and final reporting jobs receive `statuses: write`; the reused job that executes reviewed source retains only read permissions. Existing validation commands, runner resources and cache policy are reused. This permission split limits the build token; it does not make a persistent runner safe for arbitrary untrusted code. Only dispatch code the maintainer has reviewed.
+
+`lat/reviewed-ci` is a distinct commit status against the exact SHA, with a run-attempt URL. Pending is published after authorization; final success requires the complete reusable job to succeed and the PR still to match. Failure maps to failure; skipped/cancelled/other conclusions and a moved/closed PR map to error. A reporter API failure cannot publish success. GitHub does not surface ordinary branch `workflow_dispatch` jobs as native PR checks; see [primary-source research](research/PR_CI.md).
+
+Workflow concurrency serializes runs per PR with `cancel-in-progress: false`. An older run finishes reporting before a newer run starts publishing; exact-SHA statuses never transfer to a new head. GitHub may replace a waiting concurrency run, which has not yet authorized or published pending. Reusable CI uses a run-specific concurrency group for reviewed calls so main/ordinary branch cancellation cannot cancel them. Avoid force-cancelling the controller: its `always()` reporter attempts to publish after validation failure/cancellation, but runner loss, force cancellation, checkout failure or GitHub API failure can leave a pending status. A pending/missing status is not a pass. Recover by inspecting the linked run and dispatching the still-reviewed current head again. No branch-protection configuration is changed here.
+
+Controller tests exercise API data and status-state behavior on lat. Full CI and the live stale-head/visible-status exercises require workflow runs; the first deployed controller must be verified on main before claiming end-to-end PR visibility. The dedicated runner still serializes jobs; no extra runner or hosted minutes are added.
+
 ## What persists between jobs
 
 `scripts/cargo-cache.sh` selects a Blackbox-only namespace inside the container's home directory. Configuration identity includes tracked Cargo manifests/lockfile, Cargo configuration, SDK defaults, partitions and relevant build overrides. Host output also includes the compiler identity. Environment values contribute to digests; credentials and network settings are not printed as cache metadata.
