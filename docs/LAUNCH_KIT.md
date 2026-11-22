@@ -4,7 +4,7 @@ These are editable drafts for the maintainer to publish after the bench/drive ch
 
 ## Core description
 
-Blackbox is an open-source ESP32-C3 GPS driving instrument with Rust firmware and a phone dashboard served over local Wi-Fi. Record circuits and stages, compare position-matched reference pace, inspect forces and rolling speed intervals, and export recordings you can back up and restore. Build it, understand the measurements, and help validate it.
+Blackbox is an open-source ESP32-C3 GPS driving instrument with Rust firmware and a phone dashboard served over local Wi-Fi. Record an ordinary drive without a track, or set up circuit/stage timing and position-matched reference pace. Review saved speed and sustained-force estimates, inspect rolling speed intervals, and export recordings you can back up and restore. Build it, understand the measurements, and help validate it.
 
 ## Short post: drivers and builders
 
@@ -12,9 +12,9 @@ Blackbox is an open-source ESP32-C3 GPS driving instrument with Rust firmware an
 
 I wanted a driving instrument I could inspect from GPS input to exported recording, so I built Blackbox around an ESP32-C3, u-blox GPS and WT901 IMU. The phone connects over local Wi-Fi; there’s no project cloud account or subscription.
 
-It has circuit/stage timing, a landscape dashboard with Speed/G-meter/Peaks/Runs, position-matched reference pace and local recordings with CSV export and backup/restore. NEO-M9N is configured for a 25 Hz GPS target; delivered rates and real-world timing accuracy still need installation-specific evidence.
+It has circuit/stage timing, a landscape dashboard with Speed/G-meter/Peaks/Runs, and a no-track Drive recording panel. Saved recordings include maximum qualified speed and half-second force estimates, alongside CSV export and backup/restore. Rolling presets follow mph/km/h while keeping four independent literal tests. NEO-M9N is configured for a 25 Hz GPS target; delivered rates and real-world timing accuracy still need installation-specific evidence.
 
-You can try the synthetic dashboard without hardware: https://jctoledo.github.io/blackbox/demo.html?v=0.0.4-rc.11
+You can try the synthetic dashboard without hardware: https://jctoledo.github.io/blackbox/demo.html
 
 Source, build instructions and verified release installer: https://jctoledo.github.io/blackbox/
 
@@ -43,7 +43,7 @@ I’d value review of coordinate-frame assumptions, timestamp handling, reproduc
 | 0–10 s | Real box, receiver and phone together | “I built a GPS driving instrument I can inspect and change.” |
 | 10–25 s | Connect while parked, open local dashboard | Local Wi-Fi, no project cloud login |
 | 25–45 s | Landscape instrument selection and timing | Show real data; label any synthetic inserts on screen |
-| 45–60 s | Saved data, GPS CSV and backup | Show how evidence leaves the browser |
+| 45–60 s | Stopped Drive summary, Saved data Summary, GPS CSV and backup | Show saved evidence and exclusions, then how it leaves the browser |
 | 60–75 s | One concrete finding from the drive | State the observation and its limits |
 | 75–90 s | Build guide and repository | Invite builders and reproducible bug reports |
 

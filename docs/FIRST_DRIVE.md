@@ -7,7 +7,7 @@ Start with an ordinary drive after the bench checks. The aim is to establish tha
 - Download a full backup of existing browser recordings and tracks. Keep it outside browser storage.
 - Confirm the controller is the supported ESP32-C3 build and choose the NEO-M9N release image. Record the version and checksum. Check the actual board's USB arrangement before attaching the IMU; the default GPIO18/19 UART assignment conflicts with active C3 native USB.
 - Secure the enclosure, antenna, wiring and phone. Photograph the sensor axes and antenna position while parked. Configure the UI before driving.
-- Use level ground for the first stationary startup baseline. The modest-incline arithmetic has software tests; a driveway comparison is a later parked validation step.
+- Keep the sensor upright and parallel to the car floor; a sloping dash may need a rigid support. Non-horizontal mounting remains R&D. Use level ground for the first stationary startup baseline. The modest-incline arithmetic has software tests; a driveway comparison is a later parked validation step.
 - Choose one phone/browser as the primary recorder. Keep that dashboard foregrounded, powered and unlocked. A Home Screen launch may use different browser storage; test recovery before relying on it.
 
 ## Parked, outdoors
@@ -30,11 +30,13 @@ Recording a route and timing a stage are separate operations. For an initial lon
 
 Record another short stationary segment. Stop recording: Drive duration and distance freeze immediately, while final saving may still finish. Wait for saving, then open **Saved data**:
 
+- Expand **Summary · saved samples**. Note maximum speed, qualified half-second force estimates and any exclusions; these are saved-recording observations, separate from the live page-session MAX/Peaks. Missing legacy evidence remains unavailable.
 - Export the recording's **Session CSV** and **GPS CSV**.
 - On **v0.0.4-rc.11 and later**, expand **Recording details** and choose **Download details JSON** for the recording. Keep this companion file with the CSVs and backup; rc.10 does not provide this capture/export. Pending or unavailable details do not prevent recording.
 - Export **Runs CSV** if attempts exist. An empty result is not a failed ordinary drive.
 - Download a **full backup**. Export track geometry too if you recorded or used a circuit/stage.
-- Reload the same browser/origin and confirm the recording remains listed. Preserve the backup before trying another browser or phone.
+- Reload the same browser/origin and confirm the recording, frozen Drive duration/distance and saved Summary remain available without recording resuming. Preserve the backup before trying another browser or phone.
+- Before relying on a second phone or Home Screen launch, restore the backup **as new copies** there and compare sample/GPS counts, Drive details and derived Summary. Keep the original browser data and file until that check succeeds. See the [phone restore checklist](HARDWARE_VALIDATION.md#drive-recording-and-backup-acceptance-on-both-phones).
 
 Keep files together in a private folder named with date, receiver and firmware version. Keep the flashed image SHA-256 and add a short note: phone/OS/browser, antenna/mounting, foreground/background events, reception conditions and anything unexpected. Automatic recording context does not infer these details; its configured rates do not replace the delivered rates in Diagnostics. Retain originals; make redacted copies for public reports. CSV/JSON backups contain location history and are not encrypted.
 

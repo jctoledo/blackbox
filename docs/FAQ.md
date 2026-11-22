@@ -63,6 +63,22 @@ No. It maintains seven state values using a diagonal covariance approximation. C
 
 Recordings, tracks, and reference laps are local to the browser origin and device. Quota exhaustion, private browsing behavior, clearing site data, switching browsers, or losing an unsaved in-memory tail can lose data. Export important sessions before closing the tab or changing storage. A visible recording indicator does not mean the current tail has already committed to storage.
 
+## Can I record a normal drive without a track?
+
+Yes. Leave the track unselected and choose **Record session**. The Drive panel shows connection/sensor/storage readiness, recording duration and partial GPS observed distance. **Stop recording** freezes the metrics immediately while saving may finish afterward. Selecting a circuit/stage changes the panel without changing capture. Rotation and reload never start or resume recording. See [Drive recording](DRIVE.md) for the clock, GPS qualification and recovery rules.
+
+Nearby-track suggestions occupy a separate notice row. **Dismiss** suppresses that track until page reload; **Activate** explicitly arms timing. Suggestions do not start recording.
+
+## Can I review maximum speed and braking after a drive?
+
+Open **Saved data → Summary · saved samples**. It derives maximum qualified speed and the strongest time-weighted 0.5-second acceleration, braking and left/right force estimates from committed recording chunks. Pending samples are excluded until saved. These values survive reload by being recalculated from raw data; they are separate from the live page-session MAX/Peaks. Missing quality/clock evidence remains unavailable, and known zero is distinct from no result.
+
+The summary is also included in **Recording details → Download details JSON**, with speed in m/s and forces in g. Display units follow your preference; raw export units stay documented. See [summary calculations](RECORDING_SUMMARY.md). These estimates do not measure tyre grip or braking distance.
+
+## Which rolling runs follow my units setting?
+
+**Menu → Speed units** selects lower-speed/overtaking presets: **30–60 / 45–70 mph** or **50–100 / 80–120 km/h**. The corresponding categories are different tests, not exact conversions. All four detectors keep their own literal thresholds and results; switching units preserves the category without converting an existing time into another test. Recording is required. Standing-start 0–60, quarter-mile launch/rollout rules and slope correction remain proposals. See [Runs](RUNS.md).
+
 ## Do recordings remember the firmware and sensor setup?
 
 In **v0.0.4-rc.11 and later**, the dashboard requests one device snapshot per new recording and exposes **Saved data → Recording details → Download details JSON**. Recording continues while details are pending or unavailable. rc.10 does not provide this capture/export. Older recordings remain unknown; recovery does not query the current device to fill their history. Demo context is explicitly **SIM** / simulated.
@@ -122,7 +138,7 @@ While parked, stop session and route recording. Open **Saved data → Download b
 
 On the destination browser, open **Saved data → Choose backup**, select the file, review its counts, then choose **Restore as new copies**. The full-backup checksum and data relationships are checked before any writes. Existing data is never replaced; track/reference/history IDs are remapped together. Restored recordings are stopped, and restored tracks are not automatically armed. Existing track timing may continue, and backup/restore does not require a device connection. Importing the same file a second time adds another set of copies.
 
-Recordings and tracks use separate IndexedDB databases. Each group commits atomically, but both cannot share one transaction. If tracks fail after recordings commit, keep the tab open and choose **Retry remaining data**; it skips the committed recordings. Reloading loses that retry plan. Check Saved data before starting a fresh import after a reload to avoid duplicate copies. Keep the original backup file until restoration is verified.
+Recordings and tracks use separate IndexedDB databases. Each group commits atomically, but both cannot share one transaction. If tracks fail after recordings commit, keep the tab open and choose **Retry remaining data**; it skips the committed recordings. Reloading loses that retry plan. Check Saved data before starting a fresh import after a reload to avoid duplicate copies. Keep the original backup file until restoration is verified. Compare recording/GPS row counts and metadata, then check the stopped or interrupted Drive context and the recalculated Summary after reload. Restoring older recordings does not fill missing historical fields from the current device. Test the file-selection flow on both actual phones before relying on a browser or Home Screen change; see the [phone acceptance checklist](HARDWARE_VALIDATION.md#drive-recording-and-backup-acceptance-on-both-phones).
 
 The maximum supported JSON file is **100 MiB**. For larger libraries, use **Backup contents** to select one recording, all recordings, or tracks only. A single recording over that limit still needs CSV export for analysis; CSV is not a restorable backup. Backups contain precise location history and are not encrypted. The CRC checksum detects accidental damage; it is not proof of who created a file. Browser eviction and hardware failure still require an external copy to protect your data.
 

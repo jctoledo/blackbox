@@ -159,6 +159,10 @@ Connect to the device's WiFi and open `192.168.71.1` in any browser.
 
 With no selected track, the timing frame shows recording readiness, duration and partial GPS observed distance. Stop freezes the summary; selecting a track restores timing while recording continues. See the [Drive recording guide](docs/DRIVE.md).
 
+While parked, open **Saved data → Summary · saved samples** for a recording’s maximum qualified speed and strongest half-second acceleration, braking and left/right force estimates. The summary uses committed samples; pending samples stay excluded until saved. Reload and restore recompute it from the retained data. [Summary calculations and limits](docs/RECORDING_SUMMARY.md).
+
+Nearby-track suggestions stay in a reserved notice row. **Dismiss** suppresses that track until page reload; only **Activate** arms timing, and neither action starts recording.
+
 Landscape offers Speed, G-meter, sustained Peaks and Runs, with timing or Drive alongside. Tap the instrument name to reveal its picker, or swipe horizontally to switch; the picker closes after selection. Speed includes a subtle maximum speed estimate while GPS is fresh for this page session. 
 
 Choose **Menu → Speed units** for mph or km/h; the preference stays in this browser and applies to Speed and MAX. Drive distance follows the same preference in mi/km. Runs shows 30–60 / 45–70 mph or 50–100 / 80–120 km/h. These are purpose counterparts, not exact conversions: all four detectors keep independent literal results and export labels. Recording/export units do not change. Tap Controls for the toolbar; the G-meter uses a selectable fixed scale and clears when data becomes unavailable.
