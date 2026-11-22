@@ -3471,7 +3471,7 @@ async function prepareMultipartBackup(scope='all',options={}){
             data[collection]=[checked];validateBackup({format:BACKUP_FORMAT,version:1,data,checksum:backupChecksum(data)});
             const text=JSON.stringify(row);multipartCheck(multipartBytes(text)<=MULTIPART_RECORD_BYTES,'one saved record exceeds the 16 MiB record limit; original data is unchanged');digest.update(collection+'\n'+text+'\n');counts[collection]++;if(collection==='chunks')samples+=row.data.length;multipartCheck(++recordsCount<=MULTIPART_MAX_RECORDS,'archive has too many records');if(['sessions','tracks'].includes(collection))multipartCheck(counts[collection]<=MULTIPART_MAX_ROOTS,'archive has too many recordings or tracks');options.onProgress?.({phase:'preparing',records:recordsCount,samples})
         }
-        for(const replay of replays.values())replay.finish();
+        for(const replay of replays.values())replay.finish();multipartAbort(options.signal);
         return{digest:digest.value(),counts,samples};
     }
     const expected=await scan(),source=records(),actual=multipartDigest(),counts=Object.fromEntries(MULTIPART_COLLECTIONS.map(k=>[k,0])),parts=[];
@@ -3528,7 +3528,7 @@ async function stageMultipartBackup(files,options={}){
         }
         multipartCheck(!current&&job.records===manifest.records&&MULTIPART_COLLECTIONS.every(k=>job.counts[k]===manifest.counts[k])&&job.samples===manifest.samples&&digest.value()===manifest.sourceDigest,'incomplete archive or manifest summary mismatch');
         for await(const entry of multipartStagedRows(stage,job.id,'sessions'))if(entry.data.drive){const replay=new DriveReplay(entry.data.drive);await new Promise((resolve,reject)=>{const tx=stage.transaction('records','readonly'),r=tx.objectStore('records').index('session').openCursor(IDBKeyRange.bound([job.id,'chunks',entry.data.sessionId,0],[job.id,'chunks',entry.data.sessionId,Number.MAX_SAFE_INTEGER]));tx.oncomplete=resolve;tx.onerror=tx.onabort=()=>reject(tx.error||Error('Drive evidence read failed'));r.onsuccess=()=>{const cursor=r.result;if(!cursor)return;try{replay.update(cursor.value.data.data);cursor.continue()}catch(error){tx.abort();reject(error)}}});replay.finish();multipartAbort(options.signal)}
-        job.collectionDigests=Object.fromEntries(MULTIPART_COLLECTIONS.map(k=>[k,collectionDigests[k].value()]));job.state='ready';delete job.referenceTracks;await multipartStagePut(stage,job);return job;
+        multipartAbort(options.signal);job.collectionDigests=Object.fromEntries(MULTIPART_COLLECTIONS.map(k=>[k,collectionDigests[k].value()]));job.state='ready';delete job.referenceTracks;await multipartStagePut(stage,job);multipartAbort(options.signal);return job;
     }catch(error){job.state='incomplete';job.error=String(error.message);try{await multipartStagePut(stage,job)}catch{}throw error}finally{stage.close()}
 }
 async function listMultipartJobs(){const stage=await openMultipartStage();try{return await multipartRead(stage,['jobs'],(tx,done)=>{const jobs=[],r=tx.objectStore('jobs').openCursor(null,'prev');r.onsuccess=()=>{const cursor=r.result;if(!cursor||jobs.length>=100){done(jobs);return}const {id,archiveId,createdAt,state,counts,samples}=cursor.value;jobs.push({id,archiveId,createdAt,state,counts,samples});cursor.continue()}})}finally{stage.close()}}
