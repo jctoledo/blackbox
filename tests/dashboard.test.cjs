@@ -64,7 +64,7 @@ test('old track telemetry cannot be recorded against a newly selected track',()=
 
 test('recording commits preserve samples arriving during a pending write',async()=>{
  const transactions=[],records=[];
- const c={console,Date,Math,db:{transaction(){
+ const c={console,Date,Math,performance,db:{transaction(){
    const tx={objectStore:()=>({put:value=>records.push(value)})};transactions.push(tx);return tx;
  }}};
  vm.createContext(c);

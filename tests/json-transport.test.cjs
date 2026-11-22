@@ -32,8 +32,8 @@ test('GPS body timeout releases collection for the next batch without stopping r
  let healthy=false;const stalled=body(()=>new Promise(()=>{}));
  const batch={version:1,simulated:false,boot_id:7,capacity:64,latest_seq:1,events:[{seq:1,host_us:40000,utc_us:40000,date_ddmmyy:201126,fractional_digits:2,active:true,accepted:true,lat:37,lon:-122,speed_mps:10,course_rad:1}]};
  const s=setup(async()=>healthy?chunks(JSON.stringify(batch)).response:stalled.response),c=s.c;
- Object.assign(c,{console:{warn(){}},MAX_PENDING_SAMPLES:6000,CHUNK_INTERVAL:5000});
- vm.runInContext(html.slice(html.indexOf('// Recording state.'),html.indexOf('function updateRecUI()'))+';function updateRecUI(){};rec=true;sessionId=10;lastSaveTime=Date.now();',c);
+ Object.assign(c,{console:{warn(){}},performance:{now:()=>0},MAX_PENDING_SAMPLES:6000,CHUNK_INTERVAL:5000});
+ vm.runInContext(html.slice(html.indexOf('// Recording state.'),html.indexOf('function updateRecUI()'))+';function updateRecUI(){};rec=true;sessionId=10;lastSaveMono=0;',c);
  const pending=c.collectGpsLog();await flush();assert.equal(vm.runInContext('rec',c),true);assert.equal(vm.runInContext('chunkBuffer.length',c),0);
  await s.advance(3000);await pending;assert.equal(vm.runInContext('rec',c),true);assert.equal(vm.runInContext('gpsRequest',c),null);assert.equal(vm.runInContext('chunkBuffer.length',c),0);
  healthy=true;await c.collectGpsLog();assert.equal(vm.runInContext('chunkBuffer.length',c),1);assert.equal(vm.runInContext('chunkBuffer[0].gpsSeq',c),1);assert.equal(vm.runInContext('rec',c),true);assert.equal(s.timers.size,0);
