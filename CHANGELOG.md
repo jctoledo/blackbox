@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- G-meter filtering/trails, page SESSION and track-capture elapsed displays use monotonic time; phone calendar corrections no longer corrupt forces or produce negative elapsed values. Real frame gaps reset motion history (#142).
 - Recording saves and save-age labels use monotonic elapsed time, so phone clock corrections cannot postpone persistence until the pending-data cap or trigger premature saves. Raw calendar timestamps remain intact.
 
 ### Changed
