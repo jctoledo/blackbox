@@ -15,3 +15,7 @@ Reduced-motion and data-saving preferences retain a still image. Playback pauses
 ## Instrument fonts
 
 Inter and JetBrains Mono Latin variable WOFF2 subsets are stored in `fonts/`, with OFL license texts and exact source URLs/byte counts in `fonts/sources.json`. The website serves these locally. `scripts/embed_dashboard_fonts.py` embeds the identical files into the device HTML, which therefore needs no internet font request. Preserve the licenses when redistributing.
+
+## Dashboard captures for rc.12
+
+The `dashboard-*-v9.png` images are actual browser captures of the combined production dashboard at source `d4461b5`, using the separately labelled synthetic demo backend. Landscape images are 844 × 390; portrait is 390 × 844. `recording-details-v2.png` and `recording-summary-v1.png` are 390 × 844 captures from that same interface. Images were encoded on lat without resizing or stretching. They demonstrate interface behavior, not physical sensor or timing accuracy. Existing versioned images remain available for old links.
