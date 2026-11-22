@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Commit the synthetic demo track before its reference so a fresh browser initializes correctly under the reference integrity guard.
 - Bind reference-save publication and warnings to their timing owner; retain faster committed spatial references and prevent late saves from recreating references for deleted tracks (#166).
 - Phone and sensor-alignment dialogs share Escape, button and backdrop cleanup, stop alignment polling and restore a visible control after closing or rotating. Diagnostics has a keyboard-operable return that remains visible in landscape (#167).
 
