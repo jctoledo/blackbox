@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Count every valid post-warmup GPS RMC fix in delivered-rate diagnostics, including UART batches ending with an invalid fix (#157). Estimation remains latest-only; this does not establish physical receiver cadence or timing accuracy.
 - Stationary IMU bias calibration restarts its 150-sample collection after acceleration evidence gaps over 200 ms; menu failures retain the previous bias (#156).
+- Retain captured routes through invalid finishes and failed browser writes, with stable-identity retry, write-free track JSON recovery, explicit discard, and truthful saved versus arming-unconfirmed states. Reference save failures now warn while preserving the prior reference (#158).
 
 ### Changed
 - Renamed `neo6m` driver to `ublox-gps` to reflect support for multiple u-blox GPS modules (NEO-6M, NEO-M9N, etc.)

@@ -11,9 +11,16 @@ GPS-based lap timing for an open telemetry project. Record circuits or stages, s
 2. Open **Tracks** and choose circuit or stage recording
 3. At a controlled site, record one circuit, or follow the stage to its finish
 4. For circuits, review the loop-complete prompt. For stages, stop safely and tap **Mark Finish**
-5. Name and save
+5. While parked, choose **Save track & arm**, enter a name, and check the confirmed timing state. A successful save and arm releases the capture panel.
+
+If browser storage fails, the completed route stays in this tab with **Save track & arm** to retry and **Download captured track** to recover a portable version 2 track JSON file without another storage write. Check Files/Downloads before closing the tab. A retry uses the same captured identity; existing saved tracks are not overwritten. **Continue route** replaces the captured finish after confirmation; **Discard route** explicitly abandons an unsaved capture. An early finish with too few route points can still continue.
+
+If the track saves but arming is not confirmed, the panel says so and offers **Retry arming**. This retries only device configuration, without creating another saved track. Check the connection and current timing state before retrying. You may close the saved capture and select it from Tracks later. Nearby-track suggestions resume after the completed capture closes.
+
+A failed reference write appears in the dashboard warning area. The prior saved reference remains available; check browser storage and complete another valid lap/run to retry.
 
 ### Start Timing
+For an existing saved track, or to arm again later:
 1. Open **Tracks** → saved track → **Arm timing**
 2. **Start line indicator** shows distance and direction: "Start line: 150 m ↗"
 3. Drive across start line — timing begins automatically

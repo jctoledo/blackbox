@@ -898,8 +898,13 @@ body.cluster-view .bbDeltaBar:not(.no-ref) .bbDeltaText{font-size:min(clamp(24px
             <div class="bbRecordSuccessStats" id="rec-success-stats">—</div>
         </div>
         <div class="bbRecordActions">
-            <button class="bbRecordActionBtn secondary" onclick="continueTrackRecording()">Continue route</button>
-            <button class="bbRecordActionBtn primary" onclick="finishTrackRecording()">Save track & arm</button>
+            <button class="bbRecordActionBtn secondary" id="btn-continue-route" onclick="continueTrackRecording()">Continue route</button>
+            <button class="bbRecordActionBtn primary" id="btn-save-track" onclick="finishTrackRecording()">Save track & arm</button>
+        </div>
+        <p class="bbRecordHint" id="rec-save-status" role="status"></p>
+        <div class="bbRecordActions">
+            <button class="bbRecordActionBtn secondary" id="btn-export-route" onclick="exportCapturedTrack()" disabled>Download captured track</button>
+            <button class="bbRecordActionBtn secondary" id="btn-discard-route" onclick="cancelTrackRecording()">Discard route</button>
         </div>
     </div>
 </div>
@@ -1304,7 +1309,7 @@ function updateRecUI(){
     }
     if(recordingError){stat.textContent=recordingError;stat.className='bbVal err'}
     const quick=$('quick-record');quick.textContent=rec?'Stop recording':'Record session';quick.disabled=recordingBusy;quick.classList.toggle('recording',rec);
-    const notice=recordingError||lapPersistenceError||(recoveredSessionCount?recoveredSessionCount+' interrupted recording(s) found in Saved data. Check saved sample counts; recording has not resumed.':'');
+    const notice=recordingError||lapPersistenceError||referencePersistenceError||(recoveredSessionCount?recoveredSessionCount+' interrupted recording(s) found in Saved data. Check saved sample counts; recording has not resumed.':'');
     $('recording-notice').hidden=!notice;$('recording-notice').textContent=notice;
     const saveStatus=$('save-status');saveStatus.hidden=!sessionId;saveStatus.textContent=chunkWrite?'Saving recording…':chunkBuffer.length?chunkBuffer.length+' samples pending save':lastSaveMono!==null?'Recording saved in this browser':'No samples saved yet';
     $('rec-chunks').textContent=chunkIndex;
@@ -1564,7 +1569,7 @@ class TrackRecorder{
     _gpsQualityRating(sigma){if(sigma<2.5)return'excellent';if(sigma<4.0)return'good';if(sigma<6.0)return'fair';return'poor'}
     cancel(){this.recording=false}
     // Finish recording - uses this.gpsRef (set at start) as the coordinate reference
-    finish(trackName){if(!this.recording)return null;this.recording=false;if(this.keyPoints.length<10)return null;const centerline=this._smoothPath(this.keyPoints,3);const startLine=this._calculateTimingLine(centerline,'start');let finishLine=null;if(this.trackType==='point_to_point')finishLine=this._calculateTimingLine(centerline,'finish');const bounds=this._calculateBounds(centerline);const totalDist=this._calculatePathLength(centerline);const quality=this._assessQuality();return{id:'track_'+Date.now()+'_'+Math.random().toString(36).substr(2,9),name:trackName,type:this.trackType,created:Date.now(),startLine:startLine,finishLine:finishLine,centerline:centerline,bounds:bounds,totalDistance:totalDist,origin:{x:this.startPos.x,y:this.startPos.y},gpsOrigin:this.gpsRef,quality:quality,corners:this.cornerCount,keyPoints:this.keyPoints.length}}
+    finish(trackName){if(!this.recording||this.keyPoints.length<10)return null;this.recording=false;const centerline=this._smoothPath(this.keyPoints,3);const startLine=this._calculateTimingLine(centerline,'start');let finishLine=null;if(this.trackType==='point_to_point')finishLine=this._calculateTimingLine(centerline,'finish');const bounds=this._calculateBounds(centerline);const totalDist=this._calculatePathLength(centerline);const quality=this._assessQuality();return{id:'track_'+Date.now()+'_'+Math.random().toString(36).substr(2,9),name:trackName,type:this.trackType,created:Date.now(),startLine:startLine,finishLine:finishLine,centerline:centerline,bounds:bounds,totalDistance:totalDist,origin:{x:this.startPos.x,y:this.startPos.y},gpsOrigin:this.gpsRef,quality:quality,corners:this.cornerCount,keyPoints:this.keyPoints.length}}
     _smoothPath(pts,ws){if(!pts||pts.length===0)return[];if(pts.length<=ws)return pts.map(p=>({...p}));const result=[];const hw=Math.floor(ws/2);for(let i=0;i<pts.length;i++){const s=Math.max(0,i-hw),e=Math.min(pts.length-1,i+hw),w=pts.slice(s,e+1);if(w.length===0){result.push({...pts[i]});continue}let sx=0,sy=0,sw=0;for(let j=0;j<w.length;j++){const df=Math.abs(j-(i-s)),pw=1/(1+df*0.5),sg=w[j].sigma||3.0,qw=1/(sg+0.5),wt=pw*qw;sx+=w[j].x*wt;sy+=w[j].y*wt;sw+=wt}const x=sw>0?sx/sw:pts[i].x,y=sw>0?sy/sw:pts[i].y;result.push({x:isNaN(x)?pts[i].x:x,y:isNaN(y)?pts[i].y:y,lat:pts[i].lat,lon:pts[i].lon,heading:pts[i].heading,speed:pts[i].speed,sigma:pts[i].sigma,t:pts[i].t,curvature:pts[i].curvature,isCorner:pts[i].isCorner})}return result}
     _calculateTimingLine(cl,which='start'){if(!cl||cl.length===0)return{p1:[0,12],p2:[0,-12],direction:0};const idx=which==='start'?Math.min(2,cl.length-1):Math.max(0,cl.length-3);const ns=5,s=Math.max(0,idx-ns),e=Math.min(cl.length-1,idx+ns),pts=cl.slice(s,e+1);let sx=0,sy=0,sw=0;for(const p of pts){const wt=1/(p.sigma||3.0+0.5);sx+=p.x*wt;sy+=p.y*wt;sw+=wt}const cx=sw>0?sx/sw:cl[idx].x,cy=sw>0?sy/sw:cl[idx].y;const safeCx=isNaN(cx)?0:cx,safeCy=isNaN(cy)?0:cy;let dir=0;if(pts.length>=2){const f=pts[0],l=pts[pts.length-1];dir=Math.atan2(l.y-f.y,l.x-f.x)}const w=12,perp=dir+Math.PI/2;return{p1:[safeCx+Math.cos(perp)*w,safeCy+Math.sin(perp)*w],p2:[safeCx-Math.cos(perp)*w,safeCy-Math.sin(perp)*w],direction:dir}}
     _calculateBounds(cl){if(!cl||cl.length===0)return{minX:0,minY:0,maxX:100,maxY:100};let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;for(const p of cl){minX=Math.min(minX,p.x);minY=Math.min(minY,p.y);maxX=Math.max(maxX,p.x);maxY=Math.max(maxY,p.y)}return{minX,minY,maxX,maxY}}
@@ -1575,7 +1580,7 @@ class TrackRecorder{
 // Track Manager IndexedDB (v3 adds lap_history for session history)
 const TRACK_DB='blackbox-tracks',TRACK_DB_VER=3;
 let trackDb=null,activeTrack=null,currentPos=null,suppressStartLineIndicator=false;
-let p2pNeedsWarmup=false,trackRecorder=null;
+let p2pNeedsWarmup=false,trackRecorder=null,routeCapture=null;
 let referenceLap=null,lapTracker=null,lastDeltaMs=0,deltaTrend=0;
 let currentSessionId=null,currentSessionStart=null;
 
@@ -1912,20 +1917,20 @@ async function saveNewRefLap(trackId,lapTimeMs,tracker){
     try{
         const ref={id:'ref_'+Date.now()+'_'+Math.random().toString(36).substr(2,9),trackId,lapTimeMs,created:Date.now(),samples:tracker.toBinary(),sampleCount:tracker.samples.length,totalDistance:tracker.dist,spatial:{version:1,closed:activeTrack?.type==='loop',origin:tracker.spatialOrigin,points:tracker.spatialPoints.map(p=>({...p}))}};
         if(!validSpatialReference(ref.spatial,lapTimeMs))return;
-        await saveRefLap(ref);if(!activeTrack||activeTrack.id!==trackId)return;referenceLap=ref;const sec=$('lap-section');if(sec)sec.classList.add('has-ref');console.log('Reference lap created:',fmtLapTime(lapTimeMs),'('+ref.sampleCount+' samples)');
+        await saveRefLap(ref);if(!activeTrack||activeTrack.id!==trackId)return;referenceLap=ref;referencePersistenceError='';updateRecUI();const sec=$('lap-section');if(sec)sec.classList.add('has-ref');console.log('Reference lap created:',fmtLapTime(lapTimeMs),'('+ref.sampleCount+' samples)');
         console.log('Reference lap saved to IndexedDB')
-    }catch(e){console.error('Failed to save ref lap:',e)}
+    }catch(e){referencePersistenceError='Reference could not be saved. Previous reference is unchanged. Keep this tab open, check browser storage, then complete another valid lap or run to retry.';updateRecUI();console.error('Failed to save ref lap:',e)}
 }
 
-async function saveTrack(track){
+async function saveTrack(track,{create=false}={}){
     trackAutoDetector.beginTrackChange();
     try{
         if(!trackDb)await openTrackDB();
         track.modified=Date.now();
         return await new Promise((res,rej)=>{
             const tx=trackDb.transaction('tracks','readwrite');
-            tx.oncomplete=()=>res(track);tx.onabort=()=>rej(tx.error||new Error('Track storage failed'));tx.onerror=()=>rej(tx.error);
-            tx.objectStore('tracks').put(track);
+            tx.oncomplete=()=>res(track);tx.onabort=()=>rej(tx.error||new Error('Track storage failed'));tx.onerror=()=>rej(tx.error||new Error('Track storage failed'));
+            if(create)tx.objectStore('tracks').add(track);else tx.objectStore('tracks').put(track);
         });
     }finally{trackAutoDetector.endTrackChange()}
 }
@@ -2172,7 +2177,7 @@ async function deactivateTrack(){return queueTrackCommand(()=>deactivateTrackCom
 async function activateTrackCommand(track){
     const isP2P=track.type==='point_to_point';
     // Track must have gpsOrigin to convert timing line to GPS coordinates
-    if(!track.gpsOrigin){alert('Track missing GPS origin. Cannot activate.');return}
+    if(!track.gpsOrigin){alert('Track missing GPS origin. Cannot activate.');return false}
     // Convert local timing line coordinates to GPS lat/lon using track's own origin
     // Firmware receives GPS coords and converts to local using its own origin
     // This eliminates cross-session coordinate frame mismatch!
@@ -2182,7 +2187,7 @@ async function activateTrackCommand(track){
     // Helper to convert local (x,y) back to GPS using track's origin
     function toGps(x,y){return{lat:origin.lat+y/111320,lon:origin.lon+x/(111320*cosLat)}}
     const line=track.startLine,finLine=track.finishLine;
-    if(isP2P&&!finLine){alert('This stage has no finish line. Record a complete stage before arming.');return}
+    if(isP2P&&!finLine){alert('This stage has no finish line. Record a complete stage before arming.');return false}
     const p1=toGps(line.p1[0],line.p1[1]);
     const p2=toGps(line.p2[0],line.p2[1]);
     // Direction is already in math convention (from atan2 in _calculateTimingLine)
@@ -2210,7 +2215,7 @@ async function activateTrackCommand(track){
     try{
         const r=await requestDevice(url);
         const j=await r.json();
-        if(!r.ok||j.error){alert('Failed to configure lap timer: '+(j.error||r.status));return}
+        if(!r.ok||j.error){alert('Failed to configure lap timer: '+(j.error||r.status));return false}
         // Do not expose a new owner with the previous track's reference while storage waits.
         let loadedReference=null;
         try{loadedReference=await getRefLap(track.id)}catch(e){console.warn('Reference lap unavailable:',e)}
@@ -2248,8 +2253,8 @@ async function activateTrackCommand(track){
         $('lap-delta').textContent='—';
         $('lap-delta').className='bbLapHistValue bbNum delta';
         updateActiveTrackDisplay();
-        console.log('Track activated:',track.name,'Type:',track.type);
-    }catch(e){alert('Failed to configure lap timer: '+e.message)}finally{trackAutoDetector.endTrackChange()}
+        console.log('Track activated:',track.name,'Type:',track.type);return true;
+    }catch(e){alert('Failed to configure lap timer: '+e.message);return false}finally{trackAutoDetector.endTrackChange()}
 }
 
 async function deactivateTrackCommand(){
@@ -2273,6 +2278,8 @@ async function deactivateTrackCommand(){
 
 // Track Recording Functions
 function startTrackRecording(trackType='loop'){
+    if(routeCapture?.busy)return false;
+    if(trackRecorder&&!cancelTrackRecording())return false;
     trackAutoDetector.withdraw();
     if(!currentPos||!currentPos.valid){alert('No fresh GPS position. Wait outdoors for a fix before creating a track.');return false}
     const ref=getGpsRef();if(!ref){alert('GPS is still starting. Wait for a fresh fix, then try again.');return false}
@@ -2282,6 +2289,8 @@ function startTrackRecording(trackType='loop'){
     const pos={x:currentPos.x,y:currentPos.y,lat:currentPos.lat,lon:currentPos.lon,heading:heading,speed:currentPos.speed/3.6,valid:true,sigma:currentPos.sigma||3.0};
     // Pass GPS reference so all coordinates are computed in firmware's frame (for timing line alignment)
     if(!trackRecorder.start(pos,trackType,ref)){console.warn('Failed to start recording');return false}
+    routeCapture={recorder:trackRecorder,frozen:false,track:null,saved:false,busy:false};
+    renderRouteRecovery();
     const overlay=$('record-overlay');overlay.classList.add('active');
     $('rec-title').textContent=trackType==='loop'?'Recording Circuit':'Recording Stage';
     $('rec-distance').textContent='0';$('rec-corners').textContent='0';$('rec-points').textContent='0';$('rec-elapsed').textContent='0:00';
@@ -2291,7 +2300,7 @@ function startTrackRecording(trackType='loop'){
     closeTrackModal();return true;
 }
 function updateTrackRecording(){
-    if(!trackRecorder||!trackRecorder.recording||!currentPos||!currentPos.valid)return;
+    if(!trackRecorder||!trackRecorder.recording||routeCapture?.frozen||!currentPos||!currentPos.valid)return;
     // Use GPS course when valid, otherwise EKF yaw (heading used for corner detection, not loop closure)
     const heading=currentPos.validGpsCourse?currentPos.gpsCourse:currentPos.yaw;
     const pos={x:currentPos.x,y:currentPos.y,lat:currentPos.lat,lon:currentPos.lon,heading:heading,speed:currentPos.speed/3.6,valid:true,sigma:currentPos.sigma||3.0};
@@ -2306,10 +2315,36 @@ function updateTrackRecording(){
     updateRecordingQualityDisplay(stats.gpsQuality);
     if(result&&result.loopDetected&&$('rec-state-complete').style.display==='none')onLoopDetected();
 }
-function cancelTrackRecording(){
-    if(trackRecorder){trackRecorder.cancel();trackRecorder=null}
-    $('record-overlay').classList.remove('active');
+// A completed capture owns one frozen identity until commit or explicit discard.
+function renderRouteRecovery(message=''){
+    const owner=routeCapture;if(!owner)return;
+    $('rec-save-status').textContent=message;
+    if(owner.saved)$('rec-success-title').textContent='Track saved · arming unconfirmed';
+    $('btn-save-track').textContent=owner.busy?(owner.saved?'Arming…':'Saving…'):owner.saved?'Retry arming':'Save track & arm';
+    $('btn-save-track').disabled=owner.busy;
+    $('btn-continue-route').disabled=owner.busy||owner.saved;
+    $('btn-export-route').disabled=owner.busy||!owner.track;
+    $('btn-discard-route').disabled=owner.busy;
+    $('btn-discard-route').textContent=owner.saved?'Close saved track':'Discard route';
 }
+function cancelTrackRecording(){
+    if(routeCapture?.busy)return false;
+    if(trackRecorder&&!routeCapture?.saved&&trackRecorder.keyPoints.length>1&&!confirm('Discard this unsaved route? This cannot be undone. If a captured track download is available, cancel and download it first to keep a copy.'))return false;
+    if(trackRecorder)trackRecorder.cancel();
+    trackRecorder=null;routeCapture=null;
+    $('record-overlay').classList.remove('active');return true;
+}
+function exportCapturedTrack(){
+    const owner=routeCapture;if(!owner?.track||owner.busy)return;
+    const value={version:2,exportedAt:new Date().toISOString(),track:owner.track,lapHistory:{sessions:[]},referenceLap:null};
+    const url=URL.createObjectURL(new Blob([JSON.stringify(value,null,2)],{type:'application/json'}));
+    const anchor=document.createElement('a');anchor.href=url;anchor.download='track_'+owner.track.id+'.json';
+    document.body.appendChild(anchor);anchor.click();anchor.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+    renderRouteRecovery(owner.saved?'Track saved in this browser. Download requested; check Files or Downloads. Arming is not confirmed.':'Download requested; check Files or Downloads. Route is still not saved in this browser. Keep this tab open to retry.');
+}
+window.addEventListener('beforeunload',event=>{
+    if(trackRecorder&&!routeCapture?.saved&&trackRecorder.keyPoints.length>1){event.preventDefault();event.returnValue=''}
+});
 function markRecordingFinish(){
     if(!trackRecorder||!trackRecorder.recording||trackRecorder.trackType!=='point_to_point')return;
     const stats=trackRecorder.getStats();
@@ -2317,6 +2352,8 @@ function markRecordingFinish(){
     onLoopDetected();
 }
 function onLoopDetected(){
+    if(!routeCapture||routeCapture.busy)return;
+    routeCapture.frozen=true;renderRouteRecovery();
     const stats=trackRecorder.getStats();
     const quality={excellent:'low',good:'low',fair:'moderate',poor:'high'}[stats.gpsQuality]||'unknown';
     const distance=Math.round(stats.totalDistance)||0,corners=stats.corners||0;
@@ -2326,23 +2363,42 @@ function onLoopDetected(){
     $('rec-state-recording').style.display='none';$('rec-state-complete').style.display='block';
 }
 function continueTrackRecording(){
-    if(!trackRecorder)return;
-    trackRecorder.loopDetected=false;
+    const owner=routeCapture;if(!trackRecorder||!owner||owner.busy||owner.saved)return;
+    if(owner.track&&!confirm('Continue this route? Its current captured finish will be replaced. Any downloaded file stays unchanged.'))return;
+    owner.frozen=false;owner.track=null;trackRecorder.recording=true;
+    renderRouteRecovery();trackRecorder.loopDetected=false;
     $('rec-state-recording').style.display='block';$('rec-state-complete').style.display='none';
     const isStage=trackRecorder.trackType==='point_to_point';
     $('rec-hint').textContent=isStage?'Continue the route. Stop safely at the end, then choose Mark finish.':"Continue driving. We'll detect the next loop.";
 }
 async function finishTrackRecording(){
-    if(!trackRecorder||!trackRecorder.recording)return;
-    const defaultName=trackRecorder.trackType==='loop'?'New Circuit':'New Stage';
-    const trackName=prompt('Enter track name:',defaultName);if(!trackName)return;
-    // Coordinates are already computed relative to gpsRef (set at start time)
-    const trackData=trackRecorder.finish(trackName);
-    if(!trackData){alert('Not enough route points to save this track. Record the route again with a fresh GPS fix.');return}
-    $('record-overlay').classList.remove('active');
-    const track={id:trackData.id,name:trackData.name,type:trackData.type,startLine:trackData.startLine,finishLine:trackData.finishLine,origin:trackData.origin,gpsOrigin:trackData.gpsOrigin,centerline:trackData.centerline,bounds:trackData.bounds,pathLength:trackData.totalDistance||0,quality:trackData.quality,bestLapMs:null,lapCount:0,corners:trackData.corners||0,keyPoints:(trackData.centerline&&trackData.centerline.length)||trackData.keyPoints||0,createdAt:trackData.created,isNew:true};
-    await saveTrack(track);await activateTrack(track);renderTrackList();
-    alert('Track "'+track.name+'" saved in this browser. Select it from Tracks whenever you want to arm timing.');
+    const owner=routeCapture;
+    if(!owner||owner.busy||owner.recorder!==trackRecorder)return;
+    if(!owner.track){
+        const defaultName=trackRecorder.trackType==='loop'?'New Circuit':'New Stage';
+        const trackName=prompt('Enter track name:',defaultName);if(!trackName)return;
+        const data=trackRecorder.finish(trackName);
+        if(!data){renderRouteRecovery('Not enough route points to save. Choose Continue route and collect more with fresh GPS, or discard this route.');return}
+        owner.frozen=true;
+        owner.track={id:data.id,name:data.name,type:data.type,startLine:data.startLine,finishLine:data.finishLine,origin:data.origin,gpsOrigin:data.gpsOrigin,centerline:data.centerline,bounds:data.bounds,pathLength:data.totalDistance||0,quality:data.quality,bestLapMs:null,lapCount:0,corners:data.corners||0,keyPoints:(data.centerline&&data.centerline.length)||data.keyPoints||0,createdAt:data.created,isNew:true};
+    }
+    owner.busy=true;renderRouteRecovery(owner.saved?'Track saved. Waiting for timing confirmation…':'Saving track. Keep this tab open…');
+    try{
+        if(!owner.saved){await saveTrack(owner.track,{create:true});owner.saved=true}
+        if(routeCapture!==owner)return;
+        renderRouteRecovery('Track saved. Waiting for timing confirmation…');
+        const armed=await activateTrack(owner.track);
+        if(routeCapture!==owner)return;
+        if(!armed){renderRouteRecovery('Track saved in this browser; arming was not confirmed. Check the connection and current timing state, then retry arming or close and select this track later.');return}
+        trackRecorder=null;routeCapture=null;$('record-overlay').classList.remove('active');renderTrackList();
+        alert('Track "'+owner.track.name+'" saved in this browser and timing armed. Review the timing state before your next pass.');
+    }catch(error){
+        if(routeCapture===owner)renderRouteRecovery(owner.saved?'Track saved in this browser; arming was not confirmed. Check the connection and current timing state, then retry arming.':'Track not saved: browser storage failed. Keep this tab open. Retry Save, download the captured track, continue the route, or discard it explicitly.');
+        console.error('Track capture could not be completed:',error);
+    }finally{
+        owner.busy=false;
+        if(routeCapture===owner)renderRouteRecovery($('rec-save-status').textContent);
+    }
 }
 function updateRecordingQualityDisplay(quality){
     const fill=$('rec-quality-fill'),text=$('rec-quality-text');
@@ -2822,7 +2878,7 @@ function updateLapProgress(active){
     $('lap-progress').hidden=value===null;
     if(value!==null){$('lap-progress-label').textContent=(activeTrack?.type==='point_to_point'?'Stage progress · ':'Lap progress · ')+value+'%';$('lap-progress-bar').value=value}
 }
-let lapPersistenceError='',lapResultGeneration=0;
+let lapPersistenceError='',referencePersistenceError='',lapResultGeneration=0;
 function showLapResult(time,previousBest){
     const box=$('lap-result'),generation=++lapResultGeneration;
     const better=!previousBest||time<previousBest;
