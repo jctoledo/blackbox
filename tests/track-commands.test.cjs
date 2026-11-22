@@ -4,12 +4,13 @@ const deferred=()=>{let resolve,reject;const promise=new Promise((yes,no)=>{reso
 const settle=async()=>{for(let i=0;i<20;i++)await Promise.resolve()};
 const track=id=>({id,name:'Track '+id,type:'loop',gpsOrigin:{lat:37,lon:-122},startLine:{p1:[0,0],p2:[0,20],direction:0},lapCount:0});
 function fixture(){
- const requests=[],lookups=[],alerts=[],elements=new Map(),published=[],deletions=[];let changes=0;
+ const requests=[],lookups=[],alerts=[],elements=new Map(),published=[],deletions=[],stored=new Map(['original','A','B'].map(id=>[id,track(id)]));let changes=0;
  const c={console,Promise,Math,activeTrack:track('original'),referenceLap:{id:'ref-original'},expectedLapRevision:9,lapResultGeneration:0,lapTracker:{reset(){}},lastDeltaMs:0,deltaTrend:0,prevLapFlags:0,prevLapTimeMs:0,prevLapCnt:0,lapTimerActive:true,p2pNeedsWarmup:false,suppressStartLineIndicator:false,
   trackAutoDetector:{beginTrackChange(){changes++},endTrackChange(){changes--}},
   requestDevice(url){const pending=deferred();requests.push({url,...pending});return pending.promise},
+  getTrack:async id=>stored.get(id),
   getRefLap(id){const pending=deferred();lookups.push({id,...pending});return pending.promise},alert:message=>alerts.push(message),startNewSession(){},clearSession(){},fmtLapTime:String,updateDeltaBar(){},
-  trackDb:{},IDBKeyRange:{only:id=>id},commitTrackWrite(names,write){write({objectStore:name=>({delete(id){deletions.push([name,id])},clear(){deletions.push([name,'*'])},index(){return{openCursor:()=>({result:null})}}})});return Promise.resolve()},
+  trackDb:{},IDBKeyRange:{only:id=>id},commitTrackWrite(names,write){write({objectStore:name=>({delete(id){deletions.push([name,id]);if(name==='tracks')stored.delete(id)},clear(){deletions.push([name,'*']);if(name==='tracks')stored.clear()},index(){return{openCursor:()=>({result:null})}}})});return Promise.resolve()},
   updateActiveTrackDisplay(){published.push({id:c.activeTrack?.id??null,ref:c.referenceLap?.id??null,revision:c.expectedLapRevision})},
   $:id=>{if(!elements.has(id)){const values=new Set();elements.set(id,{textContent:'Original label',hidden:false,classList:{add(...keys){keys.forEach(k=>values.add(k))},remove(...keys){keys.forEach(k=>values.delete(k))},toggle(key,on){if(on===undefined)on=!values.has(key);on?values.add(key):values.delete(key);return on}}})}return elements.get(id)}};
  vm.createContext(c);
@@ -70,4 +71,23 @@ for(const operation of ['delete','clear'])test('failed timing stop retains track
  const f=fixture(),removal=operation==='delete'?f.c.deleteTrackWithRef('original'):f.c.clearAllTracks(),rejected=assert.rejects(removal,/retained: device timing is still active/);await settle();f.ack(0,10,false);await rejected;
  assert.equal(f.c.activeTrack.id,'original');assert.equal(f.deletions.length,0);assert.equal(f.changes(),0);
  const arm=f.c.activateTrack(track('B'));await settle();f.ack(1,11);await settle();f.lookups[0].resolve(null);await arm;assert.equal(f.c.activeTrack.id,'B');assert.equal(f.changes(),0);
+});
+
+test('a raw track object queued after its deletion cannot arm a deleted row',async()=>{
+ const f=fixture(),remove=f.c.deleteTrackWithRef('B'),arm=f.c.activateTrack(track('B'));await remove;await settle();
+ assert.equal(f.requests.length,0,'stale object must be re-read before configuring');await arm;assert.equal(f.c.activeTrack.id,'original');assert.equal(f.c.referenceLap.id,'ref-original');assert.match(f.alerts[0],/no longer saved/);
+});
+test('a raw track object queued after clear-all cannot revive a removed track',async()=>{
+ const f=fixture(),clear=f.c.clearAllTracks(),arm=f.c.activateTrack(track('B'));await settle();f.ack(0,10);await clear;await settle();
+ assert.equal(f.requests.length,1,'only Stop may configure after rows are cleared');await arm;assert.equal(f.c.activeTrack,null);assert.equal(f.c.referenceLap,null);assert.match(f.alerts[0],/no longer saved/);
+});
+test('failed saved-track lookup cannot publish an object and later commands remain usable',async()=>{
+ const f=fixture(),lookup=f.c.getTrack;f.c.getTrack=async()=>{throw Error('Database closed')};const arm=f.c.activateTrack(track('A'));await settle();
+ assert.equal(f.requests.length,0);await arm;assert.equal(f.c.activeTrack.id,'original');assert.equal(f.c.referenceLap.id,'ref-original');assert.match(f.alerts[0],/Database closed/);
+ f.c.getTrack=lookup;const next=f.c.activateTrack(track('B'));await settle();f.ack(0,10);await settle();f.lookups[0].resolve(null);await next;assert.equal(f.c.activeTrack.id,'B');
+});
+test('object activation uses the current saved geometry and new-stage state',async()=>{
+ const f=fixture(),saved={...track('B'),name:'Saved stage',type:'point_to_point',isNew:true,finishLine:{p1:[100,0],p2:[100,20],direction:0}};f.c.getTrack=async()=>saved;
+ const arm=f.c.activateTrack(track('B'));await settle();assert.match(f.requests[0].url,/type=point_to_point/);assert.match(f.requests[0].url,/f_p1_lat=/);f.ack(0,10);await settle();f.lookups[0].resolve(null);await arm;
+ assert.equal(f.c.activeTrack.name,'Saved stage');assert.equal(f.c.activeTrack.isNew,true);assert.equal(f.c.p2pNeedsWarmup,true);assert.equal(f.elements.get('lap-track-name').textContent,'Saved stage');
 });
