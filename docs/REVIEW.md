@@ -254,3 +254,9 @@ On lat, four targeted regressions failed against the unchanged baseline: consume
 
 
 Independent Spec review caught a recovery-export history envelope that the production importer rejected. The recovery file now uses the established `lapHistory.sessions` structure. Its regression parses the actual downloaded Blob with production `normalizeBackup` and `validateBackup`, compares the imported geometry/identity, and rejects any IndexedDB access during export. This stronger test failed on lat with `Invalid backup: invalid exported history` before the envelope correction.
+
+## Driver receiver-log status and measurement scope
+
+Issue #159 reproduced three software failures against rc.14 on lat: Runs continued to claim collection after GPS-log request failure, empty/repeated evidence stayed presented as collection indefinitely, and a late failed request from an older recording overwrote the new owner's status. The fix tracks monotonic event-delivery freshness and recording ownership separately from ordinary telemetry. It preserves accepted results and pending receiver evidence through temporary transport failure; the original sequence/time gates remain authoritative when data returns. Waiting/unavailable status is visible and announced only when its text changes.
+
+Speed maximum and elapsed page time now visibly identify their page scope, and the touch-only Peaks view identifies its half-second averaging window. Route overlays are bounded to the dynamic viewport and recovery actions wrap with touch-sized targets. These are presentation and persistence-state improvements, not new sensor accuracy, detection F1 or native-phone guarantees. Parent #155 tracks the related sensor and track-storage fixes; the existing physical/R&D acceptance remains open.

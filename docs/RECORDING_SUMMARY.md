@@ -1,5 +1,7 @@
 # Saved drive summary: speed, sustained forces and gaps
 
+The live dashboard's **PAGE MAX**, **Page time** and **Peaks** belong to the current page, not a recording. Peaks visibly labels its 0.5-second averages and page scope. Starting a new recording does not reset these page measurements. The saved-recording Summary below instead derives its values from that one recording's retained samples.
+
 Open **Saved data** while parked and expand **Summary · saved samples** on a recording. It shows that recording’s maximum qualified speed estimate and strongest half-second acceleration, braking, left and right force estimates. An ordinary drive is enough to populate useful observations; no performance maneuvers are required.
 
 These values belong to the saved recording. They are separate from the live page-session MAX and Peaks, which reset when the page reloads or you choose Reset speed / force stats. Opening another drive does not transfer its results into an earlier recording.

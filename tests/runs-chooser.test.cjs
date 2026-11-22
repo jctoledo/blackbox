@@ -4,7 +4,7 @@ const slice=(a,b)=>html.slice(html.indexOf(a),html.indexOf(b,html.indexOf(a)));
 function setup(unit='km/h',preferences=false){
  const elements=new Map(),events=new Map();let focused;
  const $=id=>{if(!elements.has(id))elements.set(id,{id,hidden:id==='run-options',offsetTop:id==='run-overtaking'?48:4,scrollTop:0,textContent:'',attrs:{},setAttribute(k,v){this.attrs[k]=v},focus(){focused=this;for(const fn of events.get('focusin')||[])fn({target:this})},contains(target){return target===this||this.id==='run-chooser'&&['run-interval','run-lower','run-overtaking','run-options'].includes(target?.id)}});return elements.get(id)};
- const c={Math,Number,Error,$,rec:true,recordingBusy:false,speedUnit:unit,document:{addEventListener(name,fn){if(!events.has(name))events.set(name,[]);events.get(name).push(fn)}}};if(preferences){delete c.speedUnit;c.speed_ema=100;c.maximumFreshSpeed=120;c.localStorage={getItem:()=>unit,setItem(){}}}vm.createContext(c);
+ const c={Math,Number,Error,$,gpsRunReadiness:()=>null,rec:true,recordingBusy:false,speedUnit:unit,document:{addEventListener(name,fn){if(!events.has(name))events.set(name,[]);events.get(name).push(fn)}}};if(preferences){delete c.speedUnit;c.speed_ema=100;c.maximumFreshSpeed=120;c.localStorage={getItem:()=>unit,setItem(){}}}vm.createContext(c);
  vm.runInContext(slice('class RollingRuns{', 'function runsToCSV(')+slice('// Runs interval disclosure:', '// End Runs interval disclosure.')+(preferences?slice('// Speed display preferences.', '// End speed display preferences.'):'') ,c);c.syncRunUnits();
  return {c,$,events,focus:()=>focused,emit(name,event){for(const fn of events.get(name)||[])fn(event)}};
 }

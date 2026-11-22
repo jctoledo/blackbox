@@ -13,6 +13,12 @@ Tap the instrument name to reveal the picker and select Runs, or swipe horizonta
 
 This first implementation is an uncorrected GPS estimate. It is not a validated drag timer, and it does not yet implement standing-start 0–60 mph. Defining launch from noisy near-zero speed needs separate validation; a nonzero threshold must not silently be sold as a true zero-speed start. There is no distance rollout, slope correction, wind correction or vehicle-efficiency inference.
 
+## Receiver-log health
+
+Runs shows an amber status when its GPS timestamp log is unavailable or no new receiver events have arrived for more than 2.5 seconds. Ordinary dashboard telemetry can remain live during a log failure; it is a separate input. The display distinguishes waiting for initial timestamps, waiting for fresh timestamps and a failed log request. Last and best accepted results remain visible.
+
+This is a display-readiness interval, not a new timing gate. A temporary HTTP failure does not by itself invalidate a pending interval: the retained receiver window may still provide complete evidence after recovery. Existing sequence, epoch, quality and continuity rules decide the result. Late responses from a previous recording cannot replace the current recording's status. The demo menu's **Pause GPS timestamp log** control demonstrates this condition without stopping ordinary synthetic telemetry.
+
 ## Timing and rejection rules
 
 - Use receiver UTC epochs, never browser receipt times. Interpolate the start and finish between adjacent speed observations: `crossing = t0 + (threshold − speed0)/(speed1 − speed0) × (t1 − t0)`.
