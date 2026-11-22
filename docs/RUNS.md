@@ -53,3 +53,7 @@ Replay known recordings and compare repeated controlled runs against independent
 Synthetic regressions cover exact crossing times, incomplete lead-in, threshold spikes, gaps, restarts and duplicate events. They do not establish real-drive precision, recall or F1. Hold out entire trips and use independently labelled positives and negatives before tuning or claiming detection quality.
 
 Check opened and closed chooser readability and touch/keyboard focus on physical Android and iPhone browsers, including short landscape cards. Desktop device emulation does not establish physical-phone behaviour.
+
+![Synthetic Runs and Drive preview with receiver timestamp logging unavailable and completed results retained](assets/gps-log-health-v1.jpg)
+
+This synthetic interruption leaves ordinary telemetry live. Runs retains completed estimates; Drive keeps the qualified distance partial rather than guessing across the missing log.
