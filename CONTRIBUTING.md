@@ -167,7 +167,7 @@ Documentation is just as important as code! Help us by:
 
 ### Maintained workflow
 
-Use the root README for the ESP-IDF prerequisites. All project compilation, automated tests, documentation generation and media encoding run on lat. A maintainer reviews branch code and dispatches `.github/workflows/ci.yml` on `blackbox-lat`; fork pull requests must not automatically run on this persistent runner.
+Use the root README for the ESP-IDF prerequisites. All project compilation, automated tests, documentation generation and media encoding run on lat. A maintainer reviews the exact PR head and dispatches reviewed PR validation on `blackbox-lat`; fork pull requests must not automatically run on this persistent runner. Main pushes and ordinary manual branch CI remain available.
 
 Host checks (repository root, on lat):
 
@@ -217,6 +217,24 @@ CI also validates Python tools, cross-language packet fixtures, both GPS variant
 
 3. **Respond to feedback** - Maintainers may request changes
 4. **Keep PR updated** - Rebase on latest `main` if needed
+
+### Reviewed PR validation
+
+After reviewing an open same-repository PR targeting `main`, a maintainer with repository write access records its full lowercase head SHA and dispatches the controller from **main**:
+
+```bash
+# Replace 123 with the PR number; inspect/review this exact commit first.
+gh pr view 123 --repo jctoledo/blackbox --json headRefOid,baseRefName,headRepository
+# Paste the reviewed 40-character SHA, not a branch name.
+gh workflow run reviewed-pr.yml --repo jctoledo/blackbox --ref main \
+  -f pr_number=123 -f reviewed_sha=FULL_REVIEWED_HEAD_SHA
+# Find the run and follow its validation/report jobs.
+gh run list --repo jctoledo/blackbox --workflow reviewed-pr.yml --limit 5
+```
+
+The controller refuses stale heads, forks, closed PRs and other base branches before executing PR source. It rechecks after queueing, checks out the immutable reviewed SHA, and runs the same full CI as main. The `lat/reviewed-ci` commit status becomes pending, then success only when the full validation succeeds; failure/cancellation cannot produce success. The status links to the run attempt. A later push needs a new review and dispatch; an older SHA's status does not cover it. Authors can dispatch their own reviewed PRs without GitHub self-approval.
+
+This is a PR-visible **commit status**, not native `workflow_dispatch` Checks-tab support. Check the status against the current PR head before merging. Per-PR attempts are serialized without cancelling the running attempt; GitHub can replace an attempt still waiting for that concurrency slot, before it publishes pending. Runner loss, force cancellation or publisher/API failure can leave pending rather than a final result: inspect the run, then retry the reviewed head. See [build infrastructure](docs/BUILD_INFRASTRUCTURE.md#reviewed-pr-controller) for permissions and limits.
 
 ### What Happens Next
 

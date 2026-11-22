@@ -7,7 +7,9 @@ Blackbox is an open-source ESP32-C3 telemetry project: GPS and inertial sensing,
 [Project website & USB installer](https://jctoledo.github.io/blackbox/) · [Lap timer guide](docs/LAP_TIMER.md) · [Sensor fusion](docs/SENSOR_FUSION.md) · [Hardware checklist](docs/HARDWARE_VALIDATION.md) · [Try the demo](https://jctoledo.github.io/blackbox/demo.html)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-3b6b3b.svg)](LICENSE)
-[![Host regressions](https://github.com/jctoledo/blackbox/actions/workflows/ci.yml/badge.svg)](https://github.com/jctoledo/blackbox/actions/workflows/ci.yml)
+[![Full CI on lat](https://github.com/jctoledo/blackbox/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jctoledo/blackbox/actions/workflows/ci.yml)
+
+Main CI validates host/browser regressions, documentation, both GPS firmware variants and artifacts on lat. Reviewed pull requests use the separate `lat/reviewed-ci` commit status; [maintainer dispatch procedure](CONTRIBUTING.md#reviewed-pr-validation).
 
 ### Start here
 
