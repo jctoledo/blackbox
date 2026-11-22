@@ -70,7 +70,7 @@ def main():
             manifest_name = name.removesuffix('.bin') + '.json'
             (destination/manifest_name).write_text(json.dumps(manifest, indent=2)+'\n')
             projects[f'{version}-{name}'] = dict(
-                name=f"Blackbox {version} — {VARIANTS[name]}" + (' (release candidate)' if release['prerelease'] else ''),
+                name=f"{VARIANTS[name]} — {version}" + (' (release candidate)' if release['prerelease'] else ''),
                 chip='esp32c3', firmwareUrl=f'firmware/{version}/{name}',
                 manifestUrl=f'firmware/{version}/{manifest_name}')
             print(f'Staged verified {version}/{name} ({len(data)} bytes)')
