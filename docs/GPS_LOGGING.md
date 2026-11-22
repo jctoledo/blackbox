@@ -40,6 +40,8 @@ Keep manual phone/OS/browser, antenna, mounting and reception notes, plus the fl
 
 Session CSV gains `gps_boot_id`, `gps_rmc_seq`, `gps_host_parse_us`, `gps_receiver_utc_us_of_day`, `gps_receiver_date_ddmmyy`, and `gps_utc_fractional_digits` for the latest parsed RMC accompanying each dashboard sample. A repeated sequence is a repeated snapshot, not another receiver fix. The existing `device_time_ms` wraps at 2³² milliseconds; use the full-width GPS host time and boot boundaries when aligning logs.
 
+The historical Session CSV name `ekf_yaw` holds the packet's **display heading**, in clockwise compass basis, with a learned GPS reference offset when available. It is not the estimator's internal counterclockwise mathematical yaw. Its absolute reference is unverified before alignment; the CSV field does not carry an alignment-valid flag. Keep firmware identity when comparing files: the heading basis correction after rc.12 fixes opposite turn sense during turns, without recalculating older recordings.
+
 ## Analyze without publishing your route
 
 ```sh
