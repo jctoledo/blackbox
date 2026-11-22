@@ -80,7 +80,7 @@
    // One deliberate receiver-log gap in the middle interval exercises rejection/export.
    const missing=kind==='rolling'&&ms>=35000&&ms<35240;
    const lat=origin.lat+p.north/111320,lon=origin.lon+p.east/(111320*Math.cos(origin.lat*Math.PI/180));
-   rows.push({t:base+ms,deviceTimeMs:ms,sp:p.speed*3.6,ax:-p.lonAccel,ay:p.latAccel,wz:p.yawRate,latg:p.latAccel/9.81,lng:p.lonAccel/9.81,lat,lon,gpsOk:1,gpsAgeMs:0,imuAgeMs:0,gpsSynthetic:1,ekfX:p.east,ekfY:p.north,ekfYaw:p.yaw,gpsCourse:(p.yaw+tau)%tau});
+   rows.push({t:base+ms,deviceTimeMs:ms,gpsBootId:kind==='circuit'?101:102,sp:p.speed*3.6,ax:-p.lonAccel,ay:p.latAccel,wz:p.yawRate,latg:p.latAccel/9.81,lng:p.lonAccel/9.81,lat,lon,gpsOk:1,gpsAgeMs:0,imuAgeMs:0,gpsSynthetic:1,ekfX:p.east,ekfY:p.north,ekfYaw:p.yaw,gpsCourse:(p.yaw+tau)%tau});
    if(!missing){rows.push({t:base+ms,rowType:1,gpsSynthetic:1,gpsBootId:kind==='circuit'?101:102,gpsSeq:seq,gpsHostUs:ms*1000,gpsUtcUs:43200000000+ms*1000,gpsDate:10126,gpsFractionDigits:2,gpsActive:1,gpsAccepted:1,lat,lon,sp:p.speed,gpsCourse:(p.yaw+tau)%tau,gpsMissing:priorSeq?seq-priorSeq-1:0,gpsBoundary:priorSeq?0:1});priorSeq=seq}
   }
   return rows;
@@ -98,7 +98,7 @@
   return d.snapshot();
  }
  async function seedExampleRecording(database,label,rows,fixtureId){
-  const boot=rows.find(row=>row.gpsBootId!==undefined)?.gpsBootId??({'circuit-v6':101,'rolling-v7':102}[fixtureId]);
+  const boot=rows.find(row=>row.gpsBootId!==undefined)?.gpsBootId??({'circuit-v6':101,'circuit-v7':101,'rolling-v7':102,'rolling-v8':102}[fixtureId]);
   return new Promise((resolve,reject)=>{
    const tx=database.transaction(['sessions','chunks'],'readwrite'),sessions=tx.objectStore('sessions');let id;
    tx.oncomplete=()=>resolve(id);tx.onerror=tx.onabort=()=>reject(tx.error||new Error('Demo example could not be saved'));
@@ -118,8 +118,9 @@
  async function populateExamples(track){
   if(typeof openDB!=='function')return;
   const database=await openDB(),circuit=exampleRows('circuit'),rolling=exampleRows('rolling');
-  await seedExampleRecording(database,'SIM · Circuit example',circuit,'circuit-v6');
-  await seedExampleRecording(database,'SIM · Rolling intervals + GPS gap',rolling,'rolling-v7');
+  // New evidence-complete fixture IDs add examples without rewriting old/user rows.
+  await seedExampleRecording(database,'SIM · Circuit drive',circuit,'circuit-v7');
+  await seedExampleRecording(database,'SIM · Rolling drive + GPS gap',rolling,'rolling-v8');
   updatePerformanceRuns(rolling);
   // Warm the page-session force summary from the simulated lead-in, not invented peaks.
   const elapsed=Math.floor(performance.now()-start);
@@ -158,7 +159,7 @@
    const turning=Math.abs(m.latAccel)>1.2,mode=(turning?4:0)|(m.lonAccel>.35?1:m.lonAccel<-.35?2:0);
    v.setUint8(59,mode);v.setFloat32(60,lat,true);v.setFloat32(64,lon,true);v.setUint8(68,1);v.setFloat32(69,(m.yaw+tau)%tau,true);
    v.setUint32(73,timing?Math.floor(c.lapMs):0,true);v.setUint16(77,count,true);v.setUint16(80,data.slice(0,80).reduce((a,b)=>a+b,0)&65535,true);
-   return json({seq:Math.floor(elapsed/40),data:btoa(String.fromCharCode(...data)),timing:{simulated:true,state:armedCycle===null?'idle':timing?'timing':'armed',revision,last_lap_ms:count?Math.round(completed[0]):null,best_lap_ms:count?Math.round(Math.min(...completed)):null,lat,lon,gps_valid:true,gps_age_ms:0,imu_age_ms:0},f:{li:m.lonAccel,lg:m.lonAccel,gw:.3,gr:25,pc:0,pf:95,rc:0,rf:95,tx:0,ty:0}});
+   return json({seq:Math.floor(elapsed/40),data:btoa(String.fromCharCode(...data)),timing:{simulated:true,gps_boot_id:demoBoot,state:armedCycle===null?'idle':timing?'timing':'armed',revision,last_lap_ms:count?Math.round(completed[0]):null,best_lap_ms:count?Math.round(Math.min(...completed)):null,lat,lon,gps_valid:true,gps_age_ms:0,imu_age_ms:0},f:{li:m.lonAccel,lg:m.lonAccel,gw:.3,gr:25,pc:0,pf:95,rc:0,rf:95,tx:0,ty:0}});
   }
   if(url.pathname==='/api/mount-calibration')return json({state:'unavailable',message:'Sensor-to-car alignment needs a real device and fresh GPS/IMU evidence. The demo does not simulate a successful calibration.',saved:{is_calibrated:false,yaw_offset:0},candidate_degrees:null,samples:0,parked:false,storage_available:false});
   if(url.pathname==='/api/recording-metadata')return json(recordingSnapshot(elapsed));

@@ -61,3 +61,7 @@ The current loop subtracts request/processing time from that interval and keeps 
 ## Drive recording summary
 
 Without a selected track, the Drive panel shows recording readiness, monotonic duration and partial receiver-speed distance. Stop freezes its summary before network/storage waits. Gaps are excluded rather than estimated; interrupted reloads show a saved checkpoint and never resume recording. Keep GPS CSV with Recording details JSON or the full backup to explain the enrollment fences and clocks. See the [Drive recording guide](DRIVE.md).
+
+## Saved drive summaries
+
+Saved data derives each recording’s speed and sustained-force summary from its committed ordinary telemetry rows. GPS evidence rows retain receiver speed in m/s and are excluded from those force windows; ordinary telemetry speed is km/h and is normalized once. The details JSON includes the versioned SI summary alongside Drive fences and firmware context. See [recording summary rules](RECORDING_SUMMARY.md).
