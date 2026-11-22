@@ -3849,6 +3849,15 @@ function lockRenderedDataControls(){
         multipartUI.locked.push([element,element.disabled]);element.disabled=true;
     }
 }
+// These two persistent controls can gain or lose eligibility after restore.
+// Refresh their post-lock state without touching operation-owned controls.
+function setDataClearButtonState(button,disabled){
+    if(backupBusy&&multipartUI.locked){
+        const locked=multipartUI.locked.find(([element])=>element===button);
+        if(locked)locked[1]=disabled;
+    }
+    button.disabled=backupBusy||disabled;
+}
 async function renderDataModal(){
     const generation=++dataRenderGeneration,modal=$('data-modal');
     const isCurrent=()=>generation===dataRenderGeneration&&modal.classList.contains('open');
@@ -3947,7 +3956,7 @@ async function renderSessionList(stats=null,isCurrent=()=>true){
         if(stats===null)stats=await getStorageStats();
         if(!isCurrent())return;
         clearBtn.hidden=false;
-        clearBtn.disabled=backupBusy||stats.sessionCount===0||rec||recordingBusy||!!chunkWrite||chunkBuffer.length>0;
+        setDataClearButtonState(clearBtn,stats.sessionCount===0||rec||recordingBusy||!!chunkWrite||chunkBuffer.length>0);
         recoveredSessionCount=stats.sessions.filter(s=>s.status==='active'&&s.sessionId!==sessionId).length;updateRecUI();
         if(stats.sessionCount===0){
             listEl.innerHTML='<div class=\"bbSessionEmpty\"><div class=\"icon\"></div>No saved sessions yet.<br>Choose Record session to capture data in this browser.</div>';
@@ -3983,7 +3992,7 @@ async function renderTrackDataList(stats=null,isCurrent=()=>true){
         if(stats===null)stats=await getTrackDataStats();
         if(!isCurrent())return;
         clearBtn.hidden=false;
-        clearBtn.disabled=backupBusy||stats.tracks.length===0;
+        setDataClearButtonState(clearBtn,stats.tracks.length===0);
         if(stats.tracks.length===0){
             listEl.innerHTML='<div class=\"bbSessionEmpty\"><div class=\"icon\"></div>No tracks saved.<br>Record a track to get started.</div>';
             return;
