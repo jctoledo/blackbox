@@ -1087,7 +1087,7 @@ async function captureRecordingMetadata(database,owner,request=requestDevice){
 // End recording details core.
 
 // Recording state. Detach each batch before awaiting IndexedDB; only one writer runs.
-let rec=false,sessionId=null,chunkBuffer=[],chunkIndex=0,lastSaveTime=0,sessionStart=0;
+let rec=false,sessionId=null,chunkBuffer=[],chunkIndex=0,lastSaveMono=null,sessionStart=0;
 let recordingContext=null,latestDriveRecording=null;
 let driveReadiness={at:null,gps:false,imu:false};
 let recoveredSessionCount=0;
@@ -1103,6 +1103,9 @@ function commitStore(store,value){
 }
 // Recording adapters: Drive clocks/state belong to the raw recording owner.
 function recordingClock(){return{mono:performance.now(),wall:Date.now(),hidden:typeof document!=='undefined'&&document.visibilityState==='hidden'}}
+// Scheduling and elapsed save age must not follow phone calendar corrections.
+function recordingSaveAgeMs(){return lastSaveMono===null?null:Math.max(0,performance.now()-lastSaveMono)}
+function recordingSaveDue(){const age=recordingSaveAgeMs();return age===null||age>=CHUNK_INTERVAL}
 function checkpointDrive(owner=recordingContext,type='checkpoint'){
     if(!owner?.driveSession)return null;
     owner.driveSession.apply({owner:owner.sessionId,type,...recordingClock()});
@@ -1140,7 +1143,7 @@ async function startRecording(){
         const started=Date.now(),metadata={status:'pending',requestedAt:started},id=await createRecordingSession(started,metadata);
         const owner={sessionId:id,recordingMetadata:metadata,driveSession:new DriveSession(id)};recordingContext=owner;
         owner.driveSession.apply({owner:id,type:'start',...recordingClock()});latestDriveRecording=null;
-        if(typeof resetPerformanceRuns==='function')resetPerformanceRuns();gpsCursor=null;gpsLogStatus='Waiting for GPS timestamp log…';sessionId=id;sessionStart=started;chunkIndex=0;lastSaveTime=Date.now();rec=true;recordingError='';lastSaveTime=0;
+        if(typeof resetPerformanceRuns==='function')resetPerformanceRuns();gpsCursor=null;gpsLogStatus='Waiting for GPS timestamp log…';sessionId=id;sessionStart=started;chunkIndex=0;lastSaveMono=null;rec=true;recordingError='';
         void captureRecordingMetadata(db,owner);
     }catch(e){recordingError='Storage error — recording not started';console.error(e)}
     finally{recordingBusy=false;updateRecUI()}
@@ -1155,7 +1158,7 @@ async function saveChunk(){
         try{
             if(owner?.driveSession)await commitRecordingChunk(db,ownerId,index,data,drive);
             else if(data.length)await commitStore('chunks',{sessionId:ownerId,chunkIndex:index,data,timestamp:Date.now()});
-            if(data.length)chunkIndex++;lastSaveTime=Date.now();recordingError='';
+            if(data.length)chunkIndex++;lastSaveMono=performance.now();recordingError='';
         }catch(e){
             chunkBuffer=data.concat(chunkBuffer);
             checkpointDrive(owner,'interrupt');rec=false;
@@ -1217,7 +1220,7 @@ async function collectGpsLog(){
             if(chunkBuffer.length+result.rows.length>MAX_PENDING_SAMPLES){checkpointDrive(recordingContext,'interrupt');rec=false;recordingError='Recording stopped: too many unsaved samples. Keep this tab open and export.';return}
             chunkBuffer.push(...result.rows);recordingContext?.driveSession?.apply({owner:recording,type:'gps',rows:result.rows});gpsCursor=result.cursor;if(typeof updatePerformanceRuns==='function')updatePerformanceRuns(result.rows);
             gpsLogStatus=batch.events.length?'GPS timestamps captured with this recording. Export GPS CSV from Saved data.':'GPS log connected; waiting for receiver messages.';
-            if(chunkBuffer.length&&Date.now()-lastSaveTime>=CHUNK_INTERVAL&&!chunkWrite)await saveChunk();
+            if(chunkBuffer.length&&recordingSaveDue()&&!chunkWrite)await saveChunk();
         }catch(error){gpsLogStatus='GPS timestamp log unavailable. Dashboard recording continues; check connection and firmware.';console.warn(error)}
         finally{updateRecUI()}
     })();
@@ -1246,7 +1249,7 @@ function renderDrive(){
     const exclusions=state?Object.entries(state.rejected).filter(([,n])=>n).map(([k])=>({invalid:'invalid fix',sequence:'GPS gap',boundary:'restart/date',clock:'clock gap',implausible:'speed jump'})[k]).join(', '):'';
     $('drive-coverage').textContent=state?(state.distanceM===null?'GPS distance unavailable':state.knownGpsSeconds.toFixed(1)+' s GPS observed · partial')+(gaps?' · excluded: '+exclusions:'')+(state.durationStatus==='uncertain'?' · duration uncertain':state.durationStatus==='checkpoint'?' · duration lower bound':''):'GPS distance uses qualified receiver evidence';
     const live=driveReadiness.at!==null&&performance.now()-driveReadiness.at<=1500;
-    const storage=recordingError||(!db?'Storage unavailable':chunkWrite?'Saving…':chunkBuffer.length?'Data pending save':sessionId&&lastSaveTime?'Saved in this browser':'Browser storage ready');
+    const storage=recordingError||(!db?'Storage unavailable':chunkWrite?'Saving…':chunkBuffer.length?'Data pending save':sessionId&&lastSaveMono!==null?'Saved in this browser':'Browser storage ready');
     $('drive-health').textContent=rec||!state?[live?'Connected':'No fresh telemetry',live&&driveReadiness.gps?'GPS ready':'GPS waiting',live&&driveReadiness.imu?'IMU ready':'IMU waiting',storage].join(' · '):storage;
     const button=$('drive-record');button.textContent=rec?'Stop recording':state||historical?'Record new session':'Record session';button.disabled=recordingBusy;button.classList.toggle('recording',rec);
 }
@@ -1282,9 +1285,9 @@ function updateRecUI(){
     const quick=$('quick-record');quick.textContent=rec?'Stop recording':'Record session';quick.disabled=recordingBusy;quick.classList.toggle('recording',rec);
     const notice=recordingError||lapPersistenceError||(recoveredSessionCount?recoveredSessionCount+' interrupted recording(s) found in Saved data. Check saved sample counts; recording has not resumed.':'');
     $('recording-notice').hidden=!notice;$('recording-notice').textContent=notice;
-    const saveStatus=$('save-status');saveStatus.hidden=!sessionId;saveStatus.textContent=chunkWrite?'Saving recording…':chunkBuffer.length?chunkBuffer.length+' samples pending save':lastSaveTime?'Recording saved in this browser':'No samples saved yet';
+    const saveStatus=$('save-status');saveStatus.hidden=!sessionId;saveStatus.textContent=chunkWrite?'Saving recording…':chunkBuffer.length?chunkBuffer.length+' samples pending save':lastSaveMono!==null?'Recording saved in this browser':'No samples saved yet';
     $('rec-chunks').textContent=chunkIndex;
-    $('rec-lastsave').textContent=lastSaveTime?(Math.floor((Date.now()-lastSaveTime)/1000)+'s ago'):'--';
+    const saveAge=recordingSaveAgeMs();$('rec-lastsave').textContent=saveAge===null?'--':Math.floor(saveAge/1000)+'s ago';
     const drive=recordingContext?.driveSession?.snapshot();$('rec-duration').textContent=drive?fmtTime(drive.elapsedMs):'--';
 }
 
@@ -2992,7 +2995,7 @@ function process(buf,timing=null){
     if(rec){
         chunkBuffer.push({t:now,gpsSynthetic:timing?.simulated?1:0,deviceTimeMs:d.getUint32(3,true),lapTimeMs,lapCnt,lapFlags,lastLapMs:timing?.last_lap_ms,bestLapMs:timing?.best_lap_ms,gpsAgeMs:timing?.gps_age_ms,imuAgeMs:timing?.imu_age_ms,timingRevision:timing?.revision,gpsBootId:timing?.gps_boot_id,gpsSeq:timing?.gps_event?.seq,gpsHostUs:timing?.gps_event?.host_us,gpsUtcUs:timing?.gps_event?.utc_us,gpsDate:timing?.gps_event?.date_ddmmyy,gpsFractionDigits:timing?.gps_event?.fractional_digits,sp,ax,ay,wz,mo,latg,lng,lat,lon,gpsOk,ekfX,ekfY,ekfYaw,gpsCourse,lon_imu:fusion.lon_imu,lon_gps:fusion.lon_gps,gps_wt:fusion.gps_wt,pitch_c:fusion.pitch_c,pitch_cf:fusion.pitch_cf,roll_c:fusion.roll_c,roll_cf:fusion.roll_cf,tilt_x:fusion.tilt_x,tilt_y:fusion.tilt_y});
         if(chunkBuffer.length>=MAX_PENDING_SAMPLES){checkpointDrive(recordingContext,'interrupt');rec=false;recordingError='Recording stopped: too many unsaved samples. Keep this tab open and export.';updateRecUI()}
-        else if(now-lastSaveTime>=CHUNK_INTERVAL&&!chunkWrite)saveChunk().catch(console.error);
+        else if(recordingSaveDue()&&!chunkWrite)saveChunk().catch(console.error);
     }
 }
 

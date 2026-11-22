@@ -19,8 +19,8 @@ test('GPS and session CSV remain separate and preserve missing clocks, zeros and
  assert.equal(c.samplesToCSV(all).trim().split('\n').length,2);assert.equal(c.recordingHealth([{chunkIndex:0,data:all}]).samples,1);
 });
 test('stopping waits for the in-flight GPS fetch and saves its tail in the same session',async()=>{
- let deliver;const saved=[];const c={console,Math,Number,Date,MAX_PENDING_SAMPLES:6000,CHUNK_INTERVAL:5000,db:{},requestDevice:()=>new Promise(resolve=>{deliver=resolve})};vm.createContext(c);
- vm.runInContext(section('// Recording state.', 'function updateRecUI()')+';function updateRecUI(){};rec=true;sessionId=10;sessionStart=100;lastSaveTime=Date.now();',c);
+ let deliver;const saved=[];const c={console,Math,Number,Date,performance,MAX_PENDING_SAMPLES:6000,CHUNK_INTERVAL:5000,db:{},requestDevice:()=>new Promise(resolve=>{deliver=resolve})};vm.createContext(c);
+ vm.runInContext(section('// Recording state.', 'function updateRecUI()')+';function updateRecUI(){};rec=true;sessionId=10;sessionStart=100;lastSaveMono=performance.now();',c);
  c.commitStore=async(store,value)=>saved.push({store,value});
  c.patchRecordingSession=async(database,id,patch)=>saved.push({store:'sessions',value:{sessionId:id,...patch}});
  const pending=c.collectGpsLog(),stop=c.stopRecording();
