@@ -34,9 +34,9 @@ Record another short stationary segment. Stop recording: Drive duration and dist
 - Export the recording's **Session CSV** and **GPS CSV**.
 - On **v0.0.4-rc.11 and later**, expand **Recording details** and choose **Download details JSON** for the recording. Keep this companion file with the CSVs and backup; rc.10 does not provide this capture/export. Pending or unavailable details do not prevent recording.
 - Export **Runs CSV** if attempts exist. An empty result is not a failed ordinary drive.
-- Download a **full backup**. Export track geometry too if you recorded or used a circuit/stage.
+- Download a **full backup** and keep every numbered part with its final manifest; see the [backup guide](BACKUP.md). Export track geometry too if you recorded or used a circuit/stage.
 - Reload the same browser/origin and confirm the recording, frozen Drive duration/distance and saved Summary remain available without recording resuming. Preserve the backup before trying another browser or phone.
-- Before relying on a second phone or Home Screen launch, restore the backup **as new copies** there and compare sample/GPS counts, Drive details and derived Summary. Keep the original browser data and file until that check succeeds. See the [phone restore checklist](HARDWARE_VALIDATION.md#drive-recording-and-backup-acceptance-on-both-phones).
+- Before relying on a second phone or Home Screen launch, restore the backup **as new copies** there and compare sample/GPS counts, Drive details and derived Summary. Keep the original browser data and complete backup set until that check succeeds. See the [phone restore checklist](HARDWARE_VALIDATION.md#drive-recording-and-backup-acceptance-on-both-phones).
 
 Keep files together in a private folder named with date, receiver and firmware version. Keep the flashed image SHA-256 and add a short note: phone/OS/browser, antenna/mounting, foreground/background events, reception conditions and anything unexpected. Automatic recording context does not infer these details; its configured rates do not replace the delivered rates in Diagnostics. Retain originals; make redacted copies for public reports. CSV/JSON backups contain location history and are not encrypted.
 

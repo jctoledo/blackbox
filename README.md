@@ -217,7 +217,7 @@ See the [full documentation](docs/LAP_TIMER.md) for details on recording, delta 
 
 ### Keep a backup outside the browser
 
-Stop recording, then open **Saved data → Download backup**. Save the JSON file in Files/Downloads and copy it somewhere safe. To recover on another browser, choose **Saved data → Choose backup → Restore as new copies**. Recordings, tracks, reference traces, and lap history are included; existing data is preserved. Files include location history and are not encrypted. See the [backup/restore guide and limits](docs/FAQ.md#how-do-i-back-up-and-restore-everything).
+Stop recording, then prepare a backup in **Saved data**. Save every numbered part and the final manifest together in Files/Downloads, and copy the complete set somewhere safe. To recover on another browser, choose the manifest and all parts, then **Restore as new copies**. Long recordings can span multiple files without becoming separate recordings. Recordings, tracks, reference traces and lap history are included; existing data is preserved. Files include location history and are not encrypted. Older single-file backups remain importable. See the [backup/restore guide and limits](docs/BACKUP.md).
 
 ## Calibration
 

@@ -14,6 +14,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Obsolete documentation files (RELEASE.md, IMPLEMENTATION_SUMMARY.md, release-notes.md)
 
+## [0.0.4-rc.14] - 2026-11-21
+
+### Added
+- Multipart backups with bounded files for recordings beyond the legacy 100 MiB single-file limit, complete-set validation, add-only restore staging and explicit recovery of partially committed database groups (#138). Existing single-file and track JSON imports remain supported.
+
+### Fixed
+- Replay saved Drive evidence one chunk at a time and check restored record sizes before promotion. Multi-tab retries retain committed-copy proof, cancelled/discarded staging stays discarded, and partial failures remain explicit.
+- Read legacy backup files once under a serialized picker lock, preserving compatibility without a duplicate whole-file parse.
+
 ## [0.0.4-rc.13] - 2026-11-21
 
 ### Added

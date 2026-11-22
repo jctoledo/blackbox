@@ -827,11 +827,13 @@ body.cluster-view .bbDeltaBar:not(.no-ref) .bbDeltaText{font-size:min(clamp(24px
         <div class="bbModalBody">
             <div class="bbModalSection">
                 <div class="bbSectionTitle">Backup &amp; restore</div>
-                <p class="bbCreateTrackHint">Save recordings, tracks, reference laps, and history in one file. Keep a copy outside this browser. Stop recording first; track timing may continue.</p>
+                <p class="bbCreateTrackHint">Save recordings, tracks, references and history as numbered files plus a final manifest. Keep the complete set outside this browser. Stop recording first; track timing may continue.</p>
                 <label for="backup-scope" style="display:block;margin-top:12px;font-size:13px">Backup contents</label><select id="backup-scope" style="width:100%;padding:10px;background:var(--bg);color:var(--text);border:1px solid var(--divider);border-radius:6px"><option value="all">All saved data</option><option value="recordings">Recordings only</option><option value="tracks">Tracks, references &amp; history only</option></select><div style="display:flex;flex-wrap:wrap;gap:8px;margin:12px 0"><button class="bbSessionBtn" id="backup-download">Download backup</button><button class="bbSessionBtn" id="backup-choose">Choose backup</button><button class="bbSessionBtn" id="backup-restore" disabled>Restore as new copies</button></div>
                 <p id="gps-log-status" role="status" style="font-size:13px;color:var(--muted)">GPS evidence is collected while recording.</p>
-                <input type="file" id="backup-file" accept=".json,application/json" hidden>
-                <p id="backup-status" role="status" style="font-size:13px;line-height:1.5;overflow-wrap:anywhere">Restore adds copies; it never replaces existing data. Backup files contain location history. Maximum file size: 100 MiB.</p>
+                <input type="file" id="backup-file" accept=".json,application/json" multiple hidden>
+                <div style="display:flex;flex-wrap:wrap;gap:8px;margin:12px 0"><button class="bbSessionBtn" id="backup-save-part" hidden>Save numbered part</button><button class="bbSessionBtn" id="backup-next-part" hidden>Prepare next file</button><button class="bbSessionBtn" id="backup-cancel" hidden>Cancel</button></div>
+                <div id="backup-staged-row" hidden><label for="backup-staged">Resume or clean up a staged restore</label><select id="backup-staged" style="display:block;width:100%;min-height:44px;margin:8px 0;background:var(--bg);color:var(--text);border:1px solid var(--divider)"><option value="">Choose staged restore…</option></select><button class="bbSessionBtn" id="backup-discard-staged" disabled>Discard staging only</button></div>
+                <p id="backup-status" role="status" style="font-size:13px;line-height:1.5;overflow-wrap:anywhere">Restore adds copies; it never replaces existing data. Choose the manifest and all numbered parts together, in any order. Files contain location history. Parts are at most 8 MiB; version 1 single-file backups up to 100 MiB remain supported. Keep this tab in the foreground.</p>
             </div>
             <div class="bbStorageOverview">
                 <div class="bbStorageTotal"><div class="bbStorageLabel">Estimated data size</div><div class="bbStorageValue" id="data-total-size">—</div></div>
@@ -978,6 +980,8 @@ function driveCalendar(date){
     const day=Math.floor(date/10000),month=Math.floor(date/100)%100,year=2000+date%100,d=new Date(Date.UTC(year,month-1,day));
     return d.getUTCFullYear()===year&&d.getUTCMonth()===month-1&&d.getUTCDate()===day;
 }
+// Keep only the six scalars needed by the next interval, never a raw row.
+function driveAnchor(row){return{sp:row.sp,gpsUtcUs:row.gpsUtcUs,gpsBootId:row.gpsBootId,gpsDate:row.gpsDate,gpsSeq:row.gpsSeq,gpsHostUs:row.gpsHostUs}}
 class DriveSession{
     constructor(owner){
         this.owner=owner;this.previous=null;this.started=false;this.mono=null;this.wall=null;
@@ -1012,11 +1016,11 @@ class DriveSession{
             const valid=r.gpsActive===1&&r.gpsAccepted===1&&Number.isFinite(r.sp)&&r.sp>=0&&r.sp<=100&&Number.isSafeInteger(r.gpsHostUs)&&r.gpsHostUs>=0&&Number.isSafeInteger(r.gpsUtcUs)&&r.gpsUtcUs>=0&&r.gpsUtcUs<86400000000&&driveCalendar(r.gpsDate)&&Number.isInteger(r.gpsFractionDigits)&&r.gpsFractionDigits>=2&&r.gpsFractionDigits<=255&&Number.isSafeInteger(r.gpsBootId)&&r.gpsBootId>=0&&r.gpsBootId<=0xffffffff&&Number.isSafeInteger(r.gpsSeq)&&r.gpsSeq>0;
             if(!valid){s.rejected.invalid++;this.previous=null;continue}
             const p=this.previous;
-            if(!p){this.previous=r;continue}
+            if(!p){this.previous=driveAnchor(r);continue}
             const dt=(r.gpsUtcUs-p.gpsUtcUs)/1e6;
             const reason=r.gpsBootId!==p.gpsBootId||r.gpsDate!==p.gpsDate||r.gpsBoundary===2?'boundary':r.gpsSeq!==p.gpsSeq+1||r.gpsMissing>0?'sequence':r.gpsHostUs<=p.gpsHostUs||dt<.02||dt>.3?'clock':Math.abs(r.sp-p.sp)/dt>15?'implausible':null;
             if(reason){s.rejected[reason]++;this.previous=null;continue}
-            s.distanceM=(s.distanceM??0)+(p.sp+r.sp)*.5*dt;s.knownGpsSeconds+=dt;s.intervalCount++;this.previous=r;
+            s.distanceM=(s.distanceM??0)+(p.sp+r.sp)*.5*dt;s.knownGpsSeconds+=dt;s.intervalCount++;this.previous=driveAnchor(r);
         }
         if(initial)s.startAfterGpsRow=s.observedGpsRows;
         return true;
@@ -1028,16 +1032,23 @@ function recoverDrive(value){
     if(state.status==='active'){state.status='interrupted';state.durationStatus='checkpoint';state.stopAfterGpsRow=state.observedGpsRows}
     return state;
 }
-function replayDrive(value,rows){
-    const saved=projectDrive(value),d=new DriveSession(0);d.apply({owner:0,type:'start',mono:0,wall:0});
-    let ordinal=0,initial=[],enrolled=[];
-    for(const r of rows){if(r.rowType!==1)continue;ordinal++;if(ordinal>saved.observedGpsRows)continue;(ordinal<=(saved.startAfterGpsRow??0)?initial:enrolled).push(r)}
-    if(ordinal<saved.observedGpsRows)throw Error('Drive summary exceeds saved evidence');
-    if(saved.startAfterGpsRow!==null){d.apply({owner:0,type:'gps',rows:initial});d.apply({owner:0,type:'gps',rows:enrolled})}
-    const actual=d.snapshot();
-    for(const key of ['startAfterGpsRow','observedGpsRows','distanceM','knownGpsSeconds','intervalCount','rejected','synthetic'])if(JSON.stringify(actual[key])!==JSON.stringify(saved[key]))throw Error('Drive summary does not match GPS evidence');
-    return saved;
+class DriveReplay{
+    constructor(value){this.saved=projectDrive(value);this.drive=new DriveSession(0);this.drive.apply({owner:0,type:'start',mono:0,wall:0});this.ordinal=0;if(this.saved.startAfterGpsRow!==null)this.drive.state.startAfterGpsRow=this.saved.startAfterGpsRow}
+    update(rows){
+        for(const row of rows){
+            if(row.rowType!==1)continue;this.ordinal++;if(this.ordinal>this.saved.observedGpsRows)continue;
+            if(this.ordinal<=(this.saved.startAfterGpsRow??0)){this.drive.state.observedGpsRows++;this.drive.state.synthetic=this.drive.state.synthetic||row.gpsSynthetic===1}
+            else this.drive.apply({owner:0,type:'gps',rows:[row]});
+        }
+    }
+    finish(){
+        if(this.ordinal<this.saved.observedGpsRows)throw Error('Drive summary exceeds saved evidence');
+        const actual=this.drive.snapshot();
+        for(const key of ['startAfterGpsRow','observedGpsRows','distanceM','knownGpsSeconds','intervalCount','rejected','synthetic'])if(JSON.stringify(actual[key])!==JSON.stringify(this.saved[key]))throw Error('Drive summary does not match GPS evidence');
+        return this.saved;
+    }
 }
+function replayDrive(value,rows){const replay=new DriveReplay(value);replay.update(rows);return replay.finish()}
 // End Drive session core.
 
 const failedRecordingMetadata=new Map(),pendingRecordingMetadata=new Set();
@@ -1266,9 +1277,13 @@ async function loadLatestDrive(database,sessions){
     let drive=null;
     if(row.drive){
         try{
-            const chunks=await idbPromise(database.transaction('chunks','readonly').objectStore('chunks').index('sessionId').getAll(row.sessionId));
-            const rows=chunks.sort((a,b)=>a.chunkIndex-b.chunkIndex).flatMap(c=>c.data||[]);
-            drive=recoverDrive(replayDrive(row.drive,rows));
+            const replay=new DriveReplay(row.drive);
+            await new Promise((resolve,reject)=>{
+                const tx=database.transaction('chunks','readonly'),request=tx.objectStore('chunks').index('sessionId').openCursor(IDBKeyRange.only(row.sessionId));
+                tx.oncomplete=resolve;tx.onerror=tx.onabort=()=>reject(tx.error||Error('Drive evidence unavailable'));
+                request.onsuccess=()=>{const cursor=request.result;if(!cursor)return;try{replay.update(cursor.value.data||[]);cursor.continue()}catch(error){tx.abort();reject(error)}};
+            });
+            drive=recoverDrive(replay.finish());
         }catch(error){console.warn('Historical Drive summary unavailable',error)}
     }
     if(!recordingContext)latestDriveRecording={sessionId:row.sessionId,drive};
@@ -1952,7 +1967,7 @@ function wrapAngle(a){while(a>Math.PI)a-=2*Math.PI;while(a<-Math.PI)a+=2*Math.PI
 // Track Manager UI
 const modalReturnFocus=new Map();
 function revealModal(id,closeId){modalReturnFocus.set(id,document.activeElement);$(id).classList.add('open');$(closeId).focus()}
-function hideModal(id){$(id).classList.remove('open');modalReturnFocus.get(id)?.focus();modalReturnFocus.delete(id)}
+function hideModal(id){if(id==='data-modal'&&backupBusy)return;$(id).classList.remove('open');modalReturnFocus.get(id)?.focus();modalReturnFocus.delete(id)}
 document.addEventListener('keydown',event=>{
     const modal=document.querySelector('.bbModal.open');if(!modal)return;
     if(event.key==='Escape'){event.preventDefault();hideModal(modal.id);return}
@@ -3370,14 +3385,17 @@ async function downloadBackup(){
         $('backup-status').textContent='Backup download requested. Check that the file is saved in Downloads or Files, then copy it somewhere safe. Browser data has not been removed.';
     });
 }
+function previewParsedBackup(value){
+    value=normalizeBackup(value);const summary=validateBackup(value);backupPreview=value;
+    $('backup-status').textContent=(value.legacyImport?'Track JSON export (no original checksum). ':'Checksum verified. ')+summary.recordings+' recordings · '+summary.sampleCount+' '+(summary.sampleCount===1?'sample':'samples')+' · '+summary.tracks+' tracks · '+summary.references+' references · '+summary.laps+' lap results. Restore adds copies without changing existing data. Importing the same file again creates another copy. Location data is included; nothing is uploaded.';
+}
 async function previewBackup(file){
     await backupAction(async()=>{
         backupPreview=null;restorePlan=null;$('backup-restore').textContent='Restore as new copies';
         if(!file)return;$('backup-status').textContent='Checking backup…';backupIdle();
         if(file.size>BACKUP_MAX_BYTES)throw new Error('Backup is larger than the supported 100 MiB limit.');
         let value;try{value=JSON.parse(await file.text())}catch{throw new Error('This file is not valid JSON. Choose a Blackbox backup file, not a CSV export.');}
-        value=normalizeBackup(value);const summary=validateBackup(value);backupPreview=value;
-        $('backup-status').textContent=(value.legacyImport?'Track JSON export (no original checksum). ':'Checksum verified. ')+summary.recordings+' recordings · '+summary.sampleCount+' '+(summary.sampleCount===1?'sample':'samples')+' · '+summary.tracks+' tracks · '+summary.references+' references · '+summary.laps+' lap results. Restore adds copies without changing existing data. Importing the same file again creates another copy. Location data is included; nothing is uploaded.';
+        previewParsedBackup(value);
     });
 }
 async function restoreBackup(){
@@ -3395,10 +3413,307 @@ async function restoreBackup(){
         await renderDataModal();await renderTrackList();
     });
 }
+// Multipart backup core. Bounded files; immutable staging; add-only promotion.
+const MULTIPART_BYTES=8*1024*1024,MULTIPART_FRAGMENT_CHARS=256*1024,MULTIPART_RECORD_BYTES=16*1024*1024,MULTIPART_MAX_PARTS=4096,MULTIPART_MAX_RECORDS=1000000,MULTIPART_MAX_ROOTS=10000,MULTIPART_MAX_JOBS=100;
+const MULTIPART_COLLECTIONS=['sessions','tracks','chunks','references','history'];
+const MULTIPART_STORES={sessions:'sessions',tracks:'tracks',chunks:'chunks',references:'reference_laps',history:'lap_history'};
+const MULTIPART_STAGE_NAME='blackbox-backup-staging';
+function multipartCheck(condition,message){if(!condition)throw Error('Backup: '+message)}
+function multipartAbort(signal){if(signal?.aborted)throw Error('Cancelled. Original browser data is unchanged.')}
+function multipartBytes(text){return new TextEncoder().encode(text).length}
+function multipartFileChecksum(bytes){let crc=0xffffffff;for(const byte of bytes)crc=(crc>>>8)^BACKUP_CRC_TABLE[(crc^byte)&255];return 'crc32-utf8:'+((crc^0xffffffff)>>>0).toString(16).padStart(8,'0')}
+function multipartId(){return typeof crypto!=='undefined'&&crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+'-'+Math.random().toString(36).slice(2)}
+function multipartDigest(){let crc=0xffffffff;return{update(text){for(let i=0;i<text.length;i++){const code=text.charCodeAt(i);crc=(crc>>>8)^BACKUP_CRC_TABLE[(crc^(code&255))&255];crc=(crc>>>8)^BACKUP_CRC_TABLE[(crc^(code>>>8))&255]}},value(){return 'crc32-utf16le:'+((crc^0xffffffff)>>>0).toString(16).padStart(8,'0')}}}
+function multipartKey(collection,row){return collection==='chunks'?[row.sessionId,row.chunkIndex]:collection==='sessions'?row.sessionId:row.id}
+function multipartRead(database,stores,action){return new Promise((resolve,reject)=>{const tx=database.transaction(stores,'readonly');let result;tx.oncomplete=()=>resolve(result);tx.onerror=tx.onabort=()=>reject(tx.error||Error('Saved data read failed'));try{action(tx,value=>{result=value})}catch(error){tx.abort();reject(error)}})}
+function multipartLastKey(database,store){return multipartRead(database,[store],(tx,done)=>{const r=tx.objectStore(store).openKeyCursor(null,'prev');r.onsuccess=()=>done(r.result?.primaryKey??null)})}
+function multipartNextRow(database,store,last,upper){
+    if(upper===null||last!==null&&indexedDB.cmp(last,upper)>=0)return Promise.resolve(null);
+    return multipartRead(database,[store],(tx,done)=>{const range=last===null?IDBKeyRange.upperBound(upper):IDBKeyRange.bound(last,upper,true,false),r=tx.objectStore(store).openCursor(range);r.onsuccess=()=>done(r.result?{key:r.result.primaryKey,row:r.result.value}:null)});
+}
+async function prepareMultipartBackup(scope='all',options={}){
+    backupIdle();multipartAbort(options.signal);
+    const selected=scope==='all'||scope==='recordings'?null:scope==='tracks'?false:Number(scope);
+    multipartCheck(selected===null||selected===false||Number.isSafeInteger(selected)&&selected>=0,'choose valid backup contents');
+    const capturedAt=Date.now(),archiveId=multipartId(),tail={sessionId,sessionStart,chunkIndex,data:chunkBuffer.slice(),owner:typeof recordingContext!=='undefined'&&recordingContext?.sessionId===sessionId?recordingContext:null};
+    const tailDrive=tail.owner?.driveSession?.snapshot();
+    if(selected!==false&&!db)await openDB();if((scope==='all'||scope==='tracks')&&!trackDb)await openTrackDB();
+    const fences={};for(const collection of MULTIPART_COLLECTIONS){const recording=['sessions','chunks'].includes(collection),included=recording?selected!==false:scope==='all'||scope==='tracks';fences[collection]=included?await multipartLastKey(recording?db:trackDb,MULTIPART_STORES[collection]):null}
+    const tailMetadata=tail.owner?.recordingMetadata,failed=new Map(Array.from(failedRecordingMetadata,([id,value])=>[id,structuredClone(value)]));
+    const overlays={drive:tailDrive?recoverDrive(tailDrive):null,metadata:tailMetadata?structuredClone(tailMetadata):null};
+    async function* records(){
+        let tailSession=false,tailChunk=false;
+        const includeTail=tail.data.length&&selected!==false&&(selected===null||selected===tail.sessionId);
+        for(const collection of MULTIPART_COLLECTIONS){
+            if(['sessions','chunks'].includes(collection)?selected===false:!(scope==='all'||scope==='tracks'))continue;
+            const database=['sessions','chunks'].includes(collection)?db:trackDb,store=MULTIPART_STORES[collection];let last=null;
+            while(true){multipartAbort(options.signal);const next=await multipartNextRow(database,store,last,fences[collection]);if(!next)break;last=next.key;let row=next.row;
+                if(['sessions','chunks'].includes(collection)&&selected!==null&&row.sessionId!==selected)continue;
+                if(collection==='sessions'){
+                    if(row.sessionId===tail.sessionId){tailSession=true;if(overlays.metadata&&(overlays.metadata.status!=='pending'||!row.recordingMetadata||row.recordingMetadata.status==='pending'))row.recordingMetadata=overlays.metadata;if(overlays.drive)row.drive=overlays.drive}
+                    if(failed.has(row.sessionId))row.recordingMetadata=failed.get(row.sessionId);
+                }
+                if(collection==='chunks'){if(row.sessionId===tail.sessionId&&row.chunkIndex===tail.chunkIndex)tailChunk=true;row=portableRecordingChunk(row)}
+                if(collection==='references')row=portableReference(row);
+                yield{collection,row};
+            }
+            if(collection==='sessions'&&includeTail&&!tailSession){const row={sessionId:tail.sessionId,startTime:tail.sessionStart,status:'active'};if(overlays.drive)row.drive=overlays.drive;if(failed.get(tail.sessionId)||overlays.metadata)row.recordingMetadata=failed.get(tail.sessionId)||overlays.metadata;yield{collection,row}}
+            if(collection==='chunks'&&includeTail&&!tailChunk)yield{collection,row:portableRecordingChunk({sessionId:tail.sessionId,chunkIndex:tail.chunkIndex,data:tail.data,timestamp:capturedAt})};
+        }
+    }
+    async function scan(){const digest=multipartDigest(),counts=Object.fromEntries(MULTIPART_COLLECTIONS.map(k=>[k,0])),sessionRoots=new Set(),trackRoots=new Set(),referenceTracks=new Set(),replays=new Map();let samples=0,recordsCount=0;
+        for await(const {collection,row} of records()){
+            const data={sessions:[],chunks:[],tracks:[],references:[],history:[]};let checked=row;
+            if(collection==='sessions'){
+                multipartCheck(!sessionRoots.has(row.sessionId),'duplicate recording');sessionRoots.add(row.sessionId);
+                if(row.drive!==undefined){const replay=new DriveReplay(row.drive);multipartCheck(sameRecordingMetadata(replay.saved,row.drive),'invalid Drive summary payload');replays.set(row.sessionId,replay);checked={...row};delete checked.drive}
+            }
+            if(collection==='tracks'){multipartCheck(!trackRoots.has(row.id),'duplicate track');trackRoots.add(row.id)}
+            if(collection==='chunks'){multipartCheck(sessionRoots.has(row.sessionId),'orphan recording chunk');data.sessions=[{sessionId:row.sessionId,startTime:0}];replays.get(row.sessionId)?.update(row.data)}
+            if(['references','history'].includes(collection)){
+                multipartCheck(trackRoots.has(row.trackId),'orphan track data');data.tracks=[{id:row.trackId,name:'validation parent',type:'loop',startLine:{p1:[0,0],p2:[1,0],direction:0},gpsOrigin:{lat:0,lon:0},centerline:[]}];
+                if(collection==='references'){multipartCheck(!referenceTracks.has(row.trackId),'duplicate track reference');referenceTracks.add(row.trackId)}
+            }
+            data[collection]=[checked];validateBackup({format:BACKUP_FORMAT,version:1,data,checksum:backupChecksum(data)});
+            const text=JSON.stringify(row);multipartCheck(multipartBytes(text)<=MULTIPART_RECORD_BYTES,'one saved record exceeds the 16 MiB record limit; original data is unchanged');digest.update(collection+'\n'+text+'\n');counts[collection]++;if(collection==='chunks')samples+=row.data.length;multipartCheck(++recordsCount<=MULTIPART_MAX_RECORDS,'archive has too many records');if(['sessions','tracks'].includes(collection))multipartCheck(counts[collection]<=MULTIPART_MAX_ROOTS,'archive has too many recordings or tracks');options.onProgress?.({phase:'preparing',records:recordsCount,samples})
+        }
+        for(const replay of replays.values())replay.finish();multipartAbort(options.signal);
+        return{digest:digest.value(),counts,samples};
+    }
+    const expected=await scan(),source=records(),actual=multipartDigest(),counts=Object.fromEntries(MULTIPART_COLLECTIONS.map(k=>[k,0])),parts=[];
+    let current=null,offset=0,fragment=0,ordinal=0,done=false,closed=false,samples=0;
+    return{archiveId,summary:expected,async next(){
+        if(closed)return null;multipartAbort(options.signal)
+        const fragments=[];let budget=0;
+        while(true){
+            if(!current){const item=await source.next();if(item.done){done=true;break}const {collection,row}=item.value,text=JSON.stringify(row);multipartCheck(multipartBytes(text)<=MULTIPART_RECORD_BYTES,'saved record grew beyond the supported limit');actual.update(collection+'\n'+text+'\n');counts[collection]++;if(collection==='chunks')samples+=row.data.length;ordinal++;current={collection,text};offset=0;fragment=0}
+            const length=Math.min(MULTIPART_FRAGMENT_CHARS,current.text.length-offset),end=offset+length,entry={record:ordinal,collection:current.collection,fragment,last:end===current.text.length,text:current.text.slice(offset,end)},cost=multipartBytes(JSON.stringify(entry))+1;
+            if(fragments.length&&budget+cost>MULTIPART_BYTES-1024)break;
+            fragments.push(entry);budget+=cost;offset=end;fragment++;if(entry.last)current=null;
+        }
+        if(fragments.length){multipartCheck(parts.length<MULTIPART_MAX_PARTS,'archive exceeds the 4096-part limit');const data={format:BACKUP_FORMAT,version:2,kind:'part',archiveId,index:parts.length,fragments};const text=JSON.stringify({...data,checksum:backupChecksum(data)}),bytes=multipartBytes(text);multipartCheck(bytes<=MULTIPART_BYTES,'internal part size limit exceeded');const name='blackbox-'+archiveId+'-part-'+String(parts.length+1).padStart(4,'0')+'.json';parts.push({index:parts.length,name,bytes,checksum:backupChecksum(data),fileChecksum:multipartFileChecksum(new TextEncoder().encode(text))});options.onProgress?.({phase:'exporting',parts:parts.length,records:ordinal,samples});return{name,text,bytes,index:parts.length-1,kind:'part'}}
+        multipartCheck(actual.value()===expected.digest&&JSON.stringify(counts)===JSON.stringify(expected.counts)&&samples===expected.samples,'saved data changed during export. Keep originals, discard this incomplete set and prepare a new backup');
+        const data={format:BACKUP_FORMAT,version:2,kind:'manifest',archiveId,createdAt:new Date(capturedAt).toISOString(),parts,counts,samples,records:ordinal,sourceDigest:actual.value(),limits:{partBytes:MULTIPART_BYTES,recordBytes:MULTIPART_RECORD_BYTES}};
+        const text=JSON.stringify({...data,checksum:backupChecksum(data)});multipartCheck(multipartBytes(text)<=1024*1024,'manifest size limit exceeded');closed=true;return{name:'blackbox-'+archiveId+'-manifest.json',text,bytes:multipartBytes(text),kind:'manifest'};
+    },async cancel(){closed=true;current=null;await source.return?.()}};
+}
+function openMultipartStage(){return new Promise((resolve,reject)=>{const request=indexedDB.open(MULTIPART_STAGE_NAME,1);request.onerror=()=>reject(request.error);request.onblocked=()=>reject(Error('Close other Blackbox backup tabs before opening staging'));request.onsuccess=()=>{request.result.onversionchange=()=>request.result.close();resolve(request.result)};request.onupgradeneeded=()=>{const database=request.result;database.createObjectStore('jobs',{keyPath:'id'});const records=database.createObjectStore('records',{keyPath:['jobId','collection','key']});records.createIndex('order',['jobId','collection','ordinal']);records.createIndex('session',['jobId','collection','sessionId','chunkIndex'])}})}
+async function multipartStageWrite(stage,stores,action){return new Promise((resolve,reject)=>{const tx=stage.transaction(stores,'readwrite');tx.oncomplete=resolve;tx.onerror=tx.onabort=()=>reject(tx.error||Error('Backup staging write failed; originals are unchanged'));try{action(tx)}catch(error){tx.abort();reject(error)}})}
+function multipartStageGet(stage,id){return multipartRead(stage,['jobs'],(tx,done)=>{const r=tx.objectStore('jobs').get(id);r.onsuccess=()=>done(r.result)})}
+function multipartStagePut(stage,job){return multipartStageWrite(stage,['jobs'],tx=>tx.objectStore('jobs').put(job))}
+function multipartStagedRecord(stage,id,collection,key){return multipartRead(stage,['records'],(tx,done)=>{const r=tx.objectStore('records').get([id,collection,JSON.stringify(key)]);r.onsuccess=()=>done(r.result?.data)})}
+async function* multipartStagedRows(stage,id,collection){let last=0;while(true){const row=await multipartRead(stage,['records'],(tx,done)=>{const r=tx.objectStore('records').index('order').openCursor(IDBKeyRange.bound([id,collection,last],[id,collection,Number.MAX_SAFE_INTEGER],true,false));r.onsuccess=()=>done(r.result?.value??null)});if(!row)return;last=row.ordinal;yield row}}
+async function multipartFile(file,max,withChecksum=false){
+    multipartCheck(file&&Number.isSafeInteger(file.size)&&file.size>=0&&file.size<=max,'file exceeds its supported size limit');
+    let bytes,text;try{bytes=new Uint8Array(await file.arrayBuffer());multipartCheck(bytes.byteLength===file.size,'file size changed while reading');text=new TextDecoder('utf-8',{fatal:true}).decode(bytes)}catch(error){throw Error('Backup file could not be read as UTF-8; choose the original file again. '+error.message)}
+    let value;try{value=JSON.parse(text)}catch{throw Error('Backup file is not valid JSON')}
+    return withChecksum?{value,fileChecksum:multipartFileChecksum(bytes)}:value;
+}
+function multipartVerify(value,kind){multipartCheck(value&&value.format===BACKUP_FORMAT&&value.version===2&&value.kind===kind,'unsupported multipart format');const {checksum,...data}=value;multipartCheck(typeof checksum==='string'&&checksum===backupChecksum(data),'checksum mismatch; a file is damaged');multipartCheck(typeof value.archiveId==='string'&&/^[a-zA-Z0-9-]{1,100}$/.test(value.archiveId),'invalid archive identity');return data}
+function multipartManifest(value){const data=multipartVerify(value,'manifest');multipartCheck(Array.isArray(data.parts)&&data.parts.length<=MULTIPART_MAX_PARTS,'invalid part catalog');multipartCheck(data.counts&&MULTIPART_COLLECTIONS.every(k=>Number.isSafeInteger(data.counts[k])&&data.counts[k]>=0),'invalid collection counts');multipartCheck(['sessions','tracks'].every(k=>data.counts[k]<=MULTIPART_MAX_ROOTS),'too many recordings or tracks');multipartCheck(Number.isSafeInteger(data.records)&&data.records>=0&&data.records<=MULTIPART_MAX_RECORDS&&Object.values(data.counts).reduce((a,b)=>a+b,0)===data.records,'invalid record count');multipartCheck(Number.isSafeInteger(data.samples)&&data.samples>=0&&typeof data.sourceDigest==='string','invalid sample summary');const names=new Set();for(let i=0;i<data.parts.length;i++){const p=data.parts[i];multipartCheck(p&&p.index===i&&typeof p.name==='string'&&p.name.length<=256&&!names.has(p.name)&&Number.isSafeInteger(p.bytes)&&p.bytes>0&&p.bytes<=MULTIPART_BYTES&&typeof p.checksum==='string'&&typeof p.fileChecksum==='string'&&/^crc32-utf8:[0-9a-f]{8}$/.test(p.fileChecksum),'invalid part descriptor');names.add(p.name)}return data}
+async function multipartValidateRecord(stage,job,collection,row){
+    multipartCheck(MULTIPART_COLLECTIONS.includes(collection)&&row&&typeof row==='object'&&!Array.isArray(row),'invalid record');
+    const data={sessions:[],chunks:[],tracks:[],references:[],history:[]};let checked=row;
+    if(collection==='sessions'&&row.drive!==undefined){const drive=projectDrive(row.drive);multipartCheck(sameRecordingMetadata(drive,row.drive),'invalid Drive summary payload');checked={...row};delete checked.drive}
+    data[collection]=[checked];
+    if(collection==='chunks'){const parent=await multipartStagedRecord(stage,job.id,'sessions',row.sessionId);multipartCheck(parent,'orphan recording chunk');data.sessions=[{sessionId:parent.sessionId,startTime:parent.startTime}]}
+    if(['references','history'].includes(collection)){const parent=await multipartStagedRecord(stage,job.id,'tracks',row.trackId);multipartCheck(parent,'orphan track data');data.tracks=[parent];if(collection==='references'){const prior=job.referenceTracks||[];multipartCheck(!prior.includes(row.trackId),'duplicate reference for track');prior.push(row.trackId);job.referenceTracks=prior}}
+    validateBackup({format:BACKUP_FORMAT,version:1,data,checksum:backupChecksum(data)});
+}
+function multipartCreateJob(stage,job){return new Promise((resolve,reject)=>{
+    const tx=stage.transaction('jobs','readwrite'),store=tx.objectStore('jobs');let failure;
+    tx.oncomplete=resolve;tx.onabort=tx.onerror=()=>reject(failure||tx.error||Error('Backup staging creation failed'));
+    const request=store.count();request.onsuccess=()=>{if(request.result>=MULTIPART_MAX_JOBS){failure=Error('Backup staging has 100 retained jobs. Discard completed or incomplete staging to free a slot; original and restored data will remain.');tx.abort()}else store.add(job)};
+})}
+function multipartStageRecord(stage,job,entry){return new Promise((resolve,reject)=>{
+    const tx=stage.transaction(['jobs','records'],'readwrite');let failure;
+    tx.oncomplete=resolve;tx.onabort=tx.onerror=()=>reject(failure||tx.error||Error('Backup staging record write failed'));
+    const request=tx.objectStore('jobs').get(job.id);request.onsuccess=()=>{
+        if(!request.result||request.result.state!=='building'){failure=Error('Backup staging was discarded or is no longer being built; choose the files again');tx.abort();return}
+        tx.objectStore('records').add(entry);
+    };
+})}
+async function stageMultipartBackup(files,options={}){
+    backupIdle();multipartAbort(options.signal);multipartCheck(files&&files.length>0&&files.length<=MULTIPART_MAX_PARTS+1,'choose the manifest and all numbered parts');
+    let manifest=null;const selected=new Map();
+    for(const file of files){multipartAbort(options.signal);const value=await multipartFile(file,MULTIPART_BYTES);if(value.kind==='manifest'){multipartCheck(!manifest,'choose exactly one manifest');manifest=multipartManifest(value)}else{const part=multipartVerify(value,'part');multipartCheck(Number.isSafeInteger(part.index)&&part.index>=0&&part.index<MULTIPART_MAX_PARTS&&!selected.has(part.index),'duplicate or invalid part index');selected.set(part.index,{file,archiveId:part.archiveId})}}
+    multipartCheck(manifest,'manifest is missing; incomplete exports cannot be restored');multipartCheck(selected.size===manifest.parts.length,'parts are missing or unexpected; select the manifest and every numbered part');
+    for(const descriptor of manifest.parts){const part=selected.get(descriptor.index);multipartCheck(part&&part.archiveId===manifest.archiveId&&part.file.size===descriptor.bytes,'missing or mixed archive parts')}
+    const stage=await openMultipartStage(),job={id:multipartId(),archiveId:manifest.archiveId,createdAt:Date.now(),state:'building',counts:Object.fromEntries(MULTIPART_COLLECTIONS.map(k=>[k,0])),samples:0,records:0,groups:{recordings:'pending',tracks:'pending'}};
+    try{await multipartCreateJob(stage,job)}catch(error){stage.close();throw error}const digest=multipartDigest(),collectionDigests=Object.fromEntries(MULTIPART_COLLECTIONS.map(k=>[k,multipartDigest()]));let assembly=[],assemblyChars=0,current=null,nextRecord=1,collectionOrder=-1;
+    try{
+        for(const descriptor of manifest.parts){multipartAbort(options.signal);const checked=await multipartFile(selected.get(descriptor.index).file,MULTIPART_BYTES,true),value=checked.value,part=multipartVerify(value,'part');multipartCheck(checked.fileChecksum===descriptor.fileChecksum&&value.checksum===descriptor.checksum&&part.archiveId===manifest.archiveId&&part.index===descriptor.index&&Array.isArray(part.fragments)&&part.fragments.length>0,'part identity or checksum differs from manifest');
+            for(const f of part.fragments){multipartAbort(options.signal);multipartCheck(f&&f.record===nextRecord&&MULTIPART_COLLECTIONS.includes(f.collection)&&Number.isSafeInteger(f.fragment)&&f.fragment>=0&&typeof f.last==='boolean'&&typeof f.text==='string'&&f.text.length>0&&f.text.length<=MULTIPART_FRAGMENT_CHARS,'invalid or reordered record fragment');
+                if(!current){multipartCheck(f.fragment===0,'record fragment is missing');const order=MULTIPART_COLLECTIONS.indexOf(f.collection);multipartCheck(order>=collectionOrder,'record collections are reordered');collectionOrder=order;current={collection:f.collection,fragment:0}}
+                multipartCheck(f.collection===current.collection&&f.fragment===current.fragment++,'mixed or reordered fragments');assembly.push(f.text);assemblyChars+=f.text.length;multipartCheck(assemblyChars<=MULTIPART_RECORD_BYTES,'logical record exceeds supported size');
+                if(f.last){const text=assembly.join('');multipartCheck(multipartBytes(text)<=MULTIPART_RECORD_BYTES,'logical record exceeds 16 MiB');let row;try{row=JSON.parse(text)}catch{throw Error('Backup record is not valid JSON')};await multipartValidateRecord(stage,job,f.collection,row);const key=JSON.stringify(multipartKey(f.collection,row));digest.update(f.collection+'\n'+text+'\n');collectionDigests[f.collection].update(JSON.stringify(row)+'\n');await multipartStageRecord(stage,job,{jobId:job.id,collection:f.collection,key,ordinal:nextRecord,data:row,...(f.collection==='chunks'?{sessionId:row.sessionId,chunkIndex:row.chunkIndex}:{})});job.counts[f.collection]++;if(f.collection==='chunks')job.samples+=row.data.length;job.records++;multipartCheck(job.records<=MULTIPART_MAX_RECORDS,'too many records');nextRecord++;assembly=[];assemblyChars=0;current=null}
+            }
+            options.onProgress?.({phase:'checking',part:descriptor.index+1,parts:manifest.parts.length,records:job.records});
+        }
+        multipartCheck(!current&&job.records===manifest.records&&MULTIPART_COLLECTIONS.every(k=>job.counts[k]===manifest.counts[k])&&job.samples===manifest.samples&&digest.value()===manifest.sourceDigest,'incomplete archive or manifest summary mismatch');
+        for await(const entry of multipartStagedRows(stage,job.id,'sessions'))if(entry.data.drive){const replay=new DriveReplay(entry.data.drive);await new Promise((resolve,reject)=>{const tx=stage.transaction('records','readonly'),r=tx.objectStore('records').index('session').openCursor(IDBKeyRange.bound([job.id,'chunks',entry.data.sessionId,0],[job.id,'chunks',entry.data.sessionId,Number.MAX_SAFE_INTEGER]));tx.oncomplete=resolve;tx.onerror=tx.onabort=()=>reject(tx.error||Error('Drive evidence read failed'));r.onsuccess=()=>{const cursor=r.result;if(!cursor)return;try{replay.update(cursor.value.data.data);cursor.continue()}catch(error){tx.abort();reject(error)}}});replay.finish();multipartAbort(options.signal)}
+        multipartAbort(options.signal);job.collectionDigests=Object.fromEntries(MULTIPART_COLLECTIONS.map(k=>[k,collectionDigests[k].value()]));job.state='ready';delete job.referenceTracks;await multipartUpdateJob(stage,job.id,current=>{multipartCheck(current.state==='building','backup staging was discarded or changed');return{...current,...job}});multipartAbort(options.signal);return job;
+    }catch(error){job.state='incomplete';job.error=String(error.message);try{await multipartUpdateJob(stage,job.id,current=>current.state==='building'?{...current,...job}:current)}catch{}throw error}finally{stage.close()}
+}
+async function listMultipartJobs(){const stage=await openMultipartStage();try{return await multipartRead(stage,['jobs'],(tx,done)=>{const jobs=[],r=tx.objectStore('jobs').openCursor(null,'prev');r.onsuccess=()=>{const cursor=r.result;if(!cursor||jobs.length>=100){done(jobs);return}const {id,archiveId,createdAt,state,counts,samples}=cursor.value;jobs.push({id,archiveId,createdAt,state,counts,samples});cursor.continue()}})}finally{stage.close()}}
+async function discardMultipartJob(id){const stage=await openMultipartStage();try{await multipartStageWrite(stage,['jobs','records'],tx=>{tx.objectStore('jobs').delete(id);const r=tx.objectStore('records').openCursor(IDBKeyRange.bound([id],[id,[]]));r.onsuccess=()=>{const cursor=r.result;if(cursor){cursor.delete();cursor.continue()}}})}finally{stage.close()}}
+async function multipartMapping(stage,job,recordingDb){
+    if(job.mapping)return;
+    let next=job.counts.sessions?await multipartRead(recordingDb,['sessions'],(tx,done)=>{const r=tx.objectStore('sessions').openKeyCursor(null,'prev');r.onsuccess=()=>done(Math.max(Date.now(),r.result?.key??0))}):Date.now();
+    const sessions=[],tracks=[];for await(const row of multipartStagedRows(stage,job.id,'sessions')){multipartCheck(Number.isSafeInteger(++next),'recording ID capacity exceeded');sessions.push([row.data.sessionId,next])}for await(const row of multipartStagedRows(stage,job.id,'tracks'))tracks.push([row.data.id,'restore_'+job.id+'_'+tracks.length]);
+    await multipartStageWrite(stage,['jobs'],tx=>{const store=tx.objectStore('jobs'),r=store.get(job.id);r.onsuccess=()=>{const latest=r.result;if(!latest){tx.abort();return}if(latest.mapping)Object.assign(job,latest);else{job.mapping={sessions,tracks};store.put(job)}}});
+}
+function multipartTransform(entry,job,mapping){const row=entry.data,{sessions,tracks}=mapping,marker={job:job.id,archive:job.archiveId,group:entry.collection==='sessions'?'recordings':'tracks',roots:entry.collection==='sessions'?sessions.size:tracks.size};
+    if(entry.collection==='sessions')return{...row,...(row.drive?{drive:recoverDrive(row.drive)}:{}),sessionId:sessions.get(row.sessionId),status:'complete',restoredFrom:row.sessionId,restoredAt:job.createdAt,restoreJob:marker};
+    if(entry.collection==='chunks')return{...row,sessionId:sessions.get(row.sessionId)};
+    if(entry.collection==='tracks'){const suffix=' (restored)';return{...row,id:tracks.get(row.id),name:row.name.slice(0,1000-suffix.length)+suffix,modified:job.createdAt,restoreJob:marker}}
+    if(entry.collection==='references')return{...row,id:'restore_ref_'+job.id+'_'+entry.ordinal,trackId:tracks.get(row.trackId),samples:new Float32Array(row.samples).buffer};
+    return{...row,id:'restore_lap_'+job.id+'_'+entry.ordinal,trackId:tracks.get(row.trackId),sessionId:'restore_session_'+job.id+'_'+row.sessionId};
+}
+async function multipartCheckRestoredSizes(stage,job,options){
+    const key=backupChecksum(job.mapping);if(job.sizedForMapping===key)return;
+    const mapping={sessions:new Map(job.mapping.sessions),tracks:new Map(job.mapping.tracks)};let count=0;
+    for(const collection of MULTIPART_COLLECTIONS)for await(const entry of multipartStagedRows(stage,job.id,collection)){
+        multipartAbort(options.signal);const row=multipartTransform(entry,job,mapping),portable=collection==='references'?portableReference(row):row;
+        multipartCheck(multipartBytes(JSON.stringify(portable))<=MULTIPART_RECORD_BYTES,'a restored record would exceed the 16 MiB limit after ID and recovery metadata are added. No destination data was changed');count++;options.onProgress?.({phase:'restore-preflight',records:count});
+    }
+    multipartCheck(count===job.records,'validated staging changed or was removed before restore');
+    await multipartUpdateJob(stage,job.id,current=>{multipartCheck(backupChecksum(current.mapping)===key,'restore mapping changed');current.sizedForMapping=key;return current});
+}
+async function multipartGroupPresence(database,job,group){
+    const roots=group==='recordings'?job.mapping.sessions:job.mapping.tracks,store=group==='recordings'?'sessions':'tracks';if(!roots.length)return'empty';
+    return multipartRead(database,[store],(tx,done)=>{
+        let present=0,conflict=false,index=0;
+        const next=()=>{if(index===roots.length){done(conflict||present>0&&present<roots.length?'conflict':present===roots.length?'all':'none');return}
+            const request=tx.objectStore(store).get(roots[index++][1]);request.onsuccess=()=>{
+                const row=request.result;if(row){if(row.restoreJob?.job===job.id&&row.restoreJob?.archive===job.archiveId&&row.restoreJob?.group===group&&row.restoreJob?.roots===roots.length)present++;else conflict=true}next();
+            };
+        };
+        // One root value at a time, with all reads sharing one transaction snapshot.
+        next();
+    });
+}
+
+async function multipartPromote(stage,job,database,group,options){
+    const collections=group==='recordings'?['chunks','sessions']:['references','history','tracks'],stores=collections.map(k=>MULTIPART_STORES[k]);
+    async function* entries(){for(const collection of collections){const digest=multipartDigest();let count=0;for await(const row of multipartStagedRows(stage,job.id,collection)){digest.update(JSON.stringify(row.data)+'\n');count++;yield row}multipartCheck(count===job.counts[collection]&&digest.value()===job.collectionDigests[collection],'validated staging changed or was removed; active restore group will roll back')}}
+    const source=entries(),mapping={sessions:new Map(job.mapping.sessions),tracks:new Map(job.mapping.tracks)};
+    await new Promise((resolve,reject)=>{
+        const tx=database.transaction(stores,'readwrite');let ready=null,waiting=false,eof=false,failure=null,finished=false,adds=0;
+        const abort=error=>{if(finished)return;failure=error;try{tx.abort()}catch{}},cancel=()=>abort(Error('Cancelled. The active restore group was rolled back; original data is unchanged.'));
+        options.signal?.addEventListener('abort',cancel,{once:true});
+        tx.oncomplete=()=>{finished=true;options.signal?.removeEventListener('abort',cancel);if(!eof||ready||waiting)reject(Object.assign(Error('Restore ended before all staged data was consumed; check copies before retrying'),{uncertain:true}));else resolve()};
+        tx.onerror=()=>{};tx.onabort=()=>{finished=true;options.signal?.removeEventListener('abort',cancel);reject(failure||tx.error||Error('Restore transaction aborted; original data is unchanged'))};
+        const fetch=()=>{waiting=true;source.next().then(result=>{waiting=false;if(finished)return;if(result.done)eof=true;else ready=result.value}).catch(abort)};
+        const pump=()=>{if(finished)return;try{multipartAbort(options.signal);if(ready){const entry=ready;ready=null;const request=tx.objectStore(MULTIPART_STORES[entry.collection]).add(multipartTransform(entry,job,mapping));request.onsuccess=()=>{try{adds++;options.onProgress?.({phase:'restoring',group,records:adds});pump()}catch(error){abort(error)}};fetch();return}if(eof)return;const request=tx.objectStore(stores[0]).get(group==='recordings'?[-1,-1]:'__blackbox_restore_keepalive__');request.onsuccess=pump}catch(error){abort(error)}};
+        fetch();pump();
+    });
+}
+// Every group claim and transition is a compare-and-set in the staging database.
+// An overlapping tab can recover a proven commit, but cannot downgrade its ledger.
+function multipartUpdateJob(stage,id,update){return new Promise((resolve,reject)=>{
+    const tx=stage.transaction('jobs','readwrite');let result,failure;
+    tx.oncomplete=()=>resolve(result);tx.onabort=tx.onerror=()=>reject(failure||tx.error||Error('Restore ledger update failed'));
+    const store=tx.objectStore('jobs'),request=store.get(id);
+    request.onsuccess=()=>{try{multipartCheck(request.result,'restore staging was discarded; inspect saved copies before importing again');result=update(request.result);store.put(result)}catch(error){failure=error;tx.abort()}};
+})}
+async function executeMultipartRestore(id,options={}){
+    backupIdle();multipartAbort(options.signal);const stage=await openMultipartStage(),known={recordings:null,tracks:null};
+    try{
+        let job=await multipartStageGet(stage,id);multipartCheck(job&&['ready','restoring','partial','complete'].includes(job.state),'choose and fully validate the archive first');
+        for(const group of ['recordings','tracks'])if(job.groups[group]==='committed'&&(group==='recordings'?job.counts.sessions:job.counts.tracks))known[group]='previously marked committed';
+        if(job.counts.sessions&&!db)await openDB();if(job.counts.tracks&&!trackDb)await openTrackDB();await multipartMapping(stage,job,db);await multipartCheckRestoredSizes(stage,job,options);
+        for(const group of ['recordings','tracks']){
+            multipartAbort(options.signal);job=await multipartStageGet(stage,id);multipartCheck(job,'restore staging was discarded');
+            const database=group==='recordings'?db:trackDb,presence=await multipartGroupPresence(database,job,group);
+            multipartCheck(presence!=='conflict','restore IDs conflict or some copies were removed. Nothing will be overwritten; inspect the existing copies');
+            if(presence==='empty'||presence==='all'){
+                if(presence==='all')known[group]='present in saved data';
+                job=await multipartUpdateJob(stage,id,current=>{multipartCheck(backupChecksum(current.mapping)===backupChecksum(job.mapping),'restore mapping changed');current.groups[group]='committed';return current});continue;
+            }
+            const attempt=multipartId();
+            job=await multipartUpdateJob(stage,id,current=>{
+                multipartCheck(backupChecksum(current.mapping)===backupChecksum(job.mapping),'restore mapping changed');
+                multipartCheck(current.groups[group]!=='committed'&&current.groups[group]!=='attempting','the previous commit is uncertain, another tab is restoring, or copies were removed. No automatic re-add was attempted; inspect saved data before starting a new restore');
+                current.groups[group]='attempting';current.attempts={...current.attempts,[group]:attempt};current.state='restoring';return current;
+            });
+            try{await multipartPromote(stage,job,database,group,options)}catch(error){
+                try{job=await multipartUpdateJob(stage,id,current=>{
+                    if(current.attempts?.[group]===attempt&&current.groups[group]==='attempting'){
+                        current.groups[group]=error.uncertain?'attempting':'aborted';current.state=current.groups.recordings==='committed'?'partial':error.uncertain?'restoring':'ready';
+                    }
+                    return current;
+                })}catch{}
+                throw Error((error.uncertain?'The group commit is uncertain; inspect saved copies before retrying. ':job.groups.recordings==='committed'?'Recordings committed; remaining tracks were not committed. ':'The active group was rolled back. ')+'Originals are unchanged. Retry remaining data only when its status is known. '+error.message);
+            }
+            known[group]='committed';
+            // Destination commit is already durable. A ledger failure must never
+            // be reported as a rolled-back group or overwrite another tab's proof.
+            try{job=await multipartUpdateJob(stage,id,current=>{
+                multipartCheck(current.groups[group]==='committed'||current.groups[group]==='attempting'&&current.attempts?.[group]===attempt,'restore attempt ownership changed');
+                current.groups[group]='committed';return current;
+            })}catch(error){throw Error(group+' copies committed, but the restore acknowledgement could not be saved. '+(group==='recordings'?'Tracks may still remain. ':'Both database groups may be present. ')+'Originals are unchanged. Keep staging and resume to check the committed copies safely. '+error.message)}
+        }
+        try{job=await multipartUpdateJob(stage,id,current=>{multipartCheck(current.groups.recordings==='committed'&&current.groups.tracks==='committed','restore groups are not complete');current.state='complete';return current})}
+        catch(error){throw Error('Both restore groups committed, but completion could not be acknowledged. Originals are unchanged. Resume this staged restore to confirm the copies. '+error.message)}
+        return job;
+    }catch(error){
+        const evidence=Object.entries(known).filter(([,value])=>value).map(([group,value])=>group+' copies '+value).join('; ');
+        if(evidence)throw Error(error.message+' Restore status: '+evidence+'. '+(!known.tracks?'Tracks may remain. ':'')+'Keep staging and resume to check committed copies. Originals are unchanged.');
+        throw error;
+    }finally{stage.close()}
+}
+// End multipart backup core.
+
+// Multipart backup controls. Downloads stay attached to explicit user taps.
+let multipartUI={exporter:null,current:null,url:null,requested:false,controller:null,working:false,locked:null};
+function multipartStatus(text){$('backup-status').textContent=text}
+function multipartProgress(p){multipartStatus(p.phase==='preparing'?'Checking saved data · '+p.records+' records…':p.phase==='checking'?'Checking part '+p.part+' of '+p.parts+' · '+p.records+' records…':p.phase==='restore-preflight'?'Checking restored record sizes · '+p.records+' records. Originals are unchanged…':p.phase==='restoring'?'Restoring '+p.group+' · '+p.records+' records. Keep this tab in the foreground…':'Preparing numbered backup files…')}
+function multipartLock(){if(multipartUI.locked)return;multipartUI.locked=Array.from(document.querySelectorAll('button,select,input')).map(e=>[e,e.disabled]);for(const [e]of multipartUI.locked)e.disabled=true;backupBusy=true;$('backup-cancel').hidden=false;$('backup-cancel').disabled=false}
+function multipartRelease(){if(multipartUI.url)URL.revokeObjectURL(multipartUI.url);multipartUI.url=null;multipartUI.current=null;multipartUI.requested=false;for(const [e,disabled]of multipartUI.locked||[])e.disabled=disabled;multipartUI.locked=null;backupBusy=false;$('backup-save-part').hidden=true;$('backup-next-part').hidden=true;$('backup-cancel').hidden=true;$('backup-restore').disabled=!backupPreview||backupPreview.multipartComplete===true}
+async function multipartWork(action){if(multipartUI.working)return;multipartUI.working=true;multipartLock();try{await action()}catch(error){multipartStatus(error.message);await multipartUI.exporter?.cancel();multipartUI.exporter=null}finally{multipartUI.working=false;if(!multipartUI.exporter)multipartRelease();else multipartPartControls()}}
+function multipartPartControls(){const current=multipartUI.current;$('backup-save-part').hidden=!current;$('backup-save-part').disabled=!current;$('backup-next-part').hidden=!current;$('backup-next-part').disabled=!multipartUI.requested;$('backup-next-part').textContent=current?.kind==='manifest'?'Finish backup':'Prepare next file';$('backup-save-part').textContent=current?.kind==='manifest'?'Save final manifest':'Save numbered part'}
+async function multipartAdvance(){
+    if(multipartUI.url)URL.revokeObjectURL(multipartUI.url);multipartUI.url=null;multipartUI.current=null;multipartUI.requested=false;
+    const current=await multipartUI.exporter.next();if(!current){multipartUI.exporter=null;multipartStatus('Backup downloads requested. Check every numbered part and the final manifest in Downloads or Files, then copy the complete set somewhere safe. Originals and pending samples are unchanged.');return}
+    multipartUI.current=current;multipartUI.url=URL.createObjectURL(new Blob([current.text],{type:'application/json'}));current.text=null;
+    multipartStatus(current.kind==='manifest'?'All source data checked. Save the final manifest and keep it with every numbered part. A download request does not prove a file was saved.':'Numbered part '+(current.index+1)+' ready · '+(current.bytes/1048576).toFixed(1)+' MiB. Save this file, then prepare the next. Keep every part; the final manifest comes last.');
+}
+async function downloadMultipartBackup(){if(backupBusy)return;multipartUI.controller=new AbortController();await multipartWork(async()=>{backupPreview=null;restorePlan=null;multipartUI.exporter=await prepareMultipartBackup($('backup-scope').value,{signal:multipartUI.controller.signal,onProgress:multipartProgress});await multipartAdvance()})}
+function saveMultipartPart(){const current=multipartUI.current;if(!current||multipartUI.working)return;const anchor=document.createElement('a');anchor.href=multipartUI.url;anchor.download=current.name;document.body.appendChild(anchor);anchor.click();anchor.remove();multipartUI.requested=true;multipartPartControls();multipartStatus('Download requested: '+current.name+'. Check Downloads or Files. You can save this file again before advancing; existing browser data is unchanged.')}
+async function nextMultipartPart(){if(!multipartUI.requested||multipartUI.working)return;await multipartWork(multipartAdvance)}
+async function cancelMultipartAction(){multipartUI.controller?.abort();if(multipartUI.working){multipartStatus('Cancelling. Waiting for the active operation to stop safely…');return}await multipartUI.exporter?.cancel();multipartUI.exporter=null;multipartStatus('Backup cancelled. Downloaded parts without a final manifest are incomplete. Original recordings, tracks and pending samples are unchanged.');multipartRelease()}
+async function refreshMultipartJobs(){
+    try{const jobs=await listMultipartJobs(),select=$('backup-staged'),selected=select.value;select.innerHTML='<option value="">Choose staged restore…</option>'+jobs.map(job=>'<option value="'+escHtml(job.id)+'">'+escHtml(new Date(job.createdAt).toLocaleString())+' · '+escHtml(job.state)+' · '+job.counts.sessions+' recordings · '+job.counts.tracks+' tracks</option>').join('');if(jobs.some(job=>job.id===selected))select.value=selected;$('backup-staged-row').hidden=!jobs.length}catch(error){multipartStatus('Staged restore list unavailable: '+error.message)}
+}
+async function previewBackupFiles(files){
+    if(backupBusy||!files?.length)return;
+    multipartUI.controller=new AbortController();await multipartWork(async()=>{
+        // Lock before the first file read. A slow old picker result cannot replace
+        // a newer preview or race an export. Legacy JSON is parsed only once.
+        backupPreview=null;restorePlan=null;$('backup-restore').textContent='Restore as new copies';backupIdle();multipartStatus('Checking backup…');
+        if(files.length===1){
+            const file=files[0];if(file.size>BACKUP_MAX_BYTES)throw Error('Backup is larger than the supported 100 MiB legacy-file limit. Multipart files must be at most 8 MiB.');
+            let value;try{value=JSON.parse(await file.text())}catch{throw Error('This file is not valid JSON. Choose a Blackbox backup file, not a CSV export.')}
+            multipartAbort(multipartUI.controller.signal);
+            if(value?.format!==BACKUP_FORMAT||value.version!==2){previewParsedBackup(value);return}
+        }
+        const job=await stageMultipartBackup(Array.from(files),{signal:multipartUI.controller.signal,onProgress:multipartProgress});backupPreview={multipartJob:job.id};
+        multipartStatus('Complete archive verified and staged: '+job.counts.sessions+' recordings · '+job.samples+' samples · '+job.counts.tracks+' tracks. Restore adds copies. Temporary staging needs extra browser storage; originals are unchanged.');await refreshMultipartJobs();
+    });
+}
+async function restoreMultipartOrLegacy(){
+    if(!backupPreview?.multipartJob){await restoreBackup();return}if(backupBusy)return;
+    multipartUI.controller=new AbortController();await multipartWork(async()=>{try{const job=await executeMultipartRestore(backupPreview.multipartJob,{signal:multipartUI.controller.signal,onProgress:multipartProgress});backupPreview.multipartComplete=true;multipartStatus('Restore complete: '+job.counts.sessions+' recordings and '+job.counts.tracks+' tracks added. Copies are stopped and unarmed. Keep the backup files. You may discard staging to free its temporary space.');await renderDataModal();await renderTrackList()}finally{await refreshMultipartJobs()}});
+}
+function chooseMultipartJob(){const select=$('backup-staged');backupPreview=select.value?{multipartJob:select.value}:null;restorePlan=null;$('backup-restore').disabled=!backupPreview;multipartStatus('Selected staged restore. Ready, restoring and partial archives can resume; an incomplete check needs the original files selected again. Restore never overwrites originals.');$('backup-discard-staged').disabled=!select.value}
+async function discardSelectedMultipartJob(){if(backupBusy)return;const id=$('backup-staged').value;if(!id)return;await multipartWork(async()=>{await discardMultipartJob(id);if(backupPreview?.multipartJob===id)backupPreview=null;await refreshMultipartJobs();multipartStatus('Temporary staging discarded. Original data and any already restored copies are unchanged. Keep your backup files.')})}
+// End multipart backup controls.
+
 // End backup / restore
 
 // Data Modal
-function openDataModal(){revealModal('data-modal','data-modal-close');renderDataModal()}
+function openDataModal(){revealModal('data-modal','data-modal-close');renderDataModal();refreshMultipartJobs()}
 function closeDataModal(){hideModal('data-modal')}
 
 async function renderDataModal(){
@@ -3560,10 +3875,15 @@ async function handleTrackDataAction(btn){
 }
 
 $('menu-data').onclick=()=>{$('menu-overlay').classList.remove('open');openDataModal()};
-$('backup-download').onclick=downloadBackup;
+$('backup-download').onclick=downloadMultipartBackup;
 $('backup-choose').onclick=()=>$('backup-file').click();
-$('backup-file').onchange=event=>{const file=event.target.files[0];event.target.value='';previewBackup(file)};
-$('backup-restore').onclick=restoreBackup;
+$('backup-file').onchange=event=>{const files=Array.from(event.target.files);event.target.value='';previewBackupFiles(files)};
+$('backup-restore').onclick=restoreMultipartOrLegacy;
+$('backup-save-part').onclick=saveMultipartPart;
+$('backup-next-part').onclick=nextMultipartPart;
+$('backup-cancel').onclick=cancelMultipartAction;
+$('backup-staged').onchange=chooseMultipartJob;
+$('backup-discard-staged').onclick=discardSelectedMultipartJob;
 $('data-modal-close').onclick=closeDataModal;
 $('data-modal').onclick=e=>{if(e.target===$('data-modal'))closeDataModal()};
 $('btn-clear-all-recordings').onclick=async()=>{
