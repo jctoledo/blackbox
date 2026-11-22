@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Offline Session CSV analysis now separates browser/device cadence and quality-qualified observations, handles short/legacy recordings and omits route coordinates. Removed unsupported dashboard-derived ground-truth/classifier/calibration claims and maneuver recommendations.
 - Convert mathematical estimator yaw to compass basis before learning the display-heading reference offset, preserving the correct turn sense (#132). Estimator and timing frames remain unchanged.
 - Recording saves and save-age labels use monotonic elapsed time, so phone clock corrections cannot postpone persistence until the pending-data cap or trigger premature saves. Raw calendar timestamps remain intact.
+- Serialize track arming, Stop and track deletion commands, publishing the selected track, reference and revision together after storage lookup so rapid selections cannot mix timing owners (#127).
 
 ### Changed
 - Renamed `neo6m` driver to `ublox-gps` to reflect support for multiple u-blox GPS modules (NEO-6M, NEO-M9N, etc.)

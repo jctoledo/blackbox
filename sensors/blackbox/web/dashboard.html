@@ -1436,10 +1436,11 @@ async function getCombinedStorageStats(){
     return{totalBytes:recStats.totalBytes+trackStats.totalBytes,recordingsBytes:recStats.totalBytes,tracksBytes:trackStats.totalBytes,sessionCount:recStats.sessionCount,trackCount:trackStats.tracks.length}
 }
 
-async function deleteTrackWithRef(trackId){
+async function deleteTrackWithRef(trackId){return queueTrackCommand(()=>deleteTrackCommand(trackId))}
+async function deleteTrackCommand(trackId){
     trackAutoDetector.beginTrackChange();
     try{
-        if(activeTrack&&activeTrack.id===trackId&&await deactivateTrack()===false)throw new Error('Track retained: device timing is still active');
+        if(activeTrack&&activeTrack.id===trackId&&await deactivateTrackCommand()===false)throw new Error('Track retained: device timing is still active');
         if(!trackDb)await openTrackDB();
         await commitTrackWrite(['tracks','reference_laps','lap_history'],tx=>{
             tx.objectStore('tracks').delete(trackId);
@@ -1451,10 +1452,11 @@ async function deleteTrackWithRef(trackId){
     }finally{trackAutoDetector.endTrackChange()}
 }
 
-async function clearAllTracks(){
+async function clearAllTracks(){return queueTrackCommand(()=>clearAllTracksCommand())}
+async function clearAllTracksCommand(){
     trackAutoDetector.beginTrackChange();
     try{
-        if(activeTrack&&await deactivateTrack()===false)throw new Error('Tracks retained: device timing is still active');
+        if(activeTrack&&await deactivateTrackCommand()===false)throw new Error('Tracks retained: device timing is still active');
         if(!trackDb)await openTrackDB();
         await commitTrackWrite(['tracks','reference_laps','lap_history'],tx=>{
             for(const name of ['tracks','reference_laps','lap_history'])tx.objectStore(name).clear();
@@ -1977,8 +1979,7 @@ async function renderTrackList(){
 
 async function handleTrackAction(action,id){
     if(action==='use'){
-        const t=await getTrack(id);
-        if(t)await activateTrack(t);
+        await activateSavedTrack(id);
         closeTrackModal();
     }else if(action==='delete'){
         if(confirm('Delete this track and all lap history?')){
@@ -2101,7 +2102,19 @@ async function clearTrackHistoryConfirm(id){
     }
 }
 
-async function activateTrack(track){
+// Track command ownership. Configuration and its UI publication have one ordered owner.
+let trackCommandTail=Promise.resolve();
+function queueTrackCommand(command){
+    const result=trackCommandTail.then(command);
+    // A rejected command must not prevent later selections or Stop from running.
+    trackCommandTail=result.catch(()=>{});
+    return result;
+}
+async function activateTrack(track){return queueTrackCommand(()=>activateTrackCommand(track))}
+async function activateSavedTrack(id){return queueTrackCommand(async()=>{const track=await getTrack(id);if(track)return activateTrackCommand(track)})}
+async function deactivateTrack(){return queueTrackCommand(()=>deactivateTrackCommand())}
+
+async function activateTrackCommand(track){
     const isP2P=track.type==='point_to_point';
     // Track must have gpsOrigin to convert timing line to GPS coordinates
     if(!track.gpsOrigin){alert('Track missing GPS origin. Cannot activate.');return}
@@ -2143,14 +2156,16 @@ async function activateTrack(track){
         const r=await requestDevice(url);
         const j=await r.json();
         if(!r.ok||j.error){alert('Failed to configure lap timer: '+(j.error||r.status));return}
+        // Do not expose a new owner with the previous track's reference while storage waits.
+        let loadedReference=null;
+        try{loadedReference=await getRefLap(track.id)}catch(e){console.warn('Reference lap unavailable:',e)}
         expectedLapRevision=j.revision??null;
-        activeTrack={...track,startLine:line,finishLine:finLine};$('lap-result').hidden=true;lapResultGeneration++;
+        activeTrack={...track,startLine:line,finishLine:finLine};referenceLap=loadedReference;
+        $('lap-result').hidden=true;lapResultGeneration++;
         suppressStartLineIndicator=false;
         p2pNeedsWarmup=isP2P&&track.isNew;
-        // Start new session for lap history
+        // Publish the history owner, reference, tracker and labels without another await.
         startNewSession();
-        // Load reference lap for delta calculation
-        try{referenceLap=await getRefLap(track.id);if(referenceLap)console.log('Reference lap loaded:',fmtLapTime(referenceLap.lapTimeMs))}catch(e){referenceLap=null}
         // Initialize lap tracker
         if(!lapTracker)lapTracker=new LapTracker();lapTracker.reset();lastDeltaMs=0;deltaTrend=0;
         // Update delta bar display
@@ -2182,7 +2197,7 @@ async function activateTrack(track){
     }catch(e){alert('Failed to configure lap timer: '+e.message)}finally{trackAutoDetector.endTrackChange()}
 }
 
-async function deactivateTrack(){
+async function deactivateTrackCommand(){
     trackAutoDetector.beginTrackChange();
     try{const r=await requestDevice('/api/laptimer/configure?type=clear');if(!r.ok)throw new Error('Device rejected the request');const j=await r.json();if(j.error)throw new Error(j.error);expectedLapRevision=j.revision??null}catch(e){alert('Could not stop device timing. Reconnect and retry. '+e.message);return false}finally{trackAutoDetector.endTrackChange()}
     activeTrack=null;referenceLap=null;clearSession();$('lap-result').hidden=true;lapResultGeneration++;

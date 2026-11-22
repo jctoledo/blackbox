@@ -108,7 +108,7 @@ test('reference replacement deletes old key and writes new lap in one committed 
 test('failed stop acknowledgement preserves the active track',async()=>{
  const active={id:'still-running'},messages=[];
  let changes=0;const c={trackAutoDetector:{beginTrackChange(){changes++},endTrackChange(){changes--}},activeTrack:active,requestDevice:async()=>({ok:false}),alert:s=>messages.push(s)};
- vm.createContext(c);vm.runInContext(section('async function deactivateTrack(', '// Track Recording Functions'),c);
+ vm.createContext(c);vm.runInContext(section('// Track command ownership.', '// Track Recording Functions'),c);
  assert.equal(await c.deactivateTrack(),false);assert.equal(c.activeTrack,active);assert.match(messages[0],/Could not stop/);assert.equal(changes,0);
 });
 test('a stalled request is aborted and its timer is cleaned up',async()=>{
