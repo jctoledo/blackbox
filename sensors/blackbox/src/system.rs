@@ -14,15 +14,14 @@ use crate::{
     binary_telemetry,
     gps::NmeaParser,
     gps_timing::GpsTimingQueue,
-    imu::{ImuBias, ImuCalibrator, PacketType, Wt901Parser},
+    imu::{ImuBias, PacketType, Wt901Parser},
+    imu_bias_collection::{BiasCollection, CALIB_SAMPLES},
     mode::ModeClassifier,
     mqtt::MqttClient,
     rgb_led::RgbLed,
     udp_stream::UdpTelemetryStream,
     websocket_server::TelemetryServerState,
 };
-
-const CALIB_SAMPLES: usize = 150;
 
 /// System-level errors
 #[derive(Debug)]
@@ -156,17 +155,16 @@ impl SensorManager {
             FreeRtos::delay_ms(100);
         }
 
-        let mut calibrator = ImuCalibrator::new(CALIB_SAMPLES);
         let mut buf = [0u8; 1];
         let mut last_progress = 0;
-        let mut last_sample_us = 0u64;
 
         // Keep LED on during calibration (solid yellow)
         led.yellow().ok();
 
-        let started_us = unsafe { esp_idf_svc::sys::esp_timer_get_time() };
+        let started_us = unsafe { esp_idf_svc::sys::esp_timer_get_time() as u64 };
+        let mut calibrator = BiasCollection::new(started_us);
         while !calibrator.is_complete() {
-            if unsafe { esp_idf_svc::sys::esp_timer_get_time() } - started_us > 30_000_000 {
+            if calibrator.expired(unsafe { esp_idf_svc::sys::esp_timer_get_time() as u64 }) {
                 led.set_low().ok();
                 return Err(SystemError::CalibrationFailed);
             }
@@ -180,28 +178,24 @@ impl SensorManager {
                         self.last_angle_us = timestamp_us;
                     }
                     if packet_type == PacketType::Accel {
-                        // Bound collection to 100 Hz: at least ~1.5 s of stillness.
-                        if timestamp_us.saturating_sub(last_sample_us) < 10_000 {
-                            continue;
-                        }
-                        last_sample_us = timestamp_us;
-                        let data = self.imu_parser.data();
-                        let angle_age = if self.last_angle_us == 0 {
-                            u64::MAX
-                        } else {
-                            timestamp_us.saturating_sub(self.last_angle_us)
-                        };
-                        let gyro_age = if self.last_gyro_us == 0 {
-                            u64::MAX
-                        } else {
-                            timestamp_us.saturating_sub(self.last_gyro_us)
-                        };
-                        if !calibrator.add_stationary_sample(data, angle_age, gyro_age) {
-                            last_progress = 0;
-                            continue;
+                        match calibrator.observe_accel(
+                            timestamp_us,
+                            self.imu_parser.data(),
+                            self.last_angle_us,
+                            self.last_gyro_us,
+                        ) {
+                            None => continue,
+                            Some(false) => {
+                                last_progress = 0;
+                                continue;
+                            }
+                            Some(true) => {}
                         }
 
                         let progress = (calibrator.progress() * 100.0) as u32;
+                        if progress < last_progress {
+                            last_progress = 0;
+                        }
                         if progress > last_progress && progress.is_multiple_of(10) {
                             info!("Calibration progress: {}%", progress);
                             if let Some(ref mut mqtt_client) = mqtt {
