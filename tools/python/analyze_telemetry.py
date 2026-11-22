@@ -15,18 +15,21 @@ class Aggregate:
     """Constant-memory finite-value statistics."""
 
     def __init__(self):
+        """Start with no observed values; zero is not an unavailable result."""
         self.count = 0
         self.mean = 0.0
         self.low = None
         self.high = None
 
     def add(self, value):
+        """Update aggregate statistics without retaining the observation."""
         self.count += 1
         self.mean = self.mean * ((self.count - 1) / self.count) + value / self.count
         self.low = value if self.low is None else min(self.low, value)
         self.high = value if self.high is None else max(self.high, value)
 
     def result(self):
+        """Return null for no evidence, otherwise count/range/mean."""
         if not self.count:
             return None
         return dict(count=self.count, min=self.low, max=self.high, mean=self.mean)
@@ -43,6 +46,7 @@ def analyze(rows):
     previous = None
     for line, row in enumerate(rows, 2):
         def number(key, optional=False, integer=False, low=None, high=None):
+            """Validate one field without including its private value in errors."""
             value = row.get(key)
             if optional and value in (None, ''):
                 return None
@@ -144,6 +148,7 @@ def analyze_telemetry(filename):
 
 
 def main():
+    """Read one Session export and print its reduced JSON report."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('csv', help='Session CSV from Saved data (not GPS CSV)')
     args = parser.parse_args()
