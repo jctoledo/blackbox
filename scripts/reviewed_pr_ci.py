@@ -33,11 +33,15 @@ def status_for_result(result):
 
 
 class GitHub:
+    """Provide repository-scoped GitHub REST access for the trusted controller."""
+
     def __init__(self):
+        """Read the API endpoint and repository from the Actions environment."""
         self.root = os.environ.get('GITHUB_API_URL', 'https://api.github.com').rstrip('/')
         self.repository = os.environ['GITHUB_REPOSITORY']
 
     def request(self, path, payload=None):
+        """GET repository data or POST a JSON payload, propagating API failures."""
         request = Request(
             f'{self.root}/repos/{self.repository}/{path}',
             data=None if payload is None else json.dumps(payload).encode(),
@@ -56,13 +60,16 @@ def guard(api, number, sha):
 
 
 def publish(api, sha, state, description):
+    """Publish the dedicated exact-SHA status with a link to this run attempt."""
     url = (f"{os.environ['GITHUB_SERVER_URL']}/{api.repository}/actions/runs/"
            f"{os.environ['GITHUB_RUN_ID']}/attempts/{os.environ['GITHUB_RUN_ATTEMPT']}")
-    api.request(f'statuses/{sha}', {'state': state, 'context': CONTEXT,
-                                 'description': description, 'target_url': url})
+    api.request(f'statuses/{sha}', {
+        'state': state, 'context': CONTEXT,
+        'description': description, 'target_url': url})
 
 
 def main():
+    """Authorize, mark pending, or report validation using workflow inputs."""
     action = sys.argv[1]
     number, sha = os.environ['PR_NUMBER'], os.environ['REVIEWED_SHA']
     api = GitHub()

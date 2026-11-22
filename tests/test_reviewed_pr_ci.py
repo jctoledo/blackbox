@@ -18,14 +18,18 @@ PR = {'state': 'open', 'base': {'ref': 'main', 'repo': {'full_name': REPO}},
 
 
 class FakeAPI:
+    """Record API calls and return a controlled PR response or failure."""
+
     repository = REPO
 
     def __init__(self, pr=None, error=None):
+        """Isolate the response fixture and optional injected API failure."""
         self.pr = copy.deepcopy(PR if pr is None else pr)
         self.error = error
         self.calls = []
 
     def request(self, path, payload=None):
+        """Record the request before returning the response or raising."""
         self.calls.append((path, payload))
         if self.error:
             raise self.error
@@ -33,12 +37,16 @@ class FakeAPI:
 
 
 class ReviewedPRTests(unittest.TestCase):
+    """Verify authorization and status publication through the API contract."""
+
     def test_accepts_current_same_repository_head(self):
+        """Accept the exact current head of an eligible PR."""
         api = FakeAPI()
         controller.guard(api, '139', SHA)
         self.assertEqual(api.calls, [('pulls/139', None)])
 
     def test_refuses_stale_fork_closed_wrong_base_and_repository(self):
+        """Reject each unsupported PR state or repository association."""
         for field, value in [('stale', 'b' * 40), ('fork', 'other/blackbox'),
                              ('closed', 'closed'), ('base', 'release'),
                              ('repository', 'other/blackbox'), ('deleted', None)]:
@@ -62,6 +70,7 @@ class ReviewedPRTests(unittest.TestCase):
                 self.assertEqual(len(api.calls), 1)
 
     def test_malformed_input_refused_before_api(self):
+        """Reject malformed dispatch inputs without making API calls."""
         for number, sha in [('0', SHA), ('1;echo', SHA), ('01', SHA),
                             ('1', 'abc'), ('1', 'A' * 40), ('1', SHA + '\n')]:
             api = FakeAPI()
@@ -70,10 +79,12 @@ class ReviewedPRTests(unittest.TestCase):
             self.assertEqual(api.calls, [])
 
     def test_api_failure_does_not_authorize(self):
+        """Propagate an API failure rather than authorizing execution."""
         with self.assertRaises(TimeoutError):
             controller.guard(FakeAPI(error=TimeoutError()), '139', SHA)
 
     def run_action(self, api, action, result='success'):
+        """Invoke the CLI with isolated Actions inputs and capture job output."""
         with tempfile.NamedTemporaryFile() as output:
             env = {'PR_NUMBER': '139', 'REVIEWED_SHA': SHA,
                    'GITHUB_OUTPUT': output.name, 'VALIDATION_RESULT': result,
@@ -85,6 +96,7 @@ class ReviewedPRTests(unittest.TestCase):
             return Path(output.name).read_text()
 
     def test_pending_publishes_exact_sha_and_attempt_url_before_output(self):
+        """Tie authorization output and pending status to this exact attempt."""
         api = FakeAPI()
         self.assertEqual(self.run_action(api, 'pending'), f'sha={SHA}\n')
         path, status = api.calls[-1]
@@ -95,6 +107,7 @@ class ReviewedPRTests(unittest.TestCase):
                          f'https://github.com/{REPO}/actions/runs/42/attempts/2')
 
     def test_refusal_and_api_failure_publish_no_pending(self):
+        """Avoid publishing pending when authorization cannot complete."""
         pr = copy.deepcopy(PR)
         pr['head']['sha'] = 'b' * 40
         for api, error in [(FakeAPI(pr), ValueError),
@@ -104,6 +117,7 @@ class ReviewedPRTests(unittest.TestCase):
             self.assertTrue(all(payload is None for _, payload in api.calls))
 
     def test_final_mapping_never_treats_skipped_cancelled_or_timeout_as_success(self):
+        """Only a successful full validation result can map to success."""
         for result, state in [('success', 'success'), ('failure', 'failure'),
                               ('cancelled', 'error'), ('skipped', 'error'),
                               ('timed_out', 'error'), ('unknown', 'error')]:
@@ -114,6 +128,7 @@ class ReviewedPRTests(unittest.TestCase):
                 self.assertEqual(api.calls[-1][1]['state'], state)
 
     def test_head_moving_during_validation_cannot_receive_success(self):
+        """Report an obsolete reviewed head as error after validation."""
         pr = copy.deepcopy(PR)
         pr['head']['sha'] = 'b' * 40
         api = FakeAPI(pr)
@@ -122,6 +137,7 @@ class ReviewedPRTests(unittest.TestCase):
         self.assertEqual(api.calls[-1][1]['state'], 'error')
 
     def test_final_api_failure_cannot_publish_success(self):
+        """Leave status unresolved when the final API guard fails."""
         api = FakeAPI(error=TimeoutError())
         with self.assertRaises(TimeoutError):
             self.run_action(api, 'finish')
