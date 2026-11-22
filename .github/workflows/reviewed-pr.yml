@@ -1,0 +1,75 @@
+name: Reviewed PR CI
+run-name: "Reviewed PR #${{ inputs.pr_number }} at ${{ inputs.reviewed_sha }}"
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Open same-repository PR targeting main
+        required: true
+        type: string
+      reviewed_sha:
+        description: Full lowercase head SHA reviewed by the maintainer
+        required: true
+        type: string
+permissions:
+  contents: read
+# Keep one running attempt per PR. GitHub may replace a pending attempt;
+# pending attempts have not published a status or executed PR code yet.
+concurrency:
+  group: reviewed-pr-${{ inputs.pr_number }}
+  cancel-in-progress: false
+jobs:
+  authorize:
+    if: github.ref == 'refs/heads/main'
+    runs-on: [blackbox-lat]
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+      statuses: write
+    outputs:
+      sha: ${{ steps.guard.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - id: guard
+        name: Validate reviewed head and publish pending status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+          REVIEWED_SHA: ${{ inputs.reviewed_sha }}
+        run: python3 scripts/reviewed_pr_ci.py pending
+  validate:
+    needs: authorize
+    permissions:
+      actions: read
+      contents: read
+      pages: read
+      pull-requests: read
+    uses: ./.github/workflows/ci.yml
+    with:
+      checkout_sha: ${{ needs.authorize.outputs.sha }}
+      pr_number: ${{ inputs.pr_number }}
+  report:
+    if: always() && needs.authorize.result == 'success'
+    needs: [authorize, validate]
+    runs-on: [blackbox-lat]
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+      statuses: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Publish exact-commit result
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+          REVIEWED_SHA: ${{ needs.authorize.outputs.sha }}
+          VALIDATION_RESULT: ${{ needs.validate.result }}
+        run: python3 scripts/reviewed_pr_ci.py finish

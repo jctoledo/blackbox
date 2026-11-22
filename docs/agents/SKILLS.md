@@ -26,3 +26,7 @@ The [controlled code-review trial](evals/code-review-2026-11-21.md) compared the
 ## Confirmed product grilling
 
 The user explicitly requested grilling during the post-rc.11 follow-up. The pinned `grilling` skill was installed and applied in four question rounds. The confirmed design is [Drive panel #105](https://github.com/jctoledo/blackbox/issues/105): recording-owned duration and qualified distance, frozen Stop summary, explicit gaps, unchanged track timing and no automatic recording/resumption. Mounting stays parallel to the car floor; non-horizontal mounting remains R&D requiring validation. This was a user-invoked interview, not a claim that grilling was evaluated as a mandatory improvement for every task.
+
+## Reviewed PR workflow exercise
+
+For [reviewed PR CI #139](https://github.com/jctoledo/blackbox/issues/139), the maintainer installed `to-spec`, `to-tickets` and `implement-spec` from the same pinned upstream commit above. The parent specification fixed the trust, status and lat testing seams before implementation; issue #139 supplied the focused worker ticket. The house workflow adapted `implement-spec` to one worker-owned branch and an independent coordinating review, rather than adding integration/merger agents for a single ticket. No additional design interview was needed. Controller contract tests ran on lat; full workflow/live-status acceptance remains separately recorded in the PR. This records actual use, not evaluation of the three skills or proof of end-to-end deployment.
