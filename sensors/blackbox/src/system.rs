@@ -42,6 +42,7 @@ pub struct SensorManager {
     last_angle_us: u64,
     stationary: crate::imu_evidence::StationaryTracker,
     gps_timing: GpsTimingQueue,
+    gps_continuity: crate::gps_ingest::Continuity,
 }
 
 impl SensorManager {
@@ -60,6 +61,7 @@ impl SensorManager {
             last_angle_us: 0,
             stationary: crate::imu_evidence::StationaryTracker::default(),
             gps_timing: GpsTimingQueue::new(),
+            gps_continuity: Default::default(),
         }
     }
 
@@ -245,7 +247,7 @@ impl SensorManager {
     pub fn poll_imu(&mut self) -> Option<(f32, u64, u32)> {
         let now_us = unsafe { esp_idf_svc::sys::esp_timer_get_time() as u64 };
         let mut buf = [0u8; 64]; // Read up to 64 bytes at once (~10 packets worth)
-        let mut result: Option<(f32, u64)> = None;
+        let previous_us = self.last_imu_us;
         let mut accel_count: u32 = 0;
 
         // Read all available bytes to prevent buffer overflow
@@ -265,13 +267,7 @@ impl SensorManager {
                     }
                     if packet_type == PacketType::Accel {
                         accel_count += 1;
-                        let dt = (now_us - self.last_imu_us) as f32 * 1e-6;
                         self.last_imu_us = now_us;
-
-                        // Validate dt range (0.5ms to 50ms)
-                        if dt > 5e-4 && dt < 0.05 {
-                            result = Some((dt, now_us));
-                        }
                     }
                 }
             }
@@ -289,11 +285,8 @@ impl SensorManager {
         }
 
         // Return result with packet count if we processed any Accel packets
-        if accel_count > 0 {
-            result.map(|(dt, ts)| (dt, ts, accel_count))
-        } else {
-            None
-        }
+        crate::imu_interval::elapsed_seconds(previous_us, now_us, accel_count)
+            .map(|dt| (dt, now_us, accel_count))
     }
 
     /// Poll GPS and return true if new fix available
@@ -309,6 +302,7 @@ impl SensorManager {
             gps_parser,
             gps_timing,
             stationary,
+            gps_continuity,
             ..
         } = self;
         let mut new_fix = false;
@@ -321,6 +315,7 @@ impl SensorManager {
                     new_fix = true;
                     let timing = gps_parser.rmc_timing();
                     if timing.sequence != before {
+                        gps_continuity.observe(timing, gps_parser.last_fix().valid);
                         if timing.status_active {
                             active += 1;
                         } else {
@@ -342,6 +337,7 @@ impl SensorManager {
             }
         });
         if outcome.loss {
+            gps_continuity.invalidate();
             gps_parser.invalidate_stream();
             gps_timing.invalidate();
             stationary.invalidate();
@@ -356,6 +352,10 @@ impl SensorManager {
 
     pub fn replay_gps_timing(&mut self, timer: &mut sensor_fusion::LapTimer, now_us: u64) -> u8 {
         self.gps_timing.replay(timer, now_us)
+    }
+
+    pub fn take_gps_discontinuity(&mut self) -> bool {
+        self.gps_continuity.take_discontinuity()
     }
 
     /// Update once per new GPS fix; repeated telemetry polls are not new evidence.
@@ -381,6 +381,8 @@ impl SensorManager {
 pub struct StateEstimator {
     pub ekf: Ekf,
     pub mode_classifier: ModeClassifier,
+    position_recovery: sensor_fusion::position_recovery::PositionRecovery,
+    prediction_clock: crate::imu_interval::PredictionClock,
 }
 
 impl StateEstimator {
@@ -388,17 +390,45 @@ impl StateEstimator {
         Self {
             ekf: Ekf::new(),
             mode_classifier: ModeClassifier::new(),
+            position_recovery: Default::default(),
+            prediction_clock: Default::default(),
         }
+    }
+
+    pub fn prediction_interval(&mut self, at_us: u64, correction_pending: bool) -> Option<f32> {
+        self.prediction_clock.advance(at_us, correction_pending)
     }
 
     /// Update EKF prediction with IMU data
     pub fn predict(&mut self, ax_earth: f32, ay_earth: f32, wz: f32, dt: f32) {
-        self.ekf.predict(ax_earth, ay_earth, wz, dt);
+        if dt <= 0.2 {
+            self.ekf.predict(ax_earth, ay_earth, wz, dt);
+        } else {
+            self.ekf.coast(dt);
+        }
     }
 
     /// Update EKF with GPS position
-    pub fn update_position(&mut self, x: f32, y: f32) {
-        self.ekf.update_position(x, y);
+    pub fn invalidate_position_recovery(&mut self) {
+        self.position_recovery.reset();
+    }
+
+    /// Update EKF with GPS position
+    pub fn update_position(
+        &mut self,
+        x: f32,
+        y: f32,
+        vx: f32,
+        vy: f32,
+        epoch: sensor_fusion::position_recovery::ReceiverEpoch,
+    ) {
+        if self.ekf.update_position(x, y) == sensor_fusion::ekf::UpdateResult::Accepted {
+            self.position_recovery.reset();
+        } else if self.position_recovery.observe([x, y], [vx, vy], epoch) {
+            self.ekf.reacquire_position(x, y);
+            self.ekf.update_position(x, y);
+            self.position_recovery.reset();
+        }
     }
 
     /// Update EKF with GPS velocity

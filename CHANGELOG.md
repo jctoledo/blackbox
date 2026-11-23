@@ -19,6 +19,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Obsolete documentation files (RELEASE.md, IMPLEMENTATION_SUMMARY.md, release-notes.md)
 
+## [0.0.4-rc.20] - 2026-11-23
+
+### Fixed
+- Preserve elapsed IMU batch time through short scheduling stalls; coast through longer unobserved intervals instead of holding new acceleration over an outage.
+- Recover a gated EKF position only after at least eight coherent GPS observations over half a second; retain GPS-first display speed and raw receiver lap timing.
+- Differentiate GPS speed using receiver microseconds, reset across clock/date gaps, and filter derivative noise. Make orientation learning time-based and reduce its quality score when residuals disagree or correction saturates.
+- Retain 512 GPS events (20.48 seconds at 25 Hz), recover them in bounded 64-event cursor pages, and explicitly report unrecoverable recording gaps. CSV and backup formats remain unchanged.
+
 ## [0.0.4-rc.19] - 2026-11-22
 
 ### Fixed

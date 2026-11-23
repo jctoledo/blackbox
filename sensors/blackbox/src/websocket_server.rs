@@ -511,7 +511,21 @@ impl TelemetryServer {
             "/api/gps-log",
             esp_idf_svc::http::Method::Get,
             move |req| -> Result<(), esp_idf_svc::io::EspIOError> {
-                let snapshot = gps_state.gps_log.lock().ok().map(|log| log.snapshot());
+                let query = req.uri().split_once('?').map_or("", |(_, q)| q);
+                let parameter = |name: &str| {
+                    query.split('&').find_map(|item| {
+                        let (key, value) = item.split_once('=')?;
+                        (key == name).then_some(value)
+                    })
+                };
+                let cursor = parameter("boot")
+                    .and_then(|b| b.parse::<u32>().ok())
+                    .zip(parameter("after").and_then(|s| s.parse::<u64>().ok()));
+                let snapshot = gps_state
+                    .gps_log
+                    .lock()
+                    .ok()
+                    .map(|log| log.snapshot_since(cursor));
                 let json = serde_json::to_string(&snapshot).unwrap_or_else(|_| "null".into());
                 let mut response = req.into_response(
                     200,

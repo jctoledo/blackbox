@@ -1,5 +1,31 @@
 # Engineering review and validation
 
+## Drive continuity follow-up
+
+Source inspection identified a separate integration defect after the covariance
+fix: IMU drain intervals at or above 50 ms advanced the acquisition timestamp but
+never advanced estimator motion. A separate prediction clock now advances before
+GPS correction, including without new IMU arrivals. Unobserved long intervals
+coast rather than extrapolating new IMU data. Review caught and tests cover the
+case where GPS continues correcting during an IMU outage: recovery must not
+integrate the entire outage a second time. Receiver identity/clock continuity and
+an ingestion-latched boundary also prevent invalid-then-valid batches or repeated
+epochs from silently joining the new derivative/recovery evidence.
+Position gating also gains sustained coherent-GPS reacquisition, preserving the
+single-outlier gate without permanently rejecting a returning trajectory.
+
+Receiver microsecond differences now drive GPS acceleration, with explicit clock
+boundaries and low-pass filtering. Orientation learning uses elapsed time and a
+residual/headroom quality score; correction saturation cannot claim full quality.
+An original saturated-confidence regression failed against rc.19 on lat.
+
+GPS history expands to 512 events, but each HTTP response remains at most 64.
+Boot/sequence cursor pagination recovers retained history while preserving default
+latest-64 behavior, loss counts, initial fences and recording stop ownership.
+Public tests use synthetic data. Private drive exports cannot provide exact IMU
+replay or physical acceptance; no source recordings or diagnostic series are
+published. RAM headroom and new behavior still need physical C3 drive acceptance.
+
 ## EKF persistent-bias covariance follow-up
 
 The diagonal-only predictor discarded the correlations that repeated integration

@@ -173,7 +173,7 @@ Keep failures and untested cases visible. Promote a candidate to stable only whe
 ## GPS evidence capture
 
 - [ ] Record at least two minutes with M9N outdoors; GPS CSV should show receiver epochs and host parse times. Check the actual cadence with [the timestamp analyzer](GPS_LOGGING.md).
-- [ ] While parked, disconnect the phone for five seconds, reconnect, stop, and export. Sequence loss beyond the 64-event RAM window must appear in `missing_before`.
+- [ ] While parked, disconnect the phone for five seconds, reconnect, stop, and export. Cursor catch-up should recover retained events. Repeat beyond the 512-event RAM window (20.48 s at 25 Hz); overwritten sequences must appear in `missing_before`.
 - [ ] Power-cycle the device during a disposable recording. The GPS CSV must show a new boot boundary; UTC must not be fabricated during reacquisition.
 - [ ] Reload the phone, export again, then back up and restore as a copy. Check GPS row counts and timestamps match.
 - [ ] Keep the phone foregrounded for the intended drive duration; record any collection gaps, unavailable logger status or storage failure.

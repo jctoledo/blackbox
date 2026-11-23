@@ -49,9 +49,10 @@ euler_heading_rate = (q sinφ + r cosφ) / cosθ
 earth_vertical_rate = −p sinθ + q sinφ cosθ + r cosφ cosθ
 ```
 
-The first advances the EKF Euler yaw. Prediction is skipped when `|cosθ| < 0.1`,
+The first advances the EKF Euler yaw. IMU-driven prediction is unavailable when `|cosθ| < 0.1`,
 when attitude/gyro evidence is invalid or older than 200 ms, or when acceleration
-is invalid/stale; no zero heading rate is fabricated. The cosine guard bounds
+is invalid/stale; the estimator coasts without advancing yaw. No zero measured
+heading rate is fabricated. The cosine guard bounds
 numerical conditioning, not a validated mounting tolerance. The second supplies
 the existing approximate planar force, mode and mounting-straightness paths.
 They are not interchangeable during general roll/pitch motion. Telemetry v4 `wz`
@@ -92,11 +93,28 @@ The position diagnostic combines diagonal variance, accepted-update residual sta
 
 ## Acceleration and orientation correction
 
-`GpsAcceleration` differentiates scalar GPS speed using the application sample interval, filters the result, and expires stale data. Differentiation amplifies noise; it is a reference signal, not ground truth. `speed × bias-corrected earth_vertical_rate` estimates lateral acceleration under approximately planar motion and limited sideslip. Banking, slip, vibration and mounting errors violate those assumptions.
+`GpsAcceleration` differentiates scalar GPS speed using integer receiver-epoch differences, then applies a time-based low-pass filter (0.12 s time constant). Host parsing jitter does not enter the derivative. Missing/invalid clocks, duplicate/reversed epochs, date changes and intervals outside 20 ms–1.5 s break the segment. Invalid or stale fixes invalidate the derivative. The legacy host-time API remains for callers/tests. Differentiation amplifies noise; this is a reference signal, not ground truth. `speed × bias-corrected earth_vertical_rate` estimates lateral acceleration under approximately planar motion and limited sideslip. Banking, slip, vibration and mounting errors violate those assumptions.
 
 When an offset is saved, force projection rotates into vehicle axes and learning residuals rotate back into device pitch/roll axes. Saving/clearing resets learned force-fusion corrections.
 
-`OrientationCorrector` compares the filtered longitudinal IMU signal with the speed derivative, and lateral IMU acceleration with the centripetal estimate. Small-angle pitch/roll residual corrections accumulate with opposite signs, bounded near ±15°. Cruise-bias learning also accumulates the residual; averaging it as an absolute bias would converge to half the true offset. Its confidence is a learning-sample counter, not a probability of correctness. GPS blend weight interpolates approximately 80% → 50% → 30% as pitch confidence grows. Freshness controls fallback to IMU-only estimates.
+`OrientationCorrector` compares the filtered longitudinal IMU signal with the speed derivative, and lateral IMU acceleration with the centripetal estimate. Small-angle pitch/roll residual corrections accumulate with opposite signs, bounded near ±15°. Learning uses a 0.66 s time constant, limits one update's interval to 0.1 s and clips its angular innovation to ±0.1 rad. Quality combines learning maturity, smoothed residual agreement and headroom from the correction limit; saturation reports zero quality. It is not a calibrated probability. The application interpolates GPS weight from 100% toward 30% as longitudinal quality improves. Cruise-bias learning remains residual-based. Freshness controls fallback to IMU-only estimates.
+
+Prediction has a separate monotonic clock and advances before GPS correction,
+including when no new IMU packet arrived. Fresh acceleration is held between
+packets. Prediction normally accumulates at least 5 ms before running, flushing
+shorter intervals before GPS correction. This includes 50–200 ms scheduling
+stalls without discarding time. Longer intervals, or unavailable attitude, coast
+at constant velocity with growing covariance. GPS corrections during an IMU
+outage are therefore not followed by a second integration of the entire outage.
+Position rejection can reacquire after eight coherent receiver fixes spanning at
+least 0.5 s, with increasing sequence/UTC on one date, receiver intervals of
+20–300 ms, host intervals of 10–300 ms and position steps within 5 m of trapezoidal GPS velocity.
+Recovery replaces position and its correlations while preserving yaw, velocity
+and bias marginals. This continuity heuristic can follow a persistent coherent
+receiver error; it does not establish independent position accuracy.
+Invalid/clock-discontinuous RMCs and UART loss latch a boundary during ingestion,
+so an invalid-then-valid batch resets derivative and reacquisition evidence before
+the application consumes its final fix.
 
 The filter attenuates vibration; it cannot eliminate arbitrary vibration or distinguish every road slope from attitude error. This pipeline does not supply validated slope compensation, brake pressure, tyre grip, apex location or driver coaching.
 

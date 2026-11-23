@@ -3,6 +3,42 @@
 use crate::diagnostics::DiagnosticsState;
 use ublox_gps::NmeaParser;
 
+/// Retain boundaries from every parsed RMC even when estimation consumes only
+/// the final fix of a drain. Consumers reset before accepting that final fix.
+#[derive(Default)]
+pub struct Continuity {
+    previous: Option<ublox_gps::RmcTiming>,
+    lost: bool,
+}
+impl Continuity {
+    pub fn invalidate(&mut self) {
+        self.previous = None;
+        self.lost = true;
+    }
+    pub fn observe(&mut self, timing: ublox_gps::RmcTiming, valid: bool) {
+        let Some(utc) = timing.utc_us.filter(|utc| *utc < 86_401_000_000) else {
+            self.invalidate();
+            return;
+        };
+        if !valid || !timing.status_active || timing.date_ddmmyy.is_none() {
+            self.invalidate();
+            return;
+        }
+        if self.previous.is_some_and(|p| {
+            timing.sequence != p.sequence.wrapping_add(1)
+                || timing.date_ddmmyy != p.date_ddmmyy
+                || p.utc_us
+                    .is_none_or(|old| utc <= old || utc - old > 1_500_000)
+        }) {
+            self.lost = true;
+        }
+        self.previous = Some(timing);
+    }
+    pub fn take_discontinuity(&mut self) -> bool {
+        core::mem::take(&mut self.lost)
+    }
+}
+
 /// Count each valid post-warmup RMC when parsed, before another sentence can
 /// replace its evidence. Timing and logging retain the same per-RMC events.
 pub fn feed_byte(parser: &mut NmeaParser, byte: u8, diagnostics: &DiagnosticsState) -> bool {
@@ -43,6 +79,28 @@ mod tests {
         assert!(!take_latest_fix(&mut parser));
         assert_eq!(diagnostics.gps_fix_count(), 0);
         (parser, diagnostics)
+    }
+
+    #[test]
+    fn invalid_then_valid_in_one_drain_preserves_a_boundary_for_latest_consumers() {
+        let (mut parser, diagnostics) = warmed();
+        let mut continuity = Continuity::default();
+        for body in [VALID, INVALID, VALID] {
+            sentence(&mut parser, &diagnostics, body);
+            continuity.observe(parser.rmc_timing(), parser.last_fix().valid);
+        }
+        assert!(take_latest_fix(&mut parser));
+        assert!(continuity.take_discontinuity());
+        let mut acceleration = sensor_fusion::fusion::GpsAcceleration::new();
+        acceleration.update_epoch(10.0, Some(1_000_000), Some(201126));
+        acceleration.update_epoch(11.0, Some(1_040_000), Some(201126));
+        // Same reset contract used by main before it feeds the retained final fix.
+        acceleration.update_epoch(f32::NAN, None, None);
+        assert_eq!(
+            acceleration.update_epoch(12.0, Some(1_080_000), Some(201126)),
+            None
+        );
+        assert!(!continuity.take_discontinuity());
     }
 
     #[test]

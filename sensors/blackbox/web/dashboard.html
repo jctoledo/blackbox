@@ -1242,6 +1242,7 @@ async function stopRecording(){
 function gpsRows(batch,cursor,receivedAt){
     const integer=(v)=>Number.isSafeInteger(v)&&v>=0;
     if(!batch||batch.version!==1||typeof batch.simulated!=='boolean'||!integer(batch.boot_id)||batch.boot_id>0xffffffff||batch.capacity!==64||!integer(batch.latest_seq)||!Array.isArray(batch.events)||batch.events.length>64)throw Error('Invalid GPS log');
+    if(batch.has_more!==undefined&&typeof batch.has_more!=='boolean')throw Error('Invalid GPS pagination');
     let previous=0;
     for(const e of batch.events){
         if(!e||!integer(e.seq)||e.seq===0||e.seq<=previous||e.seq>batch.latest_seq||!integer(e.host_us)||typeof e.active!=='boolean'||typeof e.accepted!=='boolean')throw Error('Invalid GPS event');
@@ -1284,15 +1285,21 @@ async function collectGpsLog(){
     const recording=sessionId;
     gpsRequest=(async()=>{
         try{
-            const response=await requestDevice('/api/gps-log');
+          let missed=0;
+          for(let page=0;page<8;page++){
+            const suffix=gpsCursor?'?boot='+gpsCursor.boot+'&after='+gpsCursor.seq:'';
+            const response=await requestDevice('/api/gps-log'+suffix);
             if(!response.ok)throw Error('GPS log unavailable');
             const batch=await response.json();
             if(recording!==sessionId||!rec&&!recordingBusy)return;
             const result=gpsRows(batch,gpsCursor,Date.now());
+            missed+=result.rows.reduce((n,r)=>n+(r.gpsMissing||0),0);
             if(chunkBuffer.length+result.rows.length>MAX_PENDING_SAMPLES){checkpointDrive(recordingContext,'interrupt');rec=false;recordingError='Recording stopped: too many unsaved samples. Keep this tab open and export.';return}
             chunkBuffer.push(...result.rows);recordingContext?.driveSession?.apply({owner:recording,type:'gps',rows:result.rows});gpsCursor=result.cursor;noteGpsLogHealth(recording,'connected',result.rows.length>0);if(typeof updatePerformanceRuns==='function')updatePerformanceRuns(result.rows);
-            gpsLogStatus=result.rows.length?'GPS timestamps captured with this recording. Export GPS CSV from Saved data.':'GPS log connected; waiting for new receiver timestamps.';
+            gpsLogStatus=missed?'GPS recording gap: '+missed+' events could not be recovered. GPS CSV marks the gap.':result.rows.length?'GPS timestamps captured with this recording. Export GPS CSV from Saved data.':'GPS log connected; waiting for new receiver timestamps.';
             if(chunkBuffer.length&&recordingSaveDue()&&!chunkWrite)await saveChunk();
+            if(!batch.has_more||!result.rows.length)break;
+          }
         }catch(error){if(recording===sessionId&&(rec||recordingBusy)){noteGpsLogHealth(recording,'unavailable',false);gpsLogStatus='GPS timestamp log unavailable. Dashboard recording continues; check connection and firmware.'}console.warn(error)}
         finally{updateRecUI()}
     })();
