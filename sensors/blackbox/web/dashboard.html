@@ -2055,9 +2055,11 @@ function wrapAngle(a){while(a>Math.PI)a-=2*Math.PI;while(a<-Math.PI)a+=2*Math.PI
 // Nonblocking decisions and notices: browser collection keeps running.
 function notifyUser(message){$('app-notice-text').textContent=String(message).replace(/\\n/g,'\n');$('app-notice').hidden=false}
 $('app-notice-close').onclick=()=>{$('app-notice').hidden=true};
+let decisionPending=false;
 function requestDecision(message,value){
     const dialog=$('decision-dialog');
-    if(dialog.open)return Promise.resolve(null);
+    if(decisionPending||dialog.open)return Promise.resolve(null);
+    decisionPending=true;
     const opener=document.activeElement,naming=typeof value==='string',input=$('decision-name');
     $('decision-title').textContent=naming?'Name this track':'Confirm action';
     $('decision-message').textContent=String(message).replace(/\\n/g,'\n');
@@ -2066,11 +2068,11 @@ function requestDecision(message,value){
     return new Promise(resolve=>{
         dialog.onclose=()=>{
             const result=dialog.returnValue==='accept'?(naming?input.value.trim():true):null;
-            dialog.onclose=null;focusVisibleControl(opener);resolve(result||null);
+            dialog.onclose=null;decisionPending=false;focusVisibleControl(opener);resolve(result||null);
         };
         $('decision-cancel').onclick=()=>dialog.close();
         try{dialog.showModal();if(naming){input.focus();input.select()}else $('decision-cancel').focus()}
-        catch{dialog.onclose=null;notifyUser('This browser could not open the confirmation. No action was taken.');resolve(null)}
+        catch{dialog.onclose=null;decisionPending=false;notifyUser('This browser could not open the confirmation. No action was taken.');resolve(null)}
     });
 }
 // Track Manager UI
