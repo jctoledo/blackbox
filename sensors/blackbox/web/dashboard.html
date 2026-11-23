@@ -922,6 +922,25 @@ body.cluster-view .bbDeltaBar:not(.no-ref) .bbDeltaText{font-size:min(clamp(24px
     </div>
 </div>
 
+<style>
+.bbDecision{width:min(440px,calc(100vw - 24px));max-height:calc(100dvh - 24px);margin:auto;padding:22px;border:1px solid var(--divider);border-radius:14px;background:var(--surface);color:var(--text);font:inherit;overflow:auto}
+.bbDecision::backdrop{background:rgba(0,0,0,.5)}
+.bbDecision h2{font-size:20px;margin:0 0 12px}.bbDecision p{margin:0 0 16px;white-space:pre-line;overflow-wrap:anywhere}
+.bbDecision label{display:block;margin-bottom:18px}.bbDecision input{display:block;width:100%;min-height:44px;margin-top:8px;padding:10px;font:inherit;border:1px solid var(--divider);border-radius:6px;background:var(--bg);color:var(--text)}
+.bbDecisionActions{display:flex;justify-content:flex-end;gap:12px;flex-wrap:wrap}.bbDecision button,.bbNotice button{min-height:44px;padding:10px 16px;font:inherit;border:1px solid var(--divider);border-radius:6px;background:var(--bg);color:var(--text);cursor:pointer}
+.bbDecision button[value=accept]{background:var(--text);color:var(--surface)}
+.bbNotice{max-height:calc(100dvh - 24px);overflow:auto;position:fixed;bottom:12px;left:12px;right:12px;z-index:1200;max-width:600px;margin:auto;padding:14px;background:var(--surface);color:var(--text);border:1px solid var(--divider);border-radius:10px;display:flex;gap:14px;align-items:center;box-shadow:0 4px 18px rgba(0,0,0,.2)}
+.bbNotice[hidden]{display:none}.bbNotice span{flex:1;min-width:0;overflow-wrap:anywhere;white-space:pre-line}
+</style>
+<dialog id="decision-dialog" class="bbDecision" aria-labelledby="decision-title" aria-describedby="decision-message">
+ <form method="dialog">
+  <h2 id="decision-title">Confirm action</h2><p id="decision-message"></p>
+  <label id="decision-name-label" hidden>Track name<input id="decision-name" type="text" autocomplete="off"></label>
+  <div class="bbDecisionActions"><button id="decision-cancel" type="button">Cancel</button><button id="decision-accept" value="accept">Continue</button></div>
+ </form>
+</dialog>
+<div id="app-notice" class="bbNotice" hidden><span id="app-notice-text" role="status" aria-live="polite"></span><button id="app-notice-close" type="button" aria-label="Dismiss message">Dismiss</button></div>
+
 <script>
 const $=id=>document.getElementById(id);
 const MODES={0:'IDLE',1:'ACCEL',2:'BRAKE',4:'CORNER',5:'EXIT',6:'TRAIL'};
@@ -1357,9 +1376,9 @@ function samplesToCSV(samples,includeHeader=true){
 
 async function exportCSV(){
     try{if(!db)await openDB();const sessions=await idbPromise(db.transaction('sessions','readonly').objectStore('sessions').getAll());
-        if(!sessions.length){alert('No recordings found');return}
+        if(!sessions.length){notifyUser('No recordings found');return}
         const latest=sessions.sort((a,b)=>b.sessionId-a.sessionId)[0];await exportSessionById(latest.sessionId);
-    }catch(e){alert('Export failed: '+e.message)}
+    }catch(e){notifyUser('Export failed: '+e.message)}
 }
 
 // Data Management Functions
@@ -2033,6 +2052,29 @@ function genTrackId(){return 'track_'+Date.now()+'_'+Math.random().toString(36).
 function escHtml(t){return String(t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function wrapAngle(a){while(a>Math.PI)a-=2*Math.PI;while(a<-Math.PI)a+=2*Math.PI;return a}
 
+// Nonblocking decisions and notices: browser collection keeps running.
+function notifyUser(message){$('app-notice-text').textContent=String(message).replace(/\\n/g,'\n');$('app-notice').hidden=false}
+$('app-notice-close').onclick=()=>{$('app-notice').hidden=true};
+let decisionPending=false;
+function requestDecision(message,value){
+    const dialog=$('decision-dialog');
+    if(decisionPending||dialog.open)return Promise.resolve(null);
+    decisionPending=true;
+    const opener=document.activeElement,naming=typeof value==='string',input=$('decision-name');
+    $('decision-title').textContent=naming?'Name this track':'Confirm action';
+    $('decision-message').textContent=String(message).replace(/\\n/g,'\n');
+    $('decision-name-label').hidden=!naming;input.disabled=!naming;input.required=naming;input.value=naming?value:'';
+    $('decision-accept').textContent=naming?'Save track & arm':'Continue';dialog.returnValue='';
+    return new Promise(resolve=>{
+        dialog.onclose=()=>{
+            const result=dialog.returnValue==='accept'?(naming?input.value.trim():true):null;
+            dialog.onclose=null;decisionPending=false;focusVisibleControl(opener);resolve(result||null);
+        };
+        $('decision-cancel').onclick=()=>dialog.close();
+        try{dialog.showModal();if(naming){input.focus();input.select()}else $('decision-cancel').focus()}
+        catch{dialog.onclose=null;decisionPending=false;notifyUser('This browser could not open the confirmation. No action was taken.');resolve(null)}
+    });
+}
 // Track Manager UI
 const modalReturnFocus=new Map();
 function revealModal(id,closeId){modalReturnFocus.set(id,document.activeElement);$(id).classList.add('open');$(closeId).focus()}
@@ -2048,6 +2090,7 @@ function hideModal(id){
     const opener=modalReturnFocus.get(id);modalReturnFocus.delete(id);focusVisibleControl(opener);
 }
 document.addEventListener('keydown',event=>{
+    if($('decision-dialog')?.open)return;
     const modal=document.querySelector('.bbModal.open');if(!modal)return;
     if(event.key==='Escape'){event.preventDefault();hideModal(modal.id);return}
     if(event.key!=='Tab')return;
@@ -2109,8 +2152,8 @@ async function handleTrackAction(action,id){
         await activateSavedTrack(id);
         closeTrackModal();
     }else if(action==='delete'){
-        if(confirm('Delete this track and all lap history?')){
-            try{await deleteTrackWithRef(id)}catch(e){alert(e.message);return}
+        if(await requestDecision('Delete this track and all lap history?')){
+            try{await deleteTrackWithRef(id)}catch(e){notifyUser(e.message);return}
             renderTrackList();
         }
     }else if(action==='history'){
@@ -2127,7 +2170,7 @@ function portableReference(ref){
 async function exportTrackData(id){
     try{
         const track=await getTrack(id);
-        if(!track){alert('Track not found');return}
+        if(!track){notifyUser('Track not found');return}
         const history=await getLapHistory(id,Infinity);
         const refLap=await getRefLap(id);
         const exportData={
@@ -2150,14 +2193,14 @@ async function exportTrackData(id){
         URL.revokeObjectURL(url);
     }catch(e){
         console.error('Export error:',e);
-        alert('Export failed: '+e.message);
+        notifyUser('Export failed: '+e.message);
     }
 }
 
 async function exportAllTracks(){
     try{
         const tracks=await getAllTracks();
-        if(tracks.length===0){alert('No tracks to export');return}
+        if(tracks.length===0){notifyUser('No tracks to export');return}
         const allData={
             version:2,
             exportedAt:new Date().toISOString(),
@@ -2183,10 +2226,10 @@ async function exportAllTracks(){
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        alert('Exported '+tracks.length+' track(s)');
+        notifyUser('Exported '+tracks.length+' track(s)');
     }catch(e){
         console.error('Export all error:',e);
-        alert('Export failed: '+e.message);
+        notifyUser('Export failed: '+e.message);
     }
 }
 
@@ -2222,9 +2265,9 @@ async function showTrackHistory(id){
     item.appendChild(sec);const clear=sec.querySelector('.bbHistoryClearBtn');if(clear)clear.onclick=()=>clearTrackHistoryConfirm(id);
 }
 async function clearTrackHistoryConfirm(id){
-    if(confirm('Clear all lap history for this track?')){
+    if(await requestDecision('Clear all lap history for this track?')){
         try{await deleteLapHistory(id)}
-        catch(error){alert('Could not clear lap history. Saved history and track count are unchanged. '+error.message);return}
+        catch(error){notifyUser('Could not clear lap history. Saved history and track count are unchanged. '+error.message);return}
         renderTrackList();
     }
 }
@@ -2242,16 +2285,16 @@ async function activateSavedTrack(id){return queueTrackCommand(async()=>{
     // Suggestions and route-save continuations can hold an object across queued deletion.
     // Only the currently saved row may configure timing, including its saved isNew state.
     let track;
-    try{track=await getTrack(id)}catch(error){alert('Could not load the saved track. '+error.message);return false}
-    if(!track){alert('This track is no longer saved. Choose another track.');return false}
+    try{track=await getTrack(id)}catch(error){notifyUser('Could not load the saved track. '+error.message);return false}
+    if(!track){notifyUser('This track is no longer saved. Choose another track.');return false}
     return activateTrackCommand(track);
 })}
-async function deactivateTrack(){return queueTrackCommand(()=>deactivateTrackCommand())}
+async function deactivateTrack(isCurrent=()=>true){return queueTrackCommand(()=>isCurrent()?deactivateTrackCommand():false)}
 
 async function activateTrackCommand(track){
     const isP2P=track.type==='point_to_point';
     // Track must have gpsOrigin to convert timing line to GPS coordinates
-    if(!track.gpsOrigin){alert('Track missing GPS origin. Cannot activate.');return false}
+    if(!track.gpsOrigin){notifyUser('Track missing GPS origin. Cannot activate.');return false}
     // Convert local timing line coordinates to GPS lat/lon using track's own origin
     // Firmware receives GPS coords and converts to local using its own origin
     // This eliminates cross-session coordinate frame mismatch!
@@ -2261,7 +2304,7 @@ async function activateTrackCommand(track){
     // Helper to convert local (x,y) back to GPS using track's origin
     function toGps(x,y){return{lat:origin.lat+y/111320,lon:origin.lon+x/(111320*cosLat)}}
     const line=track.startLine,finLine=track.finishLine;
-    if(isP2P&&!finLine){alert('This stage has no finish line. Record a complete stage before arming.');return false}
+    if(isP2P&&!finLine){notifyUser('This stage has no finish line. Record a complete stage before arming.');return false}
     const p1=toGps(line.p1[0],line.p1[1]);
     const p2=toGps(line.p2[0],line.p2[1]);
     // Direction is already in math convention (from atan2 in _calculateTimingLine)
@@ -2289,7 +2332,7 @@ async function activateTrackCommand(track){
     try{
         const r=await requestDevice(url);
         const j=await r.json();
-        if(!r.ok||j.error){alert('Failed to configure lap timer: '+(j.error||r.status));return false}
+        if(!r.ok||j.error){notifyUser('Failed to configure lap timer: '+(j.error||r.status));return false}
         // Do not expose a new owner with the previous track's reference while storage waits.
         let loadedReference=null;
         try{loadedReference=await getRefLap(track.id)}catch(e){console.warn('Reference lap unavailable:',e)}
@@ -2328,12 +2371,12 @@ async function activateTrackCommand(track){
         $('lap-delta').className='bbLapHistValue bbNum delta';
         updateActiveTrackDisplay();
         console.log('Track activated:',track.name,'Type:',track.type);return true;
-    }catch(e){alert('Failed to configure lap timer: '+e.message);return false}finally{trackAutoDetector.endTrackChange()}
+    }catch(e){notifyUser('Failed to configure lap timer: '+e.message);return false}finally{trackAutoDetector.endTrackChange()}
 }
 
 async function deactivateTrackCommand(){
     trackAutoDetector.beginTrackChange();
-    try{const r=await requestDevice('/api/laptimer/configure?type=clear');if(!r.ok)throw new Error('Device rejected the request');const j=await r.json();if(j.error)throw new Error(j.error);expectedLapRevision=j.revision??null}catch(e){alert('Could not stop device timing. Reconnect and retry. '+e.message);return false}finally{trackAutoDetector.endTrackChange()}
+    try{const r=await requestDevice('/api/laptimer/configure?type=clear');if(!r.ok)throw new Error('Device rejected the request');const j=await r.json();if(j.error)throw new Error(j.error);expectedLapRevision=j.revision??null}catch(e){notifyUser('Could not stop device timing. Reconnect and retry. '+e.message);return false}finally{trackAutoDetector.endTrackChange()}
     activeTrack=null;referenceLap=null;referencePersistenceError='';updateRecUI();clearSession();$('lap-result').hidden=true;lapResultGeneration++;
     if(lapTracker)lapTracker.reset();
     p2pNeedsWarmup=false;
@@ -2351,12 +2394,12 @@ async function deactivateTrackCommand(){
 }
 
 // Track Recording Functions
-function startTrackRecording(trackType='loop'){
+async function startTrackRecording(trackType='loop'){
     if(routeCapture?.busy)return false;
-    if(trackRecorder&&!cancelTrackRecording())return false;
+    if(trackRecorder&&!await cancelTrackRecording())return false;
     trackAutoDetector.withdraw();
-    if(!currentPos||!currentPos.valid){alert('No fresh GPS position. Wait outdoors for a fix before creating a track.');return false}
-    const ref=getGpsRef();if(!ref){alert('GPS is still starting. Wait for a fresh fix, then try again.');return false}
+    if(!currentPos||!currentPos.valid){notifyUser('No fresh GPS position. Wait outdoors for a fix before creating a track.');return false}
+    const ref=getGpsRef();if(!ref){notifyUser('GPS is still starting. Wait for a fresh fix, then try again.');return false}
     if(!trackRecorder)trackRecorder=new TrackRecorder();
     // Use GPS course if valid, else EKF yaw (heading used for corner detection, not loop closure)
     const heading=currentPos.validGpsCourse?currentPos.gpsCourse:currentPos.yaw;
@@ -2401,9 +2444,11 @@ function renderRouteRecovery(message=''){
     $('btn-discard-route').disabled=owner.busy;
     $('btn-discard-route').textContent=owner.saved?'Close saved track':'Discard route';
 }
-function cancelTrackRecording(){
+async function cancelTrackRecording(){
     if(routeCapture?.busy)return false;
-    if(trackRecorder&&!routeCapture?.saved&&trackRecorder.keyPoints.length>1&&!confirm('Discard this unsaved route? This cannot be undone. If a captured track download is available, cancel and download it first to keep a copy.'))return false;
+    const owner=routeCapture,recorder=trackRecorder;
+    if(trackRecorder&&!routeCapture?.saved&&trackRecorder.keyPoints.length>1&&!await requestDecision('Discard this unsaved route? This cannot be undone. If a captured track download is available, cancel and download it first to keep a copy.'))return false;
+    if(routeCapture!==owner||trackRecorder!==recorder||owner?.busy)return false;
     if(trackRecorder)trackRecorder.cancel();
     trackRecorder=null;routeCapture=null;
     $('record-overlay').classList.remove('active');return true;
@@ -2422,7 +2467,7 @@ window.addEventListener('beforeunload',event=>{
 function markRecordingFinish(){
     if(!trackRecorder||!trackRecorder.recording||trackRecorder.trackType!=='point_to_point')return;
     const stats=trackRecorder.getStats();
-    if(stats.totalDistance<50){alert('Track is too short. Drive at least 50 meters.');return}
+    if(stats.totalDistance<50){notifyUser('Track is too short. Drive at least 50 meters.');return}
     onLoopDetected();
 }
 function onLoopDetected(){
@@ -2436,9 +2481,10 @@ function onLoopDetected(){
     $('rec-success-stats').textContent=distance+'m · '+corners+' estimated turns · Estimated uncertainty: '+quality;
     $('rec-state-recording').style.display='none';$('rec-state-complete').style.display='block';
 }
-function continueTrackRecording(){
+async function continueTrackRecording(){
     const owner=routeCapture;if(!trackRecorder||!owner||owner.busy||owner.saved)return;
-    if(owner.track&&!confirm('Continue this route? Its current captured finish will be replaced. Any downloaded file stays unchanged.'))return;
+    if(owner.track&&!await requestDecision('Continue this route? Its current captured finish will be replaced. Any downloaded file stays unchanged.'))return;
+    if(routeCapture!==owner||owner.busy||owner.saved||trackRecorder!==owner.recorder)return;
     owner.frozen=false;owner.track=null;trackRecorder.recording=true;
     renderRouteRecovery();trackRecorder.loopDetected=false;
     $('rec-state-recording').style.display='block';$('rec-state-complete').style.display='none';
@@ -2448,16 +2494,18 @@ function continueTrackRecording(){
 async function finishTrackRecording(){
     const owner=routeCapture;
     if(!owner||owner.busy||owner.recorder!==trackRecorder)return;
-    if(!owner.track){
-        const defaultName=trackRecorder.trackType==='loop'?'New Circuit':'New Stage';
-        const trackName=prompt('Enter track name:',defaultName);if(!trackName)return;
-        const data=trackRecorder.finish(trackName);
-        if(!data){renderRouteRecovery('Not enough route points to save. Choose Continue route and collect more with fresh GPS, or discard this route.');return}
-        owner.frozen=true;
-        owner.track={id:data.id,name:data.name,type:data.type,startLine:data.startLine,finishLine:data.finishLine,origin:data.origin,gpsOrigin:data.gpsOrigin,centerline:data.centerline,bounds:data.bounds,pathLength:data.totalDistance||0,quality:data.quality,bestLapMs:null,lapCount:0,corners:data.corners||0,keyPoints:(data.centerline&&data.centerline.length)||data.keyPoints||0,createdAt:data.created,isNew:true};
-    }
-    owner.busy=true;renderRouteRecovery(owner.saved?'Track saved. Waiting for timing confirmation…':'Saving track. Keep this tab open…');
+    owner.busy=true;renderRouteRecovery();
     try{
+        if(!owner.track){
+            const defaultName=trackRecorder.trackType==='loop'?'New Circuit':'New Stage';
+            const trackName=await requestDecision('Name the captured route, then save it and arm timing.',defaultName);
+            if(!trackName||routeCapture!==owner||trackRecorder!==owner.recorder)return;
+            const data=trackRecorder.finish(trackName);
+            if(!data){renderRouteRecovery('Not enough route points to save. Choose Continue route and collect more with fresh GPS, or discard this route.');return}
+            owner.frozen=true;
+            owner.track={id:data.id,name:data.name,type:data.type,startLine:data.startLine,finishLine:data.finishLine,origin:data.origin,gpsOrigin:data.gpsOrigin,centerline:data.centerline,bounds:data.bounds,pathLength:data.totalDistance||0,quality:data.quality,bestLapMs:null,lapCount:0,corners:data.corners||0,keyPoints:(data.centerline&&data.centerline.length)||data.keyPoints||0,createdAt:data.created,isNew:true};
+        }
+        renderRouteRecovery(owner.saved?'Track saved. Waiting for timing confirmation…':'Saving track. Keep this tab open…');
         if(!owner.saved){await saveTrack(owner.track,{create:true});owner.saved=true}
         if(routeCapture!==owner)return;
         renderRouteRecovery('Track saved. Waiting for timing confirmation…');
@@ -2465,7 +2513,7 @@ async function finishTrackRecording(){
         if(routeCapture!==owner)return;
         if(!armed){renderRouteRecovery('Track saved in this browser; arming was not confirmed. Check the connection and current timing state, then retry arming or close and select this track later.');return}
         trackRecorder=null;routeCapture=null;$('record-overlay').classList.remove('active');renderTrackList();
-        alert('Track "'+owner.track.name+'" saved in this browser and timing armed. Review the timing state before your next pass.');
+        notifyUser('Track "'+owner.track.name+'" saved in this browser and timing armed. Review the timing state before your next pass.');
     }catch(error){
         if(routeCapture===owner)renderRouteRecovery(owner.saved?'Track saved in this browser; arming was not confirmed. Check the connection and current timing state, then retry arming.':'Track not saved: browser storage failed. Keep this tab open. Retry Save, download the captured track, continue the route, or discard it explicitly.');
         console.error('Track capture could not be completed:',error);
@@ -2482,15 +2530,17 @@ function updateRecordingQualityDisplay(quality){
     text.textContent='Uncertainty: '+({excellent:'low',good:'low',fair:'moderate',poor:'high'}[quality]||'unknown');
 }
 
-async function clearActiveTrack(){
-    if(!activeTrack)return;
-    await deactivateTrack();
+async function clearActiveTrack(isCurrent=()=>true){
+    if(!activeTrack||!isCurrent())return;
+    if(await deactivateTrack(isCurrent)===false)return;
     updateActiveTrackDisplay();
     renderTrackList();
 }
-function confirmStopTiming(){
+async function confirmStopTiming(){
     if(!activeTrack)return;
-    if(confirm('Stop timing "'+activeTrack.name+'"?'))clearActiveTrack();
+    const owner=activeTrack,session=currentSessionId,revision=expectedLapRevision;
+    const isCurrent=()=>activeTrack===owner&&currentSessionId===session&&expectedLapRevision===revision;
+    if(await requestDecision('Stop timing "'+owner.name+'"?')&&isCurrent())await clearActiveTrack(isCurrent);
 }
 
 async function updateTrackBestLap(lapTimeMs){
@@ -3374,7 +3424,7 @@ $('menu-export').onclick=$('diag-export').onclick=()=>{$('menu-overlay').classLi
 $('btn-tracks').onclick=()=>openTrackModal();
 $('track-modal-close').onclick=closeTrackModal;
 $('track-modal').onclick=e=>{if(e.target===$('track-modal'))closeTrackModal()};
-$('btn-clear-track').onclick=clearActiveTrack;
+$('btn-clear-track').onclick=()=>clearActiveTrack();
 $('btn-export-all').onclick=exportAllTracks;
 $('menu-clear').onclick=()=>{$('menu-overlay').classList.remove('open');resetState()};
 
@@ -4043,29 +4093,29 @@ async function renderTrackDataList(stats=null,isCurrent=()=>true){
 async function handleSessionAction(btn){
     const action=btn.dataset.action,item=btn.closest('.bbSessionItem'),targetId=parseInt(item.dataset.sessionId,10);
     if(action==='details-export'){
-        try{await exportRecordingDetails(targetId)}catch(e){alert('Details export failed: '+e.message)}
+        try{await exportRecordingDetails(targetId)}catch(e){notifyUser('Details export failed: '+e.message)}
     }else if(action==='export'||action==='gps-export'||action==='runs-export'){
         const label=btn.textContent;
         try{btn.textContent='Exporting…';await exportSessionById(targetId,action==='gps-export'||action==='runs-export',action==='runs-export')}
-        catch(e){alert('Export failed: '+e.message)}finally{btn.textContent=label}
+        catch(e){notifyUser('Export failed: '+e.message)}finally{btn.textContent=label}
     }else if(action==='delete'){
         const dateStr=item.querySelector('.bbSessionDate').textContent;
-        if(!confirm('Delete recording from '+dateStr+'?\\n\\nThis cannot be undone.'))return;
+        if(!await requestDecision('Delete recording from '+dateStr+'?\\n\\nThis cannot be undone.'))return;
         try{btn.textContent='Deleting...';await deleteSession(targetId);await renderDataModal()}
-        catch(e){alert('Delete failed: '+e.message);btn.textContent='Delete'}
+        catch(e){notifyUser('Delete failed: '+e.message);btn.textContent='Delete'}
     }
 }
 
 async function handleTrackDataAction(btn){
     const action=btn.dataset.action,item=btn.closest('.bbTrackDataItem'),trackId=item.dataset.trackId,trackName=item.querySelector('.bbTrackDataName').textContent;
     if(action==='clear-best'){
-        if(!confirm('Clear reference lap for \"'+trackName+'\"?\\n\\nThis cannot be undone.'))return;
+        if(!await requestDecision('Clear reference lap for \"'+trackName+'\"?\\n\\nThis cannot be undone.'))return;
         try{btn.textContent='Clearing...';btn.disabled=true;await deleteRefLap(trackId);await renderDataModal()}
-        catch(e){alert('Clear failed: '+e.message);btn.textContent='Clear reference';btn.disabled=false}
+        catch(e){notifyUser('Clear failed: '+e.message);btn.textContent='Clear reference';btn.disabled=false}
     }else if(action==='delete-track'){
-        if(!confirm('Delete track \"'+trackName+'\" and its best lap?\\n\\nThis cannot be undone.'))return;
+        if(!await requestDecision('Delete track \"'+trackName+'\" and its best lap?\\n\\nThis cannot be undone.'))return;
         try{btn.textContent='Deleting...';await deleteTrackWithRef(trackId);if(activeTrack&&activeTrack.id===trackId){activeTrack=null;updateActiveTrackDisplay()}await renderDataModal()}
-        catch(e){alert('Delete failed: '+e.message);btn.textContent='Delete'}
+        catch(e){notifyUser('Delete failed: '+e.message);btn.textContent='Delete'}
     }
 }
 
@@ -4082,19 +4132,20 @@ $('backup-discard-staged').onclick=discardSelectedMultipartJob;
 $('data-modal-close').onclick=closeDataModal;
 $('data-modal').onclick=e=>{if(e.target===$('data-modal'))closeDataModal()};
 $('btn-clear-all-recordings').onclick=async()=>{
-    if(rec){alert('Cannot clear while recording. Stop recording first.');return}
+    if(rec){notifyUser('Cannot clear while recording. Stop recording first.');return}
     const stats=await getStorageStats();
-    if(stats.sessionCount===0){alert('No recordings to clear.');return}
-    if(!confirm('Delete all '+stats.sessionCount+' recording'+(stats.sessionCount!==1?'s':'')+'?\\n\\nEstimated data size: '+formatBytes(stats.totalBytes)+'.\\n\\nThis cannot be undone.'))return;
+    if(stats.sessionCount===0){notifyUser('No recordings to clear.');return}
+    if(!await requestDecision('Delete all '+stats.sessionCount+' recording'+(stats.sessionCount!==1?'s':'')+'?\\n\\nEstimated data size: '+formatBytes(stats.totalBytes)+'.\\n\\nThis cannot be undone.'))return;
+    if(rec){notifyUser('Cannot clear while recording. Stop recording first.');return}
     try{$('btn-clear-all-recordings').textContent='Clearing...';$('btn-clear-all-recordings').disabled=true;await clearAllRecordings();await renderDataModal();$('btn-clear-all-recordings').textContent='Clear All Recordings'}
-    catch(e){alert('Clear failed: '+e.message);$('btn-clear-all-recordings').textContent='Clear All Recordings';$('btn-clear-all-recordings').disabled=false}
+    catch(e){notifyUser('Clear failed: '+e.message);$('btn-clear-all-recordings').textContent='Clear All Recordings';$('btn-clear-all-recordings').disabled=false}
 };
 $('btn-clear-all-tracks').onclick=async()=>{
     const stats=await getTrackDataStats();
-    if(stats.tracks.length===0){alert('No tracks to clear.');return}
-    if(!confirm('Delete all '+stats.tracks.length+' track'+(stats.tracks.length!==1?'s':'')+'?\\n\\nEstimated data size: '+formatBytes(stats.totalBytes)+'.\\n\\nThis cannot be undone.'))return;
+    if(stats.tracks.length===0){notifyUser('No tracks to clear.');return}
+    if(!await requestDecision('Delete all '+stats.tracks.length+' track'+(stats.tracks.length!==1?'s':'')+'?\\n\\nEstimated data size: '+formatBytes(stats.totalBytes)+'.\\n\\nThis cannot be undone.'))return;
     try{$('btn-clear-all-tracks').textContent='Clearing...';$('btn-clear-all-tracks').disabled=true;await clearAllTracks();activeTrack=null;updateActiveTrackDisplay();await renderDataModal();$('btn-clear-all-tracks').textContent='Clear All Tracks'}
-    catch(e){alert('Clear failed: '+e.message);$('btn-clear-all-tracks').textContent='Clear All Tracks';$('btn-clear-all-tracks').disabled=false}
+    catch(e){notifyUser('Clear failed: '+e.message);$('btn-clear-all-tracks').textContent='Clear All Tracks';$('btn-clear-all-tracks').disabled=false}
 };
 
 // Mobile display controls. Fullscreen is always user initiated; no recording mutations.

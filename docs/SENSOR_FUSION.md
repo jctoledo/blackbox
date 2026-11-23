@@ -2,6 +2,15 @@
 
 Blackbox combines GPS and a WT901 IMU for vehicle telemetry. It has two related processing paths: an earth-frame position/velocity estimator, and a GPS/IMU acceleration pipeline for the displayed forces and driving modes. Lap timing uses receiver fixes directly, so a lagging estimator heading does not veto a crossing.
 
+Dashboard velocity and the scalar speed supplied to the force display now prefer
+fresh, warmed, accepted GPS ENU velocity, including a valid zero. When that source
+is unavailable, the internal packet can fall back to a finite EKF velocity above
+0.1 m/s; both sources are bounded below 100 m/s. The browser still suppresses
+speed when GPS freshness is unavailable. Components and magnitude always share
+one source. This replaces the older EKF-first display policy; it does not correct
+the estimator's internal position, velocity or yaw, validate mounting, or make GPS
+physical ground truth. Older saved recordings retain their original speed values.
+
 ## Frames and units
 
 | Quantity | Convention |

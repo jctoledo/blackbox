@@ -12,6 +12,11 @@ These values belong to the saved recording. They are separate from the live page
 
 Maximum speed uses finite, nonnegative ordinary telemetry speed with a valid GPS flag and GPS age from 0 through 300 ms. Stored ordinary `sp` and Session CSV speed are km/h; the calculation converts them once to m/s. The display follows the existing mph/km/h preference. A qualified stationary sample can establish a known zero; no qualifying sample means **Unavailable**.
 
+New firmware prefers fresh GPS velocity for ordinary telemetry speed. Older
+firmware preferred the EKF estimate, so older recording summaries can differ from
+the receiver-speed CSV. Existing rows are preserved, not recalculated from GPS.
+Keep Recording details with the exports to distinguish firmware versions.
+
 Force estimates reuse the live Peaks calculation and qualification: finite longitudinal/lateral g values, speed at least 10 km/h, GPS age no greater than 300 ms, and all IMU packet ages represented by an oldest-packet age no greater than 200 ms. Saved analysis also requires a uint32 device timestamp and boot ID so it can establish continuity. Missing legacy quality/clock fields cannot manufacture force results.
 
 Each result is the greatest positive or negative **time-weighted 0.5-second average among complete windows ending at retained samples**, using trapezoidal integration and interpolation at the start of the window. It does not search every possible continuous window. For example, samples of 0, 0.5, 1, 0.5 and 0 g at 0, 200, 400, 600 and 800 ms produce 0.675 g; the continuous optimum of that interpolated triangle is 0.6875 g over 150–650 ms, which is not one of the evaluated endpoints. The windows may overlap; the complete-window count is not a count of independent maneuvers. The 10 km/h gate and freshness thresholds are heuristics, not physical accuracy guarantees. Isolated shocks do not become instantaneous records, but plausible sensor errors can still affect the estimates.

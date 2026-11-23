@@ -10,16 +10,16 @@ async function fixture(){
  const database=await new Promise((resolve,reject)=>{const r=indexedDB.open('track-recovery-'+(++serial));r.onerror=()=>reject(r.error);r.onsuccess=()=>resolve(r.result);r.onupgradeneeded=()=>{r.result.createObjectStore('tracks',{keyPath:'id'});r.result.createObjectStore('reference_laps',{keyPath:'id'}).createIndex('trackId','trackId',{unique:true})}});
  const c={console,Math,Number,Date,performance,Promise,Blob,Float32Array,ArrayBuffer,$,alerts,downloads,trackDb:database,trackRecorder:null,activeTrack:null,referenceLap:null,lapPersistenceError:'',referencePersistenceError:'',referenceSaveGeneration:0,currentSessionId:'original-session',routeCapture:null,
   document:{addEventListener:(name,fn)=>events.set(name,fn),createElement:()=>({click(){downloads.push(this)},remove(){}}),body:{appendChild(){}}},window:{addEventListener:(name,fn)=>events.set(name,fn)},URL:{createObjectURL:blob=>{c.lastBlob=blob;return'blob:route'},revokeObjectURL(){}},setTimeout(){},
-  alert:message=>alerts.push(message),confirm:()=>true,prompt:()=> 'Recovery circuit',closeTrackModal(){},renderTrackList(){},updateRecUI(){},validSpatialReference:()=>true,
+  notifyUser:message=>alerts.push(message),requestDecision:async(message,value)=>typeof value==='string'?'Recovery circuit':true,closeTrackModal(){},renderTrackList(){},updateRecUI(){},validSpatialReference:()=>true,
   trackAutoDetector:{withdraw(){},beginTrackChange(){},endTrackChange(){}},getGpsRef:()=>({lat:37,lon:-122}),currentPos:{valid:true,x:0,y:0,lat:37,lon:-122,speed:20,yaw:0,sigma:2},
   activateTrack:async()=>{arms++;return true}};
  vm.createContext(c);vm.runInContext(slice('function validGpsCoordinates(', '// Track Manager IndexedDB'),c);vm.runInContext(slice('async function saveTrack(', 'async function getTrack('),c);vm.runInContext(slice('// Track Recording Functions','async function updateTrackBestLap('),c);
- c.startTrackRecording('point_to_point');
+ await c.startTrackRecording('point_to_point');
  return{c,$,database,alerts,events,arms:()=>arms,async rows(){return new Promise((resolve,reject)=>{const tx=database.transaction('tracks'),r=tx.objectStore('tracks').getAll();r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)})},points(count=12){for(let i=1;i<count;i++)c.trackRecorder.addSample({x:i*10,y:0,lat:37,lon:-122+i*.00012,speed:10,heading:0,sigma:2});c.onLoopDetected()}};
 }
 test('invalid finish retains route ownership and Continue can collect enough points',async()=>{
  const f=await fixture();f.points(5);await f.c.finishTrackRecording();assert.equal(f.c.trackRecorder.recording,true);
- f.c.continueTrackRecording();f.points(15);await f.c.finishTrackRecording();assert.equal((await f.rows()).length,1);assert.equal(f.arms(),1);assert.equal(f.c.trackRecorder,null);
+ await f.c.continueTrackRecording();f.points(15);await f.c.finishTrackRecording();assert.equal((await f.rows()).length,1);assert.equal(f.arms(),1);assert.equal(f.c.trackRecorder,null);
 });
 test('an aborted route transaction retains one frozen identity for retry and portable export',async()=>{
  const f=await fixture();f.points();const original=f.database.transaction.bind(f.database);let abort=true;
@@ -44,19 +44,19 @@ test('a committed route with failed arming retries arming without another storag
 test('duplicate save clicks and cancellation during commit cannot discard or arm a different owner',async()=>{
  const f=await fixture();f.points();const gate=deferred(),save=f.c.saveTrack;let writes=0;
  f.c.saveTrack=async(...args)=>{writes++;await gate.promise;return save(...args)};
- const pending=f.c.finishTrackRecording();await f.c.finishTrackRecording();f.c.cancelTrackRecording();assert.ok(f.c.trackRecorder);assert.equal(writes,1);
+ const pending=f.c.finishTrackRecording();await f.c.finishTrackRecording();await f.c.cancelTrackRecording();assert.ok(f.c.trackRecorder);assert.equal(writes,1);
  gate.resolve();await pending;assert.equal((await f.rows()).length,1);assert.equal(f.arms(),1);assert.equal(f.c.trackRecorder,null);
 });
 test('frozen geometry does not change after capture and explicit discard can be declined',async()=>{
  const f=await fixture();f.points();const points=f.c.trackRecorder.keyPoints.length;
  f.c.currentPos={...f.c.currentPos,lon:-121.9};f.c.updateTrackRecording();assert.equal(f.c.trackRecorder.keyPoints.length,points);
- f.c.confirm=()=>false;assert.equal(f.c.cancelTrackRecording(),false);assert.ok(f.c.trackRecorder);
- f.c.confirm=()=>true;assert.equal(f.c.cancelTrackRecording(),true);assert.equal(f.c.trackRecorder,null);assert.equal(f.c.routeCapture,null);assert.equal((await f.rows()).length,0);
+ f.c.requestDecision=async()=>false;assert.equal(await f.c.cancelTrackRecording(),false);assert.ok(f.c.trackRecorder);
+ f.c.requestDecision=async()=>true;assert.equal(await f.c.cancelTrackRecording(),true);assert.equal(f.c.trackRecorder,null);assert.equal(f.c.routeCapture,null);assert.equal((await f.rows()).length,0);
 });
 test('replaced capture owner cannot be armed or have its controls overwritten by a late save',async()=>{
- const f=await fixture();f.points();const gate=deferred(),save=f.c.saveTrack;
- f.c.saveTrack=async(...args)=>{await gate.promise;return save(...args)};
- const pending=f.c.finishTrackRecording();const replacement={busy:false};f.c.routeCapture=replacement;f.$('rec-save-status').textContent='New owner';
+ const f=await fixture();f.points();const gate=deferred(),entered=deferred(),save=f.c.saveTrack;
+ f.c.saveTrack=async(...args)=>{entered.resolve();await gate.promise;return save(...args)};
+ const pending=f.c.finishTrackRecording();await entered.promise;const replacement={busy:false};f.c.routeCapture=replacement;f.$('rec-save-status').textContent='New owner';
  gate.resolve();await pending;assert.equal(f.arms(),0);assert.equal(f.$('rec-save-status').textContent,'New owner');assert.equal(f.c.routeCapture,replacement);assert.equal((await f.rows()).length,1);
 });
 test('new-route add collision aborts without changing an original track',async()=>{

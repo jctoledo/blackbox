@@ -116,12 +116,15 @@ impl SensorManager {
     /// Get best available velocity estimate as (vx, vy, speed) tuple
     ///
     /// Returns consistent values from the same source:
-    /// - Prefers EKF velocity when magnitude > 0.1 m/s
-    /// - Falls back to GPS velocity (from speed + course)
+    /// - Prefers fresh, warmed, valid GPS velocity (including zero)
+    /// - Falls back to bounded EKF velocity when GPS is unavailable
     /// - Returns zeros if no valid source available
-    pub fn get_velocity(&self, ekf: Option<&Ekf>) -> (f32, f32, f32) {
+    pub fn get_velocity(&self, ekf: Option<&Ekf>, now_ms: u32) -> (f32, f32, f32) {
         let ekf_velocity = ekf.map(|e| e.velocity());
-        let gps_velocity = self.gps_parser.get_velocity_enu();
+        let gps_velocity = self
+            .gps_parser
+            .get_velocity_enu()
+            .filter(|_| self.gps_parser.is_warmed_up() && self.gps_is_fresh(now_ms));
         select_best_velocity(ekf_velocity, gps_velocity)
     }
 
@@ -129,8 +132,8 @@ impl SensorManager {
     ///
     /// Convenience wrapper around get_velocity() for consumers
     /// that only need scalar speed.
-    pub fn get_speed(&self, ekf: Option<&Ekf>) -> f32 {
-        self.get_velocity(ekf).2
+    pub fn get_speed(&self, ekf: Option<&Ekf>, now_ms: u32) -> f32 {
+        self.get_velocity(ekf, now_ms).2
     }
 
     /// Calibrate stationary bias using fresh AHRS gravity projection.
@@ -507,9 +510,9 @@ impl TelemetryPublisher {
 
         let (ekf_x, ekf_y) = estimator.ekf.position();
 
-        // Get velocity from best available source (EKF preferred, GPS fallback)
+        // Use fresh receiver velocity before an unvalidated estimator fallback
         // Returns consistent (vx, vy, speed) tuple from same source
-        let (mut vx, mut vy, speed_ms) = sensors.get_velocity(Some(&estimator.ekf));
+        let (mut vx, mut vy, speed_ms) = sensors.get_velocity(Some(&estimator.ekf), now_ms);
         let mut display_speed_kmh = speed_ms * 3.6;
 
         // Zero out very low speeds to clean up display

@@ -928,7 +928,7 @@ fn main() {
                 state.publish_mount_status(&mount_calibrator.status);
             }
             // Get current speed and check if stationary
-            let speed = sensors.get_speed(Some(&estimator.ekf));
+            let speed = sensors.get_speed(Some(&estimator.ekf), now_ms);
             let (ax_corr, ay_corr, az_corr) = sensors.imu_parser.get_accel_corrected();
             let is_stationary = sensors.is_stationary(now_ms);
 

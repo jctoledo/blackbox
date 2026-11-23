@@ -1,5 +1,21 @@
 # Engineering review and validation
 
+## Drive follow-up: collection decisions and displayed speed
+
+App-native prompt/confirm/alert calls suspended browser collection long enough to
+risk overrunning the 64-event GPS RAM window. Dashboard decisions now await a
+nonblocking HTML dialog; notices do not suspend JavaScript. Host ownership tests
+cover cancellation, duplicate saves and replacement timing sessions. A real browser
+check keeps the naming dialog open longer than the buffer duration while collection
+continues. Phone suspension and outages still require device-side recording work.
+
+Telemetry and the force pipeline's speed input now prefer fresh accepted GPS ENU
+velocity over an unvalidated EKF estimate, including GPS zero. This fixes the source
+selection policy, not the underlying estimator discrepancy. Private drive replay
+checks source consistency without publishing the original exports. Physical
+accuracy, mounting and estimator error remain separate hardware/R&D questions.
+
+
 This review covers the lap timer, coordinate maths and fusion, GPS/IMU ingestion, telemetry protocol, device dashboard, recording, browser installer, CI, public claims, and open issues. It is based on source inspection, deterministic host tests, browser checks, and ESP32-C3 cross-builds. No physical device was flashed and no instrumented drive was performed during the review.
 
 ## Confirmed failures addressed

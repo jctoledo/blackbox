@@ -19,6 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Obsolete documentation files (RELEASE.md, IMPLEMENTATION_SUMMARY.md, release-notes.md)
 
+## [0.0.4-rc.18] - 2026-11-22
+
+### Fixed
+- Prefer fresh, valid GPS velocity for dashboard speed and the force pipeline's speed input, including a valid stationary zero. Keep a bounded EKF fallback and existing browser stale-data suppression; retain the raw-GPS crossing path.
+- Replace blocking browser dialogs with asynchronous, keyboard-accessible confirmations and track naming, plus dismissible notices. Keep collection running while waiting, guard capture/timing ownership across decisions, and prevent a delayed stop from clearing a replacement timing session.
+
 ## [0.0.4-rc.17] - 2026-11-22
 
 ### Fixed
