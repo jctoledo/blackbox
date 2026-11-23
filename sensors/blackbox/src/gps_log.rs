@@ -63,9 +63,6 @@ impl GpsLog {
     pub fn latest(&self) -> (u32, Option<GpsEvent>) {
         (self.boot_id, self.events.back().copied())
     }
-    pub fn snapshot(&self) -> GpsLogSnapshot {
-        self.snapshot_since(None)
-    }
     pub fn snapshot_since(&self, cursor: Option<(u32, u64)>) -> GpsLogSnapshot {
         let after = cursor
             .filter(|(boot, seq)| *boot == self.boot_id && *seq <= self.sequence)
@@ -142,7 +139,7 @@ mod tests {
         }
         fix.valid = false;
         log.push(RmcTiming::default(), &fix, 9_000_000);
-        let s = log.snapshot();
+        let s = log.snapshot_since(None);
         assert_eq!(s.events.len(), 64);
         assert_eq!(s.events[0].seq, 8);
         assert_eq!(s.latest_seq, 71);
@@ -163,7 +160,7 @@ mod tests {
         };
         log.push(t, &GpsFix::default(), 1);
         log.push(t, &GpsFix::default(), 1);
-        assert_eq!(log.snapshot().events.len(), 2);
+        assert_eq!(log.snapshot_since(None).events.len(), 2);
         assert_eq!(log.latest().1.unwrap().seq, 2);
     }
 }
