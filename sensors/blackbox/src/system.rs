@@ -42,6 +42,7 @@ pub struct SensorManager {
     last_angle_us: u64,
     stationary: crate::imu_evidence::StationaryTracker,
     gps_timing: GpsTimingQueue,
+    gps_continuity: crate::gps_ingest::Continuity,
 }
 
 impl SensorManager {
@@ -60,6 +61,7 @@ impl SensorManager {
             last_angle_us: 0,
             stationary: crate::imu_evidence::StationaryTracker::default(),
             gps_timing: GpsTimingQueue::new(),
+            gps_continuity: Default::default(),
         }
     }
 
@@ -300,6 +302,7 @@ impl SensorManager {
             gps_parser,
             gps_timing,
             stationary,
+            gps_continuity,
             ..
         } = self;
         let mut new_fix = false;
@@ -312,6 +315,7 @@ impl SensorManager {
                     new_fix = true;
                     let timing = gps_parser.rmc_timing();
                     if timing.sequence != before {
+                        gps_continuity.observe(timing, gps_parser.last_fix().valid);
                         if timing.status_active {
                             active += 1;
                         } else {
@@ -333,6 +337,7 @@ impl SensorManager {
             }
         });
         if outcome.loss {
+            gps_continuity.invalidate();
             gps_parser.invalidate_stream();
             gps_timing.invalidate();
             stationary.invalidate();
@@ -347,6 +352,10 @@ impl SensorManager {
 
     pub fn replay_gps_timing(&mut self, timer: &mut sensor_fusion::LapTimer, now_us: u64) -> u8 {
         self.gps_timing.replay(timer, now_us)
+    }
+
+    pub fn take_gps_discontinuity(&mut self) -> bool {
+        self.gps_continuity.take_discontinuity()
     }
 
     /// Update once per new GPS fix; repeated telemetry polls are not new evidence.
@@ -373,6 +382,7 @@ pub struct StateEstimator {
     pub ekf: Ekf,
     pub mode_classifier: ModeClassifier,
     position_recovery: sensor_fusion::position_recovery::PositionRecovery,
+    prediction_clock: crate::imu_interval::PredictionClock,
 }
 
 impl StateEstimator {
@@ -381,7 +391,12 @@ impl StateEstimator {
             ekf: Ekf::new(),
             mode_classifier: ModeClassifier::new(),
             position_recovery: Default::default(),
+            prediction_clock: Default::default(),
         }
+    }
+
+    pub fn prediction_interval(&mut self, at_us: u64, correction_pending: bool) -> Option<f32> {
+        self.prediction_clock.advance(at_us, correction_pending)
     }
 
     /// Update EKF prediction with IMU data
@@ -399,10 +414,17 @@ impl StateEstimator {
     }
 
     /// Update EKF with GPS position
-    pub fn update_position(&mut self, x: f32, y: f32, vx: f32, vy: f32, at_us: u64) {
+    pub fn update_position(
+        &mut self,
+        x: f32,
+        y: f32,
+        vx: f32,
+        vy: f32,
+        epoch: sensor_fusion::position_recovery::ReceiverEpoch,
+    ) {
         if self.ekf.update_position(x, y) == sensor_fusion::ekf::UpdateResult::Accepted {
             self.position_recovery.reset();
-        } else if self.position_recovery.observe([x, y], [vx, vy], at_us) {
+        } else if self.position_recovery.observe([x, y], [vx, vy], epoch) {
             self.ekf.reacquire_position(x, y);
             self.ekf.update_position(x, y);
             self.position_recovery.reset();

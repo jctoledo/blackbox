@@ -747,19 +747,30 @@ fn main() {
             unsafe { EKF_RESET_DONE = true };
         }
 
-        // Poll IMU and update EKF prediction (only after GPS warmup AND reset)
-        if let Some((dt, imu_at_us, accel_count)) = sensors.poll_imu() {
+        // Acquisition freshness and prediction elapsed time are distinct clocks.
+        let imu_batch = sensors.poll_imu();
+        if let Some((_, _, accel_count)) = imu_batch {
             // Record all processed Accel packets for accurate rate measurement
             for _ in 0..accel_count {
                 diagnostics.record_imu_packet();
             }
-            // Only run EKF prediction after reset is done
-            let imu_now_ms = (imu_at_us / 1000) as u32;
-            if let Some(evidence) = sensors
-                .motion_evidence(imu_now_ms)
-                .filter(|_| unsafe { EKF_RESET_DONE })
-            {
-                // Near Euler pitch singularity, skip prediction rather than inventing a rate.
+        }
+        // Poll GPS and update EKF correction
+        let gps_updated = sensors.poll_gps(telemetry_state.as_deref(), &diagnostics);
+        if sensors.take_gps_discontinuity() {
+            sensor_fusion.process_gps_epoch(f32::NAN, None, None);
+            estimator.invalidate_position_recovery();
+        }
+        // UART parsing can advance the clock beyond the loop-start timestamp.
+        let gps_now_us = unsafe { esp_idf_svc::sys::esp_timer_get_time() as u64 };
+        let now_ms = (gps_now_us / 1000) as u32;
+        let predict_at_us = gps_now_us;
+        if let Some(dt) = estimator
+            .prediction_interval(predict_at_us, gps_updated)
+            .filter(|_| unsafe { EKF_RESET_DONE })
+        {
+            if let Some(evidence) = sensors.motion_evidence((predict_at_us / 1000) as u32) {
+                // Fresh latest acceleration is a zero-order hold between packets.
                 if let Some(heading_rate) = evidence.rates.heading {
                     let [ax_b, ay_b, az_b] = evidence.linear_body;
                     let (ax_e, ay_e) = body_to_earth(
@@ -773,21 +784,18 @@ fn main() {
                     estimator.predict(ax_e, ay_e, heading_rate, dt);
 
                     // Update yaw from magnetometer
-                    let yaw_mag = sensors.imu_parser.data().yaw.to_radians();
-                    estimator.update_yaw(yaw_mag);
-                } else if unsafe { EKF_RESET_DONE } {
+                    if imu_batch.is_some() {
+                        let yaw_mag = sensors.imu_parser.data().yaw.to_radians();
+                        estimator.update_yaw(yaw_mag);
+                    }
+                } else {
                     estimator.ekf.coast(dt);
                 }
-            } else if unsafe { EKF_RESET_DONE } {
+            } else {
                 estimator.ekf.coast(dt);
             }
         }
 
-        // Poll GPS and update EKF correction
-        let gps_updated = sensors.poll_gps(telemetry_state.as_deref(), &diagnostics);
-        // UART parsing can advance the clock beyond the loop-start timestamp.
-        let gps_now_us = unsafe { esp_idf_svc::sys::esp_timer_get_time() as u64 };
-        let now_ms = (gps_now_us / 1000) as u32;
         pending_lap_flags |= sensors.replay_gps_timing(&mut lap_timer, gps_now_us);
         if gps_updated {
             // Rates count each valid RMC at ingest; estimation remains latest-only.
@@ -855,7 +863,24 @@ fn main() {
                     sensors.gps_parser.get_velocity_enu(),
                 ) {
                     if vx.hypot(vy) < 100.0 {
-                        estimator.update_position(x, y, vx, vy, gps_now_us);
+                        let timing = sensors.gps_parser.rmc_timing();
+                        if let (Some(utc_us), Some(date)) = (timing.utc_us, timing.date_ddmmyy) {
+                            estimator.update_position(
+                                x,
+                                y,
+                                vx,
+                                vy,
+                                sensor_fusion::position_recovery::ReceiverEpoch {
+                                    host_us: gps_now_us,
+                                    utc_us,
+                                    date,
+                                    sequence: timing.sequence,
+                                },
+                            );
+                        } else {
+                            estimator.ekf.update_position(x, y);
+                            estimator.invalidate_position_recovery();
+                        }
                     }
                 }
 

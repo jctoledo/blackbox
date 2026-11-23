@@ -4,8 +4,13 @@
 
 Source inspection identified a separate integration defect after the covariance
 fix: IMU drain intervals at or above 50 ms advanced the acquisition timestamp but
-never advanced estimator motion. Batches now account for one complete elapsed
-interval. Unobserved long intervals coast rather than extrapolating new IMU data.
+never advanced estimator motion. A separate prediction clock now advances before
+GPS correction, including without new IMU arrivals. Unobserved long intervals
+coast rather than extrapolating new IMU data. Review caught and tests cover the
+case where GPS continues correcting during an IMU outage: recovery must not
+integrate the entire outage a second time. Receiver identity/clock continuity and
+an ingestion-latched boundary also prevent invalid-then-valid batches or repeated
+epochs from silently joining the new derivative/recovery evidence.
 Position gating also gains sustained coherent-GPS reacquisition, preserving the
 single-outlier gate without permanently rejecting a returning trajectory.
 

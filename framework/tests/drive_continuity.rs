@@ -2,7 +2,7 @@ use sensor_fusion::fusion::OrientationCorrector;
 use sensor_fusion::{
     ekf::{Ekf, UpdateResult},
     fusion::GpsAcceleration,
-    position_recovery::PositionRecovery,
+    position_recovery::{PositionRecovery, ReceiverEpoch},
 };
 
 #[test]
@@ -45,12 +45,12 @@ fn gated_position_recovers_only_after_sustained_coherent_fixes() {
     ekf.reset_covariance([1.0; 7]);
     // An isolated jump never immediately resets the estimator.
     assert_eq!(ekf.update_position(500.0, 0.0), UpdateResult::Rejected);
-    assert!(!recovery.observe([500.0, 0.0], [10.0, 0.0], 1_000_000));
-    assert!(!recovery.observe([900.0, 0.0], [10.0, 0.0], 1_040_000));
+    assert!(!recovery.observe([500.0, 0.0], [10.0, 0.0], epoch(1_000_000)));
+    assert!(!recovery.observe([900.0, 0.0], [10.0, 0.0], epoch(1_040_000)));
     // A real returning trajectory must establish its own collection.
     for i in 0..=13 {
         let x = 500.0 + i as f32 * 0.4;
-        let ready = recovery.observe([x, 0.0], [10.0, 0.0], 2_000_000 + i * 40_000);
+        let ready = recovery.observe([x, 0.0], [10.0, 0.0], epoch(2_000_000 + i * 40_000));
         assert_eq!(ready, i == 13);
         if ready {
             ekf.reacquire_position(x, 0.0);
@@ -59,9 +59,9 @@ fn gated_position_recovers_only_after_sustained_coherent_fixes() {
     }
     recovery.reset();
     for i in 0..20 {
-        assert!(!recovery.observe([500.0, 0.0], [0.0, 0.0], i * 400_000));
+        assert!(!recovery.observe([500.0, 0.0], [0.0, 0.0], epoch(i * 400_000)));
     }
-    assert!(!recovery.observe([f32::NAN, 0.0], [0.0, 0.0], 10_000_000));
+    assert!(!recovery.observe([f32::NAN, 0.0], [0.0, 0.0], epoch(10_000_000)));
 }
 
 #[test]
@@ -90,4 +90,29 @@ fn orientation_learning_scales_with_time_not_call_count() {
         c.get_pitch_correction_deg()
     }
     assert!((learn(0.01) - learn(0.05)).abs() < 0.01);
+}
+
+fn epoch(us: u64) -> ReceiverEpoch {
+    ReceiverEpoch {
+        host_us: us,
+        utc_us: us,
+        date: 231126,
+        sequence: (us / 40000) as u32 + 1,
+    }
+}
+
+#[test]
+fn receiver_clock_boundaries_cannot_reacquire_position() {
+    for mode in 0..3 {
+        let mut recovery = PositionRecovery::default();
+        for i in 0..50 {
+            let mut e = epoch(1_000_000 + i * 40_000);
+            match mode {
+                0 => e.utc_us = 1_000_000,
+                1 => e.utc_us = 9_000_000 - i * 40_000,
+                _ => e.date += i as u32,
+            }
+            assert!(!recovery.observe([500.0, 0.0], [0.0, 0.0], e));
+        }
+    }
 }

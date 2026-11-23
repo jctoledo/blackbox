@@ -5,12 +5,16 @@ recordings remain private; public regressions use synthetic observations.
 
 ## Plan and acceptance
 
-1. IMU ingestion accounts once for the entire monotonic interval of each drained
-   batch. Short scheduling stalls do not discard elapsed motion; long gaps coast
-   without pretending the latest acceleration was observed throughout the gap.
+1. Prediction accounts once for its entire monotonic interval, separately from
+   acquisition freshness, before applying GPS correction. Short scheduling stalls
+   do not discard elapsed motion; long gaps coast without pretending the latest
+   acceleration was observed throughout the gap. Continuing GPS corrections during
+   an IMU outage must not cause a second integration of the outage on IMU recovery.
 2. Position rejection cannot permanently strand the estimator. Reacquisition
    requires multiple fresh, kinematically consistent receiver positions over time;
-   a single outlier and a clock/stream gap cannot trigger recovery.
+   a single outlier and a clock/stream gap cannot trigger recovery. Increasing
+   receiver epoch/date/sequence evidence is required, not host arrival time alone.
+   Invalid-then-valid fixes in one UART drain must preserve their boundary.
 3. GPS acceleration uses receiver epoch differences, with date/clock discontinuity
    resetting its derivative. Invalid fixes cannot feed orientation learning.
    Orientation learning is bounded per second and confidence reflects residual
