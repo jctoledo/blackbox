@@ -63,16 +63,26 @@ For the dashboard heading, `HeadingAligner` first converts mathematical EKF yaw 
 
 ## Covariance and measurement updates
 
-Only seven diagonal variances are retained. Prediction propagates the diagonal of `F P Fᵀ + Q` for independent position/velocity/bias states:
+The estimator retains two 3×3 covariance blocks, one for each earth-frame
+`[position, velocity, acceleration bias]` axis, plus independent yaw variance.
+Prediction propagates `F P Fᵀ + Q` within each block. Retaining position/velocity/bias
+correlations allows repeated steps to accumulate persistent bias uncertainty over
+elapsed time and lets GPS position/velocity innovations estimate that bias while
+moving. Previously, dropping those correlations understated accumulated uncertainty
+and prevented GPS observations from correcting the bias state.
 
-```
-P_position += P_velocity × dt² + ¼ × (P_bias + q_acc) × dt⁴
-P_velocity += (P_bias + q_acc) × dt²
-P_yaw += q_gyro × dt²
-P_bias += q_bias × dt
-```
+Measurement covariance uses Joseph updates. Stationary position/velocity resets
+clear the corresponding correlations; replacing the diagonal uses `reset_covariance`.
+The noise values remain unchanged: `q_acc`/`q_gyro` describe per-step variance and
+`q_bias` continuous bias-variance growth. The [maths guide](MATHS_AND_RATES.md)
+defines the transition and process-noise integration.
 
-`q_acc` and `q_gyro` describe per-step measurement variance in the current model; `q_bias` is a variance growth rate. They are tuning values, not measured sensor noise spectra. Dropping cross-covariances still underrepresents accumulated correlations, especially over long outages. A full covariance model and measured time/noise calibration remain future work.
+This remains an approximation: yaw uncertainty is not propagated through the
+externally rotated acceleration input, and ENU cross-axis correlations are not
+retained. The unused-by-application legacy scalar-speed API also drops the ENU
+correlations its shared observation would induce. The application uses GPS vector
+velocity instead. These values are not measured noise spectra or calibrated
+coverage probabilities; fully coupled attitude/error modeling remains future work.
 
 Defaults in `framework/src/ekf.rs`: `q_acc=0.40`, `q_gyro=0.005`, `q_bias=0.001`, `r_pos=20 m²`, `r_vel=0.2 (m/s)²`, `r_yaw=0.10 rad²`. Position uses a two-axis normalized residual gate (sum threshold 32); yaw uses a wrapped residual gate (12). Finite velocity updates deliberately remain available for recovery after drift, with receiver validity and a 100 m/s bound checked by the application. This is not a guarantee against all GPS outliers. Nonfinite measurements are rejected before state mutation.
 

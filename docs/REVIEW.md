@@ -1,5 +1,27 @@
 # Engineering review and validation
 
+## EKF persistent-bias covariance follow-up
+
+The diagonal-only predictor discarded the correlations that repeated integration
+creates between position, velocity and earth-frame acceleration bias. It therefore
+understated accumulated persistent-bias uncertainty, and GPS corrections could not
+learn that bias while moving. The estimator now retains a 3×3 block per ENU axis,
+propagates its transition and integrated bias random walk, and uses Joseph updates.
+Stationary resets clear affected correlations. Existing tuning and the separate
+fresh-GPS display and raw-GPS crossing paths are preserved.
+
+Analytic regressions first failed on the previous implementation, then passed with
+the correlated model. An independent dense f64 reference, irregular intervals,
+stationary transitions, turns, outages/recovery and covariance-validity tests check
+numerics. Private receiver-timeline stress tests use explicitly model-derived
+acceleration and injected errors; they do not reproduce the unrecorded raw IMU run.
+No original drive data or private diagnostic series is published.
+
+The model still omits yaw/ENU cross-axis correlations and physical noise/mounting
+calibration. This fixes a demonstrated software defect, not every cause of drift
+or a physical accuracy guarantee. See [the covariance equations](MATHS_AND_RATES.md).
+
+
 ## Drive follow-up: collection decisions and displayed speed
 
 App-native prompt/confirm/alert calls suspended browser collection long enough to
@@ -63,7 +85,7 @@ Primary reference: [u-blox NEO-M9N product summary](https://content.u-blox.com/s
 **Board pin compatibility:** the current IMU UART uses GPIO18/19, which are also native USB D−/D+ on ESP32-C3. Review the actual board/USB bridge and schematic before wiring or flashing; these signals cannot be shared concurrently with the IMU. The schematic in PR #39 identifies an ESP32-S3-WROOM-1-N16R8, not the ESP32-C3 firmware target; it needs a board-specific port and electrical validation. Do not flash the C3 release to that board. The original mounting-calibration proposal in PR #13 had a reproduced software blocker: magnitude-only acceleration detection accepted increasing-speed forward acceleration as braking, producing a 180-degree mounting correction. At the audited proposal revision, unit tests first failed compilation because two atan2 operands had ambiguous float types; correcting only those literals in a temporary lat probe exposed the false calibration. The current replacement workflow is described under Calibration PR revision below; its software checks do not establish physical mounting accuracy.
 
 1. **Timestamp and sample integrity.** GPS crossings use host arrival times, not synchronized receiver epochs/PPS. UART batches can coalesce fixes and IMU samples; IMU diagnostics count packets while prediction consumes the latest sample. Capture arrival timestamps and receiver epochs before claiming higher-rate accuracy. Do not add EKF-based timing solely to increase the displayed decimal precision.
-2. **Estimator covariance and heading.** The diagonal approximation omits position/velocity/bias correlations. Absolute WT901 yaw, mounting orientation, GPS compass course, and ENU mathematical yaw need a controlled heading/turn test. Do not interpret position sigma as a calibrated error bound.
+2. **Estimator covariance and heading.** Per-axis covariance retains position/velocity/bias correlations, but yaw-to-translation and ENU cross-axis coupling remain omitted. Absolute WT901 yaw, mounting orientation, GPS compass course, and ENU mathematical yaw need a controlled heading/turn test. Do not interpret position sigma as a calibrated error bound.
 3. **Filtering and calibration.** The display fusion path operates at telemetry cadence, after high-rate IMU ingestion. Decimation can alias vibration. Mounting-angle gravity compensation and startup bias calibration need level/tilted static tests and acceleration/braking replays. Cruise/tilt/orientation adaptation should be assessed together, not only in isolated tests.
 4. **Storage lifecycle.** IndexedDB lives in a browser origin, is quota-limited, and may be cleared by the browser. Export recordings regularly. A failed batch is retained in memory, so closing that tab before retry/export can lose the unsaved tail.
 5. **Local network trust.** The AP has a documented shared password and device controls are not authenticated individually. Keep it on a trusted local network; this review does not establish an Internet-facing security model.
@@ -166,7 +188,7 @@ New recording sessions allocate their IDs within a serialized IndexedDB transact
 
 ## Maths and documentation review — 2026-11-20
 
-Prediction previously added `0.25*q_acc*dt²` to position variance and omitted velocity/bias propagation. It now uses the diagonal of `F P Fᵀ + Q`: velocity variance times dt² and acceleration/bias variance times dt⁴/4. Cross-correlations are still discarded, so this is not a full covariance filter or calibrated uncertainty. Regression checks use independently calculated expected variances.
+Prediction previously added `0.25*q_acc*dt²` to position variance and omitted velocity/bias propagation. It now uses the diagonal of `F P Fᵀ + Q`: velocity variance times dt² and acceleration/bias variance times dt⁴/4. That earlier diagonal-only step was later superseded by the per-axis correlated model described above; uncertainty remains uncalibrated. Regression checks use independently calculated expected variances.
 
 Cruise correction previously averaged a residual as an absolute bias, yielding a half-offset fixed point. It now accumulates the residual; positive/negative offset convergence is tested. Nonfinite EKF measurements and orientation-learning inputs are rejected before mutation, with recovery tests for subsequent valid data.
 

@@ -16,7 +16,7 @@ Blackbox is an ESP32-C3 GPS/WT901 telemetry instrument. Firmware uses ESP-IDF an
 
 GPS course is clockwise from north; local east/north bearings and timing-line directions use mathematical angles. Convert `π/2 − course` only where required. Track recording already produces mathematical directions. Verify mounting/WT901 yaw semantics with real data rather than assuming automatic calibration.
 
-The estimator integrates earth-frame acceleration and uses diagonal covariance. It does not implement CTRA, full covariance propagation, RTK or calibrated error probabilities. The force-display orientation/blending path is distinct from EKF prediction. Timing uses consecutive valid receiver positions and velocities, interpolated with host receive timestamps; receiver epoch/PPS synchronization is not implemented.
+The estimator integrates earth-frame acceleration and retains per-axis position/velocity/bias covariance with independent yaw. It does not implement CTRA, fully coupled seven-state covariance, RTK or calibrated error probabilities. The force-display orientation/blending path is distinct from EKF prediction. Timing uses consecutive valid receiver positions and velocities, interpolated with host receive timestamps; receiver epoch/PPS synchronization is not implemented.
 
 Speed units depend on the source: binary v4 `speed_kmh` and ordinary browser `row.sp` are km/h; GPS-log `speed_mps` and `rowType:1` browser `row.sp` are m/s. Convert at the adapter; distinguish row types before calculations.
 

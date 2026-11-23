@@ -746,8 +746,10 @@ fn main() {
             estimator.ekf.x[1] = 0.0;
             estimator.ekf.x[3] = 0.0; // vx
             estimator.ekf.x[4] = 0.0; // vy
-            estimator.ekf.p[0] = 100.0;
-            estimator.ekf.p[1] = 100.0;
+            let mut variance = estimator.ekf.p;
+            variance[0] = 100.0;
+            variance[1] = 100.0;
+            estimator.ekf.reset_covariance(variance);
             unsafe { EKF_RESET_DONE = true };
         }
 

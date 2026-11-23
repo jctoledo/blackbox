@@ -57,7 +57,7 @@ The device's timing loop is separate from browser polling. Persistent last/best 
 
 ## Is the estimator a full covariance EKF?
 
-No. It maintains seven state values using a diagonal covariance approximation. Cross-covariances and full Jacobian covariance propagation are not implemented. Position sigma is an internal diagnostic, not a calibrated error bound. GPS and stationary updates constrain drift conditionally; they do not eliminate it.
+It retains position/velocity/bias correlations within each ENU axis and independent yaw variance. It does not retain yaw-to-translation or ENU cross-axis correlations, so it is not a fully coupled seven-state estimator. Position sigma remains an internal diagnostic, not a calibrated error bound. GPS and stationary updates constrain drift conditionally; they do not eliminate it. See the [covariance model](MATHS_AND_RATES.md).
 
 ## Where are recordings stored? Can they be lost?
 

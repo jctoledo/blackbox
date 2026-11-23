@@ -61,15 +61,44 @@ velocity += (acceleration - bias) * dt
 yaw += euler_heading_rate * dt
 ```
 
-The covariance is a **diagonal approximation**, dropping cross-correlations between position, velocity, heading and bias. For one position/velocity axis the implemented prediction includes:
+The covariance retains two 3×3 `[position, velocity, earth bias]` blocks and
+independent yaw. For each ENU axis, prediction uses `P_new = F P Fᵀ + Q` with:
 
 ```
-P_position += P_velocity * dt² + 0.25 * (P_bias + q_acc) * dt⁴
-P_velocity += (P_bias + q_acc) * dt²
-P_bias += q_bias * dt
+F = [ 1  dt  -dt²/2 ]
+    [ 0   1    -dt  ]
+    [ 0   0      1  ]
+G = [dt²/2, dt, 0]ᵀ
+Q_acc = q_acc * G Gᵀ
+Q_bias = q_bias * [ dt⁵/20   dt⁴/8  -dt³/6 ]
+                 [ dt⁴/8    dt³/3  -dt²/2 ]
+                 [-dt³/6   -dt²/2     dt   ]
 ```
 
-Here q_acc is per-step acceleration variance, not a continuous-time white-noise density. This approximation is useful for a small embedded estimator but its uncertainty is not a calibrated probability of physical error. The displayed position sigma also has a heuristic 2.5 m floor. Neither the floor nor the sensor rate is an accuracy guarantee. GPS corrections constrain drift; outages, bias, orientation errors and unmodelled motion still matter.
+`q_acc` is held acceleration-sample variance, not a continuous white-noise density.
+The bias term integrates a continuous random walk through `position'=velocity`
+and `velocity'=acceleration-bias`. Keeping the resulting correlations makes an
+uncertain constant bias contribute velocity variance proportional to total time²,
+not the sum of individual step lengths². GPS position/velocity observations can
+then estimate the bias while moving, instead of changing only their own state.
+Tuning values are unchanged; this corrects the represented model, not its noise
+calibration. Independent dense f64 and analytic regressions check the f32 blocks.
+
+Scalar measurement covariance uses Joseph form
+`P_new = (I-KH) P (I-KH)ᵀ + K R Kᵀ`. Position/velocity stationary resets clear
+correlations involving the reset quantity. Yaw and ENU cross-axis correlations
+are still omitted, including yaw uncertainty in the externally rotated
+acceleration input. The application uses vector GPS velocity; the legacy scalar
+speed API preserves marginal axis blocks but drops induced ENU correlations.
+Position sigma retains its heuristic 2.5 m floor and has no calibrated physical
+coverage probability. Outages, mounting/orientation errors and unmodelled motion
+still matter.
+
+The general covariance recursion follows [Welch and Bishop, TR 95-041](https://www.cs.utexas.edu/~pstone/Courses/393Rfall11/readings/Welch%2BBishop-TR-95.pdf).
+The Joseph update is given in [Zanetti and D’Souza, NASA, equation 5](https://ntrs.nasa.gov/api/citations/20120010515/downloads/20120010515.pdf).
+The specific transition/noise blocks above are derived for Blackbox's stated
+model; those references do not validate this device or its tuning.
+
 
 ## G-meter and peaks
 

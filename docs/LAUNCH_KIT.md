@@ -28,7 +28,7 @@ Before posting: attach your actual hardware photo and a short real dashboard cli
 
 Blackbox combines ESP-IDF/Rust firmware, u-blox GPS and a WT901 IMU with a device-served phone dashboard. The interesting engineering pieces are direction-aware finite-line crossings, explicit freshness checks, receiver/host timestamp evidence, position-matched reference pace and transactional browser-local recordings.
 
-The estimator currently uses a diagonal covariance approximation. Interpolated millisecond outputs are numerical resolution; measured physical timing accuracy is still an open validation task. Both supported GPS builds and regression checks run on a dedicated self-hosted runner.
+The estimator retains per-axis position/velocity/bias covariance with independent yaw; it is not a fully coupled seven-state estimator. Interpolated millisecond outputs are numerical resolution; measured physical timing accuracy is still an open validation task. Both supported GPS builds and regression checks run on a dedicated self-hosted runner.
 
 Repository: https://github.com/jctoledo/blackbox
 

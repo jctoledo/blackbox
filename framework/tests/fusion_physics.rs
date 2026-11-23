@@ -58,15 +58,20 @@ fn orientation_feedback_removes_persistent_pitch_and_roll_error() {
 }
 
 #[test]
-fn diagonal_prediction_propagates_velocity_and_bias_variance_with_correct_units() {
+fn prediction_propagates_velocity_bias_and_bias_walk_with_correct_units() {
     let mut ekf = Ekf::new();
     ekf.p = [1.0, 2.0, 0.1, 4.0, 9.0, 0.2, 0.3];
     ekf.predict(0.0, 0.0, 0.0, 0.5);
-    // Independent analytic F P F^T diagonal for x += vx*dt - bax*dt²/2.
-    assert!((ekf.p[0] - (1.0 + 4.0 * 0.25 + 0.25 * 0.6 * 0.0625)).abs() < 1e-6);
-    assert!((ekf.p[1] - (2.0 + 9.0 * 0.25 + 0.25 * 0.7 * 0.0625)).abs() < 1e-6);
-    assert!((ekf.p[3] - 4.15).abs() < 1e-6);
-    assert!((ekf.p[4] - 9.175).abs() < 1e-6);
+    // Independent analytic F P F^T + Q for x += vx*dt - bax*dt²/2.
+    // Q includes the continuous bias random walk integrated through position/velocity.
+    assert!(
+        (ekf.p[0] - (1.0 + 4.0 * 0.25 + 0.25 * 0.6 * 0.0625 + 0.001 * 0.03125 / 20.0)).abs() < 1e-6
+    );
+    assert!(
+        (ekf.p[1] - (2.0 + 9.0 * 0.25 + 0.25 * 0.7 * 0.0625 + 0.001 * 0.03125 / 20.0)).abs() < 1e-6
+    );
+    assert!((ekf.p[3] - (4.15 + 0.001 * 0.125 / 3.0)).abs() < 1e-6);
+    assert!((ekf.p[4] - (9.175 + 0.001 * 0.125 / 3.0)).abs() < 1e-6);
 }
 
 #[test]
