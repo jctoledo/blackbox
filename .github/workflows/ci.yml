@@ -27,7 +27,7 @@ jobs:
     env:
       CARGO_BUILD_JOBS: '4'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
           ref: ${{ github.sha }}
@@ -38,7 +38,7 @@ jobs:
           PR_NUMBER: ${{ inputs.pr_number }}
           REVIEWED_SHA: ${{ inputs.checkout_sha }}
         run: python3 scripts/reviewed_pr_ci.py guard
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         if: inputs.checkout_sha != ''
         with:
           ref: ${{ inputs.checkout_sha }}
