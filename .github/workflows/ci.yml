@@ -99,7 +99,7 @@ jobs:
         id: protocol_download_1
         continue-on-error: true
         timeout-minutes: 2
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: protocol-fixture
           github-token: ${{ github.token }}
@@ -112,7 +112,7 @@ jobs:
         if: steps.protocol_download_1.outcome == 'failure'
         continue-on-error: true
         timeout-minutes: 2
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: protocol-fixture
           github-token: ${{ github.token }}
@@ -123,7 +123,7 @@ jobs:
       - name: Download protocol artifact (attempt 3 of 3)
         if: steps.protocol_download_2.outcome == 'failure'
         timeout-minutes: 2
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: protocol-fixture
           github-token: ${{ github.token }}
