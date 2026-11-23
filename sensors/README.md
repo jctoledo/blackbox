@@ -16,7 +16,7 @@ ESP32-C3 based vehicle telemetry system with WT901 IMU and a supported NEO-6M/NE
 - WS2812 RGB LED
 
 **Features:**
-- Local sensor fusion (diagonal covariance approximation)
+- Local sensor fusion (per-axis position/velocity/bias covariance, independent yaw)
 - HTTP/UDP binary v4 telemetry (33 ms configured target interval)
 - MQTT status messages
 - Driving mode detection (IDLE, ACCEL, BRAKE, CORNER, ACCEL+CORNER, BRAKE+CORNER)

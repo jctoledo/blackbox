@@ -19,6 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Obsolete documentation files (RELEASE.md, IMPLEMENTATION_SUMMARY.md, release-notes.md)
 
+## [0.0.4-rc.19] - 2026-11-22
+
+### Fixed
+- Retain per-axis EKF position/velocity/earth-bias covariance so repeated predictions propagate persistent bias uncertainty and fresh receiver observations can learn that bias while moving. Keep existing tuning, independent yaw and the rc.18 GPS-first display policy.
+- Use Joseph measurement covariance updates, integrate continuous bias-walk noise through motion, and clear correlations consistently during stationary resets, and restore the initial motion uncertainty when warmup clears position/velocity. Raw-GPS lap timing and recording protocols are unchanged.
+
 ## [0.0.4-rc.18] - 2026-11-22
 
 ### Fixed

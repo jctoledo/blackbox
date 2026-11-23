@@ -11,7 +11,7 @@ Build a local GPS + inertial instrument for circuit/stage timing, reference pace
 - **Recording:** browser-local sessions, CSV exports, and validated JSON backup/restore as copies. Keep an external backup; recordings are not autonomously logged to device flash.
 - **Ownership:** MIT-licensed source, a local Wi-Fi dashboard, and no project subscription or cloud account requirement.
 
-The current estimator uses a diagonal covariance approximation. The project publishes regression evidence and configuration targets; physical accuracy, latency, and durability need measured acceptance results. See the [sourced capability comparison](../../docs/COMPARISON.md).
+The current estimator retains per-axis position/velocity/bias covariance with independent yaw. Yaw-to-translation and ENU cross-axis correlations remain omitted. The project publishes regression evidence and configuration targets; physical accuracy, latency, and durability need measured acceptance results. See the [sourced capability comparison](../../docs/COMPARISON.md).
 
 ## Hardware and installation
 

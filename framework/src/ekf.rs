@@ -4,10 +4,20 @@
 /// Features:
 /// - Earth-frame acceleration integration (including measured centripetal acceleration)
 /// - Innovation gating to reject outlier measurements (prevents position explosion)
-/// - Diagonal covariance approximation for embedded efficiency
+/// - Per-axis position/velocity/bias covariance; independent yaw and ENU axes
 use core::f32::consts::PI;
 
+mod axis;
+use axis::Covariance;
+const AXES: [[usize; 3]; 2] = [[0, 3, 5], [1, 4, 6]];
+
+struct AxisUpdate {
+    state: [f32; 3],
+    covariance: Covariance,
+}
+
 const N: usize = 7; // State dimension
+const INITIAL_VARIANCE: [f32; N] = [100.0, 100.0, 100.0, 100.0, 100.0, 1.0, 1.0];
 
 /// Chi-squared thresholds for innovation gating (1 DOF)
 /// These values determine how many standard deviations a measurement can be
@@ -67,8 +77,11 @@ pub struct Ekf {
     /// State: [x, y, ψ, vx, vy, bax, bay]
     pub x: [f32; N],
 
-    /// Covariance matrix (diagonal approximation for efficiency)
+    /// Covariance diagonal. Use reset_covariance when replacing it after prediction
+    /// so the retained off-diagonal terms are reset consistently as well.
     pub p: [f32; N],
+    /// Per-axis [P_position_velocity, P_position_bias, P_velocity_bias].
+    axis_cross: [[f32; 3]; 2],
 
     /// Filter configuration
     pub config: EkfConfig,
@@ -108,8 +121,9 @@ impl Ekf {
     pub fn with_config(config: EkfConfig) -> Self {
         Self {
             x: [0.0; N],
-            p: [100.0, 100.0, 100.0, 100.0, 100.0, 1.0, 1.0],
+            p: INITIAL_VARIANCE,
             config,
+            axis_cross: [[0.0; 3]; 2],
             rejected_position: 0,
             rejected_velocity: 0,
             rejected_yaw: 0,
@@ -126,6 +140,87 @@ impl Ekf {
             last_moving_yaw: 0.0,
             has_last_moving_yaw: false,
         }
+    }
+
+    fn axis_covariance(&self, axis: usize) -> Covariance {
+        let [position, velocity, bias] = AXES[axis];
+        let [pv, pb, vb] = self.axis_cross[axis];
+        [
+            [self.p[position], pv, pb],
+            [pv, self.p[velocity], vb],
+            [pb, vb, self.p[bias]],
+        ]
+    }
+
+    fn set_axis_covariance(&mut self, axis: usize, covariance: Covariance) {
+        for (i, state) in AXES[axis].iter().enumerate() {
+            self.p[*state] = covariance[i][i];
+        }
+        self.axis_cross[axis] = [covariance[0][1], covariance[0][2], covariance[1][2]];
+    }
+
+    fn axis_update(
+        &self,
+        axis: usize,
+        h: [f32; 3],
+        residual: f32,
+        noise: f32,
+    ) -> Option<AxisUpdate> {
+        if !residual.is_finite() {
+            return None;
+        }
+        let (covariance, gain) = axis::observe(self.axis_covariance(axis), h, noise)?;
+        let state = core::array::from_fn(|i| self.x[AXES[axis][i]] + gain[i] * residual);
+        state
+            .iter()
+            .all(|v| v.is_finite())
+            .then_some(AxisUpdate { state, covariance })
+    }
+
+    fn apply_axis_update(&mut self, axis: usize, update: AxisUpdate) {
+        for (i, index) in AXES[axis].iter().enumerate() {
+            self.x[*index] = update.state[i];
+        }
+        self.set_axis_covariance(axis, update.covariance);
+    }
+
+    /// Inspect the represented covariance. ENU axes and yaw are independent;
+    /// off-axis correlations are not modeled, including after legacy scalar speed.
+    pub fn covariance(&self) -> [[f32; N]; N] {
+        let mut p = [[0.0; N]; N];
+        p[2][2] = self.p[2];
+        for (axis, indices) in AXES.iter().enumerate() {
+            let block = self.axis_covariance(axis);
+            for i in 0..3 {
+                for j in 0..3 {
+                    p[indices[i]][indices[j]] = block[i][j];
+                }
+            }
+        }
+        p
+    }
+
+    /// Replace the diagonal with independent variances and clear all correlations.
+    pub fn reset_covariance(&mut self, diagonal: [f32; N]) -> bool {
+        if diagonal.iter().any(|v| !v.is_finite() || *v < 0.0) {
+            return false;
+        }
+        self.p = diagonal;
+        self.axis_cross = [[0.0; 3]; 2];
+        true
+    }
+
+    /// Establish the warmup origin with an independent, broad motion prior.
+    /// A discarded velocity mean must not retain confidence from an earlier fix.
+    /// Keep the yaw/bias estimates and their marginal variances unchanged.
+    pub fn reset_motion_origin(&mut self) {
+        for [position, velocity, _] in AXES {
+            for index in [position, velocity] {
+                self.x[index] = 0.0;
+                self.p[index] = INITIAL_VARIANCE[index];
+            }
+        }
+        self.axis_cross = [[0.0; 3]; 2];
     }
 
     /// Get innovation gating statistics (accepted, rejected) for position
@@ -302,6 +397,10 @@ impl Ekf {
         // Use inflated measurement noise
         let r_yaw = self.config.r_yaw * r_yaw_factor;
         let s = self.p[2] + r_yaw;
+        if !s.is_finite() || s <= 0.0 || r_yaw < 0.0 {
+            self.rejected_yaw += 1;
+            return UpdateResult::Rejected;
+        }
 
         // Mahalanobis distance squared (1 DOF)
         let mahal_sq = (dy * dy) / s;
@@ -316,7 +415,7 @@ impl Ekf {
         let k = self.p[2] / s;
         self.x[2] += k * dy;
         self.x[2] = wrap_angle(self.x[2]);
-        self.p[2] *= 1.0 - k;
+        self.p[2] = (1.0 - k).powi(2) * self.p[2] + k * k * r_yaw;
 
         self.accepted_yaw += 1;
         UpdateResult::Accepted
@@ -335,6 +434,9 @@ impl Ekf {
             || !ax_earth.is_finite()
             || !ay_earth.is_finite()
             || !wz.is_finite()
+            || [self.config.q_acc, self.config.q_gyro, self.config.q_bias]
+                .iter()
+                .any(|v| !v.is_finite() || *v < 0.0)
         {
             return;
         }
@@ -370,18 +472,18 @@ impl Ekf {
         self.x[4] = vy;
         // Biases remain constant (self.x[5] and self.x[6] unchanged)
 
-        // Propagate the diagonal of F P Fᵀ + Q. Off-diagonal correlations
-        // are discarded: these variances remain approximate diagnostics.
-        // q_acc is per-step acceleration variance; position scales with dt^4.
-        let dt2 = dt * dt;
-        let dt4 = dt2 * dt2;
-        self.p[0] += self.p[3] * dt2 + 0.25 * (self.p[5] + self.config.q_acc) * dt4;
-        self.p[1] += self.p[4] * dt2 + 0.25 * (self.p[6] + self.config.q_acc) * dt4;
-        self.p[2] += self.config.q_gyro * dt2;
-        self.p[3] += (self.p[5] + self.config.q_acc) * dt2;
-        self.p[4] += (self.p[6] + self.config.q_acc) * dt2;
-        self.p[5] += self.config.q_bias * dt;
-        self.p[6] += self.config.q_bias * dt;
+        // Bias uncertainty is persistent across steps, not independent per sample.
+        // Retaining its correlations also permits GPS innovations to estimate bias.
+        for axis in 0..2 {
+            let covariance = axis::predict(
+                self.axis_covariance(axis),
+                dt,
+                self.config.q_acc,
+                self.config.q_bias,
+            );
+            self.set_axis_covariance(axis, covariance);
+        }
+        self.p[2] += self.config.q_gyro * dt * dt;
     }
 
     /// Update with GPS position measurement
@@ -399,12 +501,16 @@ impl Ekf {
         let y_x = z_x - self.x[0];
         let y_y = z_y - self.x[1];
 
-        // Innovation covariances (diagonal)
+        // ENU position axes remain independent in the represented model.
         let s_x = self.p[0] + self.config.r_pos;
         let s_y = self.p[1] + self.config.r_pos;
+        if !s_x.is_finite() || !s_y.is_finite() || s_x <= 0.0 || s_y <= 0.0 {
+            self.rejected_position += 1;
+            return UpdateResult::Rejected;
+        }
 
         // Mahalanobis distance squared (sum for 2D position)
-        // For diagonal covariance: d² = y_x²/s_x + y_y²/s_y
+        // Position cross-axis covariance is zero: d² = y_x²/s_x + y_y²/s_y
         let mahal_sq = (y_x * y_x) / s_x + (y_y * y_y) / s_y;
 
         // Chi-squared gate: reject if measurement is too far from prediction
@@ -415,6 +521,14 @@ impl Ekf {
             return UpdateResult::Rejected;
         }
 
+        let updates = (
+            self.axis_update(0, [1.0, 0.0, 0.0], y_x, self.config.r_pos),
+            self.axis_update(1, [1.0, 0.0, 0.0], y_y, self.config.r_pos),
+        );
+        let (Some(east), Some(north)) = updates else {
+            self.rejected_position += 1;
+            return UpdateResult::Rejected;
+        };
         // Issue 3: Track normalized innovation squared (NIS) for uncertainty estimation
         // The 2D sum should average ~2.0 for a consistent untruncated model.
         // Accepted-only statistics are biased by gating.
@@ -427,14 +541,8 @@ impl Ekf {
         self.last_gps_y = z_y;
         self.has_last_gps = true;
 
-        // Measurement passed gating - apply standard Kalman update
-        let k_x = self.p[0] / s_x;
-        self.x[0] += k_x * y_x;
-        self.p[0] *= 1.0 - k_x;
-
-        let k_y = self.p[1] / s_y;
-        self.x[1] += k_y * y_y;
-        self.p[1] *= 1.0 - k_y;
+        self.apply_axis_update(0, east);
+        self.apply_axis_update(1, north);
 
         self.accepted_position += 1;
         UpdateResult::Accepted
@@ -454,25 +562,24 @@ impl Ekf {
             self.rejected_velocity += 1;
             return;
         }
-        // VX update
-        let s_x = self.p[3] + self.config.r_vel;
-        let k_x = self.p[3] / s_x;
-        self.x[3] += k_x * (z_vx - self.x[3]);
-        self.p[3] *= 1.0 - k_x;
-
-        // VY update
-        let s_y = self.p[4] + self.config.r_vel;
-        let k_y = self.p[4] / s_y;
-        self.x[4] += k_y * (z_vy - self.x[4]);
-        self.p[4] *= 1.0 - k_y;
+        let updates = (
+            self.axis_update(0, [0.0, 1.0, 0.0], z_vx - self.x[3], self.config.r_vel),
+            self.axis_update(1, [0.0, 1.0, 0.0], z_vy - self.x[4], self.config.r_vel),
+        );
+        let (Some(east), Some(north)) = updates else {
+            self.rejected_velocity += 1;
+            return;
+        };
+        self.apply_axis_update(0, east);
+        self.apply_axis_update(1, north);
 
         self.accepted_velocity += 1;
     }
 
     /// Update with scalar speed measurement
     ///
-    /// GPS speed is always accepted (no innovation gating) for the same reason
-    /// as velocity: gating caused runaway filter divergence.
+    /// Legacy scalar observation without innovation gating. Application GPS
+    /// ingestion uses vector velocity; this method omits induced ENU cross-correlation.
     pub fn update_speed(&mut self, z_speed: f32) {
         if !z_speed.is_finite() || z_speed < 0.0 {
             return;
@@ -491,15 +598,19 @@ impl Ekf {
         // Innovation
         let y = z_speed - v_est;
 
-        // Kalman gains
-        let k_x = self.p[3] * h_x / s;
-        let k_y = self.p[4] * h_y / s;
-
-        // Update
-        self.x[3] += k_x * y;
-        self.x[4] += k_y * y;
-        self.p[3] -= k_x * h_x * self.p[3];
-        self.p[4] -= k_y * h_y * self.p[4];
+        // Retain each axis's marginal block; the scalar API still omits cross-axis
+        // correlations. Application GPS ingestion uses vector velocity instead.
+        if !s.is_finite() || s <= 0.0 {
+            return;
+        }
+        let updates = (
+            self.axis_update(0, [0.0, h_x, 0.0], y, r_spd + h_y * h_y * self.p[4]),
+            self.axis_update(1, [0.0, h_y, 0.0], y, r_spd + h_x * h_x * self.p[3]),
+        );
+        if let (Some(east), Some(north)) = updates {
+            self.apply_axis_update(0, east);
+            self.apply_axis_update(1, north);
+        }
     }
 
     /// Update with IMU yaw measurement (from magnetometer)
@@ -518,6 +629,10 @@ impl Ekf {
 
         // Innovation covariance
         let s = self.p[2] + self.config.r_yaw;
+        if !s.is_finite() || s <= 0.0 || self.config.r_yaw < 0.0 {
+            self.rejected_yaw += 1;
+            return UpdateResult::Rejected;
+        }
 
         // Mahalanobis distance squared (1 DOF)
         let mahal_sq = (dy * dy) / s;
@@ -532,7 +647,7 @@ impl Ekf {
         let k = self.p[2] / s;
         self.x[2] += k * dy;
         self.x[2] = wrap_angle(self.x[2]);
-        self.p[2] *= 1.0 - k;
+        self.p[2] = (1.0 - k).powi(2) * self.p[2] + k * k * self.config.r_yaw;
 
         self.accepted_yaw += 1;
         UpdateResult::Accepted
@@ -545,56 +660,44 @@ impl Ekf {
         }
         const R_BIAS: f32 = 0.05 * 0.05; // (0.05 m/s²)²
 
-        // BAX update
-        let s_x = self.p[5] + R_BIAS;
-        let k_x = self.p[5] / s_x;
-        self.x[5] += k_x * (z_ax - self.x[5]);
-        self.p[5] *= 1.0 - k_x;
-
-        // BAY update
-        let s_y = self.p[6] + R_BIAS;
-        let k_y = self.p[6] / s_y;
-        self.x[6] += k_y * (z_ay - self.x[6]);
-        self.p[6] *= 1.0 - k_y;
+        let updates = (
+            self.axis_update(0, [0.0, 0.0, 1.0], z_ax - self.x[5], R_BIAS),
+            self.axis_update(1, [0.0, 0.0, 1.0], z_ay - self.x[6], R_BIAS),
+        );
+        if let (Some(east), Some(north)) = updates {
+            self.apply_axis_update(0, east);
+            self.apply_axis_update(1, north);
+        }
     }
 
-    /// Zero-velocity update (ZUPT) - force velocity to zero
-    ///
-    /// ZUPT bypasses innovation gating because we have high confidence
-    /// the vehicle is stationary (verified by multiple sensors).
-    /// If the EKF has drifted, ZUPT is the mechanism to recover.
-    ///
-    /// Note: We use moderate covariance (2.0) rather than tiny values (0.01)
-    /// because when the vehicle starts moving again, we need to accept GPS
-    /// velocity updates. With P=0.01 and R=0.2, a 5 m/s GPS velocity would
-    /// have Mahalanobis² = 25/0.21 ≈ 119, which exceeds the gate threshold
-    /// of 18 and gets rejected. P=2.0 allows velocities up to ~6 m/s (22 km/h)
-    /// to be accepted on the first update after stopping.
+    /// Stationary reset, with stationarity verified by the application.
+    /// Zero velocity, retain the existing variance preset, and clear correlations
+    /// involving the reset velocity. This does not introduce a velocity gate.
     pub fn zupt(&mut self) {
         // Force velocity to zero without gating
         // This is intentional - ZUPT is a recovery mechanism
         self.x[3] = 0.0;
         self.x[4] = 0.0;
 
-        // Use moderate covariance to allow subsequent GPS updates to be accepted
-        // P=2.0 gives s=2.2, allowing v² < 18*2.2 = 39.6, so v < 6.3 m/s (23 km/h)
+        // Retain the stationary variance preset and reset velocity correlations.
         self.p[3] = 2.0;
         self.p[4] = 2.0;
+        for cross in &mut self.axis_cross {
+            cross[0] = 0.0;
+            cross[2] = 0.0;
+        }
     }
 
-    /// Lock position when stationary - reduces position uncertainty to make EKF
-    /// resistant to GPS noise. This prevents phantom movement while parked.
-    ///
-    /// We use moderate covariance (1.0) rather than tiny values (0.01) because
-    /// when the car starts moving again, we need to accept GPS position updates.
-    /// With P=0.01 and R=20, K=0.0005 means a 10m error takes ~8 seconds to correct.
-    /// With P=1.0 and R=20, K=0.048 means a 10m error corrects in ~0.8 seconds.
-    ///
-    /// GPS noise (±2-3m) with P=1.0 causes ~0.1-0.15m position drift per update,
-    /// which is acceptable for a parked vehicle.
+    /// Reduce position variance using the existing stationary preset. Clear its
+    /// correlations so the reset remains a consistent independent position prior.
+    /// This internal preset is not a physical position-accuracy guarantee.
     pub fn lock_position(&mut self) {
         self.p[0] = 1.0;
         self.p[1] = 1.0;
+        for cross in &mut self.axis_cross {
+            cross[0] = 0.0;
+            cross[1] = 0.0;
+        }
     }
 
     /// Skip IMU prediction (use when stationary to prevent drift)
@@ -711,8 +814,10 @@ mod tests {
         // The key insight: covariance growth allows larger innovations
         // With very high uncertainty, even extreme measurements get accepted
         // Let's verify by setting high uncertainty manually
-        ekf.p[0] = 10000.0; // Very uncertain
-        ekf.p[1] = 10000.0;
+        let mut variance = ekf.p;
+        variance[0] = 10000.0;
+        variance[1] = 10000.0;
+        assert!(ekf.reset_covariance(variance));
         let result2 = ekf.update_position(100.0, 100.0);
         assert_eq!(
             result2,

@@ -38,7 +38,7 @@ A shallow crossing angle reduces normal velocity. A start line should span the i
 
 Smoothing may make a map or G-meter easier to read while hiding disagreement with physical motion. Blackbox's synthetic demo is designed to exercise UI and evidence paths. Its repeatable lap and interval values establish behavior for those inputs only.
 
-Likewise, the estimator's diagonal covariance is an internal model quantity, not a calibrated probability that a real car lies within a displayed distance. Blackbox does not implement RTK or full covariance propagation. Compare commercial systems using their documented capabilities and the same independent reference, rather than comparing decimal places. [Build or buy comparison](COMPARISON.md).
+Likewise, the estimator's per-axis covariance is an internal model quantity, not a calibrated probability that a real car lies within a displayed distance. Blackbox does not implement RTK or fully coupled seven-state covariance. Compare commercial systems using their documented capabilities and the same independent reference, rather than comparing decimal places. [Build or buy comparison](COMPARISON.md).
 
 ## Two different timing jobs
 

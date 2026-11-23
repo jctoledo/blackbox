@@ -66,7 +66,7 @@ new velocity = velocity + corrected acceleration × dt
 new heading  = heading  + yaw rate × dt
 ```
 
-GPS observations then correct the predicted state. The implementation uses a diagonal covariance approximation: it tracks individual state variances but drops their cross-correlations. Diagnostic uncertainty is useful for inspecting behaviour; it is not a calibrated physical accuracy certificate. The [maths guide](MATHS_AND_RATES.md) covers propagation, units and the approximation, and the [sensor-fusion guide](SENSOR_FUSION.md) describes the implementation.
+GPS observations then correct the predicted state. The implementation retains per-axis position/velocity/bias covariance, with independent yaw. This lets receiver corrections estimate earth-frame acceleration bias while moving. Yaw-to-translation and ENU cross-axis correlations remain omitted. Diagnostic uncertainty is useful for inspecting behaviour; it is not a calibrated physical accuracy certificate. The [maths guide](MATHS_AND_RATES.md) covers propagation, units and the approximation, and the [sensor-fusion guide](SENSOR_FUSION.md) describes the implementation.
 
 ## What the G-meter is showing
 
