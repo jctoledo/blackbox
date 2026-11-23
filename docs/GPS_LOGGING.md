@@ -12,6 +12,12 @@ The device retains **64 events in RAM**: about 2.56 seconds at 25 Hz or 12.8 sec
 
 A longer disconnect can overwrite the RAM window. The first recovered row counts missing sequence numbers in `missing_before`. Device restarts begin a new segment; the first row's missing history is unknown, not zero. The initial fetch may include up to 64 events from before you pressed Record. Compare device timestamps to Session CSV to select the recording interval. Each boot uses a random 32-bit identifier, a practical restart discriminator rather than a globally unique ID.
 
+The updated dashboard uses nonblocking confirmations, track naming and notices.
+GPS polling continues while a name or decision is pending. Park before editing;
+leaving a dialog open does not stop recording or timing. This removes app-dialog
+pauses, but cannot prevent phone suspension, network loss or every scheduling gap.
+The bounded device window and explicit missing-event markers still apply.
+
 ## Recording context
 
 In **v0.0.4-rc.11 and later**, the dashboard requests one device metadata snapshot when a new recording starts. Recording begins immediately while context is **pending**; valid details become **captured**, and an old endpoint, timeout or invalid response becomes **unavailable** without stopping collection. In **Saved data**, expand **Recording details** and choose **Download details JSON** to save a companion to Session/GPS CSV. This browser capture/export is not available in rc.10.
@@ -33,7 +39,7 @@ Keep manual phone/OS/browser, antenna, mounting and reception notes, plus the fl
 | `receiver_date_ddmmyy` | The receiver's two-digit-year date as a numeric code. Pad to six digits when displaying it. No century/Unix-epoch inference is made. |
 | `utc_fractional_digits` | Number of decimal digits supplied by the receiver. Finer than microsecond fractions are truncated. More digits do not mean greater accuracy. |
 | `rmc_active`, `fix_accepted` | Receiver status A and parser acceptance after coordinate/speed validation and warmup, respectively. Neither proves absolute accuracy or a lap crossing. |
-| `gps_lat`, `gps_lon`, `speed_mps`, `course_rad` | Accepted RMC position, speed in metres/second and course clockwise from north. Blank for unaccepted fixes. These are not the filtered dashboard values. |
+| `gps_lat`, `gps_lon`, `speed_mps`, `course_rad` | Accepted RMC position, speed in metres/second and course clockwise from north. Blank for unaccepted fixes. Ordinary telemetry has its own units and sampling cadence; older firmware preferred EKF speed, while the updated source prefers fresh GPS velocity. |
 | `missing_before` | Missing parsed events since the preceding saved event in the same boot; blank at an initial/restart boundary. Does not count receiver output or UART bytes lost before parsing. |
 | `boundary` | 0: continuation, 1: initial capture, 2: changed boot. |
 | `synthetic` | 0: device logger; 1: synthetic website demo. Never mix demo rows with driving evidence. |

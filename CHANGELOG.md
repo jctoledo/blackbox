@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Prefer fresh, valid GPS velocity for dashboard speed and the force pipeline's speed input, including a valid stationary zero. Keep a bounded EKF fallback and existing browser stale-data suppression; retain the raw-GPS crossing path.
+- Replace blocking browser dialogs with asynchronous, keyboard-accessible confirmations and track naming, plus dismissible notices. Keep collection running while waiting, guard capture/timing ownership across decisions, and prevent a delayed stop from clearing a replacement timing session.
+
 ### Added
 - Homepage introduces the real-drive replay beside the main calls to action and before dashboard screenshots, with plain-language playback guidance and a no-hardware FAQ link.
 - Public real-drive replay with synchronized lap positions, playback, lap selection and GPS speed traces from an rc.17 M9N recording. Published geometry uses relative metres; raw location exports stay private. This is an export analysis, not a dashboard feature or an independent timing-accuracy test.

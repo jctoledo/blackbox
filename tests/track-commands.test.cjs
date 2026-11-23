@@ -9,7 +9,7 @@ function fixture(){
   trackAutoDetector:{beginTrackChange(){changes++},endTrackChange(){changes--}},
   requestDevice(url){const pending=deferred();requests.push({url,...pending});return pending.promise},
   getTrack:async id=>stored.get(id),
-  getRefLap(id){const pending=deferred();lookups.push({id,...pending});return pending.promise},alert:message=>alerts.push(message),startNewSession(){},clearSession(){},fmtLapTime:String,updateDeltaBar(){},
+  getRefLap(id){const pending=deferred();lookups.push({id,...pending});return pending.promise},notifyUser:message=>alerts.push(message),startNewSession(){},clearSession(){},fmtLapTime:String,updateDeltaBar(){},
   trackDb:{},IDBKeyRange:{only:id=>id},commitTrackWrite(names,write){write({objectStore:name=>({delete(id){deletions.push([name,id]);if(name==='tracks')stored.delete(id)},clear(){deletions.push([name,'*']);if(name==='tracks')stored.clear()},index(){return{openCursor:()=>({result:null})}}})});return Promise.resolve()},
   updateActiveTrackDisplay(){published.push({id:c.activeTrack?.id??null,ref:c.referenceLap?.id??null,revision:c.expectedLapRevision})},
   $:id=>{if(!elements.has(id)){const values=new Set();elements.set(id,{textContent:'Original label',hidden:false,classList:{add(...keys){keys.forEach(k=>values.add(k))},remove(...keys){keys.forEach(k=>values.delete(k))},toggle(key,on){if(on===undefined)on=!values.has(key);on?values.add(key):values.delete(key);return on}}})}return elements.get(id)}};
@@ -27,6 +27,13 @@ test('rapid track choices serialize configuration and publish matching reference
  f.ack(1,11);await settle();f.lookups[1].resolve({id:'ref-B',lapTimeMs:2000});await b;
  assert.equal(f.c.activeTrack.id,'B');assert.equal(f.c.referenceLap.id,'ref-B');assert.equal(f.elements.get('lap-track-name').textContent,'Track B');assert.equal(f.c.expectedLapRevision,11);assert.equal(f.changes(),0);
  assert.deepEqual(f.published.map(p=>[p.id,p.ref,p.revision]),[['A','ref-A',10],['B','ref-B',11]]);
+});
+
+test('a stop queued behind a replacement selection rechecks its confirmation owner',async()=>{
+ const f=fixture(),previous=f.c.activeTrack,arm=f.c.activateSavedTrack('B');await settle();
+ const stop=f.c.deactivateTrack(()=>f.c.activeTrack===previous);
+ f.ack(0,10);await settle();f.lookups[0].resolve(null);await arm;
+ assert.equal(await stop,false);assert.equal(f.requests.length,1);assert.equal(f.c.activeTrack.id,'B');
 });
 test('Stop queued during reference lookup cannot be revived by older activation',async()=>{
  const f=fixture(),a=f.c.activateTrack(track('A'));await settle();f.ack(0,10);await settle();const stop=f.c.deactivateTrack();await settle();assert.equal(f.requests.length,1);
