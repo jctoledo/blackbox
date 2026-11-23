@@ -34,7 +34,7 @@ These are concrete capabilities and configuration targets. Measured timing accur
 
 ### Project status
 
-Active development. Automated physics, crossing replay, protocol, and browser regressions cover known failures; they do not establish real-world timing accuracy. The published firmware release can lag `main`. Read the release notes and choose the GPS model/rate that matches your hardware. The current estimator uses a diagonal covariance approximation; it is not a navigation-grade full covariance EKF.
+Active development. Automated physics, crossing replay, protocol, and browser regressions cover known failures; they do not establish real-world timing accuracy. The published firmware release can lag `main`. Read the release notes and choose the GPS model/rate that matches your hardware. The current estimator retains per-axis position/velocity/bias covariance with independent yaw; it is not a fully coupled or navigation-grade estimator.
 
 ## Quick Start
 
@@ -410,7 +410,7 @@ The system combines configured IMU output (up to 200 Hz) with GPS fixes (typical
 2. **Correct** — each new valid GPS fix updates position and velocity once
 3. **ZUPT** — When stopped, velocity forced to zero, biases learned
 
-**7-state estimator with diagonal covariance:** Position (x,y), heading, velocity (vx,vy), accelerometer biases (bax,bay)
+**7-state estimator with per-axis position/velocity/bias covariance and independent yaw:** Position (x,y), heading, velocity (vx,vy), accelerometer biases (bax,bay)
 
 ### Data Flow
 
