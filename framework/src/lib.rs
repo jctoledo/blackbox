@@ -136,6 +136,7 @@ pub mod filter;
 pub mod fusion;
 pub mod lap_timer;
 pub mod mode;
+pub mod position_recovery;
 pub mod sensor_framework;
 pub mod sensors;
 pub mod stationary;

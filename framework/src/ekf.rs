@@ -486,6 +486,28 @@ impl Ekf {
         self.p[2] += self.config.q_gyro * dt * dt;
     }
 
+    /// Advance a long missing-IMU interval with constant velocity. Do not hold a
+    /// newly arrived acceleration or angular rate across unobserved motion.
+    pub fn coast(&mut self, dt: f32) {
+        self.predict(self.x[5], self.x[6], 0.0, dt);
+    }
+
+    /// Reacquire a position only after the application establishes continuity.
+    /// Preserve velocity, yaw and bias marginals, clearing position correlations.
+    pub fn reacquire_position(&mut self, x: f32, y: f32) {
+        if !x.is_finite() || !y.is_finite() {
+            return;
+        }
+        self.x[0] = x;
+        self.x[1] = y;
+        self.p[0] = INITIAL_VARIANCE[0];
+        self.p[1] = INITIAL_VARIANCE[1];
+        for cross in &mut self.axis_cross {
+            cross[0] = 0.0;
+            cross[1] = 0.0;
+        }
+    }
+
     /// Update with GPS position measurement
     ///
     /// Uses innovation gating (Mahalanobis distance test) to reject outliers.

@@ -92,11 +92,21 @@ The position diagnostic combines diagonal variance, accepted-update residual sta
 
 ## Acceleration and orientation correction
 
-`GpsAcceleration` differentiates scalar GPS speed using the application sample interval, filters the result, and expires stale data. Differentiation amplifies noise; it is a reference signal, not ground truth. `speed × bias-corrected earth_vertical_rate` estimates lateral acceleration under approximately planar motion and limited sideslip. Banking, slip, vibration and mounting errors violate those assumptions.
+`GpsAcceleration` differentiates scalar GPS speed using integer receiver-epoch differences, then applies a time-based low-pass filter (0.12 s time constant). Host parsing jitter does not enter the derivative. Missing/invalid clocks, duplicate/reversed epochs, date changes and intervals outside 20 ms–1.5 s break the segment. Invalid or stale fixes invalidate the derivative. The legacy host-time API remains for callers/tests. Differentiation amplifies noise; this is a reference signal, not ground truth. `speed × bias-corrected earth_vertical_rate` estimates lateral acceleration under approximately planar motion and limited sideslip. Banking, slip, vibration and mounting errors violate those assumptions.
 
 When an offset is saved, force projection rotates into vehicle axes and learning residuals rotate back into device pitch/roll axes. Saving/clearing resets learned force-fusion corrections.
 
-`OrientationCorrector` compares the filtered longitudinal IMU signal with the speed derivative, and lateral IMU acceleration with the centripetal estimate. Small-angle pitch/roll residual corrections accumulate with opposite signs, bounded near ±15°. Cruise-bias learning also accumulates the residual; averaging it as an absolute bias would converge to half the true offset. Its confidence is a learning-sample counter, not a probability of correctness. GPS blend weight interpolates approximately 80% → 50% → 30% as pitch confidence grows. Freshness controls fallback to IMU-only estimates.
+`OrientationCorrector` compares the filtered longitudinal IMU signal with the speed derivative, and lateral IMU acceleration with the centripetal estimate. Small-angle pitch/roll residual corrections accumulate with opposite signs, bounded near ±15°. Learning uses a 0.66 s time constant, limits one update's interval to 0.1 s and clips its angular innovation to ±0.1 rad. Quality combines learning maturity, smoothed residual agreement and headroom from the correction limit; saturation reports zero quality. It is not a calibrated probability. The application interpolates GPS weight from 100% toward 30% as longitudinal quality improves. Cruise-bias learning remains residual-based. Freshness controls fallback to IMU-only estimates.
+
+IMU UART drains account once for their complete monotonic elapsed interval,
+including 50–200 ms scheduling stalls. Longer intervals, or unavailable attitude,
+coast at constant velocity with growing covariance rather than holding a newly
+arrived acceleration through missing motion. Position rejection can reacquire
+after eight coherent receiver fixes spanning at least 0.5 s, with successive host
+intervals of 10–300 ms and position steps within 5 m of trapezoidal GPS velocity.
+Recovery replaces position and its correlations while preserving yaw, velocity
+and bias marginals. This continuity heuristic can follow a persistent coherent
+receiver error; it does not establish independent position accuracy.
 
 The filter attenuates vibration; it cannot eliminate arbitrary vibration or distinguish every road slope from attitude error. This pipeline does not supply validated slope compensation, brake pressure, tyre grip, apex location or driver coaching.
 

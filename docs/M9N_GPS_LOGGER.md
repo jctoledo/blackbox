@@ -38,7 +38,7 @@ Session CSV carries the latest RMC metadata alongside dashboard samples. A repea
 
 ## Know where data can be lost
 
-The [device logger](../sensors/blackbox/src/gps_log.rs) holds **64 events in RAM**. At the target 25 events/s, that is a calculated 2.56-second window. The [dashboard](../sensors/blackbox/web/dashboard.html) fetches it once per second while recording, removes duplicates and saves events in browser IndexedDB chunks. This does not provide device flash recording or guaranteed background-phone collection.
+The [device logger](../sensors/blackbox/src/gps_log.rs) holds **512 events in RAM**. At the target 25 events/s, that is a calculated 20.48-second window. The [dashboard](../sensors/blackbox/web/dashboard.html) fetches once per second and catches up in pages of at most 64 events, removes duplicates and saves events in browser IndexedDB chunks. A first fetch still returns only the latest 64 events. This does not provide device flash recording or guaranteed background-phone collection.
 
 A long Wi-Fi interruption can overwrite events before the phone fetches them. `missing_before` counts skipped parsed-event sequences between saved rows in the same boot. It cannot count receiver output or serial bytes that never became parser events. Initial capture and restart boundaries have unknown missing history, not a proven zero. The first fetch can also contain events from before you pressed Record; compare device timestamps with Session CSV to select the intended interval.
 

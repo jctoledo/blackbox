@@ -245,7 +245,7 @@ impl SensorManager {
     pub fn poll_imu(&mut self) -> Option<(f32, u64, u32)> {
         let now_us = unsafe { esp_idf_svc::sys::esp_timer_get_time() as u64 };
         let mut buf = [0u8; 64]; // Read up to 64 bytes at once (~10 packets worth)
-        let mut result: Option<(f32, u64)> = None;
+        let previous_us = self.last_imu_us;
         let mut accel_count: u32 = 0;
 
         // Read all available bytes to prevent buffer overflow
@@ -265,13 +265,7 @@ impl SensorManager {
                     }
                     if packet_type == PacketType::Accel {
                         accel_count += 1;
-                        let dt = (now_us - self.last_imu_us) as f32 * 1e-6;
                         self.last_imu_us = now_us;
-
-                        // Validate dt range (0.5ms to 50ms)
-                        if dt > 5e-4 && dt < 0.05 {
-                            result = Some((dt, now_us));
-                        }
                     }
                 }
             }
@@ -289,11 +283,8 @@ impl SensorManager {
         }
 
         // Return result with packet count if we processed any Accel packets
-        if accel_count > 0 {
-            result.map(|(dt, ts)| (dt, ts, accel_count))
-        } else {
-            None
-        }
+        crate::imu_interval::elapsed_seconds(previous_us, now_us, accel_count)
+            .map(|dt| (dt, now_us, accel_count))
     }
 
     /// Poll GPS and return true if new fix available
@@ -381,6 +372,7 @@ impl SensorManager {
 pub struct StateEstimator {
     pub ekf: Ekf,
     pub mode_classifier: ModeClassifier,
+    position_recovery: sensor_fusion::position_recovery::PositionRecovery,
 }
 
 impl StateEstimator {
@@ -388,17 +380,33 @@ impl StateEstimator {
         Self {
             ekf: Ekf::new(),
             mode_classifier: ModeClassifier::new(),
+            position_recovery: Default::default(),
         }
     }
 
     /// Update EKF prediction with IMU data
     pub fn predict(&mut self, ax_earth: f32, ay_earth: f32, wz: f32, dt: f32) {
-        self.ekf.predict(ax_earth, ay_earth, wz, dt);
+        if dt <= 0.2 {
+            self.ekf.predict(ax_earth, ay_earth, wz, dt);
+        } else {
+            self.ekf.coast(dt);
+        }
     }
 
     /// Update EKF with GPS position
-    pub fn update_position(&mut self, x: f32, y: f32) {
-        self.ekf.update_position(x, y);
+    pub fn invalidate_position_recovery(&mut self) {
+        self.position_recovery.reset();
+    }
+
+    /// Update EKF with GPS position
+    pub fn update_position(&mut self, x: f32, y: f32, vx: f32, vy: f32, at_us: u64) {
+        if self.ekf.update_position(x, y) == sensor_fusion::ekf::UpdateResult::Accepted {
+            self.position_recovery.reset();
+        } else if self.position_recovery.observe([x, y], [vx, vy], at_us) {
+            self.ekf.reacquire_position(x, y);
+            self.ekf.update_position(x, y);
+            self.position_recovery.reset();
+        }
     }
 
     /// Update EKF with GPS velocity

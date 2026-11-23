@@ -73,8 +73,6 @@ pub struct OrientationCorrector {
     cruise_bias_count: u32,
     /// Time spent in cruise state (seconds)
     cruise_time: f32,
-    /// EMA alpha for learning (smaller = slower but more stable)
-    alpha: f32,
     /// Minimum speed for learning (m/s) - need motion for GPS accuracy
     min_speed: f32,
     /// Minimum acceleration to trigger pitch/roll learning (m/s²)
@@ -85,6 +83,8 @@ pub struct OrientationCorrector {
     /// Number of learning updates (for confidence calculation)
     update_count: u32,
     roll_update_count: u32,
+    pitch_residual: f32,
+    roll_residual: f32,
 }
 
 impl OrientationCorrector {
@@ -99,12 +99,13 @@ impl OrientationCorrector {
             cruise_bias_sum: 0.0,
             cruise_bias_count: 0,
             cruise_time: 0.0,
-            alpha: 0.05,          // Slow learning for stability
             min_speed: 3.0,       // ~11 km/h
             min_accel: 0.3,       // ~0.03g - lowered to learn from more events
             max_correction: 0.26, // ~15 degrees max
             update_count: 0,
             roll_update_count: 0,
+            pitch_residual: 0.0,
+            roll_residual: 0.0,
         }
     }
 
@@ -153,6 +154,9 @@ impl OrientationCorrector {
         let lat_error = s * vehicle_lon_error + c * vehicle_lat_error;
         let gps_device_x = c * lon_gps - s * lat_gps;
         let gps_device_y = s * lon_gps + c * lat_gps;
+        // A time-based gain is stable across telemetry cadence changes. Limit a
+        // single learning step after a stall rather than replaying held evidence.
+        let gain = 1.0 - (-dt.min(0.1) / 0.66).exp();
 
         // Learn pitch correction from longitudinal acceleration difference
         // During acceleration: pitch error → wrong ax_earth
@@ -163,14 +167,20 @@ impl OrientationCorrector {
             // Feedback update with clamping.
             // The input already includes the current correction: this is a
             // residual, so accumulate it rather than averaging it as an absolute angle.
-            self.pitch_correction += self.alpha * pitch_innovation;
+            self.pitch_correction += gain * pitch_innovation.clamp(-0.1, 0.1);
             self.pitch_correction = self
                 .pitch_correction
                 .clamp(-self.max_correction, self.max_correction);
 
             // Update confidence
             self.update_count = self.update_count.saturating_add(1);
-            self.pitch_confidence = (self.update_count as f32 / 100.0).min(1.0);
+            self.pitch_residual += gain * (lon_error.abs() - self.pitch_residual);
+            self.pitch_confidence = correction_quality(
+                self.update_count,
+                self.pitch_residual,
+                self.pitch_correction,
+                self.max_correction,
+            );
         }
         if lon_gps.abs() > self.min_accel {
             // Reset cruise accumulator when accelerating
@@ -207,13 +217,19 @@ impl OrientationCorrector {
 
             // Positive roll subtracts positive lateral gravity; its sensitivity
             // is opposite to pitch in remove_gravity().
-            self.roll_correction -= self.alpha * roll_innovation;
+            self.roll_correction -= gain * roll_innovation.clamp(-0.1, 0.1);
             self.roll_correction = self
                 .roll_correction
                 .clamp(-self.max_correction, self.max_correction);
 
             self.roll_update_count = self.roll_update_count.saturating_add(1);
-            self.roll_confidence = (self.roll_update_count as f32 / 100.0).min(1.0);
+            self.roll_residual += gain * (lat_error.abs() - self.roll_residual);
+            self.roll_confidence = correction_quality(
+                self.roll_update_count,
+                self.roll_residual,
+                self.roll_correction,
+                self.max_correction,
+            );
         }
     }
 
@@ -269,6 +285,8 @@ impl OrientationCorrector {
         self.roll_correction = 0.0;
         self.pitch_confidence = 0.0;
         self.roll_confidence = 0.0;
+        self.pitch_residual = 0.0;
+        self.roll_residual = 0.0;
         self.cruise_bias = 0.0;
         self.cruise_bias_sum = 0.0;
         self.cruise_bias_count = 0;
@@ -276,6 +294,13 @@ impl OrientationCorrector {
         self.update_count = 0;
         self.roll_update_count = 0;
     }
+}
+
+// Quality is residual agreement and headroom, not a calibrated probability.
+fn correction_quality(count: u32, residual: f32, correction: f32, limit: f32) -> f32 {
+    let agreement = (1.0 - residual / (G * 0.1)).clamp(0.0, 1.0);
+    let headroom = ((limit - correction.abs()) / 0.03).clamp(0.0, 1.0);
+    (count as f32 / 100.0).min(1.0) * agreement * headroom
 }
 
 impl Default for OrientationCorrector {
@@ -350,6 +375,7 @@ impl Default for FusionConfig {
 
 /// GPS-derived acceleration tracker
 pub struct GpsAcceleration {
+    receiver_previous: Option<(u64, u32)>,
     /// Previous speed (m/s)
     prev_speed: f32,
     /// Previous timestamp (seconds, monotonic)
@@ -373,6 +399,7 @@ pub struct GpsAcceleration {
 impl GpsAcceleration {
     pub fn new() -> Self {
         Self {
+            receiver_previous: None,
             prev_speed: 0.0,
             prev_time: 0.0,
             accel_lon: 0.0,
@@ -416,6 +443,48 @@ impl GpsAcceleration {
         } else {
             None
         }
+    }
+
+    /// Receiver-time derivative, independent of host parsing jitter. A new date,
+    /// missing clock, duplicate or reversal starts a new derivative segment.
+    pub fn update_epoch(
+        &mut self,
+        speed: f32,
+        utc_us: Option<u64>,
+        date: Option<u32>,
+    ) -> Option<f32> {
+        let previous = self.receiver_previous.take();
+        let was_valid = self.valid;
+        self.valid = false;
+        self.time_since_fix = 999.0;
+        let (Some(utc), Some(date)) = (utc_us, date) else {
+            return None;
+        };
+        if !speed.is_finite() || speed < 0.0 || utc >= 86_401_000_000 || date == 0 {
+            return None;
+        }
+        self.receiver_previous = Some((utc, date));
+        let old_speed = self.prev_speed;
+        self.prev_speed = speed;
+        let (old_utc, old_date) = previous?;
+        if date != old_date || utc <= old_utc {
+            return None;
+        }
+        let dt = (utc - old_utc) as f32 * 1e-6;
+        if !(0.02..=1.5).contains(&dt) {
+            return None;
+        }
+        let raw = (speed - old_speed) / dt;
+        // Time-based low pass: suppress differentiation noise without pretending
+        // arrival jitter was vehicle acceleration. Reset after a discontinuity.
+        self.accel_lon = if was_valid {
+            self.accel_lon + dt / (0.12 + dt) * (raw - self.accel_lon)
+        } else {
+            raw
+        };
+        self.valid = self.accel_lon.is_finite();
+        self.time_since_fix = 0.0;
+        self.get_accel()
     }
 
     /// Update GPS rate estimate
@@ -1174,6 +1243,11 @@ impl SensorFusion {
     /// * `time` - Monotonic timestamp in seconds
     pub fn process_gps(&mut self, speed: f32, time: f32) {
         self.gps_accel.update(speed, time);
+    }
+
+    /// Production receiver-time path; no host/receiver clock subtraction.
+    pub fn process_gps_epoch(&mut self, speed: f32, utc_us: Option<u64>, date: Option<u32>) {
+        self.gps_accel.update_epoch(speed, utc_us, date);
     }
 
     /// Process GPS heading update for yaw rate calibration and heading alignment

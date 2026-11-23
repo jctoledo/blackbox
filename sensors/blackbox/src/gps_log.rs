@@ -2,6 +2,7 @@
 use std::collections::VecDeque;
 use ublox_gps::{GpsFix, RmcTiming};
 pub const GPS_LOG_CAPACITY: usize = 64;
+pub const GPS_HISTORY_CAPACITY: usize = 512;
 #[derive(Clone, Copy, Debug, serde::Serialize)]
 pub struct GpsEvent {
     pub seq: u64,
@@ -24,6 +25,7 @@ pub struct GpsLogSnapshot {
     pub capacity: usize,
     pub latest_seq: u64,
     pub events: Vec<GpsEvent>,
+    pub has_more: bool,
 }
 pub struct GpsLog {
     boot_id: u32,
@@ -35,7 +37,7 @@ impl GpsLog {
         Self {
             boot_id,
             sequence: 0,
-            events: VecDeque::with_capacity(GPS_LOG_CAPACITY),
+            events: VecDeque::with_capacity(GPS_HISTORY_CAPACITY),
         }
     }
     pub fn push(&mut self, timing: RmcTiming, fix: &GpsFix, host_us: u64) {
@@ -53,7 +55,7 @@ impl GpsLog {
             speed_mps: fix.valid.then_some(fix.speed),
             course_rad: fix.valid.then_some(fix.course),
         };
-        if self.events.len() == GPS_LOG_CAPACITY {
+        if self.events.len() == GPS_HISTORY_CAPACITY {
             self.events.pop_front();
         }
         self.events.push_back(event);
@@ -62,19 +64,63 @@ impl GpsLog {
         (self.boot_id, self.events.back().copied())
     }
     pub fn snapshot(&self) -> GpsLogSnapshot {
+        self.snapshot_since(None)
+    }
+    pub fn snapshot_since(&self, cursor: Option<(u32, u64)>) -> GpsLogSnapshot {
+        let after = cursor
+            .filter(|(boot, seq)| *boot == self.boot_id && *seq <= self.sequence)
+            .map_or(
+                self.sequence.saturating_sub(GPS_LOG_CAPACITY as u64),
+                |(_, seq)| seq,
+            );
+        let events: Vec<_> = self
+            .events
+            .iter()
+            .filter(|e| e.seq > after)
+            .take(GPS_LOG_CAPACITY)
+            .copied()
+            .collect();
+        let latest_seq = events.last().map_or(self.sequence, |e| e.seq);
         GpsLogSnapshot {
             version: 1,
             simulated: false,
             boot_id: self.boot_id,
             capacity: GPS_LOG_CAPACITY,
-            latest_seq: self.sequence,
-            events: self.events.iter().copied().collect(),
+            latest_seq,
+            events,
+            has_more: latest_seq < self.sequence,
         }
     }
 }
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn pagination_recovers_a_phone_stall_without_unbounded_responses() {
+        let mut log = GpsLog::new(7);
+        for i in 0..400 {
+            log.push(RmcTiming::default(), &GpsFix::default(), i * 40_000);
+        }
+        let mut cursor = 10;
+        let mut count = 0;
+        loop {
+            let page = log.snapshot_since(Some((7, cursor)));
+            assert!(page.events.len() <= 64);
+            assert_eq!(page.events[0].seq, cursor + 1);
+            count += page.events.len();
+            cursor = page.latest_seq;
+            if !page.has_more {
+                break;
+            }
+        }
+        assert_eq!(count, 390);
+        assert_eq!(log.snapshot_since(Some((8, 10))).events[0].seq, 337);
+        for i in 400..600 {
+            log.push(RmcTiming::default(), &GpsFix::default(), i * 40_000);
+        }
+        assert_eq!(log.snapshot_since(Some((7, 10))).events[0].seq, 89);
+        assert!(core::mem::size_of::<GpsEvent>() * GPS_HISTORY_CAPACITY <= 65_536);
+    }
     #[test]
     fn bounded_log_keeps_order_and_invalid_epochs_without_stale_coordinates() {
         let mut log = GpsLog::new(7);

@@ -23,3 +23,6 @@ pub mod imu_evidence;
 
 #[path = "../../../sensors/blackbox/src/imu_bias_collection.rs"]
 pub mod imu_bias_collection;
+
+#[path = "../../../sensors/blackbox/src/imu_interval.rs"]
+pub mod imu_interval;

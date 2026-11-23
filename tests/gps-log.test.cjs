@@ -34,3 +34,10 @@ test('old firmware and failed GPS requests do not stop ordinary recording or inv
  vm.runInContext(section('// Recording state.', 'function updateRecUI()')+';function updateRecUI(){};rec=true;sessionId=10;',c);
  await c.collectGpsLog();assert.equal(vm.runInContext('rec',c),true);assert.equal(vm.runInContext('chunkBuffer.length',c),0);assert.match(vm.runInContext('gpsLogStatus',c),/unavailable/);
 });
+test('cursor pages drain retained history and expose unrecoverable gaps',async()=>{
+ const c={console,Math,Number,Date,performance,MAX_PENDING_SAMPLES:6000,CHUNK_INTERVAL:5000,db:{}};vm.createContext(c);
+ vm.runInContext(section('// Recording state.', 'function updateRecUI()')+';function updateRecUI(){};rec=true;sessionId=10;gpsCursor={boot:7,seq:10};lastSaveMono=performance.now();',c);
+ const paths=[];let page=0;c.requestDevice=async path=>{paths.push(path);const b=page++===0?batch([20,21]):batch([22,23]);b.has_more=page===1;return{ok:true,json:async()=>b}};
+ await c.collectGpsLog();assert.equal(paths[0],'/api/gps-log?boot=7&after=10');assert.equal(paths[1],'/api/gps-log?boot=7&after=21');
+ assert.equal(vm.runInContext('chunkBuffer.length',c),4);assert.equal(vm.runInContext('chunkBuffer[0].gpsMissing',c),9);assert.match(vm.runInContext('gpsLogStatus',c),/9 events could not be recovered/);
+});

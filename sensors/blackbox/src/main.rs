@@ -14,6 +14,7 @@ mod gps_timing;
 mod imu;
 mod imu_bias_collection;
 mod imu_evidence;
+mod imu_interval;
 mod mode;
 mod mqtt;
 mod nvs_storage;
@@ -774,7 +775,11 @@ fn main() {
                     // Update yaw from magnetometer
                     let yaw_mag = sensors.imu_parser.data().yaw.to_radians();
                     estimator.update_yaw(yaw_mag);
+                } else if unsafe { EKF_RESET_DONE } {
+                    estimator.ekf.coast(dt);
                 }
+            } else if unsafe { EKF_RESET_DONE } {
+                estimator.ekf.coast(dt);
             }
         }
 
@@ -819,10 +824,13 @@ fn main() {
             // GPS acceleration only needs scalar speed - doesn't require full position
             // validity This ensures OrientationCorrector can learn even during
             // brief GPS hiccups
-            if sensors.gps_parser.is_warmed_up() && is_new_fix {
+            if sensors.gps_parser.is_warmed_up()
+                && is_new_fix
+                && sensors.gps_parser.last_fix().valid
+            {
                 let gps_speed = sensors.gps_parser.last_fix().speed;
-                let time_s = now_ms as f32 / 1000.0;
-                sensor_fusion.process_gps(gps_speed, time_s);
+                let timing = sensors.gps_parser.rmc_timing();
+                sensor_fusion.process_gps_epoch(gps_speed, timing.utc_us, timing.date_ddmmyy);
 
                 // Feed GPS heading to yaw rate calibrator (only valid at speed)
                 // Course over ground is unreliable below ~5 m/s
@@ -842,11 +850,12 @@ fn main() {
 
                 // Always update position from GPS first (even when stationary)
                 // This prevents EKF from diverging during extended stops
-                if let Some((x, y)) = sensors.gps_parser.to_local_coords() {
-                    let (ekf_x, ekf_y) = estimator.ekf.position();
-                    let jump_dist = ((x - ekf_x).powi(2) + (y - ekf_y).powi(2)).sqrt();
-                    if jump_dist < 1000.0 {
-                        estimator.update_position(x, y);
+                if let (Some((x, y)), Some((vx, vy))) = (
+                    sensors.gps_parser.to_local_coords(),
+                    sensors.gps_parser.get_velocity_enu(),
+                ) {
+                    if vx.hypot(vy) < 100.0 {
+                        estimator.update_position(x, y, vx, vy, gps_now_us);
                     }
                 }
 
@@ -900,6 +909,11 @@ fn main() {
                     }
                 }
             }
+        }
+
+        if !sensors.gps_is_fresh(now_ms) {
+            sensor_fusion.process_gps_epoch(f32::NAN, None, None);
+            estimator.invalidate_position_recovery();
         }
 
         // Update GPS rate estimate periodically (every second)
