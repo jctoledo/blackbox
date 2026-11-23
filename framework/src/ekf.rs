@@ -17,6 +17,7 @@ struct AxisUpdate {
 }
 
 const N: usize = 7; // State dimension
+const INITIAL_VARIANCE: [f32; N] = [100.0, 100.0, 100.0, 100.0, 100.0, 1.0, 1.0];
 
 /// Chi-squared thresholds for innovation gating (1 DOF)
 /// These values determine how many standard deviations a measurement can be
@@ -120,7 +121,7 @@ impl Ekf {
     pub fn with_config(config: EkfConfig) -> Self {
         Self {
             x: [0.0; N],
-            p: [100.0, 100.0, 100.0, 100.0, 100.0, 1.0, 1.0],
+            p: INITIAL_VARIANCE,
             config,
             axis_cross: [[0.0; 3]; 2],
             rejected_position: 0,
@@ -207,6 +208,19 @@ impl Ekf {
         self.p = diagonal;
         self.axis_cross = [[0.0; 3]; 2];
         true
+    }
+
+    /// Establish the warmup origin with an independent, broad motion prior.
+    /// A discarded velocity mean must not retain confidence from an earlier fix.
+    /// Keep the yaw/bias estimates and their marginal variances unchanged.
+    pub fn reset_motion_origin(&mut self) {
+        for [position, velocity, _] in AXES {
+            for index in [position, velocity] {
+                self.x[index] = 0.0;
+                self.p[index] = INITIAL_VARIANCE[index];
+            }
+        }
+        self.axis_cross = [[0.0; 3]; 2];
     }
 
     /// Get innovation gating statistics (accepted, rejected) for position

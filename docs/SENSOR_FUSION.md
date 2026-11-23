@@ -73,7 +73,9 @@ and prevented GPS observations from correcting the bias state.
 
 Measurement covariance uses Joseph updates. Stationary position/velocity resets
 clear the corresponding correlations; replacing the diagonal uses `reset_covariance`.
-The noise values remain unchanged: `q_acc`/`q_gyro` describe per-step variance and
+The warmup origin reset discards position/velocity means and their previous
+confidence together, restoring the initial motion variances while preserving yaw
+and bias estimates. The noise values remain unchanged: `q_acc`/`q_gyro` describe per-step variance and
 `q_bias` continuous bias-variance growth. The [maths guide](MATHS_AND_RATES.md)
 defines the transition and process-noise integration.
 

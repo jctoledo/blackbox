@@ -16,6 +16,7 @@ filter state. They cannot reproduce the original firmware run exactly.
 - Keep the existing process/measurement tuning values, ENU units and state order.
   Document the covariance structure precisely, including omitted yaw/axis coupling.
   Use numerically stable measurement updates and consistent covariance resets.
+  Warmup must discard motion confidence together with a discarded motion mean.
 - Verify against an independent dense-matrix reference, analytic covariance,
   positive-semidefinite/symmetry checks, 5/25 Hz GPS, irregular prediction intervals,
   dropouts/recovery, corrupt inputs, stationary transitions and sustained turns.

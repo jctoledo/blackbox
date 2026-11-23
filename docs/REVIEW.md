@@ -7,7 +7,9 @@ creates between position, velocity and earth-frame acceleration bias. It therefo
 understated accumulated persistent-bias uncertainty, and GPS corrections could not
 learn that bias while moving. The estimator now retains a 3×3 block per ENU axis,
 propagates its transition and integrated bias random walk, and uses Joseph updates.
-Stationary resets clear affected correlations. Existing tuning and the separate
+Stationary resets clear affected correlations. Warmup restores motion means and
+initial motion variances together, avoiding retained confidence in a discarded
+velocity estimate. Existing tuning and the separate
 fresh-GPS display and raw-GPS crossing paths are preserved.
 
 Analytic regressions first failed on the previous implementation, then passed with

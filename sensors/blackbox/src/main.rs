@@ -741,15 +741,8 @@ fn main() {
         // on GPS poll)
         static mut EKF_RESET_DONE: bool = false;
         if sensors.gps_parser.is_warmed_up() && unsafe { !EKF_RESET_DONE } {
-            // Reset position to origin now that we have a valid reference
-            estimator.ekf.x[0] = 0.0;
-            estimator.ekf.x[1] = 0.0;
-            estimator.ekf.x[3] = 0.0; // vx
-            estimator.ekf.x[4] = 0.0; // vy
-            let mut variance = estimator.ekf.p;
-            variance[0] = 100.0;
-            variance[1] = 100.0;
-            estimator.ekf.reset_covariance(variance);
+            // Reset motion means and uncertainty together at the new origin.
+            estimator.ekf.reset_motion_origin();
             unsafe { EKF_RESET_DONE = true };
         }
 

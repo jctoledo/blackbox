@@ -318,3 +318,32 @@ fn vector_gps_recovers_position_and_velocity_after_unmodeled_outage_error() {
     assert!((ekf.position().0 - 480.0).abs() < 0.2 && ekf.position().1.abs() < 0.2);
     assert_eq!(ekf.rejected_velocity, 0);
 }
+
+#[test]
+fn warmup_motion_reset_discards_prior_velocity_confidence_with_its_mean() {
+    let mut ekf = Ekf::new();
+    ekf.x[2] = 0.3;
+    ekf.update_velocity(12.0, -3.0);
+    ekf.predict(0.0, 0.0, 0.0, 0.02);
+    let bias = ekf.biases();
+    let yaw = ekf.yaw();
+    let bias_variance = [ekf.p[5], ekf.p[6]];
+    assert!(ekf.p[3] < 1.0);
+    ekf.reset_motion_origin();
+    assert_eq!(ekf.position(), (0.0, 0.0));
+    assert_eq!(ekf.velocity(), (0.0, 0.0));
+    assert_eq!(ekf.biases(), bias);
+    assert_eq!(ekf.yaw(), yaw);
+    assert_eq!([ekf.p[5], ekf.p[6]], bias_variance);
+    let covariance = ekf.covariance();
+    for i in 0..7 {
+        for j in 0..7 {
+            if i != j {
+                assert_eq!(covariance[i][j], 0.0);
+            }
+        }
+    }
+    ekf.update_velocity(12.0, -3.0);
+    assert!((ekf.velocity().0 - 12.0).abs() < 0.03 && (ekf.velocity().1 + 3.0).abs() < 0.03);
+    assert_psd(&ekf);
+}
