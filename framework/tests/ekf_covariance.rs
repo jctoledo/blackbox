@@ -295,3 +295,26 @@ fn rejected_position_and_corrupt_measurements_preserve_coupled_state() {
     assert_eq!(ekf.covariance(), covariance);
     assert_eq!(ekf.get_nis_position_avg(), nis);
 }
+
+#[test]
+fn vector_gps_recovers_position_and_velocity_after_unmodeled_outage_error() {
+    let mut ekf = Ekf::new();
+    for _ in 0..200 {
+        ekf.zupt();
+        ekf.lock_position();
+        ekf.update_bias(0.0, 0.0);
+    }
+    for tick in 1..=16000 {
+        let dropout = (4000..6000).contains(&tick);
+        // Unknown acceleration error appears only during the ten-second outage.
+        ekf.predict(if dropout { 1.7 } else { 0.7 }, -0.2, 0.0, 0.005);
+        if tick % 8 == 0 && !dropout {
+            ekf.update_position(6.0 * tick as f32 * 0.005, 0.0);
+            ekf.update_velocity(6.0, 0.0);
+        }
+        assert_psd(&ekf);
+    }
+    assert!((ekf.velocity().0 - 6.0).abs() < 0.05 && ekf.velocity().1.abs() < 0.05);
+    assert!((ekf.position().0 - 480.0).abs() < 0.2 && ekf.position().1.abs() < 0.2);
+    assert_eq!(ekf.rejected_velocity, 0);
+}
