@@ -131,7 +131,7 @@ jobs:
       - name: Verify artifact round trip
         run: diff tests/fixtures/telemetry-v4.hex artifact-check/telemetry-v4.hex
       - name: Validate Pages configuration
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
       - name: Validate Pages packaging
         uses: actions/upload-pages-artifact@v4
         with:
