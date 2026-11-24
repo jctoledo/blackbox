@@ -48,6 +48,19 @@ CI waits for its uploaded protocol fixture to appear in the run's REST index, th
 
 The official download action now gets at most three attempts, each limited to two minutes, with a three-second delay after a failed attempt. Retries inspect the step's `outcome`, which preserves failure before `continue-on-error` changes its conclusion. A successful attempt skips the remaining attempts; the third attempt is fatal, and the byte-for-byte round-trip check remains required. This only tolerates brief service failures; missing artifacts, permission failures and corrupt data still fail CI. It adds no runner, token permissions or third-party action. See [GitHub's step outcome semantics](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#steps-context).
 
+Pages upload and deployment artifact indices can disagree too. The uploader's
+exact artifact ID now selects a REST metadata lookup, validating its name, size,
+expiry, run and source SHA before requesting the job's OIDC token. Deployment
+uses the same GitHub Pages REST/OIDC contract as the official action, then polls
+for an explicit successful result. This avoids a lagging artifact-service list
+and duplicate artifact names retained by reruns. Token permissions, runner trust,
+Pages environment and source checkout stay unchanged. Tokens and request payloads
+are never logged. Synthetic tests cover stale/mismatched artifacts and failed or
+unfinished deployments; live success must still be observed after merge.
+The contract is visible in the official action's
+[Pages REST client](https://github.com/actions/deploy-pages/blob/v4/src/internal/api-client.js)
+and [OIDC acquisition](https://github.com/actions/deploy-pages/blob/v4/src/internal/deployment.js).
+
 ## Observations on lat, 2026-11-21
 
 Firmware source `5ec5b47`, four-CPU/8-GiB container, pinned nightly/ESP-IDF configuration:
