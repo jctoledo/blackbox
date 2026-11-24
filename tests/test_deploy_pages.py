@@ -54,12 +54,27 @@ class DeployPagesTests(unittest.TestCase):
                 self.assertEqual([c[0] for c in calls], ['GET'])
 
     def test_failed_and_unfinished_deployments_never_report_success(self):
-        api, oidc, _ = self.fixture(statuses=['deployment_content_failed'])
+        api, oidc, calls = self.fixture(statuses=['deployment_content_failed'])
         with self.assertRaises(RuntimeError):
             MODULE.deploy(api, oidc, 123, 456, SHA)
-        api, oidc, _ = self.fixture(statuses=['deployment_in_progress'] * 2)
+        self.assertEqual(calls[-1][:2], ('POST', 'pages/deployments/deployment-1/cancel'))
+        api, oidc, calls = self.fixture(statuses=['deployment_in_progress'] * 2)
         with self.assertRaises(TimeoutError):
             MODULE.deploy(api, oidc, 123, 456, SHA, sleep=lambda _: None, attempts=2)
+        self.assertEqual(calls[-1][:2], ('POST', 'pages/deployments/deployment-1/cancel'))
+
+    def test_polling_exception_cancels_without_retrying_creation(self):
+        original, oidc, calls = self.fixture()
+
+        def api(method, endpoint, payload):
+            if method == 'GET' and endpoint.startswith('pages/deployments/'):
+                raise ConnectionError('temporary service failure')
+            return original(method, endpoint, payload)
+
+        with self.assertRaises(ConnectionError):
+            MODULE.deploy(api, oidc, 123, 456, SHA)
+        self.assertEqual(calls[-1][:2], ('POST', 'pages/deployments/deployment-1/cancel'))
+        self.assertEqual(sum(c[0] == 'POST' and c[1] == 'pages/deployments' for c in calls), 1)
 
     def test_missing_oidc_cannot_create_deployment(self):
         api, _, calls = self.fixture()

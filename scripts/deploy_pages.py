@@ -3,6 +3,7 @@
 import json
 import os
 import re
+import signal
 import sys
 import time
 from urllib.request import Request, urlopen
@@ -18,7 +19,7 @@ def validate_artifact(artifact, artifact_id, run_id, sha):
         raise ValueError('Pages artifact does not match the uploaded run and source')
 
 
-def deploy(api, oidc, artifact_id, run_id, sha, sleep=time.sleep, attempts=120):
+def deploy(api, oidc, artifact_id, run_id, sha, sleep=time.sleep, attempts=120, clock=time.monotonic):
     """Validate before requesting OIDC or mutating Pages. Never retry a POST."""
     artifact = api('GET', f'actions/artifacts/{artifact_id}', None)
     validate_artifact(artifact, artifact_id, run_id, sha)
@@ -30,20 +31,34 @@ def deploy(api, oidc, artifact_id, run_id, sha, sleep=time.sleep, attempts=120):
     })
     deployment_id = str(created.get('id', ''))
     page_url = created.get('page_url', '')
-    if (not re.fullmatch(r'[0-9A-Za-z_-]{1,128}', deployment_id)
-            or not isinstance(page_url, str) or not re.fullmatch(r'https://[^\s]+', page_url)):
+    if not re.fullmatch(r'[0-9A-Za-z_-]{1,128}', deployment_id):
         raise ValueError('Invalid Pages deployment response')
     failed = {'deployment_failed', 'deployment_perms_error', 'deployment_content_failed',
               'deployment_cancelled', 'deployment_lost'}
-    for attempt in range(attempts):
-        status = api('GET', f'pages/deployments/{deployment_id}', None).get('status')
-        if status == 'succeed':
-            return page_url
-        if status in failed:
-            raise RuntimeError('Pages reported a terminal deployment failure')
-        if attempt + 1 < attempts:
-            sleep(5)
-    raise TimeoutError('Pages did not report successful deployment within ten minutes')
+    completed = False
+    deadline = clock() + 600
+    try:
+        if not isinstance(page_url, str) or not re.fullmatch(r'https://[^\s]+', page_url):
+            raise ValueError('Invalid Pages deployment URL')
+        for attempt in range(attempts):
+            if clock() >= deadline:
+                break
+            status = api('GET', f'pages/deployments/{deployment_id}', None).get('status')
+            if status == 'succeed':
+                completed = True
+                return page_url
+            if status in failed:
+                raise RuntimeError('Pages reported a terminal deployment failure')
+            if attempt + 1 < attempts:
+                sleep(min(5, max(0, deadline - clock())))
+        raise TimeoutError('Pages did not report success before the deployment timeout')
+    finally:
+        if not completed:
+            # Do not leave an older deployment publishing after the concurrency slot releases.
+            try:
+                api('POST', f'pages/deployments/{deployment_id}/cancel', None)
+            except Exception:
+                pass
 
 
 def request_json(url, token, method='GET', payload=None):
@@ -57,6 +72,10 @@ def request_json(url, token, method='GET', payload=None):
 
 
 def main():
+    def interrupted(_signum, _frame):
+        raise InterruptedError('Deployment job interrupted')
+
+    signal.signal(signal.SIGTERM, interrupted)
     env = os.environ
     artifact_id, run_id = int(env['PAGES_ARTIFACT_ID']), int(env['GITHUB_RUN_ID'])
     sha = env['GITHUB_SHA']
