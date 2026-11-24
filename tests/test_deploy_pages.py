@@ -2,6 +2,7 @@
 import copy
 import importlib.util
 from pathlib import Path
+from urllib.error import HTTPError
 import unittest
 
 SPEC = importlib.util.spec_from_file_location('deploy_pages', Path(__file__).parents[1] / 'scripts/deploy_pages.py')
@@ -81,6 +82,21 @@ class DeployPagesTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             MODULE.deploy(api, lambda: '', 123, 456, SHA)
         self.assertEqual([c[0] for c in calls], ['GET'])
+
+    def test_transient_status_lookup_retries_get_but_never_creation(self):
+        original, oidc, calls = self.fixture(statuses=['succeed'])
+        first = True
+
+        def api(method, endpoint, payload):
+            nonlocal first
+            if method == 'GET' and endpoint.startswith('pages/deployments/') and first:
+                first = False
+                raise HTTPError('https://api.github.com', 404, 'not indexed yet', {}, None)
+            return original(method, endpoint, payload)
+
+        self.assertTrue(MODULE.deploy(api, oidc, 123, 456, SHA, sleep=lambda _: None).startswith('https:'))
+        self.assertEqual(sum(c[0] == 'POST' and c[1] == 'pages/deployments' for c in calls), 1)
+        self.assertFalse(any(c[1] and c[1].endswith('/cancel') for c in calls))
 
 
 if __name__ == '__main__':

@@ -37,13 +37,21 @@ def deploy(api, oidc, artifact_id, run_id, sha, sleep=time.sleep, attempts=120, 
               'deployment_cancelled', 'deployment_lost'}
     completed = False
     deadline = clock() + 600
+    temporary_errors = 0
     try:
         if not isinstance(page_url, str) or not re.fullmatch(r'https://[^\s]+', page_url):
             raise ValueError('Invalid Pages deployment URL')
         for attempt in range(attempts):
             if clock() >= deadline:
                 break
-            status = api('GET', f'pages/deployments/{deployment_id}', None).get('status')
+            try:
+                status = api('GET', f'pages/deployments/{deployment_id}', None).get('status')
+                temporary_errors = 0
+            except HTTPError as error:
+                if error.code not in (404, 429, 500, 502, 503, 504) or temporary_errors >= 9:
+                    raise
+                temporary_errors += 1
+                status = None
             if status == 'succeed':
                 completed = True
                 return page_url
