@@ -123,7 +123,7 @@ jobs:
           persist-credentials: false
 
       - name: Download all firmware artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           github-token: ${{ github.token }}
           path: firmware-artifacts
