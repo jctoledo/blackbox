@@ -22,8 +22,8 @@ class DeployPagesTests(unittest.TestCase):
 
         def api(method, endpoint, payload):
             calls.append((method, endpoint, copy.deepcopy(payload)))
-            if endpoint == 'actions/artifacts/123':
-                return artifact
+            if endpoint == 'actions/runs/456/artifacts?per_page=100':
+                return dict(artifacts=[dict(id=122, name='github-pages'), artifact])
             if method == 'POST':
                 return dict(id='deployment-1', page_url='https://example.github.io/project/')
             return dict(status=next(statuses))

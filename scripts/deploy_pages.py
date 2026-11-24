@@ -21,7 +21,8 @@ def validate_artifact(artifact, artifact_id, run_id, sha):
 
 def deploy(api, oidc, artifact_id, run_id, sha, sleep=time.sleep, attempts=120, clock=time.monotonic):
     """Validate before requesting OIDC or mutating Pages. Never retry a POST."""
-    artifact = api('GET', f'actions/artifacts/{artifact_id}', None)
+    index = api('GET', f'actions/runs/{run_id}/artifacts?per_page=100', None)
+    artifact = next((a for a in index.get('artifacts', []) if a.get('id') == artifact_id), {})
     validate_artifact(artifact, artifact_id, run_id, sha)
     token = oidc()
     if not isinstance(token, str) or not token:
@@ -93,9 +94,14 @@ def main():
     repository = env['GITHUB_REPOSITORY']
 
     def api(method, endpoint, payload):
+        if endpoint.startswith('actions/runs/'):
+            print('Validating uploaded Pages artifact in the run index', flush=True)
+        elif method == 'POST':
+            print('Creating or cancelling authorized Pages deployment', flush=True)
         return request_json(f'{base}/repos/{repository}/{endpoint}', env['GH_TOKEN'], method, payload)
 
     def oidc():
+        print('Requesting job OIDC authorization', flush=True)
         return request_json(env['ACTIONS_ID_TOKEN_REQUEST_URL'],
                             env['ACTIONS_ID_TOKEN_REQUEST_TOKEN'])['value']
 
