@@ -133,7 +133,7 @@ jobs:
       - name: Validate Pages configuration
         uses: actions/configure-pages@v5
       - name: Validate Pages packaging
-        uses: actions/upload-pages-artifact@v4
+        uses: actions/upload-pages-artifact@v5
         with:
           path: docs
           retention-days: 1
