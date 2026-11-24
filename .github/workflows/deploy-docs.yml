@@ -47,6 +47,7 @@ jobs:
         uses: actions/configure-pages@v5
 
       - name: Upload artifact
+        id: pages_artifact
         uses: actions/upload-pages-artifact@v4
         with:
           path: 'docs'
@@ -58,4 +59,7 @@ jobs:
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PAGES_ARTIFACT_ID: ${{ steps.pages_artifact.outputs.artifact_id }}
+        run: python3 scripts/deploy_pages.py
