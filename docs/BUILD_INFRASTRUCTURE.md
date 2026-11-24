@@ -49,7 +49,7 @@ CI waits for its uploaded protocol fixture to appear in the run's REST index, th
 The official download action now gets at most three attempts, each limited to two minutes, with a three-second delay after a failed attempt. Retries inspect the step's `outcome`, which preserves failure before `continue-on-error` changes its conclusion. A successful attempt skips the remaining attempts; the third attempt is fatal, and the byte-for-byte round-trip check remains required. This only tolerates brief service failures; missing artifacts, permission failures and corrupt data still fail CI. It adds no runner, token permissions or third-party action. See [GitHub's step outcome semantics](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#steps-context).
 
 Pages upload and deployment artifact indices can disagree too. The uploader's
-exact artifact ID now selects a REST metadata lookup, validating its name, size,
+exact artifact ID now selects its entry from the run's REST index, validating its name, size,
 expiry, run and source SHA before requesting the job's OIDC token. Deployment
 uses the same GitHub Pages REST/OIDC contract as the official action, then polls
 for an explicit successful result. This avoids a lagging artifact-service list
