@@ -85,7 +85,8 @@ mod tests {
     fn invalid_then_valid_in_one_drain_preserves_a_boundary_for_latest_consumers() {
         let (mut parser, diagnostics) = warmed();
         let mut continuity = Continuity::default();
-        for body in [VALID, INVALID, VALID] {
+        let recovered = VALID.replace("123456.04", "123456.12");
+        for body in [VALID, INVALID, recovered.as_str()] {
             sentence(&mut parser, &diagnostics, body);
             continuity.observe(parser.rmc_timing(), parser.last_fix().valid);
         }
