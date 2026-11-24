@@ -22,7 +22,7 @@ jobs:
       GPS_RATE: ${{ inputs.gps_model == 'm9n' && '25' || '5' }}
       CARGO_BUILD_JOBS: '4'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - name: Host regressions
