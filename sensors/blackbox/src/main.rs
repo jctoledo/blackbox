@@ -1005,24 +1005,11 @@ fn main() {
                 lap_timer.invalidate_fix();
             }
             lap_timer.tick(now_ms);
-            publisher
-                .publish_telemetry(
-                    &sensors,
-                    &estimator,
-                    &sensor_fusion,
-                    now_ms,
-                    Some((&lap_timer, pending_lap_flags, lap_revision)),
-                )
-                .ok();
-            pending_lap_flags = 0;
 
-            // Update fusion diagnostics at telemetry rate for synchronized CSV export
-            // This ensures fusion data (lon_imu, lon_gps, etc.) matches the telemetry
-            // packet
             let (tilt_x, tilt_y, tilt_valid) = sensor_fusion.get_tilt_offsets();
             let (pitch_corr, roll_corr) = sensor_fusion.get_orientation_correction();
             let (pitch_conf, roll_conf) = sensor_fusion.get_orientation_confidence();
-            diagnostics.update_fusion(FusionDiagnostics {
+            let fusion_diagnostics = FusionDiagnostics {
                 lon_imu_raw: sensor_fusion.get_lon_imu_raw(),
                 lon_imu_filtered: sensor_fusion.get_lon_imu_filtered(),
                 lon_blended: sensor_fusion.get_lon_blended(),
@@ -1039,7 +1026,19 @@ fn main() {
                 tilt_offset_x: tilt_x,
                 tilt_offset_y: tilt_y,
                 tilt_valid,
-            });
+            };
+            publisher
+                .publish_telemetry(
+                    &sensors,
+                    &estimator,
+                    &sensor_fusion,
+                    now_ms,
+                    Some((&lap_timer, pending_lap_flags, lap_revision)),
+                    fusion_diagnostics,
+                )
+                .ok();
+            pending_lap_flags = 0;
+            diagnostics.update_fusion(fusion_diagnostics);
 
             last_telemetry_ms = now_ms;
         }

@@ -9,7 +9,8 @@ use esp_idf_svc::http::server::{Configuration, EspHttpServer};
 use esp_idf_svc::io::Write;
 use log::info;
 
-use crate::diagnostics::DiagnosticsState;
+use crate::diagnostics::{DiagnosticsState, FusionDiagnostics};
+use crate::telemetry_http::{EncodedTelemetrySnapshot, TelemetrySnapshot};
 
 /// Lap timer timing line configuration using GPS coordinates
 /// Uses GPS lat/lon for session-independent timing (no coordinate frame issues)
@@ -68,20 +69,13 @@ impl Default for ModeSettings {
 
 pub use crate::telemetry_http::TimingTelemetry;
 
-#[derive(Default)]
-struct TelemetrySnapshot {
-    data: Vec<u8>,
-    seq: u32,
-    timing: TimingTelemetry,
-}
-
 /// Shared state for telemetry server
 pub struct TelemetryServerState {
     gps_log: Mutex<crate::gps_log::GpsLog>,
     recording_metadata: Mutex<Option<crate::recording_metadata::RecordingMetadata>>,
     mount_command: AtomicU8,
     mount_status: Mutex<String>,
-    /// Latest telemetry packet (raw bytes)
+    /// Latest telemetry packet with timing and fusion from the same sample
     telemetry_data: Mutex<TelemetrySnapshot>,
     /// Calibration requested flag
     calibration_requested: AtomicBool,
@@ -230,28 +224,25 @@ impl TelemetryServerState {
         }
     }
 
-    pub fn update_telemetry(&self, data: &[u8], mut timing: TimingTelemetry) {
+    pub fn update_telemetry(
+        &self,
+        data: &[u8],
+        mut timing: TimingTelemetry,
+        fusion: FusionDiagnostics,
+    ) {
         if let Ok(log) = self.gps_log.lock() {
             let (boot_id, event) = log.latest();
             timing.gps_boot_id = Some(boot_id);
             timing.gps_event = event;
         }
+        let fusion = self.diagnostics_state.as_ref().map(|_| fusion);
         if let Ok(mut guard) = self.telemetry_data.lock() {
-            guard.data.clear();
-            guard.data.extend_from_slice(data);
-            guard.timing = timing;
-            guard.seq = guard.seq.wrapping_add(1);
+            guard.publish(data, timing, fusion);
         }
     }
 
-    fn telemetry_snapshot(&self) -> Option<(u32, String, TimingTelemetry)> {
-        self.telemetry_data.lock().ok().and_then(|snapshot| {
-            if snapshot.data.is_empty() {
-                None
-            } else {
-                Some((snapshot.seq, base64_encode(&snapshot.data), snapshot.timing))
-            }
-        })
+    fn telemetry_snapshot(&self) -> Option<EncodedTelemetrySnapshot> {
+        self.telemetry_data.lock().ok()?.encode()
     }
 }
 
@@ -259,35 +250,6 @@ impl Default for TelemetryServerState {
     fn default() -> Self {
         Self::new()
     }
-}
-
-/// Simple base64 encoder
-fn base64_encode(data: &[u8]) -> String {
-    const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut result = String::with_capacity(data.len().div_ceil(3) * 4);
-
-    for chunk in data.chunks(3) {
-        let b0 = chunk[0] as usize;
-        let b1 = chunk.get(1).copied().unwrap_or(0) as usize;
-        let b2 = chunk.get(2).copied().unwrap_or(0) as usize;
-
-        result.push(CHARS[b0 >> 2] as char);
-        result.push(CHARS[((b0 & 0x03) << 4) | (b1 >> 4)] as char);
-
-        if chunk.len() > 1 {
-            result.push(CHARS[((b1 & 0x0f) << 2) | (b2 >> 6)] as char);
-        } else {
-            result.push('=');
-        }
-
-        if chunk.len() > 2 {
-            result.push(CHARS[b2 & 0x3f] as char);
-        } else {
-            result.push('=');
-        }
-    }
-
-    result
 }
 
 fn valid_timing_line(line: &TimingLineConfig) -> bool {
@@ -575,9 +537,8 @@ impl TelemetryServer {
             "/api/telemetry",
             esp_idf_svc::http::Method::Get,
             move |req| -> Result<(), esp_idf_svc::io::EspIOError> {
-                let json = if let Some((seq, data, timing)) = state_poll.telemetry_snapshot() {
-                    let fusion = state_poll.diagnostics().map(|diag| diag.snapshot().fusion);
-                    crate::telemetry_http::telemetry_json(seq, &data, &timing, fusion.as_ref())
+                let json = if let Some(snapshot) = state_poll.telemetry_snapshot() {
+                    snapshot.to_json()
                 } else {
                     r#"{"seq":0,"data":null}"#.to_string()
                 };

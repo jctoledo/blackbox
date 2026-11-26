@@ -17,6 +17,84 @@ pub struct TimingTelemetry {
     pub gps_event: Option<crate::gps_log::GpsEvent>,
 }
 
+/// Latest binary packet and the sidecars captured in its publication tick.
+#[derive(Default)]
+pub struct TelemetrySnapshot {
+    data: Vec<u8>,
+    seq: u32,
+    timing: TimingTelemetry,
+    fusion: Option<FusionDiagnostics>,
+}
+
+impl TelemetrySnapshot {
+    pub fn publish(
+        &mut self,
+        data: &[u8],
+        timing: TimingTelemetry,
+        fusion: Option<FusionDiagnostics>,
+    ) {
+        self.data.clear();
+        self.data.extend_from_slice(data);
+        self.seq = self.seq.wrapping_add(1);
+        self.timing = timing;
+        self.fusion = fusion;
+    }
+
+    /// Own the whole response so it can be serialized after releasing the lock.
+    pub fn encode(&self) -> Option<EncodedTelemetrySnapshot> {
+        if self.data.is_empty() {
+            return None;
+        }
+        Some(EncodedTelemetrySnapshot {
+            data: base64_encode(&self.data),
+            seq: self.seq,
+            timing: self.timing,
+            fusion: self.fusion,
+        })
+    }
+}
+
+pub struct EncodedTelemetrySnapshot {
+    data: String,
+    seq: u32,
+    timing: TimingTelemetry,
+    fusion: Option<FusionDiagnostics>,
+}
+
+impl EncodedTelemetrySnapshot {
+    pub fn to_json(&self) -> String {
+        telemetry_json(self.seq, &self.data, &self.timing, self.fusion.as_ref())
+    }
+}
+
+fn base64_encode(data: &[u8]) -> String {
+    const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut result = String::with_capacity(data.len().div_ceil(3) * 4);
+
+    for chunk in data.chunks(3) {
+        let b0 = chunk[0] as usize;
+        let b1 = chunk.get(1).copied().unwrap_or(0) as usize;
+        let b2 = chunk.get(2).copied().unwrap_or(0) as usize;
+
+        result.push(CHARS[b0 >> 2] as char);
+        result.push(CHARS[((b0 & 0x03) << 4) | (b1 >> 4)] as char);
+
+        if chunk.len() > 1 {
+            result.push(CHARS[((b1 & 0x0f) << 2) | (b2 >> 6)] as char);
+        } else {
+            result.push('=');
+        }
+
+        if chunk.len() > 2 {
+            result.push(CHARS[b2 & 0x3f] as char);
+        } else {
+            result.push('=');
+        }
+    }
+
+    result
+}
+
 /// serde_json encodes non-finite sensor values as null and escapes text fields.
 /// Hand-formatting NaN made the entire telemetry response invalid during GPS loss.
 pub fn telemetry_json(
@@ -76,6 +154,59 @@ pub fn diagnostics_json(d: &DiagnosticsSnapshot) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn telemetry_response_keeps_sidecars_with_the_sample_across_publish() {
+        let mut latest = TelemetrySnapshot::default();
+        assert!(latest.encode().is_none());
+
+        latest.publish(
+            &[0],
+            TimingTelemetry {
+                revision: 10,
+                ..Default::default()
+            },
+            Some(FusionDiagnostics {
+                gps_accel: -2.5,
+                gps_weight: 1.0,
+                ..Default::default()
+            }),
+        );
+        let first = latest.encode().unwrap();
+
+        latest.publish(
+            &[1],
+            TimingTelemetry {
+                revision: 11,
+                ..Default::default()
+            },
+            Some(FusionDiagnostics {
+                gps_accel: 4.0,
+                gps_weight: 0.5,
+                ..Default::default()
+            }),
+        );
+        let second = latest.encode().unwrap();
+
+        let first: serde_json::Value = serde_json::from_str(&first.to_json()).unwrap();
+        assert_eq!(first["seq"], 1);
+        assert_eq!(first["data"], "AA==");
+        assert_eq!(first["timing"]["revision"], 10);
+        assert_eq!(first["f"]["lg"], -2.5);
+        assert_eq!(first["f"]["gw"], 1.0);
+
+        let second: serde_json::Value = serde_json::from_str(&second.to_json()).unwrap();
+        assert_eq!(second["seq"], 2);
+        assert_eq!(second["data"], "AQ==");
+        assert_eq!(second["timing"]["revision"], 11);
+        assert_eq!(second["f"]["lg"], 4.0);
+        assert_eq!(second["f"]["gw"], 0.5);
+
+        latest.publish(&[2], TimingTelemetry::default(), None);
+        let without_fusion: serde_json::Value =
+            serde_json::from_str(&latest.encode().unwrap().to_json()).unwrap();
+        assert!(without_fusion["f"].is_null());
+    }
+
     #[test]
     fn unavailable_gps_acceleration_is_valid_json() {
         let fusion = FusionDiagnostics {
