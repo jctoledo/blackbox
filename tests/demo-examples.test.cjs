@@ -35,8 +35,8 @@ test('live and seeded metadata reuse the corresponding synthetic GPS boot identi
  for(const kind of ['circuit','rolling']){const db=await database(),rows=c.window.examplesForTest(kind);await c.window.seedForTest(db,'SIM example',rows,kind==='circuit'?'circuit-v6':'rolling-v7');const session=(await all(db,'sessions'))[0];assert.equal(session.recordingMetadata.snapshot.boot_id,rows.find(r=>r.gpsBootId!==undefined).gpsBootId)}
 });
 test('explicit Drive preview suppresses synthetic detection suggestions without activating a track',async()=>{const c=fixture();let dismissed=0,activated=0;c.location.href='https://example.test/demo.html?view=drive';c.trackAutoDetector={check:async()=>({track:{id:'demo'}})};c.showTrackDetectedToast=()=>{throw Error('Drive preview showed track overlay')};c.dismissActiveToast=()=>dismissed++;c.activateTrack=async()=>activated++;await c.events.get('DOMContentLoaded')();assert.equal(await c.trackAutoDetector.check(),null);c.showTrackDetectedToast();assert.equal(dismissed,1);assert.equal(activated,0)});
-test('unchanged rolling fixture yields auditable accepted and gap-rejected examples for all four presets',()=>{
- const c=fixture(),rows=c.window.examplesForTest('rolling'),intervals=vm.runInContext('runIntervals',c);assert.equal(intervals.length,4);
+test('unchanged rolling fixture yields auditable accepted and gap-rejected examples for the six rolling presets within its speed range',()=>{
+ const c=fixture(),rows=c.window.examplesForTest('rolling'),intervals=vm.runInContext('runIntervals.filter(i=>!i.kind&&i.hi<=34)',c);assert.equal(intervals.length,6);
  for(const interval of intervals){const detector=new c.Runs(interval);for(const row of rows)detector.update(row);const accepted=detector.results.filter(r=>r.status==='accepted'),rejected=detector.results.filter(r=>r.status==='rejected');assert.equal(accepted.length,2,interval.label);assert.equal(rejected.length,1,interval.label);assert.equal(rejected[0].reason,'GPS gap or clock boundary');
   for(const result of accepted){assert.ok(Math.abs(result.seconds-(interval.hi-interval.lo)/2)<1e-8);assert.equal(result.interval,interval.label);assert.equal(result.synthetic,1);assert.equal(result.boot,102);assert.ok(rows.some(row=>row.rowType===1&&row.gpsSeq===result.startSeq));assert.ok(rows.some(row=>row.rowType===1&&row.gpsSeq===result.endSeq))}
  }
@@ -55,8 +55,8 @@ test('new complete-evidence demo fixtures preserve old examples and user recordi
  const userId=oldId+1;await new Promise((resolve,reject)=>{const tx=db.transaction(['sessions','chunks'],'readwrite');tx.objectStore('sessions').put({sessionId:userId,startTime:123,status:'complete',label:'My private drive'});tx.objectStore('chunks').put({sessionId:userId,chunkIndex:0,data:[{t:123,sp:1}]});tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)});
  const beforeSessions=await all(db,'sessions'),beforeChunks=await all(db,'chunks');c.openDB=async()=>db;c.updatePerformanceRuns=()=>{};c.effortPeaks={update(){}};c.sustainedEffortUsable=()=>true;
  await c.window.populateForTest({id:'track'});await c.window.populateForTest({id:'track'});
- const sessions=await all(db,'sessions'),chunks=await all(db,'chunks');assert.equal(sessions.length,4);assert.ok(sessions.some(s=>s.demoFixture==='circuit-v7'));assert.ok(sessions.some(s=>s.demoFixture==='rolling-v8'));assert.deepEqual(sessions.filter(s=>s.sessionId===oldId||s.sessionId===userId),beforeSessions);assert.deepEqual(chunks.filter(s=>s.sessionId===oldId||s.sessionId===userId),beforeChunks);
- for(const session of sessions.filter(s=>['circuit-v7','rolling-v8'].includes(s.demoFixture))){assert.ok(session.label.startsWith('SIM'));const rows=chunks.filter(chunk=>chunk.sessionId===session.sessionId).sort((a,b)=>a.chunkIndex-b.chunkIndex).flatMap(chunk=>chunk.data);assert.ok(rows.filter(row=>row.rowType!==1).every(row=>Number.isInteger(row.gpsBootId)))}
+ const sessions=await all(db,'sessions'),chunks=await all(db,'chunks');assert.equal(sessions.length,5);assert.ok(sessions.some(s=>s.demoFixture==='circuit-v7'));assert.ok(sessions.some(s=>s.demoFixture==='rolling-v8'));assert.ok(sessions.some(s=>s.demoFixture==='launch-v1'));assert.deepEqual(sessions.filter(s=>s.sessionId===oldId||s.sessionId===userId),beforeSessions);assert.deepEqual(chunks.filter(s=>s.sessionId===oldId||s.sessionId===userId),beforeChunks);
+ for(const session of sessions.filter(s=>['circuit-v7','rolling-v8','launch-v1'].includes(s.demoFixture))){assert.ok(session.label.startsWith('SIM'));const rows=chunks.filter(chunk=>chunk.sessionId===session.sessionId).sort((a,b)=>a.chunkIndex-b.chunkIndex).flatMap(chunk=>chunk.data);assert.ok(rows.filter(row=>row.rowType!==1).every(row=>Number.isInteger(row.gpsBootId)))}
 });
 
 test('live demo boot identity reaches actual stored telemetry rows and saved force windows across scenarios',async()=>{
@@ -71,4 +71,14 @@ test('live demo boot identity reaches actual stored telemetry rows and saved for
   for(let i=0;i<20;i++){const telemetry=await(await c.window.fetch('/api/telemetry')).json(),bytes=Uint8Array.from(Buffer.from(telemetry.data,'base64')),row=c.storedRowForTest(bytes.buffer,telemetry.timing);assert.equal(telemetry.timing.gps_boot_id,gps.boot_id);assert.equal(row.gpsBootId,gps.boot_id);assert.equal(row.gpsSynthetic,1);summary.update(row);now+=40}
   assert.ok(summary.snapshot().samples.forceWindows>0,scenario);assert.equal(summary.snapshot().excluded.clock,0);
  }
+});
+
+
+test('standing example reconstructs launches and quarter-mile estimates with explicit GPS-gap rejection',()=>{
+ const c=fixture(),rows=c.window.examplesForTest('launch');
+ for(const interval of vm.runInContext('runIntervals.filter(i=>i.kind)',c)){
+  const d=vm.runInContext('createRunDetector',c)(interval);for(const row of rows)d.update(row);
+  const accepted=d.results.filter(r=>r.status==='accepted');assert.equal(accepted.length,2,interval.label);assert.ok(d.results.some(r=>r.status==='rejected'&&r.reason==='GPS gap or clock boundary'));assert.ok(accepted.every(r=>r.synthetic===1&&r.startConvention==='stationary-fix-v1'&&r.rolloutM===0));
+ }
+ for(const interval of vm.runInContext('runIntervals.filter(i=>!i.kind)',c)){const d=new c.Runs(interval);for(const row of rows)d.update(row);assert.ok(d.results.some(r=>r.status==='accepted'),interval.label)}
 });

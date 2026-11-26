@@ -24,7 +24,7 @@ Use the existing CSS variables for light/dark themes. Lime marks active timing, 
 - Hide live delta/progress when reference matching is unavailable. Route percentage means matched reference distance, not a completion guarantee.
 - Keep full saved-track names visible in management lists. The compact driving header may truncate a name; setup must retain the full name.
 - Preserve stale-data warnings, recording state, save failures and pending-data recovery.
-- No turn callouts, apex precision, drag times or slope correction until implemented and validated.
+- Present standing-start and quarter-mile results as experimental GPS estimates using the evidence gates and launch conventions in `docs/RUNS.md`; physical timing accuracy remains unvalidated. Turn callouts, apex precision and slope correction remain proposals.
 - Prefer tabular digits and stable bounds. Test long elapsed values and three-digit speed without overlap.
 
 ## Review and assets

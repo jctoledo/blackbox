@@ -39,7 +39,7 @@
  });
  const durations=laps.map(lap=>lap[steps].time),superPeriod=durations.reduce((a,b)=>a+b,0);
  const start=performance.now()-(durations[0]-5000);
- let revision=0,armedCycle=null,paused=false,gpsLogPaused=false,intervalStart=null,demoBoot=1,demoTrack=null;
+ let revision=0,armedCycle=null,paused=false,gpsLogPaused=false,intervalStart=null,standingScenario=false,demoBoot=1,demoTrack=null;
  const json=data=>Promise.resolve(new Response(JSON.stringify(data),{headers:{'Content-Type':'application/json','Cache-Control':'no-store'}}));
  function clock(elapsed){
   let cycle=Math.floor(elapsed/superPeriod)*laps.length,lapMs=elapsed%superPeriod,index=0;
@@ -70,18 +70,27 @@
   else{speed=10;distance=596+10*(p-26);accel=0}
   return {east:cycle*616+distance,north:0,speed,yaw:Math.PI/2,vx:speed,vy:0,lonAccel:accel,latAccel:0,yawRate:0};
  }
- function sampleMotion(elapsed){const c=clock(elapsed);return intervalStart===null?motion(c.index,c.lapMs):intervalMotion(elapsed-intervalStart)}
+ function launchMotion(ms){
+  const t=Math.max(0,ms)/1000,cycle=Math.floor(t/48),p=t%48;
+  let speed=0,distance=0,accel=0;
+  if(p>=2&&p<22){const q=p-2;speed=2*q;distance=q*q;accel=2}
+  else if(p>=22&&p<24){speed=40;distance=400+40*(p-22)}
+  else if(p>=24&&p<44){const q=p-24;speed=40-2*q;distance=480+40*q-q*q;accel=-2}
+  else if(p>=44)distance=880;
+  return {east:cycle*880+distance,north:0,speed,yaw:Math.PI/2,vx:speed,vy:0,lonAccel:accel,latAccel:0,yawRate:0};
+ }
+ function sampleMotion(elapsed){const c=clock(elapsed);return intervalStart===null?motion(c.index,c.lapMs):standingScenario?launchMotion(Math.max(0,elapsed-intervalStart-4000)):intervalMotion(elapsed-intervalStart)}
  // Example recordings use the same motion model and receiver-time evidence as the live demo.
  function exampleRows(kind){
-  const rows=[],base=Date.UTC(2026,0,1,12),duration=kind==='circuit'?Math.floor(durations[0]/40)*40:84000;
+  const rows=[],base=Date.UTC(2026,0,1,12),duration=kind==='circuit'?Math.floor(durations[0]/40)*40:kind==='launch'?144000:84000;
   let priorSeq=0;
   for(let ms=0;ms<=duration;ms+=40){
-   const p=kind==='circuit'?motion(0,ms):intervalMotion(ms),seq=ms/40+1;
+   const p=kind==='circuit'?motion(0,ms):kind==='launch'?launchMotion(ms):intervalMotion(ms),seq=ms/40+1;
    // One deliberate receiver-log gap in the middle interval exercises rejection/export.
-   const missing=kind==='rolling'&&ms>=35000&&ms<35240;
+   const missing=kind==='rolling'&&ms>=35000&&ms<35240||kind==='launch'&&ms>=58000&&ms<58240;
    const lat=origin.lat+p.north/111320,lon=origin.lon+p.east/(111320*Math.cos(origin.lat*Math.PI/180));
-   rows.push({t:base+ms,deviceTimeMs:ms,gpsBootId:kind==='circuit'?101:102,sp:p.speed*3.6,ax:-p.lonAccel,ay:p.latAccel,wz:p.yawRate,latg:p.latAccel/9.81,lng:p.lonAccel/9.81,lat,lon,gpsOk:1,gpsAgeMs:0,imuAgeMs:0,gpsSynthetic:1,ekfX:p.east,ekfY:p.north,ekfYaw:p.yaw,gpsCourse:(p.yaw+tau)%tau});
-   if(!missing){rows.push({t:base+ms,rowType:1,gpsSynthetic:1,gpsBootId:kind==='circuit'?101:102,gpsSeq:seq,gpsHostUs:ms*1000,gpsUtcUs:43200000000+ms*1000,gpsDate:10126,gpsFractionDigits:2,gpsActive:1,gpsAccepted:1,lat,lon,sp:p.speed,gpsCourse:(p.yaw+tau)%tau,gpsMissing:priorSeq?seq-priorSeq-1:0,gpsBoundary:priorSeq?0:1});priorSeq=seq}
+   rows.push({t:base+ms,deviceTimeMs:ms,gpsBootId:kind==='circuit'?101:kind==='launch'?103:102,sp:p.speed*3.6,ax:-p.lonAccel,ay:p.latAccel,wz:p.yawRate,latg:p.latAccel/9.81,lng:p.lonAccel/9.81,lat,lon,gpsOk:1,gpsAgeMs:0,imuAgeMs:0,gpsSynthetic:1,ekfX:p.east,ekfY:p.north,ekfYaw:p.yaw,gpsCourse:(p.yaw+tau)%tau});
+   if(!missing){rows.push({t:base+ms,rowType:1,gpsSynthetic:1,gpsBootId:kind==='circuit'?101:kind==='launch'?103:102,gpsSeq:seq,gpsHostUs:ms*1000,gpsUtcUs:43200000000+ms*1000,gpsDate:10126,gpsFractionDigits:2,gpsActive:1,gpsAccepted:1,lat,lon,sp:p.speed,gpsCourse:(p.yaw+tau)%tau,gpsMissing:priorSeq?seq-priorSeq-1:0,gpsBoundary:priorSeq?0:1});priorSeq=seq}
   }
   return rows;
  }
@@ -117,11 +126,13 @@
  }
  async function populateExamples(track){
   if(typeof openDB!=='function')return;
-  const database=await openDB(),circuit=exampleRows('circuit'),rolling=exampleRows('rolling');
+  const database=await openDB(),circuit=exampleRows('circuit'),rolling=exampleRows('rolling'),launch=exampleRows('launch');
   // New evidence-complete fixture IDs add examples without rewriting old/user rows.
-  await seedExampleRecording(database,'SIM · Circuit drive',circuit,'circuit-v7');
-  await seedExampleRecording(database,'SIM · Rolling drive + GPS gap',rolling,'rolling-v8');
+  const circuitId=await seedExampleRecording(database,'SIM · Circuit drive',circuit,'circuit-v7');
+  const rollingId=await seedExampleRecording(database,'SIM · Rolling drive + GPS gap',rolling,'rolling-v8');
+  const launchId=await seedExampleRecording(database,'SIM · Standing starts + GPS gap',launch,'launch-v1');
   updatePerformanceRuns(rolling);
+  updatePerformanceRuns(launch);
   // Warm the page-session force summary from the simulated lead-in, not invented peaks.
   const elapsed=Math.floor(performance.now()-start);
   for(let ms=0;ms<=elapsed;ms+=40){const c=clock(ms),p=motion(c.index,c.lapMs);effortPeaks.update(ms,p.lonAccel/9.81,sustainedEffortUsable(p.speed,1,0,0),p.latAccel/9.81)}
@@ -129,7 +140,8 @@
    let at=Date.UTC(2026,0,1,12);
    durations.slice(0,3).forEach((lapTimeMs,i)=>{at+=Math.round(lapTimeMs);tx.objectStore('lap_history').put({id:'demo-history-v6-'+i,trackId:track.id,sessionId:'demo-history-v6',sessionStart:Date.UTC(2026,0,1,12),timestamp:at,lapTimeMs:Math.round(lapTimeMs),lapNumber:i+1})});
   });
-  document.getElementById('demo-note').textContent='Synthetic circuit with left/right turns. Saved data includes a circuit and rolling-interval example with a deliberate GPS gap. No measured driving data.';
+  document.getElementById('demo-note').textContent='Synthetic circuit, rolling and standing-start examples. Saved GPS evidence includes deliberate gaps. No measured driving data.';
+  return {circuitId,rollingId,launchId};
  }
  window.fetch=(input,options={})=>{
   const url=new URL(String(input),location.href),elapsed=performance.now()-start,c=clock(elapsed);
@@ -177,14 +189,17 @@
   const drivePreview=new URL(location.href).searchParams.get('view')==='drive';
   if(drivePreview)suppressDriveSuggestions();
   document.getElementById('demo-drive').onclick=async()=>{suppressDriveSuggestions();if(activeTrack)await deactivateTrack();document.getElementById('menu-overlay')?.classList?.remove('open');renderDrive()};
-  document.getElementById('demo-interval').onclick=async event=>{
-   intervalStart=intervalStart===null?Math.floor(performance.now()-start):null;demoBoot++;revision++;armedCycle=null;
-   event.target.textContent=intervalStart===null?'Simulate rolling interval':'Return to circuit demo';
-   document.getElementById('demo-note').textContent=intervalStart===null?'Synthetic circuit and sensor texture. No measured driving data.':'Synthetic straight-line mph and km/h intervals, including 80–120 km/h. Record a session, then open Runs; presets follow Speed units. No measured driving data.';
+  async function switchRunScenario(standing){
+   intervalStart=intervalStart!==null&&standingScenario===standing?null:Math.floor(performance.now()-start);standingScenario=standing;demoBoot++;revision++;armedCycle=null;
+   document.getElementById('demo-interval').textContent=intervalStart!==null&&!standingScenario?'Return to circuit demo':'Simulate rolling interval';
+   document.getElementById('demo-launch').textContent=intervalStart!==null&&standingScenario?'Return to circuit demo':'Simulate standing start';
+   document.getElementById('demo-note').textContent=intervalStart===null?'Synthetic circuit and sensor texture. No measured driving data.':standing?'Synthetic stationary launches and quarter-mile estimates. Record a session, then open Runs. No measured driving data.':'Synthetic straight-line mph and km/h intervals. Record a session, then open Runs. No measured driving data.';
    document.getElementById('menu-overlay')?.classList?.remove('open');
    if(intervalStart===null&&demoTrack)await activateTrack(demoTrack);
    else if(typeof deactivateTrack==='function')await deactivateTrack();
-  };
+  }
+  document.getElementById('demo-interval').onclick=()=>switchRunScenario(false);
+  document.getElementById('demo-launch').onclick=()=>switchRunScenario(true);
   document.getElementById('demo-gps-log').onclick=event=>{gpsLogPaused=!gpsLogPaused;event.target.textContent=gpsLogPaused?'Resume GPS timestamp log':'Pause GPS timestamp log'};
   document.getElementById('demo-connection').onclick=event=>{paused=!paused;event.target.textContent=paused?'Restore connection':'Simulate disconnect'};
   try{
@@ -198,7 +213,8 @@
     await saveRefLap({id:'demo-reference-v6',trackId:id,lapTimeMs:Math.round(durations[0]),created:Date.now(),samples:pairs.buffer,sampleCount:steps+1,totalDistance:track.pathLength,spatial:{version:1,closed:true,origin,points:laps[0].map(p=>({x:p.x,y:p.y,t:Math.min(p.time,Math.round(durations[0]))}))}});
    }
    demoTrack=track;if(!drivePreview){await activateTrack(track);armedCycle=clock(performance.now()-start).cycle-1;}
-   await populateExamples(track);
+   const examples=await populateExamples(track);
+   if(new URL(location.href).searchParams.get('view')==='replay'&&examples&&typeof openRecordingReplay==='function')await openRecordingReplay(examples.circuitId);
    if(drivePreview){const databaseForDrive=await openDB();await loadLatestDrive(databaseForDrive,await idbPromise(databaseForDrive.transaction('sessions','readonly').objectStore('sessions').getAll()));renderDrive()}
   }catch(error){document.getElementById('demo-note').textContent='Simulated data. Browser storage unavailable; recording and saved tracks require storage access.';console.error(error)}
  });

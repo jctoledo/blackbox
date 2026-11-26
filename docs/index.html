@@ -10,11 +10,11 @@
     <meta property="og:title" content="Blackbox - Open Source Vehicle Telemetry">
     <meta property="og:description" content="GPS + IMU sensor fusion for vehicle dynamics. Lap timer with delta display. DIY hardware. Rust firmware. Your data.">
     <meta property="og:url" content="https://jctoledo.github.io/blackbox/">
-    <meta property="og:image" content="https://jctoledo.github.io/blackbox/dashboard-cluster-v12.jpg">
+    <meta property="og:image" content="https://jctoledo.github.io/blackbox/dashboard-cluster-v14.jpg">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Blackbox — GPS lap timing and open vehicle telemetry">
     <meta name="twitter:description" content="Build an ESP32-C3 instrument for your drive. Rust firmware, GPS + IMU sensing, and a local browser dashboard.">
-    <meta name="twitter:image" content="https://jctoledo.github.io/blackbox/dashboard-cluster-v12.jpg">
+    <meta name="twitter:image" content="https://jctoledo.github.io/blackbox/dashboard-cluster-v14.jpg">
     <meta name="robots" content="index,follow,max-image-preview:large">
     <meta name="theme-color" content="#090d12">
     <link rel="sitemap" type="application/xml" href="sitemap.xml">
@@ -54,9 +54,6 @@
 }
     </script>
 
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&display=swap" rel="stylesheet">
     <style>
 @font-face{font-family:Inter;font-style:normal;font-weight:400 800;font-display:swap;src:url('assets/fonts/inter.woff2') format('woff2')}
 @font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:400 700;font-display:swap;src:url('assets/fonts/jetbrains-mono.woff2') format('woff2')}
@@ -86,8 +83,9 @@
 .portrait-showcase{display:grid;grid-template-columns:1fr 1.25fr;align-items:center;gap:80px;padding-top:48px;border-top:1px solid var(--border)}.portrait-stage{width:100%;max-width:302px;justify-self:center}.portrait-stage .screen-link{padding:6px;border-radius:22px;border-color:var(--border-light);box-shadow:0 24px 60px #0007}.portrait-stage img{border-radius:16px}.portrait-stage figcaption{text-align:center;color:var(--text-muted);font:10px var(--mono);letter-spacing:.08em;margin-top:20px}.portrait-copy h3{font:700 clamp(36px,4vw,52px)/1.05 'Barlow Condensed',Impact,sans-serif;text-transform:uppercase}.portrait-copy>p{margin:20px 0}.portrait-copy ul{list-style:none;margin:24px 0 28px;display:grid;gap:18px}.portrait-copy li{font-size:15px;color:var(--text-dim)}.portrait-copy strong{display:block;color:var(--text);font-weight:600}.portrait-copy .capture-note{font-size:12px;color:var(--text-muted);max-width:460px}
 @media(max-width:650px){.cockpit-heading{grid-template-columns:1fr;gap:20px;margin-bottom:26px}.cockpit-heading p{font-size:16px}.cluster-stage{padding:12px;border-radius:12px;margin-inline:-12px}.screen-label{font-size:9px;flex-wrap:wrap;gap:4px;margin-bottom:12px}.screen-label span:last-child{font-size:8px}.cluster-stage figcaption{font-size:11px;gap:12px;margin-top:12px}.cluster-stage figcaption span{max-width:190px}.cockpit-details{grid-template-columns:1fr;gap:20px;margin:28px 0 40px}.cockpit-details article{padding-top:16px}.cockpit-details h3{display:inline;margin-left:12px}.cockpit-details p{margin-top:10px}.portrait-showcase{grid-template-columns:1fr;gap:28px;padding-top:36px}.portrait-stage{max-width:280px}.portrait-copy h3{font-size:40px}.portrait-copy .eyebrow{margin-bottom:14px}}
 .instrument-previews{max-width:894px;margin:20px auto}.instrument-previews details{border-top:1px solid var(--border,#344554);padding:16px 0}.instrument-previews summary{cursor:pointer;font-weight:600;min-height:44px;display:list-item}.instrument-previews p{font-size:14px;line-height:1.6;color:var(--muted,#a6b2bd);margin-top:12px}</style>
+    <link rel="stylesheet" href="site-theme.css">
 </head>
-<body>
+<body class="bbSite">
     <nav class="nav" id="nav">
         <div class="nav-inner">
             <a href="./" class="nav-brand">
@@ -101,7 +99,7 @@
             </a>
             <div class="nav-links">
                 <a href="demo.html?v=0.0.4-rc.20" class="demo-nav">Try demo</a>
-                <a href="#build">Build</a>
+                <a href="#replay">Replay</a><a href="#build">Build</a>
                 <a href="guides/diy-gps-lap-timer.html">Docs</a>
                 <a href="https://github.com/jctoledo/blackbox" target="_blank">GitHub</a>
                 <a href="#flash" class="nav-cta">Flash</a>
@@ -133,30 +131,39 @@
         </div>
     </section>
 
+
+    <section class="section replay-feature" id="replay" aria-labelledby="replay-title">
+      <div class="section-inner">
+        <div class="replay-feature-head"><div><span class="eyebrow">RECORD / SAVE / REPLAY</span><h2 id="replay-title">Keep the drive.<br>Read it back.</h2></div><div><p>Play a saved circuit, rolling run or standing-start example. Follow speed and load together, pause on a moment, or scrub through the recording.</p><div class="hero-ctas"><a href="demo.html?view=replay" class="btn btn-primary">Open recording replay</a><a href="guides/recording-replay.html" class="btn btn-secondary">How recording works</a></div></div></div>
+        <div class="replay-preview" id="replay-preview"><img src="dashboard-replay-v14.jpg" width="844" height="390" alt="Saved SIM drive replay with a load map, speed, combined G and a playback timeline" loading="lazy"><button id="load-replay-preview" type="button"><svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M5 3l12 7-12 7z"/></svg>Play a saved drive</button></div>
+        <div class="replay-provenance"><span>SIM RECORDINGS · INTERACTIVE PLAYBACK</span><span>Your recordings stay in your browser.</span></div>
+      </div>
+    </section>
+
     <section class="section cockpit" id="dashboard" aria-labelledby="cockpit-title">
         <div class="section-inner">
-            <div class="cockpit-heading"><div><span class="eyebrow">THE VIEW FROM YOUR SEAT</span><h2 id="cockpit-title">Your phone.<br>Your instrument panel.</h2></div><p>Turn your phone sideways. Tap the instrument name to choose Speed, G-meter, Peaks or Runs, or swipe to switch. Timing stays in place with a track selected. Without one, Drive shows recording duration, partial GPS distance and data health. Controls brings back the toolbar when you need it.</p></div>
+            <div class="cockpit-heading"><div><span class="eyebrow">THE VIEW FROM YOUR SEAT</span><h2 id="cockpit-title">Your phone.<br>Your instrument panel.</h2></div><p>Timing stays in place while you switch between Speed, G-meter, Peaks and Runs. No track selected? Drive keeps recording duration, qualified distance and data health in view.</p></div>
             <figure class="cluster-stage">
                 <div class="screen-label"><span>01 / LANDSCAPE CLUSTER</span><span>ACTUAL INTERFACE · SIMULATED DATA</span></div>
-                <a class="screen-link" href="dashboard-cluster-v12.jpg" target="_blank" rel="noopener" aria-label="Open full-size landscape dashboard screenshot"><img src="dashboard-cluster-v12.jpg" alt="Landscape dashboard with a large speed readout beside elapsed lap time, reference delta and route progress" width="844" height="390" loading="lazy"></a>
-                <figcaption><span>Tap the instrument name or swipe: Speed / G-meter / Peaks / Runs.</span><a href="dashboard-cluster-v12.jpg" target="_blank" rel="noopener">View full size ↗</a></figcaption>
+                <a class="screen-link" href="dashboard-cluster-v14.jpg" target="_blank" rel="noopener" aria-label="Open full-size landscape dashboard screenshot"><img src="dashboard-cluster-v14.jpg" alt="Landscape dashboard with a large speed readout beside elapsed lap time, reference delta and last/best results" width="844" height="390" loading="lazy"></a>
+                <figcaption><span>Tap the instrument name or swipe: Speed / G-meter / Peaks / Runs.</span><a href="dashboard-cluster-v14.jpg" target="_blank" rel="noopener">View full size ↗</a></figcaption>
             </figure>
             <div class="instrument-previews">
-                <details><summary>Explore the G-meter view</summary><a class="screen-link" href="dashboard-forces-v11.jpg" target="_blank" rel="noopener"><img src="dashboard-forces-v11.jpg" alt="G-meter with a fixed one-g scale, three-second trace and signed force estimates beside lap timing" width="844" height="390" loading="lazy"></a><p>A fixed scale keeps the trace comparable through a turn. Missing data clears the live readings; over-scale forces are marked.</p></details>
-                <details><summary>Explore the Peaks view</summary><a class="screen-link" href="dashboard-peaks-v11.jpg" target="_blank" rel="noopener"><img src="dashboard-peaks-v11.jpg" alt="Peak acceleration, braking, left and right half-second force averages beside lap timing" width="844" height="390" loading="lazy"></a><p>Review the strongest half-second averages ending at received samples from this page session. Fresh moving samples qualify; isolated spikes do not become instant records.</p></details>
-                <details><summary>Explore the Runs view</summary><a class="screen-link" href="dashboard-runs-v11.jpg" target="_blank" rel="noopener"><img src="dashboard-runs-v11.jpg" alt="Runs instrument with last and best estimates from labelled synthetic 80–120 km/h evidence" width="844" height="390" loading="lazy"></a><p>Review 30–60 / 45–70 mph or 50–100 / 80–120 km/h runs. The menu follows your units; each named test keeps its own times, GPS evidence and rejected attempts. <a href="guides/rolling-runs.html">Timing rules and limits →</a> · <a href="dashboard-runs-chooser-v11.jpg" target="_blank" rel="noopener">See the opened interval picker ↗</a></p></details>
-                <details><summary>Record an ordinary drive</summary><a class="screen-link" href="dashboard-drive-v9.png" target="_blank" rel="noopener"><img src="dashboard-drive-v9.png" alt="No-track Drive panel showing recording duration, partial GPS observed distance and storage health beside speed" width="844" height="390" loading="lazy"></a><p>No track required. Start a recording, see duration and qualified GPS distance, then Stop to freeze the summary. Gaps stay explicit. <a href="demo.html?view=drive&amp;v=0.0.4-rc.20">Try the Drive panel →</a> · <a href="guides/drive-recording.html">How distance and recovery work →</a></p></details>
+                <details><summary>Explore the G-meter view</summary><a class="screen-link" href="dashboard-forces-v14.jpg" target="_blank" rel="noopener"><img src="dashboard-forces-v14.jpg" alt="Occupant load map with measured combined G, directional components and a three-second trace beside timing" width="844" height="390" loading="lazy"></a><p>Measured components drive the combined-G readout and load map. A right turn loads the left; braking moves forward. The scale stays fixed, and missing data clears the target and numbers.</p></details>
+                <details><summary>Explore the Peaks view</summary><a class="screen-link" href="dashboard-peaks-v14.jpg" target="_blank" rel="noopener"><img src="dashboard-peaks-v14.jpg" alt="Peak acceleration, braking, left and right half-second force averages beside lap timing" width="844" height="390" loading="lazy"></a><p>Review the strongest half-second averages ending at received samples from this page session. Fresh moving samples qualify; isolated spikes do not become instant records.</p></details>
+                <details><summary>Explore the Runs view</summary><a class="screen-link" href="dashboard-runs-v14.jpg" target="_blank" rel="noopener"><img src="dashboard-runs-v14.jpg" alt="Runs instrument with experimental 0–100 km/h GPS launch estimates from labelled synthetic receiver evidence" width="844" height="390" loading="lazy"></a><p>Choose from six tests: four rolling ranges, experimental 0–60 mph / 0–100 km/h, and a quarter-mile. Standing tests use a GPS launch estimate with no rollout. The menu follows your units; each named test keeps its own times, GPS evidence and rejected attempts. <a href="guides/rolling-runs.html">Timing rules and limits →</a> · <a href="dashboard-runs-chooser-v14.jpg" target="_blank" rel="noopener">See the opened interval picker ↗</a></p></details>
+                <details><summary>Record an ordinary drive</summary><a class="screen-link" href="dashboard-drive-v14.jpg" target="_blank" rel="noopener"><img src="dashboard-drive-v14.jpg" alt="No-track Drive panel showing recording duration, partial GPS observed distance and storage health beside speed" width="844" height="390" loading="lazy"></a><p>No track required. Start a recording, see duration and qualified GPS distance, then Stop to freeze the summary. Gaps stay explicit. <a href="demo.html?view=drive&amp;v=0.0.4-rc.20">Try the Drive panel →</a> · <a href="guides/drive-recording.html">How distance and recovery work →</a></p></details>
                 <details><summary>Review a saved drive</summary><a class="screen-link summary-preview" href="assets/recording-summary-v2.jpg" target="_blank" rel="noopener"><img src="assets/recording-summary-v2.jpg" alt="Saved synthetic circuit recording with maximum speed and sustained acceleration, braking, left and right force estimates, qualified sample counts and provenance" width="390" height="844" loading="lazy"></a><p>Review a recording’s maximum qualified speed, strongest sample-ending half-second force estimates, data gaps and sample quality. Values stay tied to that recording. <a href="guides/recording-summary.html">Read the summary rules →</a></p></details>
                 <details><summary>Inspect sensor readiness</summary><a class="screen-link" href="assets/diagnostics-landscape-v1.jpg" target="_blank" rel="noopener"><img src="assets/diagnostics-landscape-v1.jpg" alt="Diagnostics SIM view showing synthetic receiver and IMU rate counters and a visible Dashboard return button" width="667" height="375" loading="lazy"></a><p>Check sensor status and delivered update counters before setting off. These demo values are synthetic; validate actual rates with your own device readings and exported data. <a href="guides/maths-and-rates.html">What the rates mean →</a></p></details>
-            </div>
             <details><summary>Name a captured track while recording continues</summary><p>Park, name your captured route, then save it and arm timing. The naming panel keeps browser collection running while you decide. <a href="assets/recording-name-portrait-v1.png">See portrait naming</a> · <a href="assets/recording-name-landscape-v1.png">See landscape naming</a>. Actual interface with synthetic demo data. <a href="guides/gps-logging.html">Recording limits and GPS evidence</a>.</p></details>
+            </div>
             <div class="cockpit-details">
                 <article><span class="detail-number">01</span><h3>Time comes first.</h3><p>Elapsed time stays prominent. Best and last laps give it context.</p></article>
                 <article><span class="detail-number">02</span><h3>A reference, not a guess.</h3><p>Compare time at a matched position on your saved route. Negative is ahead; positive is behind. Detected gaps and ambiguous matches hide the estimate.</p></article>
                 <article><span class="detail-number">03</span><h3>Know where you stand.</h3><p>Route progress, connection and recording status share the screen. No digging through menus to find them.</p></article>
             </div>
             <div class="portrait-showcase">
-                <figure class="portrait-stage"><a class="screen-link" href="dashboard-portrait-v12.jpg" target="_blank" rel="noopener" aria-label="Open full-size portrait dashboard screenshot"><img src="dashboard-portrait-v12.jpg" alt="Portrait Blackbox dashboard showing track and recording controls above lap timing and speed" width="390" height="844" loading="lazy"></a><figcaption>02 / PORTRAIT DASHBOARD</figcaption></figure>
+                <figure class="portrait-stage"><a class="screen-link" href="dashboard-portrait-v14.jpg" target="_blank" rel="noopener" aria-label="Open full-size portrait dashboard screenshot"><img src="dashboard-portrait-v14.jpg" alt="Portrait Blackbox dashboard showing track and recording controls above lap timing and speed" width="390" height="844" loading="lazy"></a><figcaption>02 / PORTRAIT DASHBOARD</figcaption></figure>
                 <div class="portrait-copy"><span class="eyebrow">PARK. REVIEW. GO AGAIN.</span><h3>Everything else,<br>within reach.</h3><p>Choose a circuit or stage. Start a recording. Bring back a saved session. Portrait keeps your setup controls close without losing the timing display.</p><ul><li><strong>Your session, saved locally.</strong> Export session and GPS timestamp CSVs, keep firmware and sensor context with new recordings, and download a backup of recordings and tracks.</li><li><strong>A record of your drive.</strong> Open a saved recording’s Summary for maximum speed, sustained forces and data gaps. Analysis shows the live force detail while parked.</li><li><strong>A place on your dashboard.</strong> Use Full screen where supported, or Phone setup for Android and iPhone Home Screen guidance.</li></ul><a class="btn btn-primary" href="demo.html?v=0.0.4-rc.20">Try the dashboard ↗</a><p class="capture-note"><a href="assets/recording-details-v2.png" target="_blank" rel="noopener">See recording context ↗</a> · <a href="assets/recording-summary-v2.jpg" target="_blank" rel="noopener">See a saved drive summary ↗</a> · Synthetic examples.</p><p class="capture-note">Captured from the actual dashboard with synthetic telemetry. The device bundles the same fonts for offline use. Rotate between portrait setup and the landscape cluster.</p></div>
             </div>
         </div>
@@ -265,7 +272,7 @@
 
     <section class="section quickstart" id="start">
         <div class="section-inner"><span class="eyebrow">FROM BENCH TO DASHBOARD</span><h2>Three steps to your first session.</h2>
-        <ol class="start-grid"><li><span>01</span><h3>Build &amp; flash</h3><p>Wire the ESP32-C3, WT901, GPS, and LED. Choose firmware for your GPS model and connect over USB.</p></li><li><span>02</span><h3>Connect &amp; settle</h3><p>Keep the sensor stationary for startup calibration; use level ground for the initial baseline. Join its Wi-Fi, open the dashboard, and wait for a fresh GPS fix outdoors.</p></li><li><span>03</span><h3>Record &amp; return</h3><p>Start Record session for an ordinary drive. For circuit or stage timing, record a route, save and arm it while safely parked, then cross the start on a later pass.</p></li></ol>
+        <ol class="start-grid"><li><span>01</span><h3>Build &amp; flash</h3><p>Wire the ESP32-C3, WT901, GPS, and LED. Choose firmware for your GPS model and connect over USB.</p></li><li><span>02</span><h3>Connect &amp; settle</h3><p>Keep the sensor stationary for startup calibration; use level ground for the initial baseline. Join its Wi-Fi, open the dashboard, and wait for a fresh GPS fix outdoors.</p></li><li><span>03</span><h3>Record &amp; return</h3><p>Start Record session for an ordinary drive. For circuit or stage timing, hold still for the five-second start capture, record a route, then save and arm it while safely parked, then cross the start on a later pass.</p></li></ol>
         <p class="field-note">In active development. Timing accuracy depends on GPS reception, update rate, and line geometry. Validate your setup before relying on lap results. <a href="guides/lap-timer.html">Setup and timing guide</a></p>
         </div>
     </section>
@@ -342,12 +349,13 @@
             <a href="guides/lap-timer.html">Lap Timer Guide</a>
             <a href="guides/sensor-fusion.html">Sensor Fusion Guide</a>
             <a href="guides/engineering-review.html">How it works</a><a href="guides/build.html">Build journal</a>
-            <a href="guides/first-drive.html">First drive</a><a href="guides/hardware-validation.html">Hardware checklist</a><a href="guides/faq.html">FAQ</a><a href="guides/gps-logging.html">GPS logging</a><a href="guides/drive-recording.html">Drive recording</a><a href="guides/recording-summary.html">Saved summaries</a><a href="guides/maths-and-rates.html">Maths &amp; rates</a><a href="guides/mount-alignment.html">Align sensor to car</a><a href="guides/rolling-runs.html">Rolling intervals</a><a href="guides/comparison.html">Build or buy</a><a href="demo.html?v=0.0.4-rc.20">Live demo</a><a href="llms.txt">Project index</a>
+            <a href="guides/first-drive.html">First drive</a><a href="guides/hardware-validation.html">Hardware checklist</a><a href="guides/faq.html">FAQ</a><a href="guides/gps-logging.html">GPS logging</a><a href="guides/drive-recording.html">Drive recording</a><a href="guides/recording-summary.html">Saved summaries</a><a href="guides/maths-and-rates.html">Maths &amp; rates</a><a href="guides/mount-alignment.html">Align sensor to car</a><a href="guides/rolling-runs.html">Performance runs</a><a href="guides/comparison.html">Build or buy</a><a href="demo.html?v=0.0.4-rc.20">Live demo</a><a href="llms.txt">Project index</a>
             <a href="https://github.com/jctoledo/blackbox/issues">Issues</a>
         </div>
         <details class="motion-preferences"><summary>Display preferences</summary><button class="motion-toggle" id="motion-toggle" aria-pressed="false" aria-controls="hero-video">Pause background</button></details><p>Code under MIT License</p>
     </footer>
 
+    <script src="replay-preview.js"></script>
     <script src="site-motion.js?v=circuit-1"></script>
     <script src="projects-config.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/adam-weber/esp-webflash-toolkit@c9b61384b1217545bdb70e7762e4e4fa36dfdc7c/dist/esp-webflash-toolkit.min.js"></script>

@@ -75,9 +75,9 @@ Open **Saved data → Summary · saved samples**. It derives maximum qualified s
 
 The summary is also included in **Recording details → Download details JSON**, with speed in m/s and forces in g. Display units follow your preference; raw export units stay documented. See [summary calculations](RECORDING_SUMMARY.md). These estimates do not measure tyre grip or braking distance.
 
-## Which rolling runs follow my units setting?
+## Where are rolling intervals, 0–60 and quarter-mile tests?
 
-**Menu → Speed units** selects lower-speed/overtaking presets: **30–60 / 45–70 mph** or **50–100 / 80–120 km/h**. The corresponding categories are different tests, not exact conversions. All four detectors keep their own literal thresholds and results; switching units preserves the category without converting an existing time into another test. Recording is required. Standing-start 0–60, quarter-mile launch/rollout rules and slope correction remain proposals. See [Runs](RUNS.md).
+Turn the phone sideways, choose **Runs**, then tap its interval button. There are six choices: four rolling ranges, experimental 0–60 mph / 0–100 km/h, and a quarter-mile. **Menu → Speed units** selects the rolling counterparts: 30–60, 45–70, 50–60 and 60–80 mph, or 50–100, 80–120, 80–100 and 100–130 km/h. Results stay attached to their literal test; quarter-mile remains exactly 402.336 m in both preferences. Recording is required. Standing estimates require a stationary lead-in and use a documented GPS launch convention with no rollout. They are not validated drag timing; slope correction is not implemented. See [Runs](RUNS.md).
 
 ## Do recordings remember the firmware and sensor setup?
 
@@ -162,3 +162,7 @@ Download a full backup from Saved data before changing browser or launch mode. H
 ## Can I calibrate a rotated device mount?
 
 **Menu → Align sensor to car** provides an experimental candidate workflow for nearly level horizontal mounting. It uses signed GPS deceleration and consistent straight-line brake vectors, then requires saving while parked. It corrects force axes, not lap timing or GPS heading. See [the alignment guide](CALIBRATION.md). Forward travel, mounting, signs and physical accuracy still require operator validation.
+
+## Can I replay a recording?
+
+Yes. Stop recording, open **Saved data**, then choose **Replay**. The viewer plays committed speed and force samples without feeding them back into live timing or recording. The [website examples](https://jctoledo.github.io/blackbox/demo.html?view=replay) use stored SIM drives. See [recording and playback](REPLAY.md) for offline behavior, freshness gaps and limits.

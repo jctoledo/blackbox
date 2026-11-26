@@ -40,7 +40,7 @@ test('Runs CSV is derived from saved GPS evidence and reports rejected attempts'
  const rows=Array.from({length:220},(_,i)=>row(i,18+i*.08,{gpsSynthetic:1}));
  const csv=c.runsToCSV(rows).trim().split('\n');assert.ok(csv.length>=2);assert.match(csv[1],/^45-70 mph,accepted,/);assert.ok(Math.abs(Number(csv[1].split(',')[3])-5.588)<1e-9);assert.equal(csv[1].split(',').at(-1),'1');
  rows[60]={...rows[60],gpsAccepted:0};assert.match(c.runsToCSV(rows),/rejected,GPS evidence incomplete/);
- assert.throws(()=>c.runsToCSV([]),/No rolling interval attempts/);
+ assert.throws(()=>c.runsToCSV([]),/No performance attempts/);
 });
 
 for(const interval of [{label:'30-60 mph',lo:30*.44704,hi:60*.44704},{label:'50-100 km/h',lo:50/3.6,hi:100/3.6}]){
@@ -53,7 +53,7 @@ for(const interval of [{label:'30-60 mph',lo:30*.44704,hi:60*.44704},{label:'50-
 test('no start from a brief threshold spike and no repeat until rearmed below threshold',()=>{const c=context(),d=new c.Runs();for(let i=0;i<220;i++)d.update(row(i,i===30?20.15:i===31?19.9:19.6));assert.equal(d.results.some(r=>r.status==='accepted'),false);assert.ok(d.results.some(r=>r.reason==='Start not sustained'))});
 
 test('all intervals work at 5 Hz and rearm only on a new below-threshold lead-in',()=>{
- const c=context();for(const interval of vm.runInContext('runIntervals',c)){
+ const c=context();for(const interval of vm.runInContext('runIntervals.filter(i=>!i.kind)',c)){
   const d=new c.Runs(interval);for(let i=0;i<100;i++)d.update(row(i,10+i*.4,{gpsUtcUs:1000000+i*200000}));
   assert.equal(d.results.filter(r=>r.status==='accepted').length,1);
   assert.ok(Math.abs(d.results[0].seconds-(interval.hi-interval.lo)/2)<1e-8);

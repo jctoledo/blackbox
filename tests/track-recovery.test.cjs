@@ -14,7 +14,7 @@ async function fixture(){
   trackAutoDetector:{withdraw(){},beginTrackChange(){},endTrackChange(){}},getGpsRef:()=>({lat:37,lon:-122}),currentPos:{valid:true,x:0,y:0,lat:37,lon:-122,speed:20,yaw:0,sigma:2},
   activateTrack:async()=>{arms++;return true}};
  vm.createContext(c);vm.runInContext(slice('function validGpsCoordinates(', '// Track Manager IndexedDB'),c);vm.runInContext(slice('async function saveTrack(', 'async function getTrack('),c);vm.runInContext(slice('// Track Recording Functions','async function updateTrackBestLap('),c);
- await c.startTrackRecording('point_to_point');
+ await c.beginCapturedTrackRecording('point_to_point');
  return{c,$,database,alerts,events,arms:()=>arms,async rows(){return new Promise((resolve,reject)=>{const tx=database.transaction('tracks'),r=tx.objectStore('tracks').getAll();r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)})},points(count=12){for(let i=1;i<count;i++)c.trackRecorder.addSample({x:i*10,y:0,lat:37,lon:-122+i*.00012,speed:10,heading:0,sigma:2});c.onLoopDetected()}};
 }
 test('invalid finish retains route ownership and Continue can collect enough points',async()=>{

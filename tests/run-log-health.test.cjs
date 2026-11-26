@@ -34,6 +34,6 @@ test('Drive exposes the same GPS-log health while ordinary sensor readiness rema
  const {c}=setup();Object.assign(c,{activeTrack:null,latestDriveRecording:null,driveReadiness:{at:100,gps:true,imu:true},db:{},recordingError:'',lastSaveMono:null,speedUnit:'km/h'});
  vm.runInContext(slice('// Drive session core.','// End Drive session core.')+';recordingContext={sessionId:7,driveSession:new DriveSession(7)};recordingContext.driveSession.apply({owner:7,type:"start",mono:0,wall:0});',c);
  vm.runInContext(slice('function driveDuration(','async function loadLatestDrive('),c);c.requestDevice=async()=>({ok:false});await c.collectGpsLog();c.renderDrive();
- assert.match(c.$('drive-health').textContent,/Connected.*GPS ready.*GPS log unavailable/);assert.equal(c.$('drive-health').attrs['data-unavailable'],'true');
+ assert.match(c.$('drive-health').textContent,/GPS log unavailable/);assert.match(c.$('drive-health').title,/Connected.*GPS ready.*GPS log unavailable/);assert.equal(c.$('drive-health').attrs['data-unavailable'],'true');
  c.rec=false;c.renderDrive();assert.doesNotMatch(c.$('drive-health').textContent,/GPS log unavailable/);assert.equal(c.$('drive-health').attrs['data-unavailable'],'false');
 });

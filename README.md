@@ -165,9 +165,9 @@ While parked, open **Saved data → Summary · saved samples** for a recording�
 
 Nearby-track suggestions stay in a reserved notice row. **Dismiss** suppresses that track until page reload; only **Activate** arms timing, and neither action starts recording.
 
-Landscape offers Speed, G-meter, sustained Peaks and Runs, with timing or Drive alongside. Tap the instrument name to reveal its picker, or swipe horizontally to switch; the picker closes after selection. Speed includes a subtle maximum speed estimate while GPS is fresh for this page session. 
+Landscape offers Speed, an occupant-load G-meter with combined horizontal G, sustained Peaks and Runs, with timing or Drive alongside. Tap the instrument name to reveal its picker, or swipe horizontally to switch; the picker closes after selection. Speed includes a subtle maximum speed estimate while GPS is fresh for this page session. A compact speed readout stays visible with the other landscape instruments.
 
-Choose **Menu → Speed units** for mph or km/h; the preference stays in this browser and applies to Speed and MAX. Drive distance follows the same preference in mi/km. Runs shows 30–60 / 45–70 mph or 50–100 / 80–120 km/h. These are purpose counterparts, not exact conversions: all four detectors keep independent literal results and export labels. Recording/export units do not change. Tap Controls for the toolbar; the G-meter uses a selectable fixed scale and clears when data becomes unavailable.
+Choose **Menu → Speed units** for mph or km/h; the preference stays in this browser and applies to Speed and MAX. Drive distance follows the same preference in mi/km. Runs offers four rolling intervals, experimental 0–60 mph / 0–100 km/h and a quarter-mile. Its six choices follow your unit preference; each named test retains its own literal thresholds and results. Standing estimates use a documented GPS launch convention with no rollout. Recording/export units do not change. Tap Controls for the toolbar; the G-meter uses a selectable fixed scale and clears when data becomes unavailable.
 
 ![Landscape cluster with synthetic demo data](docs/dashboard-cluster-v10.png)
 
@@ -515,4 +515,6 @@ New recordings in **v0.0.4-rc.11 and later** request one firmware/configuration/
 
 For the implemented equations, rate budgets, force-display semantics and current driveway-calibration limitation, see [Maths and update rates](docs/MATHS_AND_RATES.md).
 
-[Rolling interval estimates](docs/RUNS.md) use receiver timestamps for 30–60 / 45–70 mph and 50–100 / 80–120 km/h, with rejected-attempt evidence in Runs CSV. Standing-start 0–60 and slope correction are not yet implemented.
+[Performance run estimates](docs/RUNS.md) offer 30–60, 45–70, 50–60 and 60–80 mph (metric counterparts 50–100, 80–120, 80–100 and 100–130 km/h), experimental 0–60 mph / 0–100 km/h and quarter-mile GPS launch estimates. Runs CSV retains accepted/rejected evidence and launch conventions. Rollout and slope correction are not implemented.
+
+[Record and replay](docs/REPLAY.md): saved sessions have a read-only player with a load map, speed, Play/Pause and a scrubber. [Try the stored SIM drives](https://jctoledo.github.io/blackbox/demo.html?view=replay).
