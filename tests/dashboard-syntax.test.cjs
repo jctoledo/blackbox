@@ -1,0 +1,2 @@
+const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+test('the complete device script parses as shipped, beyond individually tested function slices',()=>{const html=fs.readFileSync('sensors/blackbox/web/dashboard.html','utf8');let count=0;for(const block of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)){new vm.Script(block[1]);count++}assert.ok(count>0)});

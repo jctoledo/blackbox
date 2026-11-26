@@ -20,7 +20,7 @@
 }
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:Inter,-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display',system-ui,sans-serif;background:var(--bg);color:var(--text);height:100vh;height:100dvh;display:flex;flex-direction:column;-webkit-user-select:none;user-select:none;overflow:hidden;transition:background 0.3s,color 0.3s}
-.bbNum{font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1,"lnum" 1}
+.bbNum{font-family:var(--mono);font-kerning:none;font-variant-ligatures:none;font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1,"lnum" 1}
 .bbTopbar{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;background:transparent;flex-shrink:0}
 .bbBrandToggle{background:none;border:0;padding:0;display:flex;align-items:baseline;gap:8px;cursor:pointer;color:inherit;font-family:inherit}
 .bbBrand{font-size:11px;font-weight:600;opacity:.55;letter-spacing:.03em}
@@ -45,6 +45,8 @@ body{font-family:Inter,-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Di
 .bbGCard{flex:1;display:flex;flex-direction:column;margin-bottom:4px}
 .bbGTop{display:flex;justify-content:space-between;align-items:flex-start;padding:12px 18px 6px;flex-shrink:0}
 .bbSpeedLine{display:flex;align-items:baseline;gap:4px}
+.bbSpeedPadding,.bbTimePadding{opacity:.2}
+.bbSpeed{display:inline-block;min-inline-size:3ch;flex-shrink:0;text-align:right}
 .bbSpeed{font-size:26px;font-weight:700;opacity:.85;transition:color 0.3s,opacity 0.3s;letter-spacing:-0.02em}
 .bbSpeed.peak{color:var(--amber);opacity:1;text-shadow:0 0 20px rgba(255,149,0,0.4)}
 .bbUnit{font-size:13px;opacity:.50;font-weight:500}
@@ -511,6 +513,152 @@ body.cluster-view .bbLapTime{min-width:0;font-size:min(var(--timing-font),calc(8
 body.cluster-view .bbLapHistItem{min-width:0}
 body.cluster-view .bbLapHistValue{white-space:nowrap;font-size:min(var(--timing-font),calc(50cqw / var(--timing-chars,8)))}
 body.cluster-view .bbDeltaBar:not(.no-ref) .bbDeltaText{font-size:min(clamp(24px,3.6vw,38px),calc(55cqw / var(--timing-chars,6)))}
+
+/* Cockpit review: stable numeric anchors, short labels, shared horizontal rails. */
+.bbTime,.bbHistoryLap,#rec-duration,#rec-elapsed,#drive-duration,#run-last,#run-best{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.bbManeuver{display:none}body.analysis-view .bbManeuver{display:block}
+.bbDeltaReason{display:none;font:11px/1.3 Inter,sans-serif;color:var(--text-secondary)}
+.bbDeltaBar.no-ref .bbDeltaReason{display:block}.bbDeltaBar.no-ref .bbDeltaTrack{display:none}
+.bbDeltaBar .bbDeltaText{font-family:var(--mono);font-weight:600;letter-spacing:-.04em;font-variant-numeric:tabular-nums;min-inline-size:7ch;text-align:right}
+.bbDeltaBar.no-ref .bbDeltaText{font-size:32px;line-height:1;min-inline-size:0;text-align:center}
+.bbSpeedMaximum .bbInstrumentLabel{margin:0}body .bbApp .bbSpeedMaximum{display:flex}.bbSpeedMaximum{margin:0;display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.bbLapResult{background:var(--surface);color:var(--text);border-left:3px solid var(--ok);font:600 13px var(--mono)}
+.bbLapResult.new-best{color:var(--ok)}
+body.cluster-view .bbLapMain{grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)}
+body.cluster-view .bbClusterHeader,body.cluster-view .bbClusterHealth{font-size:11px}
+body.cluster-view .bbInstrumentReveal,body.cluster-view .bbClusterTabs button{font-size:12px}
+body.cluster-view .bbInstrumentReveal::after{content:"";display:inline-block;border:4px solid transparent;border-top-color:currentColor;margin:0 0 -3px 7px}
+body.cluster-view .bbLapHistLabel,body.cluster-view .bbElapsedLabel,body.cluster-view .bbInstrumentLabel,body.cluster-view .bbReferenceLabel{font-size:11px}
+body.cluster-view .bbLapCount,body.cluster-view .bbLapState{font-size:11px}
+body.cluster-view .bbDeltaBar::before{font-size:11px}
+body.cluster-view .bbDeltaBar.no-ref .bbDeltaText{font-size:32px;line-height:1}
+body.cluster-view .bbLapResult{background:var(--surface);color:var(--text);font-size:12px}
+body.cluster-view .bbLapResult.new-best{color:var(--ok)}
+body.cluster-view .bbSpeedMaximum{font-size:16px}
+body.cluster-view .bbRunTitle{padding:0 10px 0 76px;flex:0 0 44px;display:flex;align-items:center}
+body.cluster-view .bbRunChooser{width:100%}
+body.cluster-view .bbRunChooser>.bbRunChoice{font-size:clamp(13px,6cqw,16px);white-space:nowrap;text-align:right;padding-inline:6px}
+body.cluster-view .bbRunOptions{left:auto;right:0;min-width:170px;max-height:min(280px,calc(100cqh - 60px))}
+body.cluster-view .bbClusterRuns .bbPeakGrid{grid-template-columns:1fr;gap:8px;align-content:center}
+body.cluster-view .bbClusterRuns .bbPeakGrid>div{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+body.cluster-view .bbClusterRuns .bbPeakGrid dt{margin:0;font-size:11px}
+body.cluster-view .bbClusterRuns dd{font-size:clamp(26px,5vw,40px);font-variant-numeric:tabular-nums}
+body.cluster-view .bbClusterRuns .bbPeakGrid>div+div dd{font-size:24px;color:var(--text-secondary)}
+body.cluster-view .bbClusterRuns p{font-size:11px;padding-bottom:6px}
+body.cluster-view .bbPeakNote{flex-basis:36px;font-size:11px}
+body.cluster-view .bbDriveBody{display:flex;flex-direction:column;overflow:hidden}
+body.cluster-view .bbDriveMetrics{flex:1 0 auto}
+body.cluster-view .bbDriveLabel{font-size:11px;line-height:1.3}
+body.cluster-view .bbDrivePanel p{font-size:11px;line-height:1.35;flex-shrink:0}
+body.cluster-view #drive-tracks,body.cluster-view #drive-data{display:none}
+body.cluster-view .bbDriveActions button{flex:1}
+@container cluster-card (max-height:190px){
+ body.cluster-view .bbClusterRuns .bbPeakGrid{grid-template-columns:1fr 1fr;gap:6px;padding:0 10px;flex:1 1 38px}
+ body.cluster-view .bbClusterRuns .bbPeakGrid>div{display:block}
+ body.cluster-view .bbClusterRuns dd,body.cluster-view .bbClusterRuns .bbPeakGrid>div+div dd{font-size:24px}
+ body.cluster-view .bbClusterRuns .bbPeakNote{flex-basis:24px;font-size:10px;padding:3px 8px}
+ body.cluster-view .bbClusterRuns p{font-size:10px;line-height:1.3;padding:0 10px 4px}
+ body.cluster-view .bbRunAction{margin:0 10px 4px}
+}
+
+/* Force instrument: header / measured resultant / calibrated plane / components. */
+.bbGPlotWrap .bbForceTools{display:flex;position:static;align-items:center;justify-content:space-between;width:auto;min-height:44px;flex:none;font:11px var(--mono)}
+.bbForceTools button{font:500 12px var(--mono);min-width:80px;min-height:44px;padding:0 10px}
+.bbForceLabel{font:11px Inter,sans-serif;text-transform:uppercase;letter-spacing:.08em}
+.bbForceSummary{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 16px;min-width:0}
+.bbForceFigure{display:flex;align-items:baseline;gap:6px;font:600 42px/1 var(--mono);letter-spacing:-.06em;white-space:nowrap}
+.bbForceFigure .bbNum{min-width:4ch;text-align:right}.bbForceUnit{font:14px var(--mono);color:var(--text-secondary);letter-spacing:0}
+.bbForceCaption{text-align:right;max-width:100px;font:11px/1.3 Inter,sans-serif;color:var(--text-secondary)}
+.bbForceCaption>span:first-child{text-transform:uppercase;letter-spacing:.06em}
+#force-status{display:block;font:11px/1.3 Inter,sans-serif;color:var(--amber);margin-top:3px}
+#force-status:empty{display:none}
+body.cluster-view.cluster-forces .bbApp .bbGPlotWrap{display:grid!important;grid-template-columns:minmax(0,1fr);grid-template-rows:44px 56px minmax(0,1fr);padding:0;gap:0;container-type:normal;min-height:0;flex:1}
+body.cluster-view.cluster-forces .bbForceTools{grid-row:1;position:static;padding:0 8px;justify-content:flex-end;z-index:0}
+body.cluster-view.cluster-forces .bbForceLabel{display:none}
+body.cluster-view.cluster-forces #force-status{position:static;white-space:normal;font-size:11px}
+body.cluster-view.cluster-forces .bbForceSummary{grid-row:2}
+body.cluster-view.cluster-forces .bbApp .bbGPlotFrame{position:static;grid-row:3;display:flex;align-items:center;justify-content:center;inset:auto;transform:none;width:100%;height:100%;aspect-ratio:auto;max-width:none;max-height:none;min-height:0;margin:0;padding:0}
+body.cluster-view.cluster-forces .bbApp .bbGReadoutRow{display:grid!important;grid-template-columns:1fr 1fr;flex:0 0 56px;height:56px;margin:0;padding:6px 10px;gap:0;border-top:1px solid var(--divider)}
+body.cluster-view.cluster-forces .bbGReadoutCol{gap:3px;min-width:0}
+body.cluster-view.cluster-forces .bbGReadoutCol+.bbGDivider+.bbGReadoutCol{border-left:1px solid var(--divider)}
+body.cluster-view.cluster-forces .bbGDivider{display:none}
+body.cluster-view.cluster-forces .bbGReadoutLbl{font:10px/1.2 Inter,sans-serif;letter-spacing:.04em;opacity:1}
+body.cluster-view.cluster-forces .bbGReadoutVal{font:500 22px/1 var(--mono);margin:0;letter-spacing:-.04em;min-width:0;gap:0}
+body.cluster-view.cluster-forces .bbGReadoutVal .bbVal{font:inherit}
+.bbGReadoutVal .bbSign{opacity:.65;width:1ch;margin-right:0}
+body.analysis-view .bbForceSummary{padding-block:12px}
+body.analysis-view .bbGPlotFrame{display:flex;align-items:center;justify-content:center}
+@container cluster-card (max-height:300px){
+ body.cluster-view.cluster-forces .bbApp .bbGPlotWrap{grid-template-columns:minmax(0,1fr) 96px;grid-template-rows:44px minmax(0,1fr)}
+ body.cluster-view.cluster-forces .bbForceTools{grid-column:1/-1}
+ body.cluster-view.cluster-forces .bbApp .bbGPlotFrame{grid-column:1;grid-row:2;padding:0}
+ body.cluster-view.cluster-forces .bbForceSummary{grid-column:2;grid-row:2;flex-direction:column;justify-content:center;gap:8px;padding:0 8px 0 0}
+ body.cluster-view.cluster-forces .bbForceFigure{font-size:32px;gap:3px}
+ body.cluster-view.cluster-forces .bbForceCaption{text-align:center}
+ body.cluster-view.cluster-forces .bbForceUnit{font-size:12px}
+}
+@container cluster-card (max-height:228px){
+ body.cluster-view.cluster-forces .bbApp .bbGPlotFrame{display:none}
+ body.cluster-view.cluster-forces .bbForceSummary{grid-column:1/-1;flex-direction:row;justify-content:space-between;padding:0 14px}
+ body.cluster-view.cluster-forces .bbApp .bbGReadoutRow{flex-basis:46px;height:46px;padding:4px 10px}
+ body.cluster-view.cluster-forces .bbGReadoutVal{font-size:18px}
+}
+.bbTimeSeparator{opacity:.35}
+.bbForceFigure .bbForceWide{font-size:.72em}
+
+.bbClusterSpeed{display:none;margin-left:auto;align-items:baseline;gap:4px;white-space:nowrap;font:600 22px/1 var(--mono);letter-spacing:-.04em}
+.bbClusterSpeed>span:last-child{font:10px var(--mono);color:var(--text-secondary);letter-spacing:0}
+body.cluster-view.cluster-forces .bbClusterSpeed,body.cluster-view.cluster-peaks .bbClusterSpeed,body.cluster-view.cluster-runs .bbClusterSpeed{display:flex}
+body.cluster-view .bbClusterSpeed+button{margin-left:auto}
+body.cluster-view.cluster-forces .bbClusterSpeed+button,body.cluster-view.cluster-peaks .bbClusterSpeed+button,body.cluster-view.cluster-runs .bbClusterSpeed+button{margin-left:0}
+.telemetry-stale .bbClusterSpeed{opacity:.4}
+/* A real reference match owns this rail; compact layout never suppresses it. */
+body.cluster-view .bbLapProgress:not([hidden]){display:flex;align-items:center;gap:8px;flex:0 0 24px;min-height:24px;padding:3px 14px;border-top:1px solid var(--divider);font:10px/1 var(--mono)}
+body.cluster-view .bbLapProgress progress{flex:1;min-width:0;height:4px;margin:0}
+body.cluster-view #lap-progress-label{white-space:nowrap}
+@media(max-width:700px){body.cluster-view .bbClusterHeader{gap:7px;padding-inline:10px}.bbClusterSpeed{font-size:20px}body.cluster-view .bbClusterHealth{font-size:10px;gap:6px}}
+
+body.cluster-view.cluster-forces .bbForceFigure{font-size:clamp(40px,18cqw,52px);letter-spacing:-.065em}
+body.cluster-view.cluster-forces .bbForceSummary{padding-inline:12px}
+body.cluster-view.cluster-forces .bbForceUnit{color:var(--ok)}
+@container cluster-card (max-height:300px){body.cluster-view.cluster-forces .bbForceFigure{font-size:32px}body.cluster-view.cluster-forces .bbForceSummary{padding:0 8px 0 0}}
+@container cluster-card (max-height:228px){body.cluster-view.cluster-forces .bbForceSummary{padding:0 14px}}
+
+.bbReplay{width:min(880px,calc(100vw - 24px));height:min(680px,calc(100dvh - 24px));max-width:none;max-height:none;margin:auto;padding:16px;border:1px solid var(--divider);border-radius:14px;background:var(--surface);color:var(--text);font-family:Inter,sans-serif;overflow:hidden}
+.bbReplay::backdrop{background:#000b;backdrop-filter:blur(8px)}.bbReplay[open]{display:flex;flex-direction:column;gap:10px}
+.bbReplay button,.bbReplay select{min-height:44px;border:1px solid var(--divider);border-radius:6px;background:var(--bg);color:var(--text);font:500 13px Inter,sans-serif;padding:8px 12px;cursor:pointer}
+.bbReplayHeader{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-shrink:0}.bbReplayHeader h2{font-size:17px;font-weight:600;line-height:1.3;margin:3px 0 0}.bbReplayHeader>div{min-width:0}.bbReplayHeader h2{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.bbReplayHeader>button{flex-shrink:0;font-size:24px;min-width:44px}
+.bbReplayBadge{font:11px var(--mono);letter-spacing:.08em;color:var(--ok)}
+.bbReplaySelect{display:flex;align-items:center;gap:12px;font-size:12px;color:var(--text-secondary);flex-shrink:0}.bbReplaySelect select{min-width:0;flex:1}
+.bbReplayBody{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:24px;flex:1;min-height:0;border-top:1px solid var(--divider);border-bottom:1px solid var(--divider)}
+.bbReplayMap{display:flex;align-items:center;justify-content:center;min-height:0;min-width:0}
+.bbReplayStats{display:grid;grid-template-columns:1fr 1fr;align-content:center;gap:18px 12px;min-width:0}
+.bbReplayLabel{display:block;font:10px/1.3 Inter,sans-serif;text-transform:uppercase;letter-spacing:.06em;color:var(--text-secondary);margin-bottom:5px}
+.bbReplayValue{display:flex;align-items:baseline;gap:5px;font:600 clamp(30px,5vw,46px)/1 var(--mono);letter-spacing:-.05em;white-space:nowrap}.bbReplayValue .bbForceWide{font-size:.72em}.bbReplayValue small{font:12px var(--mono);letter-spacing:0;color:var(--text-secondary)}
+.bbReplayComponents{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:12px}.bbReplayComponents .bbNum{font:500 22px var(--mono)}.bbReplayComponents .bbVal{font:inherit}.bbReplayComponents .bbGUnit{margin-left:3px}
+#replay-health{grid-column:1/-1;min-height:14px;font:11px/1.3 Inter,sans-serif;color:var(--amber)}
+.bbReplayTransport{display:flex;align-items:center;gap:10px;flex-shrink:0}.bbReplayTransport>span{font:11px var(--mono);white-space:nowrap}.bbReplayTransport input{min-width:20px;flex:1;accent-color:var(--ok);min-height:44px}.bbReplayTransport>button{min-width:68px}
+.bbReplayFooter{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-shrink:0}.bbReplayFooter span{font:11px Inter,sans-serif;color:var(--text-secondary)}
+@media(max-width:600px) and (orientation:portrait){.bbReplay{padding:12px}.bbReplayBody{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) auto;gap:8px}.bbReplayStats{grid-template-columns:1fr 1fr;gap:8px 16px}.bbReplayComponents{grid-column:auto;display:contents}.bbReplayTransport{gap:6px}.bbReplayTransport select{max-width:85px;padding:8px 4px}.bbReplayFooter span{max-width:140px}}
+@media(max-height:450px) and (min-width:600px){.bbReplay[open]{gap:6px;padding:10px 14px}.bbReplayHeader>div{min-width:0;max-width:44%}.bbReplayHeader h2{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.bbReplaySelect{position:absolute;top:12px;left:48%;right:68px;font-size:0}.bbReplayBody{gap:12px}.bbReplayStats{gap:8px}.bbReplayFooter{display:none}.bbReplayComponents .bbNum{font-size:20px}}
+
+/* Last/Best retain the visual result; the transient duplicate is an announcement. */
+.bbLapResult{position:absolute!important;width:1px!important;height:1px!important;margin:-1px!important;padding:0!important;border:0!important;overflow:hidden!important;clip-path:inset(50%)}
+/* Parked Analysis is a full-width instrument, not a squeezed overview cell. */
+body.analysis-view .bbApp .bbGCard{display:flex;flex-direction:column;min-height:0}
+body.analysis-view .bbApp .bbGTop{display:none}
+body.analysis-view .bbApp .bbGPlotWrap{display:flex;flex-direction:column;align-items:center;position:static;grid-column:auto;grid-row:auto;width:100%;padding:0 12px}
+body.analysis-view .bbForceTools,body.analysis-view .bbForceSummary{width:100%}
+body.analysis-view .bbApp .bbGCard .bbGPlotFrame{position:static;width:min(100%,340px);height:auto;aspect-ratio:1;max-height:none;max-width:none;margin:0;transform:none}
+body.analysis-view .bbGExpand{display:none}
+body.analysis-view .bbApp .bbGReadoutRow{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:0;padding:12px;border-top:1px solid var(--divider)}
+body.analysis-view .bbGDivider{display:none}
+body.analysis-view .bbApp .bbGMax{margin:0;display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:16px}
+body.analysis-view .bbMini{grid-template-columns:1fr;gap:4px}
+
+.bbStartHold{max-height:calc(100dvh - 24px);overflow:auto;width:min(360px,calc(100vw - 24px));margin:auto;padding:26px;background:var(--surface);color:var(--text);border:1px solid var(--divider);border-radius:14px;text-align:center;font-family:Inter,sans-serif}
+.bbStartHold::backdrop{background:#000b;backdrop-filter:blur(8px)}.bbStartHold h2{font-size:26px;font-weight:600;letter-spacing:-.03em;margin-top:14px}.bbStartHold .bbNum{font:600 80px/1.3 var(--mono);color:var(--ok)}.bbStartHold progress{width:100%;height:5px;accent-color:var(--ok)}.bbStartHold p{font-size:13px;line-height:1.5;min-height:40px;margin-top:14px;color:var(--text-secondary)}.bbStartHold button{min-height:44px;width:100%;margin-top:12px;background:var(--bg);border:1px solid var(--divider);border-radius:6px;color:var(--text);font:600 14px Inter,sans-serif}
+@media(max-height:450px){.bbStartHold{padding:14px 20px}.bbStartHold h2{font-size:20px;margin-top:6px}.bbStartHold .bbNum{font-size:52px;line-height:1.1}.bbStartHold p{min-height:20px;margin-top:8px}.bbStartHold button{margin-top:8px}}
 </style></head>
 <body>
 
@@ -529,23 +677,22 @@ body.cluster-view .bbDeltaBar:not(.no-ref) .bbDeltaText{font-size:min(clamp(24px
             <span class="bbClusterRecording" id="cluster-recording">REC OFF</span><span class="bbStatusItem"><span class="bbDot" id="gpsDot"></span><span id="gpsHz">GPS --</span></span>
             <span class="bbStatusItem"><span class="bbDot" id="liveDot"></span><span id="stxt" role="status">Connecting</span></span>
         </div>
-        <button class="bbDisplayButton" id="display-mode">Full screen</button>
         <button class="bbKebab" id="menu-btn" aria-label="Menu">⋮</button>
     </div>
 </header>
 <main class="bbApp">
     <div class="bbNoticeStack" tabindex="0" role="region" aria-label="Connection, recording and track notices">
-        <div id="connection-notice" class="bbConnectionNotice" role="status" hidden></div>
         <div id="recording-notice" class="bbRecordingNotice" role="status" hidden></div>
+        <div id="connection-notice" class="bbConnectionNotice" role="status" hidden></div>
         <section id="track-suggestion" class="bbTrackSuggestion" aria-label="Track suggestion" hidden><div class="bbTrackSuggestionText" role="status"><strong>Track nearby</strong><span id="track-suggestion-name"></span></div><div class="bbTrackSuggestionActions"><button id="track-suggestion-activate" class="bbToastBtn primary">Activate</button><button id="track-suggestion-dismiss" class="bbToastBtn secondary">Dismiss</button></div></section>
     </div>
-    <div class="bbQuickActions" aria-label="Session controls"><button id="quick-tracks">Tracks</button><button id="quick-record">Record session</button><button id="quick-data">Saved data</button><button id="analysis-mode" aria-pressed="false" aria-controls="g-card">Analysis</button><button id="drive-mode" aria-pressed="false">Drive view</button></div>
+    <div class="bbQuickActions" aria-label="Session controls"><button id="quick-tracks">Tracks</button><button id="quick-record">Record session</button><button id="quick-data">Saved data</button></div>
     <div id="save-status" class="bbSaveStatus" role="status" hidden></div>
     <section class="bbCard bbLapCard inactive" id="lap-section">
-        <div class="bbClusterHeader"><span class="bbClusterHealth"><span id="cluster-link">Connecting</span><span id="cluster-gps">GPS —</span><span id="cluster-rec">REC OFF</span></span><button id="cluster-controls" aria-expanded="false">Controls</button></div>
+        <div class="bbClusterHeader"><span class="bbClusterHealth"><span id="cluster-link">Connecting</span><span id="cluster-gps">GPS —</span><span id="cluster-rec">REC OFF</span></span><span class="bbClusterSpeed" aria-label="Speed"><span class="bbNum" id="cluster-speed-value"><span class="bbSpeedPadding">00</span>0</span><span id="cluster-speed-unit">km/h</span></span><button id="cluster-controls" aria-expanded="false">Controls</button></div>
         <div class="bbDrivePanel" id="drive-panel">
             <div class="bbDriveState" id="drive-state" role="status">Ready to record</div>
-            <div class="bbDriveBody" tabindex="0" aria-label="Recording metrics and health"><div class="bbDriveMetrics"><div><div class="bbDriveLabel">Recording duration</div><div class="bbDriveNumber" id="drive-duration">—</div></div><div><div class="bbDriveLabel">GPS distance · partial</div><div class="bbDriveNumber"><span id="drive-distance">—</span><small id="drive-distance-unit">km</small></div></div></div>
+            <div class="bbDriveBody" tabindex="0" aria-label="Recording metrics and health"><div class="bbDriveMetrics"><div><div class="bbDriveLabel">Duration</div><div class="bbDriveNumber" id="drive-duration">—</div></div><div><div class="bbDriveLabel">Distance · partial</div><div class="bbDriveNumber"><span id="drive-distance">—</span><small id="drive-distance-unit">km</small></div></div></div>
             <p id="drive-coverage">GPS distance uses qualified receiver evidence</p><p id="drive-health" role="status">Checking sensors and browser storage…</p></div>
             <div class="bbDriveActions"><button id="drive-record">Record session</button><button id="drive-tracks">Tracks</button><button id="drive-data">Saved data</button></div>
         </div>
@@ -557,7 +704,7 @@ body.cluster-view .bbDeltaBar:not(.no-ref) .bbDeltaText{font-size:min(clamp(24px
             <button class="bbLapStop" id="btn-lap-stop" onclick="event.stopPropagation();confirmStopTiming();" title="Stop timing" aria-label="Stop timing">×</button>
             <div class="bbLapMain">
                 <div class="bbElapsedLabel">Elapsed</div><div class="bbLapTime bbNum" id="lap-time">0:00.000</div>
-                <div class="bbReferenceLabel" id="reference-label"></div><div class="bbDeltaBar no-ref" id="delta-bar"><div class="bbDeltaText" id="delta-text">Complete a reference lap</div><div class="bbDeltaTrack"><div class="bbDeltaCenter"></div><div class="bbDeltaFill" id="delta-fill"></div></div></div>
+                <div class="bbReferenceLabel" id="reference-label"></div><div class="bbDeltaBar no-ref" id="delta-bar"><div class="bbDeltaText bbNum" id="delta-text">—</div><span class="bbDeltaReason" id="delta-reason">No reference</span><div class="bbDeltaTrack"><div class="bbDeltaCenter"></div><div class="bbDeltaFill" id="delta-fill"></div></div></div>
                 <div class="bbLapTrackName" id="lap-track-name"></div>
                 <div class="bbLapMeta">
                     <span class="bbLapCount" id="lap-count">Lap 1</span>
@@ -568,17 +715,17 @@ body.cluster-view .bbDeltaBar:not(.no-ref) .bbDeltaText{font-size:min(clamp(24px
             <div class="bbLapResult" id="lap-result" role="status" hidden></div>
             <div class="bbLapHistory">
                 <div class="bbLapHistItem">
-                    <span class="bbLapHistLabel">Best</span>
-                    <span class="bbLapHistValue bbNum" id="best-lap">—:——</span>
-                </div>
-                <div class="bbLapHistDivider"></div>
-                <div class="bbLapHistItem">
                     <span class="bbLapHistLabel">Last</span>
                     <span class="bbLapHistValue bbNum" id="last-lap">—:——</span>
                 </div>
                 <div class="bbLapHistDivider"></div>
                 <div class="bbLapHistItem">
-                    <span class="bbLapHistLabel">Last vs best</span>
+                    <span class="bbLapHistLabel">Best</span>
+                    <span class="bbLapHistValue bbNum" id="best-lap">—:——</span>
+                </div>
+                <div class="bbLapHistDivider"></div>
+                <div class="bbLapHistItem">
+                    <span class="bbLapHistLabel" aria-label="Last time minus best time">Last − Best</span>
                     <span class="bbLapHistValue bbNum delta" id="lap-delta">—</span>
                 </div>
             </div>
@@ -591,42 +738,40 @@ body.cluster-view .bbDeltaBar:not(.no-ref) .bbDeltaText{font-size:min(clamp(24px
         </div>
     </section>
     <section class="bbCard bbGCard" id="g-card">
-        <button class="bbInstrumentReveal" id="instrument-reveal" aria-expanded="false" aria-label="Choose instrument">Speed ···</button><div class="bbClusterTabs" role="group" aria-label="Cluster instrument"><button id="cluster-speed" aria-pressed="true">Speed</button><button id="cluster-forces" aria-pressed="false">G-meter</button><button id="cluster-peaks" aria-pressed="false">Peaks</button><button id="cluster-runs" aria-pressed="false">Runs</button></div>
-        <div class="bbClusterRuns"><div class="bbRunTitle"><div class="bbRunChooser" id="run-chooser"><button class="bbRunChoice" id="run-interval" aria-label="Run interval: 80–120 km/h" aria-expanded="false" aria-controls="run-options">80–120 km/h</button><div class="bbRunOptions" id="run-options" role="group" aria-label="Run interval choices" hidden><button class="bbRunChoice" id="run-lower" aria-pressed="false">50–100 km/h</button><button class="bbRunChoice" id="run-overtaking" aria-pressed="true">80–120 km/h</button></div></div></div><dl class="bbPeakGrid"><div><dt>LAST</dt><dd id="run-last">—</dd></div><div><dt>BEST</dt><dd id="run-best">—</dd></div></dl><p id="run-status" role="status">Record to collect receiver timestamps</p><button class="bbRunAction" id="run-record">Record session</button><div class="bbPeakNote">GPS estimate · uncorrected<br>No distance rollout</div></div><div class="bbClusterPeaks" title="Strongest sample-ending 0.5-second averages, moving samples this page session"><span class="bbPeakScope">0.5 s avg · page</span><dl class="bbPeakGrid"><div><dt>ACCEL</dt><dd><span id="effort-accel">—</span><small> g</small></dd></div><div><dt>BRAKING</dt><dd><span id="effort-brake">—</span><small> g</small></dd></div><div><dt>LEFT</dt><dd><span id="effort-left">—</span><small> g</small></dd></div><div><dt>RIGHT</dt><dd><span id="effort-right">—</span><small> g</small></dd></div></dl></div>
+        <button class="bbInstrumentReveal" id="instrument-reveal" aria-controls="instrument-options" aria-expanded="false" aria-label="Choose instrument">Speed</button><div class="bbClusterTabs" id="instrument-options" role="group" aria-label="Cluster instrument"><button id="cluster-speed" aria-pressed="true">Speed</button><button id="cluster-forces" aria-pressed="false">G-meter</button><button id="cluster-peaks" aria-pressed="false">Peaks</button><button id="cluster-runs" aria-pressed="false">Runs</button></div>
+        <div class="bbClusterRuns"><div class="bbRunTitle"><div class="bbRunChooser" id="run-chooser"><button class="bbRunChoice" id="run-interval" aria-label="Run interval: 80–120 km/h" aria-expanded="false" aria-controls="run-options">80–120 km/h</button><div class="bbRunOptions" id="run-options" role="group" aria-label="Run interval choices" hidden><button class="bbRunChoice" id="run-lower" aria-pressed="false">50–100 km/h</button><button class="bbRunChoice" id="run-overtaking" aria-pressed="true">80–120 km/h</button><button class="bbRunChoice" id="run-short" aria-pressed="false">80–100 km/h</button><button class="bbRunChoice" id="run-upper" aria-pressed="false">100–130 km/h</button><button class="bbRunChoice" id="run-standing" aria-pressed="false">0–100 km/h</button><button class="bbRunChoice" id="run-quarter" aria-pressed="false">1/4 mile</button></div></div></div><dl class="bbPeakGrid"><div><dt>LAST</dt><dd id="run-last">—</dd></div><div><dt>BEST</dt><dd id="run-best">—</dd></div></dl><p id="run-status" role="status">Record to measure</p><button class="bbRunAction" id="run-record">Record session</button><div class="bbPeakNote" id="run-note">GPS estimate · no rollout</div></div><div class="bbClusterPeaks" title="Strongest sample-ending 0.5-second averages, moving samples this page session"><span class="bbPeakScope">0.5 s peaks</span><dl class="bbPeakGrid"><div><dt>ACCEL</dt><dd><span id="effort-accel">—</span><small> g</small></dd></div><div><dt>BRAKING</dt><dd><span id="effort-brake">—</span><small> g</small></dd></div><div><dt>LEFT</dt><dd><span id="effort-left">—</span><small> g</small></dd></div><div><dt>RIGHT</dt><dd><span id="effort-right">—</span><small> g</small></dd></div></dl></div>
         <div class="bbGTop">
             <div class="bbGTopLeft">
-                <div class="bbInstrumentLabel">Speed</div><div class="bbSpeedMaximum" title="Maximum speed estimate with fresh GPS, this page session">PAGE MAX <span id="speed-maximum">—</span> <span id="speed-maximum-unit">km/h</span></div><div class="bbSpeedLine"><span class="bbSpeed bbNum" id="speed">0</span><span class="bbUnit" id="speed-unit">km/h</span></div>
+                <div class="bbInstrumentLabel">Speed</div><div class="bbSpeedLine"><span class="bbSpeed bbNum" id="speed"><span class="bbSpeedPadding">00</span>0</span><span class="bbUnit" id="speed-unit">km/h</span></div>
                 <div class="bbManeuver" id="maneuver">—</div>
             </div>
-            <div class="bbGTopRight"><div class="bbInstrumentLabel">Page time</div><span class="bbNum" id="session-time">0:00</span></div>
+            <div class="bbGTopRight bbSpeedMaximum" title="Maximum speed with fresh GPS since opening this page"><span class="bbInstrumentLabel">Max</span><span><span class="bbNum" id="speed-maximum">—</span> <span id="speed-maximum-unit">km/h</span></span></div>
         </div>
-        <div class="bbGPlotWrap"><div class="bbForceTools"><button id="range-val" title="Cycle plot scale: 0.5, 1 or 2 g">Scale 1.0 g</button><span id="force-status">Waiting for fresh GPS</span></div>
-            <div class="bbGPlotFrame">
-                <div class="bbAxis bbAxis--top">Brake</div>
-                <div class="bbAxis bbAxis--bottom">Accel</div>
-                <div class="bbAxis bbAxis--left">Left</div>
-                <div class="bbAxis bbAxis--right">Right</div>
-
-                <canvas class="bbGPlot" id="gcanvas" role="img" aria-label="Lateral and longitudinal g-force trail"></canvas>
+        <div class="bbGPlotWrap">
+            <div class="bbForceTools"><span class="bbForceLabel">Force map</span><button id="range-val" title="Force map scale per axis; activate to change">±1.0 g</button></div>
+            <div class="bbForceSummary" aria-label="Combined horizontal acceleration, excluding vertical gravity">
+                <div class="bbForceFigure"><span class="bbNum" id="force-combined">—</span><span class="bbForceUnit">g</span></div>
+                <div class="bbForceCaption"><span>Combined</span><span id="force-status" role="status">Waiting for force data</span></div>
             </div>
+            <div class="bbGPlotFrame"><canvas class="bbGPlot" id="gcanvas" role="img" aria-label="Occupant load view: a right turn moves the marker left; braking moves it forward (up), acceleration rearward (down). Derived from horizontal vehicle acceleration, with fixed per-axis scale and three-second history"></canvas></div>
             <button class="bbGExpand" id="expand-g" aria-expanded="false" aria-controls="gcanvas">Expand G-meter</button>
         </div>
         <div class="bbGReadoutRow">
             <div class="bbGReadoutCol">
-                <div class="bbGReadoutLbl">Lat</div>
-                <div class="bbGReadoutVal bbNum" id="lat-g"><span class="bbSign">+</span><span class="bbVal">0.00</span><span class="bbGUnit">g</span></div>
+                <div class="bbGReadoutLbl" id="lat-force-label">Lateral</div>
+                <div class="bbGReadoutVal bbNum" id="lat-g">—</div>
             </div>
             <div class="bbGDivider"></div>
             <div class="bbGReadoutCol">
-                <div class="bbGReadoutLbl">Long</div>
-                <div class="bbGReadoutVal bbNum" id="lon-g"><span class="bbSign">+</span><span class="bbVal">0.00</span><span class="bbGUnit">g</span></div>
+                <div class="bbGReadoutLbl" id="lon-force-label">Longitudinal</div>
+                <div class="bbGReadoutVal bbNum" id="lon-g">—</div>
             </div>
         </div>
         <div class="bbGMax">
-            <div class="bbMini"><span class="bbMiniLbl">Max Lat L</span><span class="bbMiniVal bbNum" id="max-l">0.00g</span></div>
-            <div class="bbMini"><span class="bbMiniLbl">Max Lat R</span><span class="bbMiniVal bbNum" id="max-r">0.00g</span></div>
-            <div class="bbMini"><span class="bbMiniLbl">Max Acc</span><span class="bbMiniVal bbNum" id="max-a">0.00g</span></div>
-            <div class="bbMini"><span class="bbMiniLbl">Max Brk</span><span class="bbMiniVal bbNum" id="max-b">0.00g</span></div>
+            <div class="bbMini"><span class="bbMiniLbl">Max vehicle left</span><span class="bbMiniVal bbNum" id="max-l">—</span></div>
+            <div class="bbMini"><span class="bbMiniLbl">Max vehicle right</span><span class="bbMiniVal bbNum" id="max-r">—</span></div>
+            <div class="bbMini"><span class="bbMiniLbl">Max Acc</span><span class="bbMiniVal bbNum" id="max-a">—</span></div>
+            <div class="bbMini"><span class="bbMiniLbl">Max Brk</span><span class="bbMiniVal bbNum" id="max-b">—</span></div>
         </div>
     </section>
     <div class="bbTelemetryStrip">
@@ -728,12 +873,13 @@ body.cluster-view .bbDeltaBar:not(.no-ref) .bbDeltaText{font-size:min(clamp(24px
         <div class="bbRow"><span class="bbLbl">TX Failed</span><span class="bbVal bbNum" id="tx-fail">--</span></div>
     </section>
     </div>
-    <div class="bbUptime" id="uptime">Uptime: --</div>
+    <div class="bbUptime">Browser session <span class="bbNum" id="session-time">0:00</span></div><div class="bbUptime" id="uptime">Uptime: --</div>
 </main>
 </div>
 
 <div class="bbMenuOverlay" id="menu-overlay">
     <div class="bbMenuPanel">
+        <button class="bbMenuItem" id="display-mode">Full screen</button><button class="bbMenuItem" id="analysis-mode" aria-pressed="false" aria-controls="g-card">Analysis</button><button class="bbMenuItem" id="drive-mode" aria-pressed="false">Drive view</button>
         <button class="bbMenuItem" id="menu-units" title="Change speed display units; exports keep their documented units">Speed units: km/h</button>
         <button class="bbMenuItem" id="menu-app">Phone setup</button>
         <button class="bbMenuItem" id="menu-mount">Align sensor to car</button>
@@ -940,6 +1086,28 @@ body.cluster-view .bbDeltaBar:not(.no-ref) .bbDeltaText{font-size:min(clamp(24px
  </form>
 </dialog>
 <div id="app-notice" class="bbNotice" hidden><span id="app-notice-text" role="status" aria-live="polite"></span><button id="app-notice-close" type="button" aria-label="Dismiss message">Dismiss</button></div>
+
+
+<dialog class="bbReplay" id="recording-replay" aria-labelledby="replay-title">
+ <header class="bbReplayHeader"><div><span id="replay-source" class="bbReplayBadge">REPLAY</span><h2 id="replay-title">Saved recording</h2></div><button id="replay-close" aria-label="Close recording replay">×</button></header>
+ <label class="bbReplaySelect">Recording<select id="replay-session"></select></label>
+ <div class="bbReplayBody">
+  <div class="bbReplayMap"><canvas id="replay-canvas" role="img" aria-label="Recorded occupant load: right turns load left; braking up, acceleration down"></canvas></div>
+  <div class="bbReplayStats">
+   <div><span class="bbReplayLabel">Speed</span><div class="bbReplayValue"><span class="bbNum" id="replay-speed">—</span><small id="replay-speed-unit">km/h</small></div></div>
+   <div><span class="bbReplayLabel">Combined</span><div class="bbReplayValue"><span class="bbNum" id="replay-force-combined">—</span><small>g</small></div></div>
+   <div class="bbReplayComponents"><div><span class="bbReplayLabel" id="replay-lat-force-label">Lateral</span><span class="bbNum" id="replay-lat-g">—</span></div><div><span class="bbReplayLabel" id="replay-lon-force-label">Longitudinal</span><span class="bbNum" id="replay-lon-g">—</span></div></div>
+   <p id="replay-health" role="status"></p>
+  </div>
+ </div>
+ <div class="bbReplayTransport"><button id="replay-play" aria-pressed="false">Play</button><span class="bbTime" id="replay-time">0:00</span><input id="replay-seek" type="range" min="0" max="1" step="1" value="0" aria-label="Recording position"><span class="bbTime" id="replay-end">0:00</span><select id="replay-scale" aria-label="Force scale per axis"><option value="0.5">±0.5 g</option><option value="1" selected>±1.0 g</option><option value="2">±2.0 g</option></select></div>
+ <footer class="bbReplayFooter"><span>Saved samples · local playback</span><button id="replay-record">Record session</button></footer>
+</dialog>
+
+
+<dialog class="bbStartHold" id="track-start-hold" aria-labelledby="start-hold-title" aria-describedby="start-hold-status">
+ <span class="bbInstrumentLabel" id="start-hold-title">Capture start</span><h2>Stay still</h2><div id="start-hold-count" class="bbNum">5</div><progress id="start-hold-progress" max="5000" value="0" aria-label="Stationary GPS capture"></progress><p id="start-hold-status" role="status">Waiting for GPS</p><button id="start-hold-cancel">Cancel</button>
+</dialog>
 
 <script>
 const $=id=>document.getElementById(id);
@@ -1326,12 +1494,15 @@ function renderDrive(){
     $('drive-distance-unit').textContent=speedUnit==='mph'?'mi':'km';
     const gaps=state?Object.values(state.rejected).reduce((n,v)=>n+v,0):0;
     const exclusions=state?Object.entries(state.rejected).filter(([,n])=>n).map(([k])=>({invalid:'invalid fix',sequence:'GPS gap',boundary:'restart/date',clock:'clock gap',implausible:'speed jump'})[k]).join(', '):'';
-    $('drive-coverage').textContent=state?(state.distanceM===null?'GPS distance unavailable':state.knownGpsSeconds.toFixed(1)+' s GPS observed · partial')+(gaps?' · excluded: '+exclusions:'')+(state.durationStatus==='uncertain'?' · duration uncertain':state.durationStatus==='checkpoint'?' · duration lower bound':''):'GPS distance uses qualified receiver evidence';
+    $('drive-coverage').title=state?(state.distanceM===null?'GPS distance unavailable':state.knownGpsSeconds.toFixed(1)+' s GPS observed · partial')+(gaps?' · excluded: '+exclusions:'')+(state.durationStatus==='uncertain'?' · duration uncertain':state.durationStatus==='checkpoint'?' · duration lower bound':''):'GPS distance uses qualified receiver evidence';
+    $('drive-coverage').textContent=state?(state.distanceM===null?'GPS distance unavailable':gaps?'Partial · GPS gaps':'Partial distance')+(state.durationStatus==='uncertain'?' · time uncertain':state.durationStatus==='checkpoint'?' · checkpoint':''):'';
     const live=driveReadiness.at!==null&&performance.now()-driveReadiness.at<=1500;
     const storage=recordingError||(!db?'Storage unavailable':chunkWrite?'Saving…':chunkBuffer.length?'Data pending save':sessionId&&lastSaveMono!==null?'Saved in this browser':'Browser storage ready');
     const evidenceHealth=rec?gpsLogReadiness():null;
     const health=rec||!state?[live?'Connected':'No fresh telemetry',live&&driveReadiness.gps?'GPS ready':'GPS waiting',live&&driveReadiness.imu?'IMU ready':'IMU waiting',...(evidenceHealth?[evidenceHealth]:[]),storage].join(' · '):storage;
-    const healthElement=$('drive-health');if(healthElement.textContent!==health)healthElement.textContent=health;healthElement.setAttribute('data-unavailable',evidenceHealth?'true':'false');
+    const healthElement=$('drive-health');healthElement.title=health;
+    const compact=recordingError?'Save failed · keep tab open':!db?'Storage unavailable':evidenceHealth||((rec||!state)&&!live?'No fresh telemetry':(rec||!state)&&!driveReadiness.gps?'GPS waiting':(rec||!state)&&!driveReadiness.imu?'IMU waiting':chunkWrite?'Saving…':chunkBuffer.length?'Pending save':rec?'Sensors ready':'Storage ready');
+    if(healthElement.textContent!==compact)healthElement.textContent=compact;healthElement.setAttribute('data-unavailable',evidenceHealth||recordingError?'true':'false');
     const button=$('drive-record');button.textContent=rec?'Stop recording':state||historical?'Record new session':'Record session';button.disabled=recordingBusy;button.classList.toggle('recording',rec);
 }
 async function loadLatestDrive(database,sessions){
@@ -1602,7 +1773,7 @@ function validGpsOrigin(ref){return !!ref&&validGpsCoordinates(ref.lat,ref.lon)&
 function gpsCapturePoint(pos){return pos?.valid!==false&&validGpsCoordinates(pos?.lat,pos?.lon)?{lat:pos.lat,lon:pos.lon}:null}
 class TrackRecorder{
     constructor(){this.config={minDistance:2,maxDistance:30,headingThreshold:0.15,cornerEntryThreshold:0.025,cornerExitThreshold:0.012,minCornerLength:3,minLoopDistance:150,closeProximity:12};this.reset()}
-    reset(){this.recording=false;this.trackType='loop';this.gpsRef=null;this.startPos=null;this.startGps=null;this.startHeading=0;this.startMono=null;this.keyPoints=[];this.rawSamples=[];this.lastPos=null;this.lastGps=null;this.lastSigma=3.0;this.totalDistance=0;this.gpsDistance=0;this.loopDetected=false;this.inCorner=false;this.cornerCount=0;this.cornerEntryDist=0;this.speedGate=false}
+    reset(){this.recording=false;this.trackType='loop';this.gpsRef=null;this.startPos=null;this.startGps=null;this.startCapture=null;this.startHeading=0;this.startMono=null;this.keyPoints=[];this.rawSamples=[];this.lastPos=null;this.lastGps=null;this.lastSigma=3.0;this.totalDistance=0;this.gpsDistance=0;this.loopDetected=false;this.inCorner=false;this.cornerCount=0;this.cornerEntryDist=0;this.speedGate=false}
     // Convert GPS lat/lon to local coordinates using gpsRef
     _gpsToLocal(lat,lon){if(!validGpsOrigin(this.gpsRef)||!validGpsCoordinates(lat,lon))return null;const latRad=this.gpsRef.lat*Math.PI/180;return{x:(lon-this.gpsRef.lon)*Math.cos(latRad)*111320,y:(lat-this.gpsRef.lat)*111320}}
     start(pos,trackType='loop',gpsRef=null){if(this.recording)return false;this.reset();this.recording=true;this.trackType=trackType;this.gpsRef=validGpsOrigin(gpsRef)?gpsRef:null;
@@ -1628,9 +1799,9 @@ class TrackRecorder{
     _gpsQualityRating(sigma){if(sigma<2.5)return'excellent';if(sigma<4.0)return'good';if(sigma<6.0)return'fair';return'poor'}
     cancel(){this.recording=false}
     // Finish recording - uses this.gpsRef (set at start) as the coordinate reference
-    finish(trackName){if(!this.recording||this.keyPoints.length<10)return null;this.recording=false;const centerline=this._smoothPath(this.keyPoints,3);const startLine=this._calculateTimingLine(centerline,'start');let finishLine=null;if(this.trackType==='point_to_point')finishLine=this._calculateTimingLine(centerline,'finish');const bounds=this._calculateBounds(centerline);const totalDist=this._calculatePathLength(centerline);const quality=this._assessQuality();return{id:'track_'+Date.now()+'_'+Math.random().toString(36).substr(2,9),name:trackName,type:this.trackType,created:Date.now(),startLine:startLine,finishLine:finishLine,centerline:centerline,bounds:bounds,totalDistance:totalDist,origin:{x:this.startPos.x,y:this.startPos.y},gpsOrigin:this.gpsRef,quality:quality,corners:this.cornerCount,keyPoints:this.keyPoints.length}}
+    finish(trackName){if(!this.recording||this.keyPoints.length<10)return null;this.recording=false;const centerline=this._smoothPath(this.keyPoints,3);const startLine=this._calculateTimingLine(centerline,'start');let finishLine=null;if(this.trackType==='point_to_point')finishLine=this._calculateTimingLine(centerline,'finish');const bounds=this._calculateBounds(centerline);const totalDist=this._calculatePathLength(centerline);const quality=this._assessQuality();return{id:'track_'+Date.now()+'_'+Math.random().toString(36).substr(2,9),name:trackName,type:this.trackType,created:Date.now(),startLine:startLine,finishLine:finishLine,...(this.startCapture?{startCapture:this.startCapture}:{}),centerline:centerline,bounds:bounds,totalDistance:totalDist,origin:{x:this.startPos.x,y:this.startPos.y},gpsOrigin:this.gpsRef,quality:quality,corners:this.cornerCount,keyPoints:this.keyPoints.length}}
     _smoothPath(pts,ws){if(!pts||pts.length===0)return[];if(pts.length<=ws)return pts.map(p=>({...p}));const result=[];const hw=Math.floor(ws/2);for(let i=0;i<pts.length;i++){const s=Math.max(0,i-hw),e=Math.min(pts.length-1,i+hw),w=pts.slice(s,e+1);if(w.length===0){result.push({...pts[i]});continue}let sx=0,sy=0,sw=0;for(let j=0;j<w.length;j++){const df=Math.abs(j-(i-s)),pw=1/(1+df*0.5),sg=w[j].sigma||3.0,qw=1/(sg+0.5),wt=pw*qw;sx+=w[j].x*wt;sy+=w[j].y*wt;sw+=wt}const x=sw>0?sx/sw:pts[i].x,y=sw>0?sy/sw:pts[i].y;result.push({x:isNaN(x)?pts[i].x:x,y:isNaN(y)?pts[i].y:y,lat:pts[i].lat,lon:pts[i].lon,heading:pts[i].heading,speed:pts[i].speed,sigma:pts[i].sigma,t:pts[i].t,curvature:pts[i].curvature,isCorner:pts[i].isCorner})}return result}
-    _calculateTimingLine(cl,which='start'){if(!cl||cl.length===0)return{p1:[0,12],p2:[0,-12],direction:0};const idx=which==='start'?Math.min(2,cl.length-1):Math.max(0,cl.length-3);const ns=5,s=Math.max(0,idx-ns),e=Math.min(cl.length-1,idx+ns),pts=cl.slice(s,e+1);let sx=0,sy=0,sw=0;for(const p of pts){const wt=1/(p.sigma||3.0+0.5);sx+=p.x*wt;sy+=p.y*wt;sw+=wt}const cx=sw>0?sx/sw:cl[idx].x,cy=sw>0?sy/sw:cl[idx].y;const safeCx=isNaN(cx)?0:cx,safeCy=isNaN(cy)?0:cy;let dir=0;if(pts.length>=2){const f=pts[0],l=pts[pts.length-1];dir=Math.atan2(l.y-f.y,l.x-f.x)}const w=12,perp=dir+Math.PI/2;return{p1:[safeCx+Math.cos(perp)*w,safeCy+Math.sin(perp)*w],p2:[safeCx-Math.cos(perp)*w,safeCy-Math.sin(perp)*w],direction:dir}}
+    _calculateTimingLine(cl,which='start'){if(!cl||cl.length===0)return{p1:[0,12],p2:[0,-12],direction:0};const idx=which==='start'?Math.min(2,cl.length-1):Math.max(0,cl.length-3);const ns=5,s=Math.max(0,idx-ns),e=Math.min(cl.length-1,idx+ns),pts=cl.slice(s,e+1);let sx=0,sy=0,sw=0;for(const p of pts){const wt=1/(p.sigma||3.0+0.5);sx+=p.x*wt;sy+=p.y*wt;sw+=wt}const cx=sw>0?sx/sw:cl[idx].x,cy=sw>0?sy/sw:cl[idx].y;const held=which==='start'&&this.startCapture&&this.startPos;const safeCx=held?this.startPos.x:isNaN(cx)?0:cx,safeCy=held?this.startPos.y:isNaN(cy)?0:cy;let dir=0;if(pts.length>=2){const f=pts[0],l=pts[pts.length-1];dir=Math.atan2(l.y-f.y,l.x-f.x)}const w=12,perp=dir+Math.PI/2;return{p1:[safeCx+Math.cos(perp)*w,safeCy+Math.sin(perp)*w],p2:[safeCx-Math.cos(perp)*w,safeCy-Math.sin(perp)*w],direction:dir}}
     _calculateBounds(cl){if(!cl||cl.length===0)return{minX:0,minY:0,maxX:100,maxY:100};let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;for(const p of cl){minX=Math.min(minX,p.x);minY=Math.min(minY,p.y);maxX=Math.max(maxX,p.x);maxY=Math.max(maxY,p.y)}return{minX,minY,maxX,maxY}}
     _calculatePathLength(cl){if(!cl||cl.length<2)return 0;let len=0;for(let i=1;i<cl.length;i++){const dx=cl[i].x-cl[i-1].x,dy=cl[i].y-cl[i-1].y;len+=Math.sqrt(dx*dx+dy*dy)}return len}
     _assessQuality(){if(this.keyPoints.length===0)return{rating:'poor',avgUncertainty:5.0,goodSampleRatio:0,corners:0,totalPoints:0};const vp=this.keyPoints.filter(p=>p.sigma<4.0);const ts=this.keyPoints.reduce((s,p)=>s+(p.sigma||3.0),0);const as=ts/this.keyPoints.length;const displayCorners=this.inCorner?this.cornerCount+1:this.cornerCount;const gr=vp.length/this.keyPoints.length;let rating='good';if(isNaN(as)||as>4.5||gr<0.7)rating='fair';if(isNaN(as)||as>6.0||gr<0.5)rating='poor';return{rating:rating,avgUncertainty:isNaN(as)?3.0:as,goodSampleRatio:isNaN(gr)?0.5:gr,corners:displayCorners,totalPoints:this.keyPoints.length}}
@@ -1991,7 +2162,23 @@ class LapTracker{
 
 function fmtDelta(ms){const sign=ms>0?'+':'',sec=ms/1000;return sign+(Math.abs(sec)<10?sec.toFixed(2):sec.toFixed(1))}
 
-function updateDeltaBar(opts){const{deltaMs,trend=0,hasRef=false,isP2P=false}=opts;const bar=$('delta-bar'),fill=$('delta-fill'),txt=$('delta-text');if(!bar||!fill||!txt)return;if(!hasRef){bar.classList.add('no-ref');fill.className='bbDeltaFill';fill.style.width='0%';fill.style.left='50%';txt.textContent=isP2P?'Complete a reference run':'Complete a reference lap';txt.className='bbDeltaText';return}if(!Number.isFinite(deltaMs)){bar.classList.add('no-ref');fill.style.width='0%';txt.textContent=opts.reason||'Delta unavailable';txt.className='bbDeltaText';return}if(Math.abs(deltaMs)<5){bar.classList.remove('no-ref');fill.className='bbDeltaFill';fill.style.width='0%';fill.style.left='50%';txt.textContent='±0.00s';txt.className='bbDeltaText';return}bar.classList.remove('no-ref');const MAX=2000,abs=Math.abs(deltaMs),pct=Math.min(50,(abs/MAX)*50),ahead=deltaMs<0;if(ahead){fill.style.left=(50-pct)+'%';fill.style.width=pct+'%'}else{fill.style.left='50%';fill.style.width=pct+'%'}let fc='bbDeltaFill';if(abs>30)fc+=ahead?' ahead':' behind';if(abs>1000)fc+=ahead?' glow-ahead':' glow-behind';fill.className=fc;let ds=fmtDelta(deltaMs)+'s';if(trend<-5)ds+=' ▲';else if(trend>5)ds+=' ▼';txt.textContent=ds;txt.className='bbDeltaText'+(abs>30?(ahead?' ahead':' behind'):'')}
+function updateDeltaBar(opts){
+    const {deltaMs,hasRef=false}=opts,bar=$('delta-bar'),fill=$('delta-fill'),txt=$('delta-text'),reason=$('delta-reason');
+    if(!bar||!fill||!txt)return;
+    if(!hasRef||!Number.isFinite(deltaMs)){
+        bar.classList.add('no-ref');fill.className='bbDeltaFill';fill.style.width='0%';fill.style.left='50%';
+        txt.textContent='—';txt.className='bbDeltaText bbNum';
+        const detail=!hasRef?'Complete a reference lap or run':opts.reason||'Delta unavailable';
+        if(reason){reason.textContent=!hasRef?'No reference':/GPS|stale|data|connection/i.test(detail)?'GPS unavailable':/Off reference/i.test(detail)?'Off reference':'No match';reason.title=detail}
+        return;
+    }
+    bar.classList.remove('no-ref');if(reason)reason.textContent='';
+    if(Math.abs(deltaMs)<5){fill.className='bbDeltaFill';fill.style.width='0%';fill.style.left='50%';txt.textContent='±0.00s';txt.className='bbDeltaText bbNum';return}
+    const abs=Math.abs(deltaMs),pct=Math.min(50,abs/2000*50),ahead=deltaMs<0;
+    fill.style.left=(ahead?50-pct:50)+'%';fill.style.width=pct+'%';
+    fill.className='bbDeltaFill'+(abs>30?(ahead?' ahead':' behind'):'')+(abs>1000?(ahead?' glow-ahead':' glow-behind'):'');
+    txt.textContent=fmtDelta(deltaMs)+'s';txt.className='bbDeltaText bbNum'+(abs>30?(ahead?' ahead':' behind'):'');
+}
 
 async function saveNewRefLap(trackId,lapTimeMs,tracker){
     const owner=activeTrack,session=currentSessionId,generation=++referenceSaveGeneration;
@@ -2097,7 +2284,7 @@ function hideModal(id){
     const opener=modalReturnFocus.get(id);modalReturnFocus.delete(id);focusVisibleControl(opener);
 }
 document.addEventListener('keydown',event=>{
-    if($('decision-dialog')?.open)return;
+    if($('decision-dialog')?.open||$('recording-replay')?.open||$('track-start-hold')?.open)return;
     const modal=document.querySelector('.bbModal.open');if(!modal)return;
     if(event.key==='Escape'){event.preventDefault();hideModal(modal.id);return}
     if(event.key!=='Tab')return;
@@ -2139,7 +2326,7 @@ async function renderTrackList(){
             return '<div class=\"bbTrackItem\" data-id=\"'+escHtml(t.id)+'\">'+
                 '<div class=\"bbTrackInfo\">'+
                     '<div class=\"bbTrackName\">'+escHtml(t.name)+(isActive?' ✓':'')+'</div>'+
-                    '<div class=\"bbTrackMeta\"><span>Best: '+best+'</span><span>'+lc+' '+unit+'</span></div>'+
+                    '<div class=\"bbTrackMeta\"><span class=\"bbTime\">Best: '+best+'</span><span>'+lc+' '+unit+'</span></div>'+
                 '</div>'+
                 '<div class=\"bbTrackActions\">'+
                     '<button class=\"bbTrackBtn primary\" data-action=\"use\">Arm timing</button>'+
@@ -2401,7 +2588,64 @@ async function deactivateTrackCommand(){
 }
 
 // Track Recording Functions
+// Stationary start anchor: distinct accepted receiver fixes, not repeated HTTP samples.
+class StationaryStartCapture{
+    constructor(){this.previous=null;this.reset('Waiting for GPS')}
+    reset(status='Stay still'){this.firstUs=null;this.count=0;this.lat=0;this.lon=0;this.spreadM=0;this.fixes=[];this.durationMs=0;this.complete=false;this.status=status}
+    update(r){
+        const valid=r.rowType===1&&r.gpsActive===1&&r.gpsAccepted===1&&validGpsCoordinates(r.lat,r.lon)&&Math.abs(r.lat)<90&&Number.isFinite(r.sp)&&r.sp>=0&&Number.isSafeInteger(r.gpsUtcUs)&&r.gpsUtcUs>=0&&r.gpsUtcUs<86401000000&&Number.isSafeInteger(r.gpsSeq)&&r.gpsSeq>0&&Number.isInteger(r.gpsBootId)&&r.gpsBootId>=0&&Number.isInteger(r.gpsDate)&&r.gpsDate>0&&Number.isInteger(r.gpsFractionDigits)&&r.gpsFractionDigits>=2;
+        if(!valid){this.reset('Waiting for fresh GPS');this.previous=null;return}
+        const p=this.previous;if(p&&r.gpsBootId===p.gpsBootId&&r.gpsSeq===p.gpsSeq)return;
+        this.previous=r;
+        const dt=p?(r.gpsUtcUs-p.gpsUtcUs)/1000:0;
+        if(p&&(r.gpsBootId!==p.gpsBootId||r.gpsDate!==p.gpsDate||r.gpsSeq!==p.gpsSeq+1||r.gpsMissing>0||dt<20||dt>300))this.reset('GPS interrupted · restarting');
+        if(r.sp>.3){this.reset('Stop at the start');return}
+        if(this.count){const north=(r.lat-this.lat)*111320,east=(r.lon-this.lon)*111320*Math.cos(this.lat*Math.PI/180),distance=Math.hypot(east,north);if(distance>10){this.reset('GPS position wandering · restarting')}else this.spreadM=Math.max(this.spreadM,distance)}
+        if(this.firstUs===null)this.firstUs=r.gpsUtcUs;
+        this.count++;this.lat+=(r.lat-this.lat)/this.count;this.lon+=(r.lon-this.lon)/this.count;
+        this.fixes.push({lat:r.lat,lon:r.lon,utcUs:r.gpsUtcUs,seq:r.gpsSeq});
+        this.durationMs=(r.gpsUtcUs-this.firstUs)/1000;this.status='Stay still · capturing start';
+        this.complete=this.durationMs>=5000&&this.count>=20;if(this.complete)this.status='Start captured';
+    }
+    anchor(){return this.complete?{version:1,lat:this.lat,lon:this.lon,fixCount:this.count,durationMs:this.durationMs,spreadM:this.spreadM,fixes:this.fixes.map(p=>({...p}))}:null}
+}
+let startHold=null,startHoldGeneration=0;
+function cancelStartHold(){const owner=startHold;if(!owner)return;startHold=null;startHoldGeneration++;clearTimeout(owner.timer);if($('track-start-hold').open)$('track-start-hold').close();owner.resolve(false);focusVisibleControl(owner.focus)}
+function renderStartHold(owner){
+    if(startHold!==owner)return;
+    $('start-hold-count').textContent=String(Math.max(0,Math.ceil((5000-owner.capture.durationMs)/1000)));
+    $('start-hold-progress').value=Math.min(5000,owner.capture.durationMs);$('start-hold-status').textContent=owner.capture.status;
+}
+async function pollStartHold(owner){
+    if(startHold!==owner)return;
+    try{
+        const url='/api/gps-log'+(owner.cursor?'?boot='+owner.cursor.boot+'&after='+owner.cursor.seq:'');
+        const response=await requestDevice(url,{cache:'no-store',timeoutMs:1000});if(!response.ok)throw Error('GPS unavailable');
+        const batch=await response.json();if(startHold!==owner)return;
+        if(owner.cursor&&batch.boot_id!==owner.cursor.boot){owner.cursor=null;owner.capture.reset('GPS restarted · restarting')}
+        const initial=owner.cursor===null,result=gpsRows(batch,owner.cursor,Date.now());owner.cursor=result.cursor;
+        // Exclude the buffered pre-click window; all five seconds follow enrollment.
+        if(!initial&&result.rows.length){owner.lastRowsAt=performance.now();for(const row of result.rows){owner.capture.update(row);if(owner.capture.complete)break}}
+        if(owner.lastRowsAt===null||performance.now()-owner.lastRowsAt>500)owner.capture.reset('Waiting for fresh GPS');
+        if(owner.capture.firstUs!==owner.firstCaptureUs){owner.firstCaptureUs=owner.capture.firstUs;owner.captureStartedAt=performance.now()}
+        if(owner.capture.complete&&performance.now()-owner.captureStartedAt>=5000){
+            if(!currentPos?.valid||!Number.isFinite(currentPos.gpsAgeMs)||currentPos.gpsAgeMs>300||currentPos.speed/3.6>.3||performance.now()-currentPos.receivedAtMs>300){owner.capture.reset('Waiting for live position')}
+            else{
+                const anchor=owner.capture.anchor();startHold=null;if($('track-start-hold').open)$('track-start-hold').close();
+                try{owner.resolve(await beginCapturedTrackRecording(owner.type,anchor))}catch(e){notifyUser('Could not start route recording. '+e.message);owner.resolve(false)}return;
+            }
+        }
+    }catch(e){if(startHold!==owner)return;owner.capture.reset('GPS unavailable · retrying');owner.cursor=null;owner.lastRowsAt=null}
+    renderStartHold(owner);if(startHold===owner)owner.timer=setTimeout(()=>pollStartHold(owner),100);
+}
 async function startTrackRecording(trackType='loop'){
+    if(startHold||routeCapture?.busy)return false;
+    if(trackRecorder&&!await cancelTrackRecording())return false;if(startHold||routeCapture?.busy)return false;
+    trackAutoDetector.withdraw();
+    return new Promise(resolve=>{const owner={type:trackType,capture:new StationaryStartCapture(),cursor:null,lastRowsAt:null,firstCaptureUs:null,captureStartedAt:null,timer:null,resolve,focus:document.activeElement,generation:++startHoldGeneration};startHold=owner;$('start-hold-title').textContent=trackType==='loop'?'Capture circuit start':'Capture stage start';$('track-start-hold').showModal();renderStartHold(owner);pollStartHold(owner)});
+}
+
+async function beginCapturedTrackRecording(trackType='loop',anchor=null){
     if(routeCapture?.busy)return false;
     if(trackRecorder&&!await cancelTrackRecording())return false;
     trackAutoDetector.withdraw();
@@ -2410,9 +2654,10 @@ async function startTrackRecording(trackType='loop'){
     if(!trackRecorder)trackRecorder=new TrackRecorder();
     // Use GPS course if valid, else EKF yaw (heading used for corner detection, not loop closure)
     const heading=currentPos.validGpsCourse?currentPos.gpsCourse:currentPos.yaw;
-    const pos={x:currentPos.x,y:currentPos.y,lat:currentPos.lat,lon:currentPos.lon,heading:heading,speed:currentPos.speed/3.6,valid:true,sigma:currentPos.sigma||3.0};
+    const pos={x:currentPos.x,y:currentPos.y,lat:anchor?anchor.lat:currentPos.lat,lon:anchor?anchor.lon:currentPos.lon,heading:heading,speed:currentPos.speed/3.6,valid:true,sigma:currentPos.sigma||3.0};
     // Pass GPS reference so all coordinates are computed in firmware's frame (for timing line alignment)
     if(!trackRecorder.start(pos,trackType,ref)){console.warn('Failed to start recording');return false}
+    if(anchor)trackRecorder.startCapture=anchor;
     routeCapture={recorder:trackRecorder,frozen:false,track:null,saved:false,busy:false};
     renderRouteRecovery();
     const overlay=$('record-overlay');overlay.classList.add('active');
@@ -2510,7 +2755,7 @@ async function finishTrackRecording(){
             const data=trackRecorder.finish(trackName);
             if(!data){renderRouteRecovery('Not enough route points to save. Choose Continue route and collect more with fresh GPS, or discard this route.');return}
             owner.frozen=true;
-            owner.track={id:data.id,name:data.name,type:data.type,startLine:data.startLine,finishLine:data.finishLine,origin:data.origin,gpsOrigin:data.gpsOrigin,centerline:data.centerline,bounds:data.bounds,pathLength:data.totalDistance||0,quality:data.quality,bestLapMs:null,lapCount:0,corners:data.corners||0,keyPoints:(data.centerline&&data.centerline.length)||data.keyPoints||0,createdAt:data.created,isNew:true};
+            owner.track={id:data.id,name:data.name,type:data.type,startLine:data.startLine,finishLine:data.finishLine,...(data.startCapture?{startCapture:data.startCapture}:{}),origin:data.origin,gpsOrigin:data.gpsOrigin,centerline:data.centerline,bounds:data.bounds,pathLength:data.totalDistance||0,quality:data.quality,bestLapMs:null,lapCount:0,corners:data.corners||0,keyPoints:(data.centerline&&data.centerline.length)||data.keyPoints||0,createdAt:data.created,isNew:true};
         }
         renderRouteRecovery(owner.saved?'Track saved. Waiting for timing confirmation…':'Saving track. Keep this tab open…');
         if(!owner.saved){await saveTrack(owner.track,{create:true});owner.saved=true}
@@ -2703,13 +2948,14 @@ function resize(){
 resize();window.addEventListener('resize',resize);
 
 // Fixed scale avoids making identical forces look different during a maneuver.
-$('range-val').onclick=()=>{currentScale=SCALE_STEPS[(SCALE_STEPS.indexOf(currentScale)+1)%SCALE_STEPS.length];$('range-val').textContent='Scale '+currentScale.toFixed(1)+' g';drawG()};
-function forcePoint(x,y,scale){const mag=Math.hypot(x,y),factor=mag>scale?scale/mag:1;return{x:x*factor/scale,y:y*factor/scale,clipped:mag>scale}}
+$('range-val').onclick=()=>{currentScale=SCALE_STEPS[(SCALE_STEPS.indexOf(currentScale)+1)%SCALE_STEPS.length];$('range-val').textContent='±'+currentScale.toFixed(1)+' g';if(trail.length){const p=trail.at(-1);$('force-status').textContent=Math.max(Math.abs(p.x),Math.abs(p.y))>currentScale?'Over scale':''}drawG()};
+function forcePoint(x,y,scale){const extent=Math.max(Math.abs(x),Math.abs(y)),factor=extent>scale?scale/extent:1;return{x:x*factor/scale,y:y*factor/scale,clipped:extent>scale}}
+function forceLoadPoint(x,y,scale){return forcePoint(-x,y,scale)}
 function forcesUsable(gps,age,imuAge){return gps===1&&Number.isFinite(age)&&age>=0&&age<=300&&Number.isFinite(imuAge)&&imuAge>=0&&imuAge<=200}
 // Moving-sample heuristic, not a force-accuracy guarantee; callers supply metres per second.
 const SUSTAINED_EFFORT_MIN_SPEED_MPS=10/3.6;
 function sustainedEffortUsable(speedMps,gps,gpsAge,imuAge){return Number.isFinite(speedMps)&&speedMps>=SUSTAINED_EFFORT_MIN_SPEED_MPS&&forcesUsable(gps,gpsAge,imuAge)}
-function clearForces(label){trail=[];emaGx=emaGy=0;lastT=null;effortPeaks.update(0,0,false);$('force-status').textContent=label;$('lat-g').textContent=$('lon-g').textContent='—';$('maneuver').textContent='—';$('maneuver').style.color=MODE_COLORS[0];currentModeColor=getModeColorHex(0);drawG()}
+function clearForces(label){trail=[];emaGx=emaGy=0;lastT=null;effortPeaks.update(0,0,false);$('force-status').textContent=label;$('force-combined').textContent=$('lat-g').textContent=$('lon-g').textContent='—';$('force-combined').className='bbNum';$('lat-force-label').textContent='LATERAL';$('lon-force-label').textContent='LONGITUDINAL';$('maneuver').textContent='—';$('maneuver').style.color=MODE_COLORS[0];currentModeColor=getModeColorHex(0);drawG()}
 
 function hexToRgba(hex,a){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return`rgba(${r},${g},${b},${a})`}
 function downsampleTrail(points,maxPoints){
@@ -2721,70 +2967,52 @@ function downsampleTrail(points,maxPoints){
 }
 
 let trail=[];
-function drawG(){
-    const size=cv.width/devicePixelRatio,cx=size/2,cy=size/2,r=size*0.38;
-    ctx.clearRect(0,0,size,size);
-    const ringColor=isDark?'rgba(174,211,193,0.18)':'rgba(0,0,0,0.12)';
-    const axisColor=isDark?'rgba(174,211,193,0.32)':'rgba(0,0,0,0.22)';
-    // Subtle concentric rings with dashed style
-    ctx.setLineDash([4,4]);ctx.lineWidth=1;ctx.strokeStyle=ringColor;
-    [0.25,0.5,0.75,1.0].forEach(f=>{ctx.beginPath();ctx.arc(cx,cy,r*f,0,Math.PI*2);ctx.stroke()});
-    ctx.setLineDash([]);
-    // Cross axes - more refined
-    ctx.strokeStyle=axisColor;ctx.lineWidth=1.5;
-    ctx.beginPath();ctx.moveTo(cx-r,cy);ctx.lineTo(cx+r,cy);ctx.moveTo(cx,cy-r);ctx.lineTo(cx,cy+r);ctx.stroke();
-    // Center reference dot
-    ctx.fillStyle=isDark?'rgba(255,255,255,0.12)':'rgba(0,0,0,0.08)';
-    ctx.beginPath();ctx.arc(cx,cy,3,0,Math.PI*2);ctx.fill();
-    const now=performance.now(),recentTrail=trail.filter(p=>now-p.t<TRAIL_DURATION_MS);
-    const displayTrail=downsampleTrail(recentTrail,TRAIL_MAX_POINTS);
-    if(displayTrail.length>1){
-        ctx.lineCap='round';ctx.lineJoin='round';
-        const trailLen=displayTrail.length;
-        for(let i=1;i<trailLen;i++){
-            const p0=displayTrail[i-1],p1=displayTrail[i];
-            const age=(now-p1.t)/TRAIL_DURATION_MS;
-            const freshness=1-age;
-            // Thickness: 6px at newest, tapering to 1px
-            const width=1+freshness*5;
-            // Opacity: 0.7 at newest, fading to 0.04
-            const alpha=Math.max(0.04,0.7*Math.pow(freshness,0.6));
-            // Add subtle glow for the newest 25% of trail
-            if(freshness>0.75){ctx.shadowColor=currentModeColor;ctx.shadowBlur=8*freshness}else{ctx.shadowBlur=0}
-            ctx.strokeStyle=hexToRgba(currentModeColor,alpha);ctx.lineWidth=width;
-            ctx.beginPath();
-            const a=forcePoint(p0.x,p0.y,currentScale),b=forcePoint(p1.x,p1.y,currentScale);
-            ctx.moveTo(cx+a.x*r,cy-a.y*r);ctx.lineTo(cx+b.x*r,cy-b.y*r);
-            ctx.stroke();
-        }
-        ctx.shadowBlur=0;
+function drawG(){drawForceMap(cv,trail,currentScale,performance.now())}
+function drawForceMap(canvas,history,scale,clock){
+    const cv=canvas,ctx=canvas.getContext('2d'),trail=history,currentScale=scale;
+    const size=cv.width/devicePixelRatio;if(!size)return;
+    const cx=size/2,cy=size/2,r=Math.max(1,(size-48)/2),now=clock;
+    const dark=document.body.classList.contains('dark');
+    const ink=dark?'#becbd5':'#3d4a55',grid=dark?'#2a3845':'#d4dce1',accent=dark?'#d7ff45':'#287121',warning=dark?'#ffbc67':'#995100';
+    ctx.clearRect(0,0,size,size);ctx.shadowBlur=0;ctx.lineCap='butt';ctx.lineJoin='round';ctx.setLineDash([]);
+    // Cartesian calibration: each component has the same fixed scale.
+    ctx.strokeStyle=grid;ctx.lineWidth=1;
+    ctx.strokeRect(cx-r,cy-r,r*2,r*2);
+    ctx.beginPath();
+    for(const f of [-.5,.5]){ctx.moveTo(cx+f*r,cy-r);ctx.lineTo(cx+f*r,cy+r);ctx.moveTo(cx-r,cy+f*r);ctx.lineTo(cx+r,cy+f*r)}ctx.stroke();
+    ctx.strokeStyle=ink;ctx.globalAlpha=.45;
+    ctx.beginPath();ctx.moveTo(cx-r,cy);ctx.lineTo(cx+r,cy);ctx.moveTo(cx,cy-r);ctx.lineTo(cx,cy+r);ctx.stroke();ctx.globalAlpha=1;
+    // Occupant-load view: a right turn loads left; braking loads forward (up).
+    ctx.fillStyle=ink;ctx.font='500 10px "JetBrains Mono",monospace';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText('BRAKE',cx,cy-r-12);ctx.fillText('ACCEL',cx,cy+r+13);
+    ctx.fillText('L',cx-r-13,cy);ctx.fillText('R',cx+r+13,cy);
+    const recent=trail.filter(p=>now-p.t>=0&&now-p.t<TRAIL_DURATION_MS),points=downsampleTrail(recent,TRAIL_MAX_POINTS);
+    if(!points.length){ctx.fillStyle=ink;ctx.globalAlpha=.65;ctx.textAlign='center';ctx.font='500 11px "JetBrains Mono",monospace';ctx.fillText('NO DATA',cx,cy);ctx.globalAlpha=1;return}
+    if(size>=180){ctx.globalAlpha=.6;ctx.textAlign='left';ctx.fillText('0',cx+5,cy+9);ctx.globalAlpha=1}
+    // History is context, never an inferred grip envelope or capacity percentage.
+    ctx.save();ctx.beginPath();ctx.rect(cx-r,cy-r,2*r,2*r);ctx.clip();
+    ctx.lineWidth=1.25;ctx.strokeStyle=ink;
+    for(let i=1;i<points.length;i++){
+        const a=forceLoadPoint(points[i-1].x,points[i-1].y,currentScale),b=forceLoadPoint(points[i].x,points[i].y,currentScale);
+        ctx.globalAlpha=.08+.34*(1-(now-points[i].t)/TRAIL_DURATION_MS);
+        ctx.beginPath();ctx.moveTo(cx+a.x*r,cy-a.y*r);ctx.lineTo(cx+b.x*r,cy-b.y*r);ctx.stroke();
     }
-    if(recentTrail.length>0){
-        const cur=recentTrail[recentTrail.length-1],point=forcePoint(cur.x,cur.y,currentScale),x=cx+point.x*r,y=cy-point.y*r;
-        const mag=Math.sqrt(cur.x*cur.x+cur.y*cur.y);
-        const intensity=Math.min(1,mag/0.8); // Intensity based on G-force
-        const baseRadius=7+intensity*3; // 7-10px radius based on G
-        // Outer glow ring
-        ctx.shadowColor=currentModeColor;ctx.shadowBlur=16+intensity*8;
-        ctx.strokeStyle=hexToRgba(currentModeColor,0.6);ctx.lineWidth=2;
-        ctx.beginPath();ctx.arc(x,y,baseRadius+3,0,Math.PI*2);ctx.stroke();
-        // Filled circle with mode color
-        ctx.shadowBlur=8;
-        ctx.fillStyle=currentModeColor;
-        ctx.beginPath();ctx.arc(x,y,baseRadius,0,Math.PI*2);ctx.fill();
-        // Inner highlight (gives 3D ball effect)
-        ctx.shadowBlur=0;
-        const grad=ctx.createRadialGradient(x-baseRadius*0.3,y-baseRadius*0.3,0,x,y,baseRadius);
-        grad.addColorStop(0,'rgba(255,255,255,0.8)');grad.addColorStop(0.3,'rgba(255,255,255,0.2)');grad.addColorStop(1,'rgba(255,255,255,0)');
-        ctx.fillStyle=grad;
-        ctx.beginPath();ctx.arc(x,y,baseRadius,0,Math.PI*2);ctx.fill();
-    }
+    ctx.restore();ctx.globalAlpha=1;
+    const last=recent.at(-1),point=forceLoadPoint(last.x,last.y,currentScale),x=cx+point.x*r,y=cy-point.y*r;
+    const color=point.clipped?warning:accent;
+    ctx.fillStyle=color;ctx.globalAlpha=.07;ctx.fillRect(Math.min(cx,x),Math.min(cy,y),Math.abs(x-cx),Math.abs(y-cy));ctx.globalAlpha=1;
+    ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.globalAlpha=.8;ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(x,y);ctx.stroke();
+    ctx.strokeStyle=color;ctx.globalAlpha=.35;ctx.lineWidth=1;ctx.setLineDash([2,3]);
+    ctx.beginPath();ctx.moveTo(x,cy);ctx.lineTo(x,y);ctx.lineTo(cx,y);ctx.stroke();ctx.setLineDash([]);ctx.globalAlpha=1;
+    // Constant target size keeps magnitude in the coordinates and numbers.
+    ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.strokeRect(x-5,y-5,10,10);
+    ctx.fillStyle=color;ctx.fillRect(x-2,y-2,4,4);
 }
 
 // Receiver-time rolling intervals. Derived results are reproducible from GPS CSV.
 class RollingRuns{
     constructor(interval={label:'45-70 mph',lo:45*.44704,hi:70*.44704}){this.interval=interval;this.reset()}
-    reset(){this.previous=null;this.belowSince=null;this.leadSynthetic=0;this.armed=false;this.attempt=null;this.results=[];this.dropped=0;this.status='Waiting for GPS evidence'}
+    reset(){this.previous=null;this.belowSince=null;this.leadSynthetic=0;this.armed=false;this.attempt=null;this.results=[];this.dropped=0;this.status='Waiting for GPS'}
     save(result){this.results.push(result);if(this.results.length>1000){this.results.shift();this.dropped++}}
     abort(reason){if(this.attempt)this.save({...this.attempt,status:'rejected',reason,seconds:null});this.attempt=null;this.armed=false;this.leadSynthetic=0;this.status=reason}
     update(r){
@@ -2794,7 +3022,7 @@ class RollingRuns{
         const p=this.previous;
         if(p&&r.gpsBootId===p.gpsBootId&&r.gpsSeq===p.gpsSeq)return;
         this.previous=r;
-        if(!p){this.belowSince=r.sp<lo-.44704?r.gpsUtcUs:null;this.leadSynthetic=this.belowSince!==null&&r.gpsSynthetic?1:0;this.status='Waiting for lead-in';return}
+        if(!p){this.belowSince=r.sp<lo-.44704?r.gpsUtcUs:null;this.leadSynthetic=this.belowSince!==null&&r.gpsSynthetic?1:0;this.status='Waiting for speed';return}
         const dt=(r.gpsUtcUs-p.gpsUtcUs)/1e6;
         if(r.gpsBootId!==p.gpsBootId||r.gpsDate!==p.gpsDate||r.gpsSeq!==p.gpsSeq+1||r.gpsMissing>0||dt<.02||dt>.3){this.abort('GPS gap or clock boundary');this.belowSince=null;return}
         if(Math.abs(r.sp-p.sp)/dt>15){this.abort('Implausible speed change');this.belowSince=null;return}
@@ -2802,7 +3030,7 @@ class RollingRuns{
             if(this.attempt)this.abort('Below start speed');
             if(this.belowSince===null){this.belowSince=p.sp<lo-.44704?p.gpsUtcUs:r.gpsUtcUs;this.leadSynthetic=p.sp<lo-.44704&&p.gpsSynthetic?1:0}
             this.leadSynthetic=this.leadSynthetic||r.gpsSynthetic?1:0;
-            this.armed=r.gpsUtcUs-this.belowSince>=200000;this.status='Waiting for '+this.interval.label;
+            this.armed=r.gpsUtcUs-this.belowSince>=200000;this.status='Ready';
         }else if(this.armed)this.leadSynthetic=this.leadSynthetic||r.gpsSynthetic?1:0;
         else{this.belowSince=null;this.leadSynthetic=0}
         const crossing=v=>p.gpsUtcUs+(v-p.sp)/(r.sp-p.sp)*(r.gpsUtcUs-p.gpsUtcUs);
@@ -2818,12 +3046,77 @@ class RollingRuns{
         if(r.gpsUtcUs-a.startUs>120e6){this.abort('Interval timed out');return}
         if(r.sp<hi-.15)a.endUs=null;
         if(a.endUs===null&&p.sp<hi&&r.sp>=hi){a.endUs=crossing(hi);a.endSeq=r.gpsSeq}
-        this.status='Collecting interval · GPS time';
-        if(a.confirmed&&a.endUs!==null&&r.gpsUtcUs-a.endUs>=80000){this.save({...a,status:'accepted',reason:'Uncorrected GPS estimate',seconds:(a.endUs-a.startUs)/1e6});this.attempt=null;this.status='Interval saved in GPS evidence'}
+        this.status='Measuring';
+        if(a.confirmed&&a.endUs!==null&&r.gpsUtcUs-a.endUs>=80000){this.save({...a,status:'accepted',reason:'Uncorrected GPS estimate',seconds:(a.endUs-a.startUs)/1e6});this.attempt=null;this.status='Run complete'}
     }
 }
-const runIntervals=[{label:'45-70 mph',family:'overtaking',unit:'mph',lo:45*.44704,hi:70*.44704},{label:'30-60 mph',family:'lower',unit:'mph',lo:30*.44704,hi:60*.44704},{label:'50-100 km/h',family:'lower',unit:'km/h',lo:50/3.6,hi:100/3.6},{label:'80-120 km/h',family:'overtaking',unit:'km/h',lo:80/3.6,hi:120/3.6}];
-const runDetectors=runIntervals.map(interval=>new RollingRuns(interval));
+// Experimental standing starts: last stationary receiver fix, never a hidden rollout.
+class StandingRuns extends RollingRuns{
+    reset(){super.reset();this.stationarySince=null;this.launchAnchor=null;this.stationarySynthetic=0}
+    abort(reason){super.abort(reason);this.stationarySince=null;this.launchAnchor=null;this.stationarySynthetic=0}
+    update(r){
+        if(r.rowType!==1)return;
+        if(r.gpsActive!==1||r.gpsAccepted!==1||!Number.isFinite(r.sp)||r.sp<0||r.sp>120||!Number.isSafeInteger(r.gpsUtcUs)||r.gpsUtcUs<0||r.gpsUtcUs>=86401000000||!Number.isSafeInteger(r.gpsSeq)||r.gpsSeq<1||!Number.isInteger(r.gpsBootId)||r.gpsBootId<0||!Number.isInteger(r.gpsDate)||r.gpsDate<=0||!Number.isInteger(r.gpsFractionDigits)||r.gpsFractionDigits<2){this.abort('GPS evidence incomplete');this.previous=null;return}
+        const p=this.previous;
+        if(p&&r.gpsBootId===p.gpsBootId&&r.gpsSeq===p.gpsSeq)return;
+        this.previous=r;
+        const dt=p?(r.gpsUtcUs-p.gpsUtcUs)/1e6:0;
+        if(p&&(r.gpsBootId!==p.gpsBootId||r.gpsDate!==p.gpsDate||r.gpsSeq!==p.gpsSeq+1||r.gpsMissing>0||dt<.02||dt>.3)){this.abort('GPS gap or clock boundary');return}
+        if(p&&Math.abs(r.sp-p.sp)/dt>15){this.abort('Implausible speed change');return}
+        if(r.sp<=.3){
+            if(this.attempt)this.abort('Returned to rest');
+            if(this.stationarySince===null)this.stationarySince=r.gpsUtcUs;
+            this.stationarySynthetic=this.stationarySynthetic||r.gpsSynthetic?1:0;
+            this.launchAnchor=r;this.armed=r.gpsUtcUs-this.stationarySince>=1e6;
+            this.status=this.armed?'Ready · standing start':'Hold still · 1 s';return;
+        }
+        if(!p){this.status='Stop to arm';return}
+        if(!this.attempt&&this.armed&&this.launchAnchor){
+            const anchor=this.launchAnchor;
+            this.attempt={interval:this.interval.label,startUs:anchor.gpsUtcUs,startSeq:anchor.gpsSeq,endUs:null,endSeq:null,boot:r.gpsBootId,date:r.gpsDate,course:null,synthetic:this.stationarySynthetic||r.gpsSynthetic?1:0,confirmed:false,distanceM:0,startConvention:'stationary-fix-v1',rolloutM:0,launchBracketMs:null,startSpeedMps:anchor.sp,finishSpeedMps:null};
+            this.armed=false;
+        }
+        const a=this.attempt;
+        if(!a){this.stationarySince=null;this.launchAnchor=null;this.stationarySynthetic=0;this.status='Stop to arm';return}
+        a.synthetic=a.synthetic||r.gpsSynthetic?1:0;
+        if(!a.confirmed){
+            if((r.gpsUtcUs-a.startUs>600000||(r.gpsUtcUs-a.startUs>300000&&r.gpsSeq-a.startSeq>2))){this.abort('Launch unresolved · creeping');return}
+            if(r.sp>=.5){a.confirmed=true;a.launchBracketMs=(r.gpsUtcUs-a.startUs)/1000}
+        }
+        // Course is unreliable at rest; establish straight-line heading once moving.
+        if(r.sp>=2){
+            if(!Number.isFinite(r.gpsCourse)){this.abort('Moving course unavailable');return}
+            if(a.course===null)a.course=r.gpsCourse;
+            else if(Math.abs(Math.atan2(Math.sin(r.gpsCourse-a.course),Math.cos(r.gpsCourse-a.course)))>Math.PI/12){this.abort('Direction changed');return}
+        }
+        if(r.gpsUtcUs-a.startUs>120e6){this.abort('Run timed out');return}
+        const before=a.distanceM;a.distanceM+=(p.sp+r.sp)*.5*dt;
+        if(this.interval.distanceM){
+            if(a.endUs===null&&before<this.interval.distanceM&&a.distanceM>=this.interval.distanceM){
+                const remaining=this.interval.distanceM-before,acceleration=(r.sp-p.sp)/dt;
+                // Stable quadratic root of distance = v0*t + acceleration*t²/2.
+                const elapsed=2*remaining/(p.sp+Math.sqrt(Math.max(0,p.sp*p.sp+2*acceleration*remaining)));
+                a.endUs=p.gpsUtcUs+Math.min(dt,Math.max(0,elapsed))*1e6;a.endSeq=r.gpsSeq;a.finishSpeedMps=p.sp+acceleration*elapsed;
+            }
+        }else{
+            const hi=this.interval.hi;
+            if(r.sp<hi-.15)a.endUs=null;
+            if(a.endUs===null&&p.sp<hi&&r.sp>=hi){a.endUs=p.gpsUtcUs+(hi-p.sp)/(r.sp-p.sp)*(r.gpsUtcUs-p.gpsUtcUs);a.endSeq=r.gpsSeq;a.finishSpeedMps=hi}
+        }
+        this.status='Running · GPS estimate';
+        if(a.confirmed&&a.endUs!==null&&r.gpsUtcUs-a.endUs>=80000){
+            this.save({...a,distanceM:this.interval.distanceM??null,status:'accepted',reason:'Experimental GPS launch estimate',seconds:(a.endUs-a.startUs)/1e6});
+            this.attempt=null;this.stationarySince=null;this.launchAnchor=null;this.stationarySynthetic=0;this.status='Saved · stop to rearm';
+        }
+    }
+}
+const runIntervals=[{label:'45-70 mph',family:'overtaking',unit:'mph',lo:45*.44704,hi:70*.44704},{label:'30-60 mph',family:'lower',unit:'mph',lo:30*.44704,hi:60*.44704},{label:'50-100 km/h',family:'lower',unit:'km/h',lo:50/3.6,hi:100/3.6},{label:'80-120 km/h',family:'overtaking',unit:'km/h',lo:80/3.6,hi:120/3.6},
+    {label:'50-60 mph',family:'short',unit:'mph',lo:50*.44704,hi:60*.44704},{label:'80-100 km/h',family:'short',unit:'km/h',lo:80/3.6,hi:100/3.6},
+    {label:'60-80 mph',family:'upper',unit:'mph',lo:60*.44704,hi:80*.44704},{label:'100-130 km/h',family:'upper',unit:'km/h',lo:100/3.6,hi:130/3.6},
+    {label:'0-60 mph',family:'standing',unit:'mph',kind:'standing',hi:60*.44704},{label:'0-100 km/h',family:'standing',unit:'km/h',kind:'standing',hi:100/3.6},
+    {label:'1/4 mile',family:'quarter',unit:'any',kind:'standing',distanceM:402.336}];
+function createRunDetector(interval){return interval.kind==='standing'?new StandingRuns(interval):new RollingRuns(interval)}
+const runDetectors=runIntervals.map(createRunDetector);
 const rollingRuns=runDetectors[0];
 let selectedRunFamily='overtaking',selectedRunDetector=rollingRuns;
 function resetPerformanceRuns(){runDetectors.forEach(d=>d.reset());renderPerformanceRuns()}
@@ -2832,21 +3125,21 @@ function renderPerformanceRuns(){
     const accepted=selectedRunDetector.results.filter(r=>r.status==='accepted'),last=accepted.at(-1),best=accepted.length?Math.min(...accepted.map(r=>r.seconds)):null;
     $('run-last').textContent=last?last.seconds.toFixed(2)+' s':'—';$('run-best').textContent=best===null?'—':best.toFixed(2)+' s';
     $('run-record').textContent=rec?'Stop recording':'Record session';$('run-record').disabled=recordingBusy;
-    const readiness=rec?gpsLogReadiness():null,status=readiness||(rec?selectedRunDetector.status:last?(last.synthetic?'SIM example · see Saved data':'Recording stopped'):'Record to collect receiver timestamps');
+    const readiness=rec?gpsLogReadiness():null,status=readiness||(rec?selectedRunDetector.status:last?(last.synthetic?'SIM example':'Stopped'):'Record to measure');
     const statusElement=$('run-status');if(statusElement.textContent!==status)statusElement.textContent=status;statusElement.setAttribute('data-unavailable',readiness?'true':'false');
 }
 function runsToCSV(rows){
     const detectors=createRunExportDetectors();for(const row of rows)for(const d of detectors)d.update(row);
     return runExportToCSV(detectors);
 }
-function createRunExportDetectors(){return runIntervals.map(interval=>new RollingRuns(interval))}
+function createRunExportDetectors(){return runIntervals.map(createRunDetector)}
 function runExportToCSV(detectors){
     for(const d of detectors)if(d.attempt)d.abort('Recording ended before completion');
     const detector={results:detectors.flatMap(d=>d.results),dropped:detectors.reduce((n,d)=>n+d.dropped,0)};
-    const header='interval,status,reason,seconds,start_utc_us,end_utc_us,start_seq,end_seq,boot_id,date_ddmmyy,synthetic';
+    const header='interval,status,reason,seconds,start_utc_us,end_utc_us,start_seq,end_seq,boot_id,date_ddmmyy,start_convention,rollout_m,target_distance_m,launch_bracket_ms,start_speed_mps,finish_speed_mps,synthetic';
     if(detector.dropped)throw Error('More than 1000 attempts: export GPS CSV for full evidence instead.');
-    if(!detector.results.length)throw Error('No rolling interval attempts found in GPS evidence. No result has been invented.');
-    return header+'\n'+detector.results.map(r=>[r.interval,r.status,r.reason,r.seconds??'',r.startUs,r.endUs??'',r.startSeq,r.endSeq??'',r.boot,r.date,r.synthetic].join(',')).join('\n')+'\n';
+    if(!detector.results.length)throw Error('No performance attempts found in GPS evidence. No result has been invented.');
+    return header+'\n'+detector.results.map(r=>[r.interval,r.status,r.reason,r.seconds??'',r.startUs,r.endUs??'',r.startSeq,r.endSeq??'',r.boot,r.date,r.startConvention??'rolling-crossing-v1',r.rolloutM??0,runIntervals.find(i=>i.label===r.interval)?.distanceM??'',r.launchBracketMs??'',r.startSpeedMps??'',r.finishSpeedMps??'',r.synthetic].join(',')).join('\n')+'\n';
 }
 // End receiver-time rolling intervals.
 
@@ -2857,14 +3150,15 @@ function closeRunChooser(returnFocus=false){
 }
 function renderRunChooser(){
     const display=interval=>interval.label.replace('-','–');
+    $('run-note').textContent=selectedRunDetector.interval.kind==='standing'?'Experimental · no rollout':'GPS estimate · no rollout';
     $('run-interval').textContent=display(selectedRunDetector.interval);$('run-interval').setAttribute('aria-label','Run interval: '+display(selectedRunDetector.interval));
-    for(const family of ['lower','overtaking']){
-        const interval=runIntervals.find(i=>i.family===family&&i.unit===speedUnit),button=$('run-'+family);
+    for(const family of ['lower','overtaking','short','upper','standing','quarter']){
+        const interval=runIntervals.find(i=>i.family===family&&(i.unit===speedUnit||i.unit==='any')),button=$('run-'+family);
         button.textContent=display(interval);button.setAttribute('aria-pressed',String(family===selectedRunFamily));
     }
 }
 function syncRunUnits(){
-    selectedRunDetector=runDetectors.find(d=>d.interval.family===selectedRunFamily&&d.interval.unit===speedUnit);
+    selectedRunDetector=runDetectors.find(d=>d.interval.family===selectedRunFamily&&(d.interval.unit===speedUnit||d.interval.unit==='any'));
     renderRunChooser();renderPerformanceRuns();
 }
 $('run-interval').onclick=()=>{
@@ -2872,11 +3166,111 @@ $('run-interval').onclick=()=>{
     $('run-options').hidden=false;$('run-interval').setAttribute('aria-expanded','true');
     const button=$('run-'+selectedRunFamily);button.focus({preventScroll:true});$('run-options').scrollTop=button.offsetTop;
 };
-for(const family of ['lower','overtaking'])$('run-'+family).onclick=()=>{selectedRunFamily=family;syncRunUnits();closeRunChooser(true)};
+for(const family of ['lower','overtaking','short','upper','standing','quarter'])$('run-'+family).onclick=()=>{selectedRunFamily=family;syncRunUnits();closeRunChooser(true)};
 document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!$('run-options').hidden){event.preventDefault();closeRunChooser(true)}});
 document.addEventListener('pointerdown',event=>{if(!$('run-chooser').contains(event.target))closeRunChooser(false)});
 document.addEventListener('focusin',event=>{if(!$('run-chooser').contains(event.target))closeRunChooser(false)});
 // End Runs interval disclosure.
+
+// Read-only recording playback. Never feeds historical rows into live timing or recording.
+class RecordingReplay{
+    constructor(rows){
+        this.samples=[];let previous=null,elapsed=0,x=0,y=0,haveForce=false,real=0,synthetic=0,unknown=0;
+        for(const r of rows){
+            if(r.rowType===1)continue;
+            if(this.samples.length>=200000)throw Error('Recording exceeds the interactive replay limit. Export Session CSV for full review.');
+            const device=Number.isInteger(r.deviceTimeMs)&&r.deviceTimeMs>=0&&r.deviceTimeMs<=0xffffffff;
+            const wall=Number.isFinite(r.t)?r.t:null;
+            if(!device&&wall===null)continue;
+            let dt=0,gap=false;
+            if(previous){
+                const same=device&&previous.device&&r.gpsBootId===previous.boot;
+                const delta=same?((r.deviceTimeMs-previous.time)>>>0):NaN;
+                if(same&&delta===0)continue;
+                if(same&&delta<=0x7fffffff)dt=delta;
+                else{dt=wall!==null&&previous.wall!==null?Math.max(1,wall-previous.wall):1;gap=true}
+                if(dt>86400000)throw Error('Recording clock span is too large for replay.');
+                elapsed+=dt;if(dt>300)gap=true;
+            }
+            previous={device,time:r.deviceTimeMs,boot:r.gpsBootId,wall};
+            const valid=forcesUsable(r.gpsOk,r.gpsAgeMs,r.imuAgeMs)&&Number.isFinite(r.latg)&&Number.isFinite(r.lng);
+            if(valid){const a=!haveForce||gap?1:1-Math.exp(-dt/70);x=a*r.latg+(1-a)*x;y=a*r.lng+(1-a)*y;haveForce=true}else{haveForce=false;x=y=0}
+            const speed=r.gpsOk===1&&Number.isFinite(r.gpsAgeMs)&&r.gpsAgeMs>=0&&r.gpsAgeMs<=300&&Number.isFinite(r.sp)&&r.sp>=0?r.sp:null;
+            if(r.gpsSynthetic===1)synthetic++;else if(r.gpsSynthetic===0)real++;else unknown++;
+            this.samples.push({t:elapsed,x,y,valid,speed,gap});
+        }
+        if(!this.samples.length)throw Error('No timestamped dashboard samples in this recording.');
+        this.duration=this.samples.at(-1).t;this.provenance=synthetic&&!real&&!unknown?'SIM REPLAY':real&&!synthetic&&!unknown?'RECORDED REPLAY':'MIXED / UNKNOWN REPLAY';
+    }
+    frame(ms){
+        const time=Math.max(0,Math.min(this.duration,ms));let lo=0,hi=this.samples.length;
+        while(lo+1<hi){const mid=(lo+hi)>>1;if(this.samples[mid].t<=time)lo=mid;else hi=mid}
+        const sample=this.samples[lo],age=time-sample.t,valid=sample.valid&&age<=300,trail=[];
+        if(valid)for(let i=lo;i>=0&&this.samples[i].t>time-3000;i--){const p=this.samples[i];if(!p.valid)break;trail.unshift({x:p.x,y:-p.y,t:p.t});if(p.gap)break}
+        return{time,sample,valid,trail,speed:age<=1500?sample.speed:null,status:age>300?'Gap in recording':sample.valid?'':'Force data unavailable'};
+    }
+}
+// End recording replay core.
+
+let replayModel=null,replayPosition=0,replayAnimation=null,replayPlaying=false,replayStarted=0,replayAnchor=0,replayGeneration=0,replayFocus=null,replayLoadedId=null,replayLoading=false;
+async function readReplayRows(database,id){
+    return new Promise((resolve,reject)=>{
+        const rows=[],tx=database.transaction('chunks','readonly'),request=tx.objectStore('chunks').index('sessionId').openCursor(IDBKeyRange.only(id));let error;
+        tx.oncomplete=()=>resolve(rows);tx.onerror=tx.onabort=()=>reject(error||tx.error||Error('Recording could not be read.'));
+        request.onsuccess=()=>{const cursor=request.result;if(!cursor)return;try{
+            for(const r of cursor.value.data||[]){if(r.rowType===1)continue;if(rows.length>=200000)throw Error('Recording exceeds the interactive replay limit. Export Session CSV for full review.');rows.push({t:r.t,deviceTimeMs:r.deviceTimeMs,gpsBootId:r.gpsBootId,sp:r.sp,latg:r.latg,lng:r.lng,gpsOk:r.gpsOk,gpsAgeMs:r.gpsAgeMs,imuAgeMs:r.imuAgeMs,gpsSynthetic:r.gpsSynthetic})}
+            cursor.continue();
+        }catch(e){error=e;tx.abort()}};
+    });
+}
+function pauseRecordingReplay(){replayPlaying=false;if(replayAnimation!==null)cancelAnimationFrame(replayAnimation);replayAnimation=null;$('replay-play').textContent='Play';$('replay-play').setAttribute('aria-pressed','false')}
+function closeRecordingReplay(){replayGeneration++;pauseRecordingReplay();setReplayLoading(false);if($('recording-replay').open)$('recording-replay').close();replayModel=null;if(replayFocus?.isConnected&&replayFocus.matches('button,input,select,a[href],[tabindex]'))focusVisibleControl(replayFocus);else focusVisibleControl($('quick-data'))}
+function resizeReplay(){
+    if(!$('recording-replay').open)return;
+    const canvas=$('replay-canvas'),frame=canvas.parentElement.getBoundingClientRect(),size=Math.max(0,Math.min(frame.width,frame.height));
+    canvas.width=size*devicePixelRatio;canvas.height=size*devicePixelRatio;canvas.style.width=size+'px';canvas.style.height=size+'px';canvas.getContext('2d').setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+    renderRecordingReplay();
+}
+function renderRecordingReplay(){
+    if(!replayModel)return;
+    const frame=replayModel.frame(replayPosition),prefix='replay-';
+    $('replay-time').textContent=driveDuration(frame.time);$('replay-end').textContent=driveDuration(replayModel.duration);$('replay-seek').value=String(frame.time);$('replay-seek').setAttribute('aria-valuetext',driveDuration(frame.time)+' of '+driveDuration(replayModel.duration));
+    const speed=frame.speed===null?'—':String(speedForDisplay(frame.speed));
+    $('replay-speed').innerHTML=frame.speed===null?'—':(speed.length<3?'<span class="bbSpeedPadding">'+'0'.repeat(3-speed.length)+'</span>':'')+speed;
+    $('replay-speed-unit').textContent=speedUnit;renderForceReadouts(prefix,frame.valid?frame.sample.x:null,frame.valid?frame.sample.y:null);
+    $('replay-health').textContent=recordingError?'Unsaved data · keep this tab open':frame.status;
+    drawForceMap($('replay-canvas'),frame.trail,Number($('replay-scale').value),frame.time);
+}
+function tickRecordingReplay(now){
+    if(!replayPlaying||!replayModel)return;
+    replayPosition=Math.min(replayModel.duration,replayAnchor+now-replayStarted);renderRecordingReplay();
+    if(replayPosition>=replayModel.duration)pauseRecordingReplay();else replayAnimation=requestAnimationFrame(tickRecordingReplay);
+}
+function setReplayLoading(value){replayLoading=value;for(const id of ['replay-play','replay-seek','replay-scale'])$(id).disabled=value;if(value)$('replay-health').textContent='Loading recording…'}
+async function openRecordingReplay(id){
+    if(rec||recordingBusy){notifyUser('Stop recording before opening replay.');return}
+    const generation=++replayGeneration;pauseRecordingReplay();setReplayLoading(true);const focus=document.activeElement;
+    try{
+        if(!db)await openDB();const session=await idbPromise(db.transaction('sessions','readonly').objectStore('sessions').get(id));if(!session)throw Error('Recording no longer exists.');
+        const model=new RecordingReplay(await readReplayRows(db,id));if(generation!==replayGeneration)return;if(rec||recordingBusy)throw Error('Stop recording before opening replay.');
+        const sessions=await idbPromise(db.transaction('sessions','readonly').objectStore('sessions').getAll());if(generation!==replayGeneration)return;if(rec||recordingBusy)throw Error('Stop recording before opening replay.');
+        const dialog=$('recording-replay');if(!dialog.open)replayFocus=focus;
+        pauseRecordingReplay();replayModel=model;replayPosition=0;replayLoadedId=id;
+        $('replay-title').textContent=session.label||'Saved recording';$('replay-title').title=session.label||'Saved recording';$('replay-source').textContent=model.provenance;$('replay-seek').max=String(Math.max(1,model.duration));
+        const select=$('replay-session');select.replaceChildren();
+        for(const s of sessions.slice().sort((a,b)=>b.sessionId-a.sessionId)){const option=document.createElement('option');option.value=String(s.sessionId);option.textContent=s.label||formatSessionDate(s.startTime);option.selected=s.sessionId===id;select.append(option)}
+        if(!dialog.open)dialog.showModal();requestAnimationFrame(resizeReplay);$('replay-play').focus();
+    }catch(e){if(generation===replayGeneration){if($('recording-replay').open){$('replay-health').textContent='Replay unavailable: '+e.message;$('replay-session').value=String(replayLoadedId)}else notifyUser('Replay unavailable: '+e.message)}}finally{if(generation===replayGeneration)setReplayLoading(false)}
+}
+$('replay-close').onclick=closeRecordingReplay;
+$('recording-replay').addEventListener('cancel',e=>{e.preventDefault();closeRecordingReplay()});
+$('replay-play').onclick=()=>{if(replayLoading||!replayModel)return;if(replayPlaying){pauseRecordingReplay();return}if(replayPosition>=replayModel.duration)replayPosition=0;replayPlaying=true;replayAnchor=replayPosition;replayStarted=performance.now();$('replay-play').textContent='Pause';$('replay-play').setAttribute('aria-pressed','true');replayAnimation=requestAnimationFrame(tickRecordingReplay)};
+$('replay-seek').oninput=e=>{pauseRecordingReplay();replayPosition=Number(e.target.value);renderRecordingReplay()};
+$('replay-scale').onchange=renderRecordingReplay;
+$('replay-session').onchange=e=>openRecordingReplay(Number(e.target.value));
+$('replay-record').onclick=()=>{closeRecordingReplay();closeDataModal();$('menu-rec').click()};
+document.addEventListener('visibilitychange',()=>{if(document.hidden)pauseRecordingReplay()});
+window.addEventListener('resize',resizeReplay);
 
 // State
 let cnt=0,lastSeq=0;
@@ -2947,13 +3341,17 @@ class RecordingSummary{
 const effortPeaks=new EffortPeaks();
 $('cluster-controls').onclick=()=>{const show=document.body.classList.toggle('cluster-controls');$('cluster-controls').setAttribute('aria-expanded',String(show));$('cluster-controls').textContent=show?'Hide controls':'Controls';requestAnimationFrame(()=>{resize();drawG()})};
 let clusterInstrument='speed';
+function closeInstrumentPicker(returnFocus=false){
+    document.body.classList.remove('instrument-picker');$('instrument-reveal').setAttribute('aria-expanded','false');
+    if(returnFocus)$('instrument-reveal').focus();
+}
 function selectClusterInstrument(name){
     if(!['speed','forces','peaks','runs'].includes(name))return;
     clusterInstrument=name;
     if(name!=='runs'&&typeof closeRunChooser==='function')closeRunChooser(false);
-    $('instrument-reveal').textContent=({speed:'Speed',forces:'G-meter',peaks:'Peaks',runs:'Runs'})[name]+' ···';
-    document.body.classList.remove('instrument-picker');
-    $('instrument-reveal').setAttribute('aria-expanded','false');
+    $('instrument-reveal').textContent=({speed:'Speed',forces:'G-meter',peaks:'Peaks',runs:'Runs'})[name];
+    const fromPicker=!!document.activeElement?.closest?.('#instrument-options');
+    closeInstrumentPicker(fromPicker);
     for(const mode of ['speed','forces','peaks','runs']){$('cluster-'+mode).setAttribute('aria-pressed',String(mode===name));document.body.classList.toggle('cluster-'+mode,mode===name)}
     requestAnimationFrame(()=>{resize();drawG()});
 }
@@ -2972,6 +3370,9 @@ $('g-card').addEventListener('touchend',event=>{
     const modes=['speed','forces','peaks','runs'];selectClusterInstrument(modes[(modes.indexOf(clusterInstrument)+(dx<0?1:3))%4]);
 },{passive:true});
 // End selectable cluster instrument.
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&document.body.classList.contains('instrument-picker')){event.preventDefault();closeInstrumentPicker(true)}});
+document.addEventListener('pointerdown',event=>{if(!event.target.closest('#instrument-options,#instrument-reveal'))closeInstrumentPicker()});
+document.addEventListener('focusin',event=>{if(!event.target.closest('#instrument-options,#instrument-reveal'))closeInstrumentPicker()});
 // Layout changes (toolbar, orientation, browser chrome) can occur after a window resize.
 // Observe the actual plot frame so its pixel canvas always follows the final geometry.
 if(typeof ResizeObserver!=='undefined')new ResizeObserver(()=>{resize();drawG()}).observe(cv.parentElement);
@@ -2981,11 +3382,16 @@ let speed_ema=0,displaySessionStart=performance.now();
 // Speed display preferences. Stored/data-processing units remain unchanged.
 let speedUnit='km/h';try{if(localStorage.getItem('blackbox-speed-unit')==='mph')speedUnit='mph'}catch{}
 function speedForDisplay(kmh,unit=speedUnit){return Math.round(kmh/(unit==='mph'?1.609344:1))}
+function renderSpeedValue(value){
+    const digits=String(value),padding='0'.repeat(Math.max(0,3-digits.length));
+    const html=(padding?'<span class="bbSpeedPadding">'+padding+'</span>':'')+digits;
+    for(const id of ['speed','cluster-speed-value'])if($(id).innerHTML!==html)$(id).innerHTML=html;
+}
 function renderSpeedUnits(){
     if(typeof renderDrive==='function')renderDrive();
-    $('speed-unit').textContent=$('speed-maximum-unit').textContent=speedUnit;
+    $('speed-unit').textContent=$('speed-maximum-unit').textContent=$('cluster-speed-unit').textContent=speedUnit;
     $('menu-units').textContent='Speed units: '+speedUnit;
-    $('speed').textContent=speed_ema<1?0:speedForDisplay(speed_ema);
+    renderSpeedValue(speed_ema<1?0:speedForDisplay(speed_ema));
     $('speed-maximum').textContent=maximumFreshSpeed===null?'—':speedForDisplay(maximumFreshSpeed);
     if(typeof syncRunUnits==='function')syncRunUnits();
 }
@@ -3008,14 +3414,15 @@ function fmtLapTime(ms){if(ms===0)return'0:00.000';const mins=Math.floor(ms/6000
 function updateLapProgress(active){
     const value=active&&lapTracker?.reliable&&lapTracker.match?.valid?lapTracker.match.progress:null;
     $('lap-progress').hidden=value===null;
-    if(value!==null){$('lap-progress-label').textContent=(activeTrack?.type==='point_to_point'?'Stage progress · ':'Lap progress · ')+value+'%';$('lap-progress-bar').value=value}
+    if(value!==null){$('lap-progress-label').textContent=(activeTrack?.type==='point_to_point'?'Stage ref · ':'Lap ref · ')+value+'%';$('lap-progress-bar').value=value}
 }
 let lapPersistenceError='',referencePersistenceError='',lapResultGeneration=0,referenceSaveGeneration=0;
 function showLapResult(time,previousBest){
     const box=$('lap-result'),generation=++lapResultGeneration;
     const better=!previousBest||time<previousBest;
     const unit=activeTrack?.type==='point_to_point'?'RUN':'LAP';
-    box.textContent=(better?'BEST '+unit+' · ':unit+' COMPLETE · ')+fmtLapTime(time)+(previousBest?' · '+fmtDelta(time-previousBest)+'s vs best':'');
+    box.textContent=(better?'BEST '+unit+' ':'LAST '+unit+' ')+fmtLapTime(time);
+    box.className='bbLapResult'+(better?' new-best':'');
     box.hidden=false;
     setTimeout(()=>{if(generation===lapResultGeneration)box.hidden=true},5000);
 }
@@ -3127,18 +3534,22 @@ function updateLapTimer(lapTimeMs,lapCnt,lapFlags,timing=null){
     prevLapCnt=lapCnt;
 }
 
-function updateReadouts(lat,lon){
-    const latFmt=fmtGSigned(lat),lonFmt=fmtGSigned(lon);
-    $('lat-g').innerHTML=`<span class="bbSign">${latFmt.sign}</span><span class="bbVal">${latFmt.num}</span><span class="bbGUnit">g</span>`;
-    $('lon-g').innerHTML=`<span class="bbSign">${lonFmt.sign}</span><span class="bbVal">${lonFmt.num}</span><span class="bbGUnit">g</span>`;
+function updateReadouts(lat,lon){renderForceReadouts('',lat,lon)}
+function renderForceReadouts(prefix,lat,lon){
+    const valid=Number.isFinite(lat)&&Number.isFinite(lon),combined=valid?Math.hypot(lat,lon).toFixed(2):'—';
+    $(prefix+'force-combined').textContent=combined;$(prefix+'force-combined').className='bbNum'+(combined.length>4?' bbForceWide':'');
+    $(prefix+'lat-force-label').textContent=!valid||Math.abs(lat)<.005?'LATERAL':lat>0?'LEFT LOAD':'RIGHT LOAD';
+    $(prefix+'lon-force-label').textContent=!valid||Math.abs(lon)<.005?'LONGITUDINAL':lon>0?'ACCEL':'BRAKE';
+    for(const [id,value] of [['lat-g',lat],['lon-g',lon]])$(prefix+id).innerHTML=valid?'<span class="bbVal">'+Math.abs(value).toFixed(2)+'</span><span class="bbGUnit">g</span>':'—';
 }
 
 function resetState(){
     maxL=maxR=maxA=maxB=peak=0;maximumFreshSpeed=null;
-    $('max-l').textContent=$('max-r').textContent=$('max-a').textContent=$('max-b').textContent='0.00g';
+    $('max-l').textContent=$('max-r').textContent=$('max-a').textContent=$('max-b').textContent='—';
     $('speed').classList.remove('peak');
     trail=[];currentScale=1;
-    $('range-val').textContent='Scale '+currentScale.toFixed(1)+' g';
+    $('force-combined').textContent=$('lat-g').textContent=$('lon-g').textContent='—';$('force-combined').className='bbNum';$('force-status').textContent='Waiting for force data';$('lat-force-label').textContent='LATERAL';$('lon-force-label').textContent='LONGITUDINAL';
+    $('range-val').textContent='±'+currentScale.toFixed(1)+' g';
     emaGx=emaGy=0;lastT=null;displaySessionStart=performance.now();effortPeaks.reset();
     $('speed-maximum').textContent='—';
     for(const id of ['effort-accel','effort-brake','effort-left','effort-right'])$(id).textContent='—';
@@ -3218,7 +3629,7 @@ function process(buf,timing=null){
         if(peakHighlightTimeout)clearTimeout(peakHighlightTimeout);
         peakHighlightTimeout=setTimeout(()=>speedEl.classList.remove('peak'),900);
     }
-    speedEl.textContent=dspd;
+    renderSpeedValue(dspd);
     if(gpsOk===1&&Number.isFinite(timing?.gps_age_ms)&&timing.gps_age_ms>=0&&timing.gps_age_ms<=300)maximumFreshSpeed=Math.max(maximumFreshSpeed??0,sp);
     $('speed-maximum').textContent=maximumFreshSpeed===null?'—':speedForDisplay(maximumFreshSpeed);
 
@@ -3246,7 +3657,7 @@ function process(buf,timing=null){
     // longitudinal; braking is drawn upward, matching the plot's text labels.
     if(forcesUsable(gpsOk,timing?.gps_age_ms,timing?.imu_age_ms)){
         trail.push({x:gx,y:-gy,t:motionNow});trail=trail.filter(p=>motionNow-p.t<TRAIL_DURATION_MS);
-        $('force-status').textContent=Math.hypot(gx,gy)>currentScale?'Over scale · tap scale':'';
+        $('force-status').textContent=Math.max(Math.abs(gx),Math.abs(gy))>currentScale?'Over scale':'';
     }else clearForces(gpsOk!==1||!Number.isFinite(timing?.gps_age_ms)||timing.gps_age_ms>300?'Waiting for fresh GPS':!Number.isFinite(timing?.imu_age_ms)?'IMU freshness unavailable':'Waiting for fresh IMU');
 
     lastGpsState=gpsOk;
@@ -3303,9 +3714,10 @@ function markTelemetryUnavailable(label){
     if(lapTimerActive){$('lap-state').textContent='Timing unconfirmed';$('lap-state').classList.remove('timing');$('lap-section').classList.remove('timing')}
     if(lapTracker)lapTracker.invalidate();updateLapProgress(false);updateDeltaBar({deltaMs:null,hasRef:!!referenceLap});
     $('liveDot').classList.remove('on');$('gpsDot').classList.remove('on');$('stxt').textContent=label;
-    $('gpsHz').textContent='GPS --';currentPos.valid=false;lastGpsState=false;
+    $('gpsHz').textContent='GPS --';$('cluster-link').textContent=label;$('cluster-gps').textContent='GPS —';currentPos.valid=false;lastGpsState=false;
     document.body.classList.add('telemetry-stale');$('connection-notice').hidden=false;
-    $('connection-notice').textContent=label==='Invalid data'?'Invalid telemetry rejected. Values below are from the last accepted sample.':label==='Offline'?'Connection lost. Showing last received values; reconnect to Blackbox Wi-Fi.':'Telemetry paused. Values below are not live.';
+    $('connection-notice').title=label==='Invalid data'?'Invalid telemetry rejected. Values below are from the last accepted sample.':label==='Offline'?'Connection lost. Showing last received values; reconnect to Blackbox Wi-Fi.':'Telemetry paused. Values below are not live.';
+    $('connection-notice').textContent=label==='Invalid data'?'Invalid telemetry · values frozen':label==='Offline'?'Disconnected · values frozen':'Telemetry paused · values frozen';
 }
 async function poll(){
     const started=performance.now();
@@ -4049,11 +4461,12 @@ async function renderSessionList(stats=null,isCurrent=()=>true){
             return'<div class=\"bbSessionItem'+(isCur?' active':'')+'\" data-session-id=\"'+s.sessionId+'\">'+
                 '<div class=\"bbSessionInfo\">'+
                     '<div class=\"bbSessionDate\">'+(s.label?escHtml(s.label)+' · ':'')+formatSessionDate(s.startTime)+'</div>'+
-                    '<div class=\"bbSessionMeta\"><span>'+s.chunkCount+' chunk'+(s.chunkCount!==1?'s':'')+'</span><span>'+formatBytes(s.estimatedBytes)+'</span><span>'+formatSessionDuration(s.durationMs)+'</span></div>'+
+                    '<div class=\"bbSessionMeta\"><span>'+s.chunkCount+' chunk'+(s.chunkCount!==1?'s':'')+'</span><span>'+formatBytes(s.estimatedBytes)+'</span><span class=\"bbTime\">'+formatSessionDuration(s.durationMs)+'</span></div>'+
                     '<div class=\"bbSessionHealth\">'+s.sampleCount+' saved '+(s.sampleCount===1?'sample':'samples')+(s.pendingSamples?' · '+s.pendingSamples+' '+(s.pendingSamples===1?'sample':'samples')+' pending save in this tab':'')+' · Received samples with GPS fix: '+(s.health.gpsPercent===null?'—':s.health.gpsPercent+'%')+'<br>Largest sample gap: '+(s.health.maxGapMs/1000).toFixed(2)+'s · '+s.health.gaps+' over 1.5s'+(s.health.clockReversals?' · Clock changed':'')+'<br>'+(s.health.gpsEvents?'GPS evidence: '+s.health.gpsEvents+' events · '+s.health.gpsMissing+' missing · '+s.health.gpsRestarts+' device restarts':'GPS evidence unavailable in this recording')+'</div>'+
                     '<div class=\"bbSessionStatus '+statusCls+'\">'+statusLbl+'</div>'+recordingSummaryHTML(s.summary,s.pendingSamples)+recordingDetailsHTML(s)+
                 '</div>'+
                 '<div class=\"bbSessionActions\">'+
+                    '<button class=\"bbSessionBtn\" data-action=\"replay\"'+(rec||recordingBusy?' disabled':'')+'>Replay</button>'+
                     '<button class=\"bbSessionBtn\" data-action=\"export\">Session CSV</button>'+
                     '<button class=\"bbSessionBtn\" data-action=\"gps-export\">GPS CSV</button>'+
                     '<button class=\"bbSessionBtn\" data-action=\"runs-export\">Runs CSV</button>'+
@@ -4099,7 +4512,7 @@ async function renderTrackDataList(stats=null,isCurrent=()=>true){
 
 async function handleSessionAction(btn){
     const action=btn.dataset.action,item=btn.closest('.bbSessionItem'),targetId=parseInt(item.dataset.sessionId,10);
-    if(action==='details-export'){
+    if(action==='replay'){await openRecordingReplay(targetId)}else if(action==='details-export'){
         try{await exportRecordingDetails(targetId)}catch(e){notifyUser('Details export failed: '+e.message)}
     }else if(action==='export'||action==='gps-export'||action==='runs-export'){
         const label=btn.textContent;
@@ -4171,7 +4584,7 @@ async function toggleDisplayMode(){
     }catch(e){openPhoneSetup('Fullscreen was unavailable. You can continue in the browser or use the Home Screen instructions below.')}
     syncDisplayControl();
 }
-$('display-mode').onclick=toggleDisplayMode;
+$('display-mode').onclick=()=>{$('menu-overlay').classList.remove('open');return toggleDisplayMode()};
 $('menu-app').onclick=()=>openPhoneSetup();$('phone-close').onclick=closePhoneSetup;
 $('phone-modal').onclick=e=>{if(e.target===$('phone-modal'))closePhoneSetup()};
 $('phone-backup').onclick=()=>{closePhoneSetup();openDataModal()};
@@ -4226,12 +4639,14 @@ function syncDrivingLayout(){
     requestAnimationFrame(resize);
 }
 $('drive-mode').onclick=()=>{
+    $('menu-overlay').classList.remove('open');
     if(document.body.classList.contains('cluster-view')){clusterSuppressed=true;manualDrive=false}
     else if(manualDrive)manualDrive=false;
     else{document.body.classList.remove('analysis-view');$('analysis-mode').setAttribute('aria-pressed','false');$('analysis-mode').textContent='Analysis';clusterSuppressed=false;manualDrive=!clusterMedia.matches}
     syncDrivingLayout();
 };
 $('analysis-mode').onclick=()=>{
+    $('menu-overlay').classList.remove('open');
     const showing=document.body.classList.toggle('analysis-view');manualDrive=false;clusterSuppressed=showing;
     $('analysis-mode').setAttribute('aria-pressed',String(showing));$('analysis-mode').textContent=showing?'Close analysis':'Analysis';syncDrivingLayout();
 };
@@ -4250,7 +4665,7 @@ $('quick-data').onclick=openDataModal;
 // Numeric width changes only at digit boundaries; no layout reads or text truncation.
 const timingDigits=new Map();
 function sizeTimingDigits(element){
-    const length=Math.max(1,element.textContent.length);
+    const length=Math.max(element.id==='delta-text'?7:1,element.textContent.length);
     if(timingDigits.get(element)===length)return;
     timingDigits.set(element,length);element.style.setProperty('--timing-chars',String(length));
 }
@@ -4260,6 +4675,56 @@ const timingDigitObserver=new MutationObserver(records=>{
 for(const id of ['lap-time','best-lap','last-lap','lap-delta','delta-text']){
     const element=$(id);sizeTimingDigits(element);timingDigitObserver.observe(element,{childList:true,characterData:true,subtree:true});
 }
+
+// Time presentation only: exports and stored numeric values stay unchanged.
+function timeTextParts(text){
+    const ranges=[];
+    // Match durations/timing values, not dates, counts or decimal sensor values.
+    for(const match of text.matchAll(/(?<![\d.:])(?:[+−\-±]?\d+(?::\d+)+(?:\.\d+)?|[+−\-±]?\d+(?:\.\d+)?\s?(?:ms|s|m|h)\b)/g)){
+        const integer=match[0].split('.')[0];
+        for(const zero of integer.matchAll(/(^|:|[+−\-±])0+/g)){
+            const start=match.index+zero.index+zero[1].length;
+            ranges.push([start,start+zero[0].length-zero[1].length,false]);
+        }
+        for(const separator of match[0].matchAll(/[:.]/g)){const at=match.index+separator.index;ranges.push([at,at+1,true])}
+    }
+    ranges.sort((a,b)=>a[0]-b[0]);
+    const parts=[];let at=0;
+    for(const [start,end,separator] of ranges){if(start>at)parts.push({text:text.slice(at,start),dim:false});parts.push({text:text.slice(start,end),dim:!separator,separator});at=end}
+    if(at<text.length)parts.push({text:text.slice(at),dim:false});return parts;
+}
+function decorateTimeElement(element){
+    const walker=document.createTreeWalker(element,NodeFilter.SHOW_TEXT),nodes=[];
+    while(walker.nextNode())if(!walker.currentNode.parentElement.closest('.bbTimePadding,.bbTimeSeparator'))nodes.push(walker.currentNode);
+    for(const node of nodes){
+        if(node.previousSibling?.nodeType===1&&node.previousSibling.classList.contains('bbTimeSeparator')&&node.previousSibling.textContent==='.')continue;
+        const parts=timeTextParts(node.data);if(!parts.some(p=>p.dim||p.separator))continue;
+        const fragment=document.createDocumentFragment();
+        for(const part of parts){
+            if(part.dim||part.separator){const span=document.createElement('span');span.className=part.dim?'bbTimePadding':'bbTimeSeparator';span.textContent=part.text;fragment.append(span)}
+            else fragment.append(document.createTextNode(part.text));
+        }
+        node.replaceWith(fragment);
+    }
+}
+const timeSelector='.bbTime,.bbLapTime,.bbLapHistValue,.bbHistoryLap,.bbHistoryDate,.bbHistorySessionStats,.bbSessionDate,.bbSessionHealth,#delta-text,#lap-result,#reference-label,#active-track-meta,#drive-duration,#run-last,#run-best,#rec-duration,#rec-elapsed,#rec-lastsave,#recording-notice,#session-time,#uptime';
+for(const element of document.querySelectorAll(timeSelector))decorateTimeElement(element);
+const timePresentationObserver=new MutationObserver(records=>{
+    const elements=new Set();
+    for(const record of records){
+        const parent=record.target.nodeType===3?record.target.parentElement:record.target;
+        const element=parent?.closest?.(timeSelector);if(element)elements.add(element);
+        for(const node of record.addedNodes){if(node.nodeType!==1)continue;if(node.matches(timeSelector))elements.add(node);for(const child of node.querySelectorAll(timeSelector))elements.add(child)}
+    }
+    for(const element of elements)if(element.isConnected)decorateTimeElement(element);
+});
+timePresentationObserver.observe(document.body,{subtree:true,childList:true,characterData:true});
+// End time presentation.
+
+$('start-hold-cancel').onclick=cancelStartHold;
+$('track-start-hold').addEventListener('cancel',event=>{event.preventDefault();cancelStartHold()});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)cancelStartHold()});
+window.addEventListener('pagehide',cancelStartHold);
 
 // Init
 setInterval(checkTelemetryFreshness,100);

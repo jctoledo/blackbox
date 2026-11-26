@@ -73,7 +73,7 @@ test('Runs preserves detector bytes across chunks, pending, mixed rows and quali
 test('Runs refuses no attempts and more than 1000 attempts without downloading',async()=>{
  for(const rows of [[gps(0)],Array.from({length:1001*220},(_,i)=>gps(i,18+(i%220)*.08))]){
   const chunks=Array.from({length:Math.ceil(rows.length/220)},(_,i)=>chunk(i,rows.slice(i*220,(i+1)*220))),db=await database(chunks),{c,downloads}=context(db);
-  assert.throws(()=>c.runsToCSV(rows),rows.length===1?/No rolling interval attempts/:/More than 1000 attempts/);
-  await assert.rejects(c.exportSessionById(1,true,true),rows.length===1?/No rolling interval attempts/:/More than 1000 attempts/);assert.equal(downloads.length,0);db.close();
+  assert.throws(()=>c.runsToCSV(rows),rows.length===1?/No performance attempts/:/More than 1000 attempts/);
+  await assert.rejects(c.exportSessionById(1,true,true),rows.length===1?/No performance attempts/:/More than 1000 attempts/);assert.equal(downloads.length,0);db.close();
  }
 });

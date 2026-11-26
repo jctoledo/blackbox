@@ -10,7 +10,7 @@ test('zero clock origin is valid and a real long frame gap resets motion history
  const f=motion();f.c.step();const initial=f.c.emaGx;f.c.trail.push({x:1,y:1,t:0});f.at(100,4000100);f.c.step();assert.equal(f.c.lastT,100);assert.equal(f.c.trail.length,1);const alpha=1-Math.exp(-.1/.07);assert.ok(Math.abs(f.c.emaGx-(alpha*.4+(1-alpha)*initial))<1e-12);f.at(351,4000351);f.c.step();assert.equal(f.c.trail.length,0);assert.ok(Math.abs(f.c.emaGx-initial)<1e-12,'a real gap must restart filtering without prior force history');
 });
 test('plot history expiry uses the same elapsed clock as its points',()=>{
- const f=clock({trail:[{t:0},{t:1000}],TRAIL_DURATION_MS:3000});const draw=html.indexOf('function drawG(){');vm.runInContext('function recent(){'+slice('    const now=', '    const displayTrail=',draw)+'return recentTrail}',f.c);
+ const f=clock({trail:[{t:0},{t:1000}],TRAIL_DURATION_MS:3000,TRAIL_MAX_POINTS:90,downsampleTrail:p=>p});const line=html.match(/    const recent=trail.filter[^\n]+/)[0];vm.runInContext('function recent(){const now=performance.now();'+line+'return recent}',f.c);
  f.at(1500,400000);assert.equal(f.c.recent().length,2);f.at(3100,90400000);assert.equal(f.c.recent().length,1);f.at(4100,400001);assert.equal(f.c.recent().length,0);
 });
 test('page SESSION stopwatch follows elapsed time despite wall corrections',()=>{

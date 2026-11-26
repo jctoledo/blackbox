@@ -13,7 +13,7 @@
 *{box-sizing:border-box}body{margin:0;background:var(--background);color:var(--foreground);font:16px/1.65 Inter,system-ui,sans-serif}a{color:var(--primary);text-underline-offset:4px}header,main,footer{max-width:1000px;margin:auto;padding:24px}header{display:flex;gap:24px;flex-wrap:wrap;border-bottom:1px solid var(--border)}header a{min-height:44px;display:inline-flex;align-items:center}h1{font-size:clamp(30px,5vw,48px);line-height:1.1;letter-spacing:-.03em;margin:0 0 20px}h2{font-size:22px;line-height:1.3;margin:0}p{color:var(--muted-foreground);margin:0 0 20px}.intro{margin-bottom:32px}.eyebrow{color:var(--primary);font:14px 'JetBrains Mono',monospace;margin-bottom:16px}footer{border-top:1px solid var(--border)}.method{margin-top:32px}.method h2{margin-bottom:12px}.method li{margin-bottom:10px;color:var(--muted-foreground)}
 .tabular-nums{font-variant-numeric:tabular-nums}.text-small{font-size:14px}.text-muted{color:var(--muted-foreground)}.viz-row,.viz-controls{display:flex;flex-wrap:wrap;gap:12px;align-items:center}.form-label{display:flex;flex-direction:column;gap:8px}.form-select,.btn{font:inherit;min-height:44px;border:1px solid var(--border);border-radius:5px;padding:10px 16px;background:var(--card);color:var(--foreground)}.form-select{max-width:100%}.btn{cursor:pointer}.btn-primary{background:var(--primary);color:var(--primary-foreground)}.form-range{accent-color:var(--primary);min-height:44px;max-width:100%}:focus-visible{outline:3px solid var(--primary);outline-offset:4px}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}[hidden]{display:none!important}
 @media(max-width:450px){header,main,footer{padding:20px}header{gap:16px}.summary>span{flex-basis:100%}}
-</style></head><body>
+</style><link rel="stylesheet" href="site-theme.css"></head><body class="bbSite bbRecordPage">
 <header aria-label="Site navigation"><a href="./">BLACKBOX /</a><a href="demo.html">Simulated dashboard</a><a href="./#flash">Flash firmware</a></header>
 <main><div class="intro"><p class="eyebrow">REAL DRIVE · M9N · RC.17</p><h1>One route. Two recorded laps.</h1><p>Play the laps together or move the slider to compare positions at the same elapsed time after each lap started. Choose a lap to isolate its route and speed profile.</p><p>This is an analysis of exported GPS recordings. It is a website example, separate from the device dashboard and its simulated demo.</p></div>
 <noscript><p>Enable JavaScript to replay the route. The stored lap times are 1:21.135 and 1:15.912; lap 2 was 5.223 seconds quicker.</p></noscript>
@@ -180,18 +180,21 @@
   draw();
 })();
 </script>
-<script type="module">
-  const root=document.getElementById('bb-drive-laps');
-  const baseConfig=JSON.parse(root.querySelector('[data-viz-chart]').textContent);
-  const getConfig=mode=>({...baseConfig,spec:{...baseConfig.spec,y:mode==='both'?['Lap 1','Lap 2']:[mode==='lap1'?'Lap 1':'Lap 2']}});
-  const container=root.querySelector('[data-viz-container]');container.textContent='';
-  try {
-    const {mountChart}=await import('https://persistent.oaistatic.com/plugins/visualize/charts/1.8.1/element.js');
-    const chart=mountChart(container,getConfig(root.querySelector('[data-lap-select]').value));
-    root.addEventListener('drive-lap-mode',event=>{chart.config=getConfig(event.detail);});
-  } catch {
-    container.textContent='Speed chart unavailable. The route, lap times and speed readouts still work. Reload when online to retry the chart.';
-  }
+<script>
+(()=>{
+ const root=document.getElementById('bb-drive-laps'),config=JSON.parse(root.querySelector('[data-viz-chart]').textContent),container=root.querySelector('[data-viz-container]'),ns='http://www.w3.org/2000/svg';
+ function draw(mode){
+  const width=Math.max(280,container.clientWidth),right=width-18;const svg=document.createElementNS(ns,'svg');svg.setAttribute('viewBox',`0 0 ${width} 230`);svg.setAttribute('role','img');svg.setAttribute('aria-label','Recorded GPS speed in km/h by elapsed seconds');svg.style.width='100%';
+  const add=(name,attrs,text)=>{const e=document.createElementNS(ns,name);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,v);if(text)e.textContent=text;svg.append(e);return e};
+  const x=t=>48+t/81.135*(right-48),y=v=>192-v/30*170;
+  for(const v of [0,10,20,30]){add('line',{x1:48,x2:right,y1:y(v),y2:y(v),stroke:'var(--border)'});add('text',{x:38,y:y(v)+4,fill:'var(--muted-foreground)','text-anchor':'end','font-size':11},String(v))}
+  for(const t of (width<450?[0,40,80]:[0,20,40,60,80]))add('text',{x:x(t),y:214,fill:'var(--muted-foreground)','text-anchor':'middle','font-size':11},String(t));
+  add('text',{x:48,y:12,fill:'var(--muted-foreground)','font-size':11},'km/h');add('text',{x:right,y:228,fill:'var(--muted-foreground)','text-anchor':'end','font-size':10},'Elapsed seconds');
+  for(const [i,name,color] of [[1,'Lap 1','var(--chart-1)'],[2,'Lap 2','var(--chart-2)']]){if(mode!=='both'&&mode!=='lap'+i)continue;let d='',pen=false;for(const r of config.rows){if(r[i]===null){pen=false;continue}d+=(pen?'L':'M')+x(r[0]).toFixed(2)+','+y(r[i]).toFixed(2);pen=true}add('path',{d,fill:'none',stroke:color,'stroke-width':2,'vector-effect':'non-scaling-stroke'})}
+  container.replaceChildren(svg);
+ }
+ window.addEventListener('resize',()=>draw(root.querySelector('[data-lap-select]').value));draw(root.querySelector('[data-lap-select]').value);root.addEventListener('drive-lap-mode',e=>draw(e.detail));
+})();
 </script>
 
 <section class="method" aria-labelledby="method-title"><h2 id="method-title">What this replay shows</h2><ul>
