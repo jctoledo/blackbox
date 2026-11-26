@@ -2625,7 +2625,7 @@ async function pollStartHold(owner){
         if(owner.cursor&&batch.boot_id!==owner.cursor.boot){owner.cursor=null;owner.capture.reset('GPS restarted · restarting')}
         const initial=owner.cursor===null,result=gpsRows(batch,owner.cursor,Date.now());owner.cursor=result.cursor;
         // Exclude the buffered pre-click window; all five seconds follow enrollment.
-        if(!initial&&result.rows.length){owner.lastRowsAt=performance.now();for(const row of result.rows){owner.capture.update(row);if(owner.capture.complete)break}}
+        if(!initial&&result.rows.length){owner.lastRowsAt=performance.now();for(const row of result.rows)owner.capture.update(row)}
         if(owner.lastRowsAt===null||performance.now()-owner.lastRowsAt>500)owner.capture.reset('Waiting for fresh GPS');
         if(owner.capture.firstUs!==owner.firstCaptureUs){owner.firstCaptureUs=owner.capture.firstUs;owner.captureStartedAt=performance.now()}
         if(owner.capture.complete&&performance.now()-owner.captureStartedAt>=5000){
