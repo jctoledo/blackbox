@@ -12,6 +12,7 @@ use sensor_fusion::velocity::select_best_velocity;
 
 use crate::{
     binary_telemetry,
+    diagnostics::FusionDiagnostics,
     gps::NmeaParser,
     gps_timing::GpsTimingQueue,
     imu::{ImuBias, PacketType, Wt901Parser},
@@ -508,6 +509,7 @@ impl TelemetryPublisher {
         sensor_fusion: &crate::fusion::SensorFusion,
         now_ms: u32,
         lap_timer_data: Option<(&sensor_fusion::LapTimer, u8, u32)>,
+        fusion_diagnostics: FusionDiagnostics,
     ) -> Result<(), SystemError> {
         // Get accelerations for display
         // lon: GPS-derived when fresh (no vibration), otherwise blended with heavy
@@ -620,7 +622,7 @@ impl TelemetryPublisher {
                 gps_boot_id: None,
                 gps_event: None,
             };
-            http_state.update_telemetry(bytes, status);
+            http_state.update_telemetry(bytes, status, fusion_diagnostics);
             sent = true;
         }
 
