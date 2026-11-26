@@ -8,18 +8,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- New circuit and stage capture waits for five stationary seconds of fresh GPS fixes and anchors the start line to their mean. Movement or interrupted GPS restarts the countdown.
 - Homepage introduces the real-drive replay beside the main calls to action and before dashboard screenshots, with plain-language playback guidance and a no-hardware FAQ link.
 - Public real-drive replay with synchronized lap positions, playback, lap selection and GPS speed traces from an rc.17 M9N recording. Published geometry uses relative metres; raw location exports stay private. This is an export analysis, not a dashboard feature or an independent timing-accuracy test.
 
 ### Changed
-- Revised the cockpit, force-load map and offline fonts/readouts; expanded Runs to six presets per unit preference with experimental standing starts and a quarter-mile, preserving replayable GPS evidence.
-- Website USB flashing now supports Android Chrome through bundled USB serial drivers, with M9N selection guidance, permission/retry handling and a best-effort screen wake lock. Existing C3 chip, image checksum and merged-image offset checks remain in place; physical phone/board acceptance is still required.
 - Renamed `neo6m` driver to `ublox-gps` to reflect support for multiple u-blox GPS modules (NEO-6M, NEO-M9N, etc.)
 - Updated driver documentation with UBX protocol examples and dynamic platform models
 
 ### Removed
 - Obsolete documentation files (RELEASE.md, IMPLEMENTATION_SUMMARY.md, release-notes.md)
+
+## [0.0.4-rc.21] - 2026-11-26
+
+### Added
+- Replay a saved drive with synchronized force and speed, play/pause, seek, and explicit gaps. The updated website includes three labeled simulated drives to try without hardware (#199).
+- New circuit and stage capture waits for five stationary seconds of fresh GPS fixes and anchors the start line to their mean. Movement or interrupted GPS restarts the countdown (#199).
+
+### Changed
+- Refresh the cockpit and force display with bundled fonts, compact landscape speed, and a restored matched-reference progress rail (#199).
+- Expand Runs to six presets per unit preference, including experimental GPS standing starts and quarter-mile estimates with retained receiver evidence (#199).
+- Enable the Android Chrome USB installer for the preview, with receiver selection, USB permission and retry handling, and a best-effort screen wake lock (#193).
+
+### Fixed
+- Publish the telemetry packet, timing, and fusion diagnostics from the same sample so recordings keep each force reading paired with its diagnostics (#198). The v4 packet format and the estimator are unchanged.
+
+### Validation
+- Automated checks cover both ESP32-C3 receiver variants. Real-drive force accuracy and roll saturation remain under investigation in #197.
 
 ## [0.0.4-rc.20] - 2026-11-23
 
