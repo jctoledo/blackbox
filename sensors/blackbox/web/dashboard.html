@@ -3084,7 +3084,7 @@ class StandingRuns extends RollingRuns{
             if(r.sp>=.5){a.confirmed=true;a.launchBracketMs=(r.gpsUtcUs-a.startUs)/1000}
         }
         // Course is unreliable at rest; establish straight-line heading once moving.
-        if(r.sp>=2){
+        if(r.sp>=2||a.course!==null){
             if(!Number.isFinite(r.gpsCourse)){this.abort('Moving course unavailable');return}
             if(a.course===null)a.course=r.gpsCourse;
             else if(Math.abs(Math.atan2(Math.sin(r.gpsCourse-a.course),Math.cos(r.gpsCourse-a.course)))>Math.PI/12){this.abort('Direction changed');return}

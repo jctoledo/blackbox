@@ -41,3 +41,5 @@ test('a finished run cannot repeat before a fresh stationary lead-in and an unfi
 test('two-epoch launch confirmation is independent of small cadence jitter',()=>{
  const c=context();for(const secondMs of [380,400]){const d=new c.Standing({label:'0-60 mph',hi:60*.44704});for(let i=0;i<=6;i++)d.update(row(i,0,.2));d.update(row(7,.4,.2));d.update(row(8,.5,.2,{gpsUtcUs:2200000+secondMs*1000}));assert.equal(d.attempt?.confirmed,true)}
 });
+
+test('established heading remains mandatory after slowing below course-enrollment speed',()=>{for(const course of [null,2]){const c=context(),d=new c.Standing({label:'1/4 mile',distanceM:402.336});for(let i=0;i<=75;i++)d.update(row(i,Math.max(0,2*(i*.04-2))));assert.notEqual(d.attempt.course,null);d.update(row(76,1.9,.04,{gpsCourse:course}));assert.equal(d.attempt,null);assert.equal(d.results.at(-1).status,'rejected');assert.match(d.results.at(-1).reason,/course unavailable|Direction changed/);}});

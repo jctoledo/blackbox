@@ -30,7 +30,7 @@ Preserve recording/track databases and transactional writes. Backup restore adds
 
 ## Documentation and claims
 
-Lead with implemented capabilities and configuration targets. Use `docs/COMPARISON.md` for sourced product comparison; keep maintainer findings in `docs/REVIEW.md`. Update website assets when UI changes. Do not claim millisecond physical accuracy, drift-free operation, automatic mounting calibration or commercial parity without measured evidence. Rolling speed intervals are implemented with evidence gates; standing-start timing, slope compensation and adaptive coaching remain proposals.
+Lead with implemented capabilities and configuration targets. Use `docs/COMPARISON.md` for sourced product comparison; keep maintainer findings in `docs/REVIEW.md`. Update website assets when UI changes. Do not claim millisecond physical accuracy, drift-free operation, automatic mounting calibration or commercial parity without measured evidence. Rolling intervals and experimental standing-start/quarter-mile GPS estimates are implemented with evidence gates and explicit launch conventions; see `docs/RUNS.md`. Physical timing accuracy remains unvalidated. Slope compensation and adaptive coaching remain proposals.
 
 Check the current README wiring: GPIO18/19 conflict with C3 native USB. Confirm the physical board before changing/flashing hardware. See `docs/HARDWARE_VALIDATION.md` for bench and drive acceptance.
 
