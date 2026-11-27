@@ -509,7 +509,7 @@ Tap **Full screen** on supported Android browsers. On iPhone, use **Menu → Pho
 
 ### GPS evidence for a drive
 
-Timestamp-logging firmware saves receiver UTC and device parse times alongside recordings. In **Saved data**, export both **Session CSV** and **GPS CSV**; the latter reveals receiver cadence, repeated epochs and phone collection gaps. [Capture and analysis guide](docs/GPS_LOGGING.md). It does not establish absolute lap accuracy.
+Timestamp-logging firmware saves receiver UTC and device parse times alongside recordings. In **Saved data**, export both **Session CSV** and **GPS CSV**; the latter reveals receiver cadence, repeated epochs and phone collection gaps. Both exports include `gps_elevation_m` (GPS altitude above mean sea level in metres) when available; older recordings leave it blank. [Capture and analysis guide](docs/GPS_LOGGING.md). It does not establish absolute lap accuracy.
 
 New recordings in **v0.0.4-rc.11 and later** request one firmware/configuration/calibration snapshot. Open **Saved data → Recording details** to inspect it or choose **Download details JSON**. This is not available in rc.10. Settings describe configuration, not measured delivered rates or the whole trip; keep the flashed image SHA-256 and phone/antenna/mount notes. See [recording context and limits](docs/GPS_LOGGING.md#recording-context).
 

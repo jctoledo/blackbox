@@ -41,3 +41,16 @@ test('cursor pages drain retained history and expose unrecoverable gaps',async()
  await c.collectGpsLog();assert.equal(paths[0],'/api/gps-log?boot=7&after=10');assert.equal(paths[1],'/api/gps-log?boot=7&after=21');
  assert.equal(vm.runInContext('chunkBuffer.length',c),4);assert.equal(vm.runInContext('chunkBuffer[0].gpsMissing',c),9);assert.match(vm.runInContext('gpsLogStatus',c),/9 events could not be recovered/);
 });
+
+test('GPS elevation survives ingestion and both CSV formats, with blanks for old firmware',()=>{
+ const c=context();
+ for(const elevation of [0,-12.5,1234.5,null,undefined]){
+  const b=batch([1]);if(elevation!==undefined)b.events[0].altitude_msl_m=elevation;
+  const row=c.gpsRows(b,null,1000).rows[0];assert.equal(row.gpsElevationM,elevation??null);
+  for(const csv of [c.gpsSamplesToCSV([row]),c.samplesToCSV([{...row,rowType:0}])]){
+   const [header,data]=csv.trim().split('\n'),index=header.split(',').indexOf('gps_elevation_m');
+   assert.ok(index>=0);assert.equal(data.split(',')[index],elevation==null?'':String(elevation));
+  }
+ }
+ for(const elevation of ['10',NaN,Infinity]){const b=batch([1]);b.events[0].altitude_msl_m=elevation;assert.throws(()=>c.gpsRows(b,null,1000),/elevation/)}
+});

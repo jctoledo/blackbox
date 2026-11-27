@@ -134,6 +134,8 @@ pub struct GpsFix {
     pub second: u8,
     /// Altitude above mean sea level (meters) - from GGA
     pub altitude: f32,
+    /// Latest GGA supplied a finite altitude in metres with a usable fix.
+    pub altitude_valid: bool,
     /// Number of satellites in use - from GGA
     pub satellites: u8,
     /// Fix quality indicator - from GGA
@@ -186,6 +188,7 @@ pub struct NmeaParser {
     /// Flag set when a new valid RMC fix is received (cleared by take_new_fix)
     new_fix_available: bool,
     rmc_timing: RmcTiming,
+    altitude_utc_us: Option<u64>,
     checksum_rejections: u32,
 }
 
@@ -215,6 +218,7 @@ impl NmeaParser {
             position_based_speed: 0.0,
             new_fix_available: false,
             rmc_timing: RmcTiming::default(),
+            altitude_utc_us: None,
             checksum_rejections: 0,
         }
     }
@@ -268,6 +272,8 @@ impl NmeaParser {
     pub fn invalidate_stream(&mut self) {
         self.line_len = 0;
         self.last_fix.valid = false;
+        self.last_fix.altitude_valid = false;
+        self.altitude_utc_us = None;
         self.new_fix_available = false;
     }
 
@@ -446,7 +452,9 @@ impl NmeaParser {
             }
         }
 
-        if field_idx < 10 {
+        self.last_fix.altitude_valid = false;
+        self.altitude_utc_us = None;
+        if field_idx < 11 {
             return;
         }
 
@@ -477,6 +485,13 @@ impl NmeaParser {
         // Field 9: Altitude (meters above mean sea level)
         if let Ok(alt) = parse_f32(fields[9]) {
             self.last_fix.altitude = alt;
+            self.altitude_utc_us = parse_utc(fields[1]).map(|(h, m, s, us, _)| {
+                ((h as u64 * 3600 + m as u64 * 60 + s as u64) * 1_000_000) + us as u64
+            });
+            self.last_fix.altitude_valid = self.altitude_utc_us.is_some()
+                && alt.is_finite()
+                && fields[10] == "M"
+                && matches!(fields[6], "1" | "2" | "3" | "4" | "5" | "6");
         }
     }
 
@@ -484,7 +499,9 @@ impl NmeaParser {
     fn parse_gga(&mut self, line: &str) {
         let fields: Vec<&str> = line.split([',', '*']).collect();
 
-        if fields.len() < 10 {
+        self.last_fix.altitude_valid = false;
+        self.altitude_utc_us = None;
+        if fields.len() < 11 {
             return;
         }
 
@@ -515,6 +532,13 @@ impl NmeaParser {
         // Field 9: Altitude
         if let Ok(alt) = fields[9].parse::<f32>() {
             self.last_fix.altitude = alt;
+            self.altitude_utc_us = parse_utc(fields[1]).map(|(h, m, s, us, _)| {
+                ((h as u64 * 3600 + m as u64 * 60 + s as u64) * 1_000_000) + us as u64
+            });
+            self.last_fix.altitude_valid = self.altitude_utc_us.is_some()
+                && alt.is_finite()
+                && fields[10] == "M"
+                && matches!(fields[6], "1" | "2" | "3" | "4" | "5" | "6");
         }
     }
 
@@ -588,6 +612,8 @@ impl NmeaParser {
     // Shared by std and no_std builds: only complete, valid fixes may advance timing.
     fn parse_rmc(&mut self, line: &str) {
         self.last_fix.valid = false;
+        let had_altitude = self.last_fix.altitude_valid;
+        self.last_fix.altitude_valid = false;
         self.new_fix_available = false;
         let mut fields = [""; 12];
         let mut count = 0;
@@ -638,6 +664,18 @@ impl NmeaParser {
             }
             deg.to_radians()
         };
+        // GGA may follow RMC and run more slowly. Keep its latest value for at
+        // most one receiver second, handling midnight; loss requires fresh GGA.
+        self.last_fix.altitude_valid = had_altitude
+            && self
+                .rmc_timing
+                .utc_us
+                .zip(self.altitude_utc_us)
+                .is_some_and(|(now, then)| {
+                    now < 86_400_000_000
+                        && then < 86_400_000_000
+                        && (now + 86_400_000_000 - then) % 86_400_000_000 <= 1_000_000
+                });
         self.last_fix.hour = h;
         self.last_fix.minute = m;
         self.last_fix.second = sec;
@@ -996,6 +1034,72 @@ mod timestamp_tests {
         for b in format!("${body}*{checksum:02X}\r\n").bytes() {
             parser.feed_byte(b);
         }
+    }
+    #[test]
+    fn gga_elevation_requires_a_finite_metre_value_and_usable_fix() {
+        let mut parser = NmeaParser::new();
+        assert!(!parser.last_fix().altitude_valid);
+        for altitude in ["0.0", "-12.5", "1234.5"] {
+            feed(
+                &mut parser,
+                &format!("GNGGA,123456.04,3723.2475,N,12158.3416,W,1,08,0.9,{altitude},M,0.0,M,,"),
+            );
+            assert!(parser.last_fix().altitude_valid);
+            assert_eq!(parser.last_fix().altitude, altitude.parse::<f32>().unwrap());
+        }
+        for tail in [
+            "0,08,0.9,100.0,M",
+            "1,08,0.9,,M",
+            "1,08,0.9,NaN,M",
+            "1,08,0.9,inf,M",
+            "1,08,0.9,100.0,F",
+            "1,08,0.9",
+        ] {
+            feed(
+                &mut parser,
+                "GPGGA,123456.04,3723.2475,N,12158.3416,W,1,08,0.9,10.0,M,0.0,M,,",
+            );
+            assert!(parser.last_fix().altitude_valid);
+            feed(
+                &mut parser,
+                &format!("GPGGA,123456.08,3723.2475,N,12158.3416,W,{tail}"),
+            );
+            assert!(!parser.last_fix().altitude_valid, "{tail}");
+        }
+    }
+    #[test]
+    fn elevation_expires_and_requires_fresh_gga_after_invalid_rmc() {
+        let mut parser = NmeaParser::with_warmup_fixes(1);
+        let rmc = |time: &str, status: &str| {
+            format!("GNRMC,{time},{status},3723.2475,N,12158.3416,W,10.0,90.0,201126,,,A")
+        };
+        let gga =
+            |time: &str| format!("GNGGA,{time},3723.2475,N,12158.3416,W,1,08,0.9,-12.5,M,0.0,M,,");
+        feed(&mut parser, &rmc("123456.00", "A"));
+        // RMC before GGA: altitude appears at the following RMC.
+        feed(&mut parser, &rmc("123456.04", "A"));
+        assert!(!parser.last_fix().altitude_valid);
+        feed(&mut parser, &gga("123456.04"));
+        feed(&mut parser, &rmc("123457.04", "A"));
+        assert!(parser.last_fix().altitude_valid);
+        feed(&mut parser, &rmc("123457.08", "A"));
+        assert!(!parser.last_fix().altitude_valid);
+        // GGA before RMC and GPS-loss recovery.
+        feed(&mut parser, &gga("123457.08"));
+        feed(&mut parser, &rmc("123457.08", "A"));
+        assert!(parser.last_fix().altitude_valid);
+        feed(&mut parser, &rmc("123457.12", "V"));
+        feed(&mut parser, &rmc("123457.16", "A"));
+        assert!(!parser.last_fix().altitude_valid);
+        feed(&mut parser, &gga("235959.96"));
+        feed(&mut parser, &rmc("000000.00", "A"));
+        assert!(parser.last_fix().altitude_valid);
+        feed(&mut parser, &rmc("000000.97", "A"));
+        assert!(!parser.last_fix().altitude_valid);
+        feed(&mut parser, &gga("000001.00"));
+        parser.invalidate_stream();
+        feed(&mut parser, &rmc("000001.04", "A"));
+        assert!(!parser.last_fix().altitude_valid);
     }
     #[test]
     fn utc_precision_midnight_and_leap_second_are_not_rounded() {

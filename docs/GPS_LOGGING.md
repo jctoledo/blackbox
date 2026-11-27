@@ -18,6 +18,8 @@ leaving a dialog open does not stop recording or timing. This removes app-dialog
 pauses, but cannot prevent phone suspension, network loss or every scheduling gap.
 The bounded device window and explicit missing-event markers still apply.
 
+GPS elevation is saved with both ordinary telemetry and GPS event rows, and survives backups/restores. Both CSV exports append `gps_elevation_m`: metres above mean sea level from the latest usable GGA report, at most one receiver second old when the RMC was parsed. This can belong to the preceding receiver epoch when GGA follows RMC; it is not a synchronized vertical trace or slope estimate. Missing/invalid altitude, fix loss and older firmware/recordings leave the column blank; zero and negative elevations remain valid values.
+
 ## Recording context
 
 In **v0.0.4-rc.11 and later**, the dashboard requests one device metadata snapshot when a new recording starts. Recording begins immediately while context is **pending**; valid details become **captured**, and an old endpoint, timeout or invalid response becomes **unavailable** without stopping collection. In **Saved data**, expand **Recording details** and choose **Download details JSON** to save a companion to Session/GPS CSV. This browser capture/export is not available in rc.10.

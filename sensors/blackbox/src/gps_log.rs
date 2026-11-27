@@ -16,6 +16,8 @@ pub struct GpsEvent {
     pub lon: Option<f64>,
     pub speed_mps: Option<f32>,
     pub course_rad: Option<f32>,
+    /// Latest valid GGA altitude, metres above mean sea level (not RMC-derived).
+    pub altitude_msl_m: Option<f32>,
 }
 #[derive(Clone, serde::Serialize)]
 pub struct GpsLogSnapshot {
@@ -54,6 +56,8 @@ impl GpsLog {
             lon: fix.valid.then_some(fix.lon),
             speed_mps: fix.valid.then_some(fix.speed),
             course_rad: fix.valid.then_some(fix.course),
+            altitude_msl_m: (fix.valid && fix.altitude_valid && fix.altitude.is_finite())
+                .then_some(fix.altitude),
         };
         if self.events.len() == GPS_HISTORY_CAPACITY {
             self.events.pop_front();
@@ -150,6 +154,34 @@ mod tests {
         assert!(s.events.windows(2).all(|w| w[1].seq == w[0].seq + 1));
         let json = serde_json::to_value(s).unwrap();
         assert!(json["events"][63]["lat"].is_null());
+    }
+    #[test]
+    fn elevation_preserves_zero_and_negative_values_but_not_missing_or_invalid_fixes() {
+        let mut log = GpsLog::new(9);
+        let mut fix = GpsFix {
+            valid: true,
+            altitude_valid: true,
+            ..Default::default()
+        };
+        for altitude in [0.0, -12.5, 1234.5] {
+            fix.altitude = altitude;
+            log.push(RmcTiming::default(), &fix, 1);
+            assert_eq!(log.latest().1.unwrap().altitude_msl_m, Some(altitude));
+        }
+        fix.altitude_valid = false;
+        log.push(RmcTiming::default(), &fix, 2);
+        assert_eq!(log.latest().1.unwrap().altitude_msl_m, None);
+        fix.altitude_valid = true;
+        fix.valid = false;
+        log.push(RmcTiming::default(), &fix, 3);
+        assert_eq!(log.latest().1.unwrap().altitude_msl_m, None);
+        fix.valid = true;
+        fix.altitude = f32::NAN;
+        log.push(RmcTiming::default(), &fix, 4);
+        assert_eq!(log.latest().1.unwrap().altitude_msl_m, None);
+        let json = serde_json::to_value(log.snapshot_since(None)).unwrap();
+        assert_eq!(json["events"][1]["altitude_msl_m"], -12.5);
+        assert!(json["events"][3]["altitude_msl_m"].is_null());
     }
     #[test]
     fn duplicate_receiver_epochs_and_host_times_remain_evidence() {

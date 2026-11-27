@@ -1417,6 +1417,7 @@ function gpsRows(batch,cursor,receivedAt){
         for(const k of ['utc_us','date_ddmmyy','fractional_digits'])if(e[k]!==null&&!integer(e[k]))throw Error('Invalid GPS clock');
         if(e.utc_us!==null&&e.utc_us>=86401000000)throw Error('Invalid UTC');
         for(const k of ['lat','lon','speed_mps','course_rad'])if(e[k]!==null&&!Number.isFinite(e[k]))throw Error('Invalid GPS measurement');
+        if(e.altitude_msl_m!=null&&!Number.isFinite(e.altitude_msl_m))throw Error('Invalid GPS elevation');
         previous=e.seq;
     }
     if(batch.events.length&&previous!==batch.latest_seq)throw Error('Incomplete GPS snapshot');
@@ -1424,7 +1425,7 @@ function gpsRows(batch,cursor,receivedAt){
     for(const e of batch.events){
         const same=next&&next.boot===batch.boot_id;
         if(same&&e.seq<=next.seq)continue;
-        rows.push({t:receivedAt,rowType:1,gpsSynthetic:batch.simulated?1:0,gpsBootId:batch.boot_id,gpsSeq:e.seq,gpsHostUs:e.host_us,gpsUtcUs:e.utc_us,gpsDate:e.date_ddmmyy,gpsFractionDigits:e.fractional_digits,gpsActive:e.active?1:0,gpsAccepted:e.accepted?1:0,lat:e.lat,lon:e.lon,sp:e.speed_mps,gpsCourse:e.course_rad,gpsMissing:same?e.seq-next.seq-1:null,gpsBoundary:same?0:next?2:1});
+        rows.push({t:receivedAt,rowType:1,gpsSynthetic:batch.simulated?1:0,gpsBootId:batch.boot_id,gpsSeq:e.seq,gpsHostUs:e.host_us,gpsUtcUs:e.utc_us,gpsDate:e.date_ddmmyy,gpsFractionDigits:e.fractional_digits,gpsActive:e.active?1:0,gpsAccepted:e.accepted?1:0,lat:e.lat,lon:e.lon,sp:e.speed_mps,gpsCourse:e.course_rad,gpsElevationM:e.altitude_msl_m??null,gpsMissing:same?e.seq-next.seq-1:null,gpsBoundary:same?0:next?2:1});
         next={boot:batch.boot_id,seq:e.seq};
     }
     return{rows,cursor:next};
@@ -1474,8 +1475,8 @@ async function collectGpsLog(){
     try{await gpsRequest}finally{gpsRequest=null}
 }
 function gpsSamplesToCSV(samples,includeHeader=true){
-    const keys=['t','gpsBootId','gpsSeq','gpsHostUs','gpsUtcUs','gpsDate','gpsFractionDigits','gpsActive','gpsAccepted','lat','lon','sp','gpsCourse','gpsMissing','gpsBoundary','gpsSynthetic'];
-    return (includeHeader?'browser_received_ms,boot_id,rmc_seq,host_parse_us,receiver_utc_us_of_day,receiver_date_ddmmyy,utc_fractional_digits,rmc_active,fix_accepted,gps_lat,gps_lon,speed_mps,course_rad,missing_before,boundary,synthetic\n':'')+samples.filter(r=>r.rowType===1).map(r=>keys.map(k=>Number.isFinite(r[k])?r[k]:'').join(',')).join('\n')+'\n';
+    const keys=['t','gpsBootId','gpsSeq','gpsHostUs','gpsUtcUs','gpsDate','gpsFractionDigits','gpsActive','gpsAccepted','lat','lon','sp','gpsCourse','gpsMissing','gpsBoundary','gpsSynthetic','gpsElevationM'];
+    return (includeHeader?'browser_received_ms,boot_id,rmc_seq,host_parse_us,receiver_utc_us_of_day,receiver_date_ddmmyy,utc_fractional_digits,rmc_active,fix_accepted,gps_lat,gps_lon,speed_mps,course_rad,missing_before,boundary,synthetic,gps_elevation_m\n':'')+samples.filter(r=>r.rowType===1).map(r=>keys.map(k=>Number.isFinite(r[k])?r[k]:'').join(',')).join('\n')+'\n';
 }
 
 function driveDuration(ms){
@@ -1548,8 +1549,8 @@ function updateRecUI(){
 }
 
 function samplesToCSV(samples,includeHeader=true){
-    const keys=['t', 'sp', 'ax', 'ay', 'wz', 'mo', 'latg', 'lng', 'lat', 'lon', 'gpsOk', 'ekfX', 'ekfY', 'ekfYaw', 'gpsCourse', 'lon_imu', 'lon_gps', 'gps_wt', 'pitch_c', 'pitch_cf', 'roll_c', 'roll_cf', 'tilt_x', 'tilt_y', 'deviceTimeMs', 'lapTimeMs', 'lapCnt', 'lapFlags', 'lastLapMs', 'bestLapMs', 'gpsAgeMs', 'imuAgeMs', 'timingRevision', 'gpsBootId', 'gpsSeq', 'gpsHostUs', 'gpsUtcUs', 'gpsDate', 'gpsFractionDigits', 'gpsSynthetic'];
-    return (includeHeader?'time,speed,ax,ay,wz,mode,lat_g,lon_g,gps_lat,gps_lon,gps_valid,ekf_x,ekf_y,ekf_yaw,gps_course,lon_imu,lon_gps,gps_weight,pitch_corr,pitch_conf,roll_corr,roll_conf,tilt_x,tilt_y,device_time_ms,lap_time_ms,lap_count,lap_flags,last_lap_ms,best_lap_ms,gps_age_ms,imu_age_ms,timing_revision,gps_boot_id,gps_rmc_seq,gps_host_parse_us,gps_receiver_utc_us_of_day,gps_receiver_date_ddmmyy,gps_utc_fractional_digits,synthetic\n':'')+samples.filter(r=>r.rowType!==1).map(r=>keys.map(k=>Number.isFinite(r[k])?r[k]:'').join(',')).join('\n')+'\n';
+    const keys=['t', 'sp', 'ax', 'ay', 'wz', 'mo', 'latg', 'lng', 'lat', 'lon', 'gpsOk', 'ekfX', 'ekfY', 'ekfYaw', 'gpsCourse', 'lon_imu', 'lon_gps', 'gps_wt', 'pitch_c', 'pitch_cf', 'roll_c', 'roll_cf', 'tilt_x', 'tilt_y', 'deviceTimeMs', 'lapTimeMs', 'lapCnt', 'lapFlags', 'lastLapMs', 'bestLapMs', 'gpsAgeMs', 'imuAgeMs', 'timingRevision', 'gpsBootId', 'gpsSeq', 'gpsHostUs', 'gpsUtcUs', 'gpsDate', 'gpsFractionDigits', 'gpsSynthetic', 'gpsElevationM'];
+    return (includeHeader?'time,speed,ax,ay,wz,mode,lat_g,lon_g,gps_lat,gps_lon,gps_valid,ekf_x,ekf_y,ekf_yaw,gps_course,lon_imu,lon_gps,gps_weight,pitch_corr,pitch_conf,roll_corr,roll_conf,tilt_x,tilt_y,device_time_ms,lap_time_ms,lap_count,lap_flags,last_lap_ms,best_lap_ms,gps_age_ms,imu_age_ms,timing_revision,gps_boot_id,gps_rmc_seq,gps_host_parse_us,gps_receiver_utc_us_of_day,gps_receiver_date_ddmmyy,gps_utc_fractional_digits,synthetic,gps_elevation_m\n':'')+samples.filter(r=>r.rowType!==1).map(r=>keys.map(k=>Number.isFinite(r[k])?r[k]:'').join(',')).join('\n')+'\n';
 }
 
 async function exportCSV(){
@@ -3667,7 +3668,7 @@ function process(buf,timing=null){
 
     // Recording
     if(rec){
-        chunkBuffer.push({t:now,gpsSynthetic:timing?.simulated?1:0,deviceTimeMs:d.getUint32(3,true),lapTimeMs,lapCnt,lapFlags,lastLapMs:timing?.last_lap_ms,bestLapMs:timing?.best_lap_ms,gpsAgeMs:timing?.gps_age_ms,imuAgeMs:timing?.imu_age_ms,timingRevision:timing?.revision,gpsBootId:timing?.gps_boot_id,gpsSeq:timing?.gps_event?.seq,gpsHostUs:timing?.gps_event?.host_us,gpsUtcUs:timing?.gps_event?.utc_us,gpsDate:timing?.gps_event?.date_ddmmyy,gpsFractionDigits:timing?.gps_event?.fractional_digits,sp,ax,ay,wz,mo,latg,lng,lat,lon,gpsOk,ekfX,ekfY,ekfYaw,gpsCourse,lon_imu:fusion.lon_imu,lon_gps:fusion.lon_gps,gps_wt:fusion.gps_wt,pitch_c:fusion.pitch_c,pitch_cf:fusion.pitch_cf,roll_c:fusion.roll_c,roll_cf:fusion.roll_cf,tilt_x:fusion.tilt_x,tilt_y:fusion.tilt_y});
+        chunkBuffer.push({t:now,gpsSynthetic:timing?.simulated?1:0,deviceTimeMs:d.getUint32(3,true),lapTimeMs,lapCnt,lapFlags,lastLapMs:timing?.last_lap_ms,bestLapMs:timing?.best_lap_ms,gpsAgeMs:timing?.gps_age_ms,imuAgeMs:timing?.imu_age_ms,timingRevision:timing?.revision,gpsBootId:timing?.gps_boot_id,gpsSeq:timing?.gps_event?.seq,gpsHostUs:timing?.gps_event?.host_us,gpsUtcUs:timing?.gps_event?.utc_us,gpsDate:timing?.gps_event?.date_ddmmyy,gpsFractionDigits:timing?.gps_event?.fractional_digits,gpsElevationM:timing?.gps_event?.altitude_msl_m??null,sp,ax,ay,wz,mo,latg,lng,lat,lon,gpsOk,ekfX,ekfY,ekfYaw,gpsCourse,lon_imu:fusion.lon_imu,lon_gps:fusion.lon_gps,gps_wt:fusion.gps_wt,pitch_c:fusion.pitch_c,pitch_cf:fusion.pitch_cf,roll_c:fusion.roll_c,roll_cf:fusion.roll_cf,tilt_x:fusion.tilt_x,tilt_y:fusion.tilt_y});
         if(chunkBuffer.length>=MAX_PENDING_SAMPLES){checkpointDrive(recordingContext,'interrupt');rec=false;recordingError='Recording stopped: too many unsaved samples. Keep this tab open and export.';updateRecUI()}
         else if(recordingSaveDue()&&!chunkWrite)saveChunk().catch(console.error);
     }
