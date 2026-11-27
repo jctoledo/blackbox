@@ -20,7 +20,7 @@ async function database(chunks=[],sessions=[1]){
 const chunk=(chunkIndex,data,sessionId=1)=>({sessionId,chunkIndex,data});
 function gps(i,sp=18+i*.08,extra={}){return {rowType:1,t:9999,gpsActive:1,gpsAccepted:1,sp,gpsCourse:1,gpsUtcUs:1000000+i*40000,gpsDate:211126,gpsFractionDigits:2,gpsBootId:7,gpsSeq:i+1,gpsMissing:0,gpsSynthetic:0,...extra}}
 for(const gpsOnly of [false,true])test('real export preserves mixed CSV bytes, zeros, blanks and numeric chunk order: '+gpsOnly,async()=>{
- const rows=[{t:0,sp:0,ax:null,gpsOk:0,gpsSynthetic:0},gps(0,0),{t:2,sp:NaN,ax:Infinity},{rowType:9,t:3,sp:12,gpsOk:undefined},gps(1,1,{gpsAccepted:undefined,gpsCourse:NaN})],pending=[{t:4,sp:0},gps(2,0)];
+ const rows=[{t:0,sp:0,ax:null,gpsOk:0,gpsSynthetic:0,gpsElevationM:-12.5},gps(0,0,{gpsElevationM:0}),{t:2,sp:NaN,ax:Infinity},{rowType:9,t:3,sp:12,gpsOk:undefined},gps(1,1,{gpsAccepted:undefined,gpsCourse:NaN})],pending=[{t:4,sp:0},gps(2,0)];
  const db=await database([chunk(10,rows.slice(3)),chunk(0,rows.slice(0,2)),chunk(2,rows.slice(2,3)),chunk(0,[{t:999}],2)],[1,2]);
  const {c,downloads,blobs}=context(db);c.sessionId=1;c.chunkBuffer=pending;
  const result=await c.exportSessionById(1,gpsOnly);

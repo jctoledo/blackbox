@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Public real-drive replay with synchronized lap positions, playback, lap selection and GPS speed traces from an rc.17 M9N recording. Published geometry uses relative metres; raw location exports stay private. This is an export analysis, not a dashboard feature or an independent timing-accuracy test.
 
 ### Changed
+- Save GPS elevation in metres above mean sea level with recording samples and GPS evidence, backups, and both Session/GPS CSV exports; unavailable elevation stays blank.
 - Renamed `neo6m` driver to `ublox-gps` to reflect support for multiple u-blox GPS modules (NEO-6M, NEO-M9N, etc.)
 - Updated driver documentation with UBX protocol examples and dynamic platform models
 

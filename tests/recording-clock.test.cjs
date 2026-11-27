@@ -48,3 +48,12 @@ test('starting a new recording resets completed-save age and makes its first sam
  f.c.createRecordingSession=async()=>20;f.c.captureRecordingMetadata=async()=>{};await f.c.startRecording();
  assert.equal(vm.runInContext('rec',f.c),true);assert.equal(vm.runInContext('sessionId',f.c),20);assert.equal(f.c.recordingSaveAgeMs(),null);assert.equal(f.c.recordingSaveDue(),true);
 });
+
+test('ordinary telemetry saves elevation from GPS metadata, including zero and missing firmware fields',async()=>{
+ const f=fixture();
+ for(const elevation of [0,-12.5,1234.5,null,undefined]){
+  f.c.timing.gps_event=elevation===undefined?null:{altitude_msl_m:elevation};
+  f.clock(10000+f.chunks.length*6000,4000000);f.telemetry();await f.settle();
+  const row=f.chunks.at(-1).data.at(-1);assert.equal(row.gpsElevationM,elevation??null);
+ }
+});
