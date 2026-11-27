@@ -8,9 +8,11 @@ Playback never starts circuit timing, changes tracks, records replayed samples, 
 
 ## Examples on the website
 
-[Open the stored SIM drives](https://jctoledo.github.io/blackbox/demo.html?view=replay). The demo seeds three persistent example recordings: a circuit, a rolling drive with a GPS gap, and standing starts with a GPS gap. They use the same saved chunks and playback reader as ordinary recordings. Existing user recordings and older example versions are preserved. These examples are synthetic and labeled **SIM REPLAY**; they are not measured driving results.
+[Open the stored SIM drives](https://jctoledo.github.io/blackbox/demo.html?view=replay). The demo seeds four persistent example recordings: a winding road, a circuit, a rolling drive with a GPS gap, and standing starts with a GPS gap. They use the same saved chunks and playback reader as ordinary recordings. Existing user recordings and older example versions are preserved. These examples are synthetic and labeled **SIM REPLAY**; they are not measured driving results.
 
 The homepage's Play a saved drive button opens that same viewer. Record a session in the demo to create another synthetic recording, then stop and replay it. On a real Blackbox, the ordinary recording flow instead stores the actual received telemetry. No recordings are uploaded by playback.
+
+The SIM winding drive shows a route alongside the existing G-meter. Green and dashed amber segments mark acceleration and braking when the half-second smoothed longitudinal estimate reaches ±0.10 g. **Jump to** uses those smoothed forces to find sustained maneuvers. The G-meter keeps its normal display filter and occupant-load directions. **Close-up** follows the car while the full route stays visible.
 
 ## Evidence and missing data
 

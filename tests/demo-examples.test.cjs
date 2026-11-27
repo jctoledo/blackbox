@@ -1,7 +1,7 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs');
 const {indexedDB}=require('fake-indexeddb');
 const html=fs.readFileSync('sensors/blackbox/web/dashboard.html','utf8');
-function fixture(){const events=new Map(),elements=new Map();const c={console:{...console,error(){}},Response,URL,btoa,DataView,Uint8Array,performance:{now:()=>0},window:{},document:{addEventListener(name,fn){events.set(name,fn)},getElementById(id){if(!elements.has(id))elements.set(id,{});return elements.get(id)}},location:{href:'https://example.test/demo.html'}};c.events=events;c.elements=elements;vm.createContext(c);vm.runInContext(html.slice(html.indexOf('// Drive session core.'),html.indexOf('// End Drive session core.')),c);vm.runInContext(fs.readFileSync('docs/demo.js','utf8').replace(' window.fetch=',' window.examplesForTest=exampleRows;window.seedForTest=seedExampleRecording;window.populateForTest=populateExamples; window.fetch='),c);vm.runInContext(html.slice(html.indexOf('class RollingRuns{'),html.indexOf('const rollingRuns='))+';this.Runs=RollingRuns;',c);return c}
+function fixture(){const events=new Map(),elements=new Map();const c={console:{...console,error(){}},Response,URL,btoa,DataView,Uint8Array,performance:{now:()=>0},window:{},document:{addEventListener(name,fn){events.set(name,fn)},getElementById(id){if(!elements.has(id))elements.set(id,{});return elements.get(id)}},location:{href:'https://example.test/demo.html'}};c.events=events;c.elements=elements;vm.createContext(c);vm.runInContext(html.slice(html.indexOf('// Drive session core.'),html.indexOf('// End Drive session core.')),c);vm.runInContext(fs.readFileSync('docs/demo.js','utf8').replace(' window.fetch=',' window.examplesForTest=exampleRows;window.routeForTest=demoRouteData;window.seedForTest=seedExampleRecording;window.populateForTest=populateExamples; window.fetch='),c);vm.runInContext(html.slice(html.indexOf('class RollingRuns{'),html.indexOf('const rollingRuns='))+';this.Runs=RollingRuns;',c);return c}
 test('demo examples populate both cornering signs and produce auditable accepted/rejected runs',()=>{
  const c=fixture(),circuit=c.window.examplesForTest('circuit'),rolling=c.window.examplesForTest('rolling');
  for(const rows of [circuit,rolling])for(const row of rows){assert.equal(row.gpsSynthetic,1);for(const value of Object.values(row))assert.ok(Number.isFinite(value))}
@@ -10,6 +10,47 @@ test('demo examples populate both cornering signs and produce auditable accepted
  const detector=new c.Runs();for(const row of rolling)detector.update(row);const accepted=detector.results.filter(r=>r.status==='accepted'),rejected=detector.results.filter(r=>r.status==='rejected');assert.equal(accepted.length,2);assert.equal(rejected.length,1);assert.equal(rejected[0].reason,'GPS gap or clock boundary');for(const r of accepted)assert.ok(Math.abs(r.seconds-5.588)<1e-8);assert.equal(rolling.reduce((sum,r)=>sum+(r.gpsMissing||0),0),6);
 });
 let serial=0;
+test('the SIM winding map uses the recording clock and separates sustained acceleration from braking',()=>{
+ const c=fixture(),rows=c.window.examplesForTest('winding');
+ const {points,sections,events}=c.window.routeForTest(rows);
+ const samples=rows.filter(row=>row.rowType!==1);
+ assert.equal(points.length,samples.length);
+ assert.ok(points.every((point,i)=>point.timeMs===samples[i].deviceTimeMs&&point.x===samples[i].ekfX&&point.y===samples[i].ekfY));
+ assert.equal(sections.reduce((edges,section)=>edges+section.points.length-1,0),points.length-1);
+ for(const {kind,points:segment} of sections){
+  for(let i=1;i<segment.length;i++){
+   const force=(segment[i-1].longitudinalG+segment[i].longitudinalG)/2;
+   assert.equal(kind,force>=.10?'accel':force<=-.10?'brake':'neutral');
+  }
+ }
+ for(const [name,measure] of [['bend',point=>Math.abs(point.lateralG)],['brake',point=>-point.longitudinalG],['accel',point=>point.longitudinalG]]){
+  const peak=points.find(point=>point.timeMs===events[name]);
+  assert(measure(peak)>.1);
+  assert(points.every(point=>measure(point)<=measure(peak)));
+ }
+});
+
+test('the synthetic winding road is open and force directions follow its motion',()=>{
+ const c=fixture(),samples=c.window.examplesForTest('winding').filter(row=>row.rowType!==1);
+ const first=samples[0],last=samples.at(-1);
+ assert(Math.hypot(last.ekfX-first.ekfX,last.ekfY-first.ekfY)>1000);
+ assert(samples.every(row=>row.gpsSynthetic===1&&row.gpsBootId===104));
+ let integratedSpeed=first.sp/3.6,matchedTurns=0,turns=0;
+ for(let i=1;i<samples.length;i++){
+  const a=samples[i-1],b=samples[i],dt=(b.deviceTimeMs-a.deviceTimeMs)/1000;
+  integratedSpeed+=(a.lng+b.lng)*.5*dt*9.81;
+  if(i<6||i+6>=samples.length||Math.abs(b.latg)<.15)continue;
+  const p=samples[i-6],q=samples[i+6];
+  const cross=(b.ekfX-p.ekfX)*(q.ekfY-b.ekfY)-(b.ekfY-p.ekfY)*(q.ekfX-b.ekfX);
+  turns++;
+  if(Math.sign(cross)===-Math.sign(b.latg))matchedTurns++;
+ }
+ assert(Math.abs(integratedSpeed-last.sp/3.6)<.5);
+ assert(turns>100&&matchedTurns/turns>.95);
+ assert(Math.max(...samples.map(row=>row.latg))>.2);
+ assert(Math.min(...samples.map(row=>row.latg))<-.2);
+});
+
 function database(){return new Promise((res,rej)=>{const r=indexedDB.open('demo-fixtures-'+(++serial));r.onerror=()=>rej(r.error);r.onsuccess=()=>res(r.result);r.onupgradeneeded=()=>{r.result.createObjectStore('sessions',{keyPath:'sessionId'});r.result.createObjectStore('chunks',{keyPath:['sessionId','chunkIndex']})}})}
 function all(db,name){return new Promise((res,rej)=>{const r=db.transaction(name).objectStore(name).getAll();r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
 test('example recording seeding is atomic, repeatable and never replaces an existing session',async()=>{
@@ -55,8 +96,8 @@ test('new complete-evidence demo fixtures preserve old examples and user recordi
  const userId=oldId+1;await new Promise((resolve,reject)=>{const tx=db.transaction(['sessions','chunks'],'readwrite');tx.objectStore('sessions').put({sessionId:userId,startTime:123,status:'complete',label:'My private drive'});tx.objectStore('chunks').put({sessionId:userId,chunkIndex:0,data:[{t:123,sp:1}]});tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)});
  const beforeSessions=await all(db,'sessions'),beforeChunks=await all(db,'chunks');c.openDB=async()=>db;c.updatePerformanceRuns=()=>{};c.effortPeaks={update(){}};c.sustainedEffortUsable=()=>true;
  await c.window.populateForTest({id:'track'});await c.window.populateForTest({id:'track'});
- const sessions=await all(db,'sessions'),chunks=await all(db,'chunks');assert.equal(sessions.length,5);assert.ok(sessions.some(s=>s.demoFixture==='circuit-v7'));assert.ok(sessions.some(s=>s.demoFixture==='rolling-v8'));assert.ok(sessions.some(s=>s.demoFixture==='launch-v1'));assert.deepEqual(sessions.filter(s=>s.sessionId===oldId||s.sessionId===userId),beforeSessions);assert.deepEqual(chunks.filter(s=>s.sessionId===oldId||s.sessionId===userId),beforeChunks);
- for(const session of sessions.filter(s=>['circuit-v7','rolling-v8','launch-v1'].includes(s.demoFixture))){assert.ok(session.label.startsWith('SIM'));const rows=chunks.filter(chunk=>chunk.sessionId===session.sessionId).sort((a,b)=>a.chunkIndex-b.chunkIndex).flatMap(chunk=>chunk.data);assert.ok(rows.filter(row=>row.rowType!==1).every(row=>Number.isInteger(row.gpsBootId)))}
+ const sessions=await all(db,'sessions'),chunks=await all(db,'chunks');assert.equal(sessions.length,6);assert.ok(sessions.some(s=>s.demoFixture==='winding-v1'));assert.ok(sessions.some(s=>s.demoFixture==='circuit-v7'));assert.ok(sessions.some(s=>s.demoFixture==='rolling-v8'));assert.ok(sessions.some(s=>s.demoFixture==='launch-v1'));assert.deepEqual(sessions.filter(s=>s.sessionId===oldId||s.sessionId===userId),beforeSessions);assert.deepEqual(chunks.filter(s=>s.sessionId===oldId||s.sessionId===userId),beforeChunks);
+ for(const session of sessions.filter(s=>['circuit-v7','rolling-v8','launch-v1','winding-v1'].includes(s.demoFixture))){assert.ok(session.label.startsWith('SIM'));const rows=chunks.filter(chunk=>chunk.sessionId===session.sessionId).sort((a,b)=>a.chunkIndex-b.chunkIndex).flatMap(chunk=>chunk.data);assert.ok(rows.filter(row=>row.rowType!==1).every(row=>Number.isInteger(row.gpsBootId)))}
 });
 
 test('live demo boot identity reaches actual stored telemetry rows and saved force windows across scenarios',async()=>{
