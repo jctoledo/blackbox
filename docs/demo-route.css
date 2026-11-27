@@ -18,12 +18,12 @@
     border:1px solid var(--divider);border-radius:6px;background:var(--surface);
 }
 .bbDemoRoute .bbDemoRouteInset[hidden]{display:none}
-.bbDemoRoute path{fill:none;stroke-linecap:round;stroke-linejoin:round}
-.bbDemoRoute .bbDemoRouteTrace{stroke:var(--text-tertiary);stroke-width:2.5}
+#demo-route-geometry path{fill:none;stroke-linecap:round;stroke-linejoin:round}
+#demo-route-geometry .bbDemoRouteTrace{stroke:var(--text-tertiary);stroke-width:2.5}
 .bbDemoAccel{--route-color:var(--ok)}
 .bbDemoBrake{--route-color:var(--amber)}
-.bbDemoRoute .bbDemoAccel,.bbDemoRoute .bbDemoBrake{stroke:var(--route-color);stroke-width:5}
-.bbDemoRoute .bbDemoBrake{stroke-dasharray:5 4;stroke-linecap:butt}
+#demo-route-geometry .bbDemoAccel,#demo-route-geometry .bbDemoBrake{stroke:var(--route-color);stroke-width:5}
+#demo-route-geometry .bbDemoBrake{stroke-dasharray:5 4;stroke-linecap:butt}
 .bbDemoRoute .bbDemoRouteCursor{fill:var(--text);stroke:var(--surface);stroke-width:2.8}
 .bbDemoRoute .bbDemoRouteInset .bbDemoRouteCursor{stroke-width:1.5}
 .bbDemoRouteKey{display:flex;flex-wrap:wrap;gap:4px 10px;color:var(--text-secondary);font:10px var(--mono)}
@@ -47,4 +47,8 @@
 @media(max-height:450px) and (min-width:600px){
     .bbReplay:has(.bbDemoRoute:not([hidden])) .bbReplayBody{gap:10px}
     .bbDemoRoute{padding:4px 0;gap:4px}
+    .bbDemoRouteStage:has(.bbDemoRouteInset:not([hidden])){
+        display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.52fr);align-items:end;gap:4px;
+    }
+    .bbDemoRoute .bbDemoRouteInset{position:static;width:100%;max-height:100%}
 }
