@@ -4,34 +4,6 @@ from pathlib import Path
 import hashlib
 ROOT = Path(__file__).resolve().parents[1]
 
-REPLAY_ROUTE = """
-  <section class="bbDemoRoute" id="demo-replay-route" hidden aria-label="Simulated winding route">
-   <div class="bbDemoRouteStage">
-    <svg id="demo-route-map" viewBox="0 0 320 230" role="img" aria-label="Simulated winding road with acceleration and braking sections"></svg>
-    <svg class="bbDemoRouteInset" id="demo-route-inset" hidden role="img" aria-label="Close-up of the car on the route">
-     <use href="#demo-route-geometry"></use><circle class="bbDemoRouteCursor" r="4"></circle>
-    </svg>
-   </div>
-   <div class="bbDemoRouteKey"><span class="bbDemoAccel">Acceleration</span><span class="bbDemoBrake">Braking</span><span>±0.10 g</span></div>
-   <div class="bbDemoRouteActions">
-    <select id="demo-route-event" aria-label="Jump to a moment on the route">
-     <option value="">Jump to a moment</option>
-     <option value="bend">Strongest bend</option>
-     <option value="brake">Hardest braking</option>
-     <option value="accel">Strongest acceleration</option>
-    </select>
-    <button id="demo-route-zoom" type="button" aria-controls="demo-route-inset" aria-expanded="false">Close-up</button>
-   </div>
-  </section>"""
-
-
-def replace_once(page, anchor, replacement):
-    """Replace a unique dashboard anchor or fail the demo build."""
-    if page.count(anchor) != 1:
-        raise ValueError(f'Demo integration anchor missing or ambiguous: {anchor}')
-    return page.replace(anchor, replacement, 1)
-
-
 def main():
     page = (ROOT/'sensors/blackbox/web/dashboard.html').read_text()
     page = page.replace('<title>Blackbox</title>', '<title>Try Blackbox — interactive GPS lap timer demo</title><meta name="description" content="Explore the actual Blackbox dashboard with simulated telemetry, lap timing, recording, and connection-loss controls. No hardware required."><link rel="canonical" href="https://jctoledo.github.io/blackbox/demo.html">')
@@ -40,12 +12,6 @@ def main():
     for brand in ('BLACKBOX', 'Diagnostics'):
         page = page.replace(f'<span class="bbBrand">{brand}', f'<span class="bbBrand">{brand} <small style="font-size:9px">SIM</small>')
     revision = hashlib.sha256((ROOT/'docs/demo.js').read_bytes()).hexdigest()[:12]
-    route_revision = hashlib.sha256((ROOT / 'docs/demo-route.css').read_bytes()).hexdigest()[:12]
-    route_body = '<div class="bbReplayBody">'
-    page = replace_once(page, route_body, route_body + REPLAY_ROUTE)
-    update_meter = "    drawForceMap($('replay-canvas'),frame.trail,Number($('replay-scale').value),frame.time);"
-    page = replace_once(page, update_meter, update_meter + '\n    window.renderDemoRoute?.(replayLoadedId,frame.time);')
-    page = replace_once(page, '</head>', f'<link rel="stylesheet" href="demo-route.css?v={route_revision}">\n</head>')
     page = page.replace('</style>', '.bbClusterHealth::before{content:"SIM";color:var(--text-tertiary)}</style>', 1)
     page = page.replace('<script>', f'<script src="demo.js?v={revision}"></script><script>', 1)
     (ROOT/'docs/demo.html').write_text(page)
