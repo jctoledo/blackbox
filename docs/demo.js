@@ -94,6 +94,70 @@
   }
   return rows;
  }
+ function demoRouteData(rows){
+  const samples=rows.filter(row=>row.rowType!==1);
+  const points=samples.map((row,i)=>{
+   // This fixture is sampled every 40 ms. Classify half-second trends,
+   // keeping the dashboard replay’s force display on its own existing filter.
+   const neighbours=samples.slice(Math.max(0,i-6),i+7);
+   const lon=neighbours.reduce((sum,entry)=>sum+entry.lng,0)/neighbours.length;
+   const lat=neighbours.reduce((sum,entry)=>sum+entry.latg,0)/neighbours.length;
+   return {x:row.ekfX,y:row.ekfY,t:row.deviceTimeMs,lon,lat};
+  });
+  const sections=[];
+  for(let i=1;i<points.length;i++){
+   const a=points[i-1],b=points[i],lon=(a.lon+b.lon)/2;
+   const kind=lon>=.10?'accel':lon<=-.10?'brake':'neutral';
+   if(sections.at(-1)?.kind!==kind)sections.push({kind,points:[a]});
+   sections.at(-1).points.push(b);
+  }
+  const strongest=measure=>points.reduce((best,point)=>measure(point)>measure(best)?point:best);
+  const events={bend:strongest(row=>Math.abs(row.lat)).t,brake:strongest(row=>-row.lon).t,accel:strongest(row=>row.lon).t};
+  return {points,sections,events};
+ }
+ function mountDemoRoute(sessionId,rows){
+  const section=document.getElementById('demo-replay-route');
+  const map=document.getElementById('demo-route-map');
+  const jump=document.getElementById('demo-route-event');
+  const seek=document.getElementById('replay-seek');
+  const {points,sections,events}=demoRouteData(rows);
+  const x=points.map(row=>row.x),y=points.map(row=>row.y);
+  const xmin=Math.min(...x),xmax=Math.max(...x),ymin=Math.min(...y),ymax=Math.max(...y);
+  const scale=Math.min(288/(xmax-xmin),198/(ymax-ymin));
+  const project=point=>[160+(point.x-(xmin+xmax)/2)*scale,115-(point.y-(ymin+ymax)/2)*scale];
+  const line=route=>route.map((point,i)=>`${i?'L':'M'}${project(point).map(value=>value.toFixed(2)).join(',')}`).join('');
+  function svgElement(tag,attributes){
+   const node=document.createElementNS('http://www.w3.org/2000/svg',tag);
+   for(const [key,value] of Object.entries(attributes))node.setAttribute(key,value);
+   map.appendChild(node);
+   return node;
+  }
+  svgElement('path',{class:'bbDemoRouteTrace',d:line(points)});
+  for(const {kind,points:segment} of sections){
+   if(kind!=='neutral')svgElement('path',{class:kind==='accel'?'bbDemoAccel':'bbDemoBrake',d:line(segment)});
+  }
+  const cursor=svgElement('circle',{class:'bbDemoRouteCursor',r:6});
+  jump.onchange=()=>{
+   const time=events[jump.value];
+   if(time===undefined)return;
+   seek.value=String(time);
+   seek.dispatchEvent(new Event('input'));
+  };
+  window.renderDemoRoute=(id,time)=>{
+   const show=id===sessionId;
+   if(section.hidden===show){
+    section.hidden=!show;
+    requestAnimationFrame(resizeReplay);
+   }
+   if(!show)return;
+   if(jump.value && events[jump.value]!==time)jump.value='';
+   const i=Math.min(Math.floor(time/40),points.length-2),a=points[i],b=points[i+1];
+   const f=Math.max(0,Math.min(1,(time-a.t)/(b.t-a.t)));
+   const position=project({x:a.x+(b.x-a.x)*f,y:a.y+(b.y-a.y)*f});
+   cursor.setAttribute('cx',position[0]);
+   cursor.setAttribute('cy',position[1]);
+  };
+ }
  function recordingSnapshot(uptime=0,boot=demoBoot){
   return {version:1,simulated:true,boot_id:boot,captured_uptime_ms:Math.max(0,Math.floor(uptime)),build:{app_version:'SIM demo',idf_version:null,source_sha:null,target:'esp32c3'},gps:{configured_model:'SIMULATED',configured_rate_hz:25,configured_uart_baud:115200,configuration_verified:false},imu:{model:'WT901',transport:'uart',configured_uart_baud:null,baud_selection:'pending',configured_output_rate_hz:null},calibration:{accelerometer_bias_mps2:null,mount_alignment:null}};
  }
@@ -141,7 +205,7 @@
    durations.slice(0,3).forEach((lapTimeMs,i)=>{at+=Math.round(lapTimeMs);tx.objectStore('lap_history').put({id:'demo-history-v6-'+i,trackId:track.id,sessionId:'demo-history-v6',sessionStart:Date.UTC(2026,0,1,12),timestamp:at,lapTimeMs:Math.round(lapTimeMs),lapNumber:i+1})});
   });
   document.getElementById('demo-note').textContent='Synthetic circuit, rolling and standing-start examples. Saved GPS evidence includes deliberate gaps. No measured driving data.';
-  return {circuitId,rollingId,launchId};
+  return {circuitId,rollingId,launchId,circuit};
  }
  window.fetch=(input,options={})=>{
   const url=new URL(String(input),location.href),elapsed=performance.now()-start,c=clock(elapsed);
@@ -214,6 +278,7 @@
    }
    demoTrack=track;if(!drivePreview){await activateTrack(track);armedCycle=clock(performance.now()-start).cycle-1;}
    const examples=await populateExamples(track);
+   if(examples)mountDemoRoute(examples.circuitId,examples.circuit);
    if(new URL(location.href).searchParams.get('view')==='replay'&&examples&&typeof openRecordingReplay==='function')await openRecordingReplay(examples.circuitId);
    if(drivePreview){const databaseForDrive=await openDB();await loadLatestDrive(databaseForDrive,await idbPromise(databaseForDrive.transaction('sessions','readonly').objectStore('sessions').getAll()));renderDrive()}
   }catch(error){document.getElementById('demo-note').textContent='Simulated data. Browser storage unavailable; recording and saved tracks require storage access.';console.error(error)}

@@ -1,7 +1,7 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs');
 const {indexedDB}=require('fake-indexeddb');
 const html=fs.readFileSync('sensors/blackbox/web/dashboard.html','utf8');
-function fixture(){const events=new Map(),elements=new Map();const c={console:{...console,error(){}},Response,URL,btoa,DataView,Uint8Array,performance:{now:()=>0},window:{},document:{addEventListener(name,fn){events.set(name,fn)},getElementById(id){if(!elements.has(id))elements.set(id,{});return elements.get(id)}},location:{href:'https://example.test/demo.html'}};c.events=events;c.elements=elements;vm.createContext(c);vm.runInContext(html.slice(html.indexOf('// Drive session core.'),html.indexOf('// End Drive session core.')),c);vm.runInContext(fs.readFileSync('docs/demo.js','utf8').replace(' window.fetch=',' window.examplesForTest=exampleRows;window.seedForTest=seedExampleRecording;window.populateForTest=populateExamples; window.fetch='),c);vm.runInContext(html.slice(html.indexOf('class RollingRuns{'),html.indexOf('const rollingRuns='))+';this.Runs=RollingRuns;',c);return c}
+function fixture(){const events=new Map(),elements=new Map();const c={console:{...console,error(){}},Response,URL,btoa,DataView,Uint8Array,performance:{now:()=>0},window:{},document:{addEventListener(name,fn){events.set(name,fn)},getElementById(id){if(!elements.has(id))elements.set(id,{});return elements.get(id)}},location:{href:'https://example.test/demo.html'}};c.events=events;c.elements=elements;vm.createContext(c);vm.runInContext(html.slice(html.indexOf('// Drive session core.'),html.indexOf('// End Drive session core.')),c);vm.runInContext(fs.readFileSync('docs/demo.js','utf8').replace(' window.fetch=',' window.examplesForTest=exampleRows;window.routeForTest=demoRouteData;window.seedForTest=seedExampleRecording;window.populateForTest=populateExamples; window.fetch='),c);vm.runInContext(html.slice(html.indexOf('class RollingRuns{'),html.indexOf('const rollingRuns='))+';this.Runs=RollingRuns;',c);return c}
 test('demo examples populate both cornering signs and produce auditable accepted/rejected runs',()=>{
  const c=fixture(),circuit=c.window.examplesForTest('circuit'),rolling=c.window.examplesForTest('rolling');
  for(const rows of [circuit,rolling])for(const row of rows){assert.equal(row.gpsSynthetic,1);for(const value of Object.values(row))assert.ok(Number.isFinite(value))}
@@ -10,6 +10,26 @@ test('demo examples populate both cornering signs and produce auditable accepted
  const detector=new c.Runs();for(const row of rolling)detector.update(row);const accepted=detector.results.filter(r=>r.status==='accepted'),rejected=detector.results.filter(r=>r.status==='rejected');assert.equal(accepted.length,2);assert.equal(rejected.length,1);assert.equal(rejected[0].reason,'GPS gap or clock boundary');for(const r of accepted)assert.ok(Math.abs(r.seconds-5.588)<1e-8);assert.equal(rolling.reduce((sum,r)=>sum+(r.gpsMissing||0),0),6);
 });
 let serial=0;
+test('the SIM circuit map uses the recording clock and separates sustained acceleration from braking',()=>{
+ const c=fixture(),rows=c.window.examplesForTest('circuit');
+ const {points,sections,events}=c.window.routeForTest(rows);
+ const samples=rows.filter(row=>row.rowType!==1);
+ assert.equal(points.length,samples.length);
+ assert.ok(points.every((point,i)=>point.t===samples[i].deviceTimeMs&&point.x===samples[i].ekfX&&point.y===samples[i].ekfY));
+ assert.equal(sections.reduce((edges,section)=>edges+section.points.length-1,0),points.length-1);
+ for(const {kind,points:segment} of sections){
+  for(let i=1;i<segment.length;i++){
+   const force=(segment[i-1].lon+segment[i].lon)/2;
+   assert.equal(kind,force>=.10?'accel':force<=-.10?'brake':'neutral');
+  }
+ }
+ for(const [name,measure] of [['bend',point=>Math.abs(point.lat)],['brake',point=>-point.lon],['accel',point=>point.lon]]){
+  const peak=points.find(point=>point.t===events[name]);
+  assert(measure(peak)>.1);
+  assert(points.every(point=>measure(point)<=measure(peak)));
+ }
+});
+
 function database(){return new Promise((res,rej)=>{const r=indexedDB.open('demo-fixtures-'+(++serial));r.onerror=()=>rej(r.error);r.onsuccess=()=>res(r.result);r.onupgradeneeded=()=>{r.result.createObjectStore('sessions',{keyPath:'sessionId'});r.result.createObjectStore('chunks',{keyPath:['sessionId','chunkIndex']})}})}
 function all(db,name){return new Promise((res,rej)=>{const r=db.transaction(name).objectStore(name).getAll();r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
 test('example recording seeding is atomic, repeatable and never replaces an existing session',async()=>{

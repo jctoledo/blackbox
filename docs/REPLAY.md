@@ -12,6 +12,8 @@ Playback never starts circuit timing, changes tracks, records replayed samples, 
 
 The homepage's Play a saved drive button opens that same viewer. Record a session in the demo to create another synthetic recording, then stop and replay it. On a real Blackbox, the ordinary recording flow instead stores the actual received telemetry. No recordings are uploaded by playback.
 
+The SIM circuit shows a route alongside the existing G-meter. Green and dashed amber segments mark acceleration and braking when the smoothed longitudinal estimate reaches ±0.10 g. Use **Jump to** to find the strongest bend, acceleration or braking in the synthetic drive.
+
 ## Evidence and missing data
 
 Replay reads committed dashboard samples in chunk order; receiver-only GPS rows remain available through GPS CSV. Pending unsaved data is excluded. Device timestamps determine playback spacing when continuous; a restart or incompatible clock falls back to a positive browser-receipt interval and breaks force continuity. The force display reconstructs the 70 ms smoothing filter, resetting at gaps rather than blending across missing evidence.
