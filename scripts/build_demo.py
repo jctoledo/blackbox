@@ -5,19 +5,28 @@ import hashlib
 ROOT = Path(__file__).resolve().parents[1]
 
 REPLAY_ROUTE = """
-  <section class="bbDemoRoute" id="demo-replay-route" hidden aria-label="Simulated circuit route">
-   <svg id="demo-route-map" viewBox="0 0 320 230" role="img" aria-label="Simulated circuit with acceleration and braking sections"></svg>
+  <section class="bbDemoRoute" id="demo-replay-route" hidden aria-label="Simulated winding route">
+   <div class="bbDemoRouteStage">
+    <svg id="demo-route-map" viewBox="0 0 320 230" role="img" aria-label="Simulated winding road with acceleration and braking sections"></svg>
+    <svg class="bbDemoRouteInset" id="demo-route-inset" hidden role="img" aria-label="Close-up of the car on the route">
+     <use href="#demo-route-geometry"></use><circle class="bbDemoRouteCursor" r="4"></circle>
+    </svg>
+   </div>
    <div class="bbDemoRouteKey"><span class="bbDemoAccel">Acceleration</span><span class="bbDemoBrake">Braking</span><span>±0.10 g</span></div>
-   <label>Jump to<select id="demo-route-event">
-    <option value="">Choose a moment</option>
-    <option value="bend">Strongest bend</option>
-    <option value="brake">Hardest braking</option>
-    <option value="accel">Strongest acceleration</option>
-   </select></label>
+   <div class="bbDemoRouteActions">
+    <select id="demo-route-event" aria-label="Jump to a moment on the route">
+     <option value="">Jump to a moment</option>
+     <option value="bend">Strongest bend</option>
+     <option value="brake">Hardest braking</option>
+     <option value="accel">Strongest acceleration</option>
+    </select>
+    <button id="demo-route-zoom" type="button" aria-controls="demo-route-inset" aria-expanded="false">Close-up</button>
+   </div>
   </section>"""
 
 
 def replace_once(page, anchor, replacement):
+    """Replace a unique dashboard anchor or fail the demo build."""
     if page.count(anchor) != 1:
         raise ValueError(f'Demo integration anchor missing or ambiguous: {anchor}')
     return page.replace(anchor, replacement, 1)
@@ -31,7 +40,7 @@ def main():
     for brand in ('BLACKBOX', 'Diagnostics'):
         page = page.replace(f'<span class="bbBrand">{brand}', f'<span class="bbBrand">{brand} <small style="font-size:9px">SIM</small>')
     revision = hashlib.sha256((ROOT/'docs/demo.js').read_bytes()).hexdigest()[:12]
-    route_revision = hashlib.sha256((ROOT/'docs/demo-route.css').read_bytes()).hexdigest()[:12]
+    route_revision = hashlib.sha256((ROOT / 'docs/demo-route.css').read_bytes()).hexdigest()[:12]
     route_body = '<div class="bbReplayBody">'
     page = replace_once(page, route_body, route_body + REPLAY_ROUTE)
     update_meter = "    drawForceMap($('replay-canvas'),frame.trail,Number($('replay-scale').value),frame.time);"

@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- The website's SIM circuit replay colors acceleration and braking on the route and links to the strongest moments in the existing G-meter.
+- The website's synthetic winding drive adds acceleration and braking zones, a close-up of the car, and jumps to key maneuvers in the existing G-meter.
 - Homepage introduces the real-drive replay beside the main calls to action and before dashboard screenshots, with plain-language playback guidance and a no-hardware FAQ link.
 - Public real-drive replay with synchronized lap positions, playback, lap selection and GPS speed traces from an rc.17 M9N recording. Published geometry uses relative metres; raw location exports stay private. This is an export analysis, not a dashboard feature or an independent timing-accuracy test.
 

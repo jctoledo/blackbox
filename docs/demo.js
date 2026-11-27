@@ -80,17 +80,76 @@
   return {east:cycle*880+distance,north:0,speed,yaw:Math.PI/2,vx:speed,vy:0,lonAccel:accel,latAccel:0,yawRate:0};
  }
  function sampleMotion(elapsed){const c=clock(elapsed);return intervalStart===null?motion(c.index,c.lapMs):standingScenario?launchMotion(Math.max(0,elapsed-intervalStart-4000)):intervalMotion(elapsed-intervalStart)}
+ // An authored, open road in local metres, independent of any recording.
+ function windingRoad(){
+  const knots=[[0,0],[100,4],[182,48],[217,121],[208,208],[258,251],[335,236],
+   [402,177],[477,158],[555,183],[607,245],[595,319],[637,378],[720,389],
+   [795,353],[880,338],[963,367],[1028,426]];
+  const points=[];
+  for(let i=0;i<knots.length-1;i++){
+   const a=knots[Math.max(0,i-1)],b=knots[i],c=knots[i+1],d=knots[Math.min(knots.length-1,i+2)];
+   for(let j=0;j<24;j++){
+    const u=j/24;
+    const spline=k=>b[k]+.5*u*(c[k]-a[k]+u*(2*a[k]-5*b[k]+4*c[k]-d[k]+u*(-a[k]+3*b[k]-3*c[k]+d[k])));
+    points.push({x:spline(0),y:spline(1)});
+   }
+  }
+  points.push({x:knots.at(-1)[0],y:knots.at(-1)[1]});
+  for(let i=0;i<points.length;i++){
+   const p=points[i],a=points[Math.max(0,i-1)],b=points[Math.min(points.length-1,i+1)];
+   const x0=p.x-a.x,y0=p.y-a.y,x1=b.x-p.x,y1=b.y-p.y;
+   const denom=Math.hypot(x0,y0)*Math.hypot(x1,y1)*Math.hypot(b.x-a.x,b.y-a.y);
+   p.curvature=denom?2*(x0*y1-y0*x1)/denom:0;
+   p.speed=Math.min(19,Math.sqrt(4.2/Math.max(.0001,Math.abs(p.curvature))));
+   p.step=Math.hypot(x0,y0);
+  }
+  points[0].speed=8;
+  points.at(-1).speed=9;
+  // Brake before tighter bends, then limit acceleration away from them.
+  for(let i=points.length-2;i>=0;i--){
+   const a=points[i],b=points[i+1];
+   a.speed=Math.min(a.speed,Math.sqrt(b.speed**2+2*3.2*b.step));
+  }
+  for(let i=1;i<points.length;i++){
+   const a=points[i-1],b=points[i];
+   b.speed=Math.min(b.speed,Math.sqrt(a.speed**2+2*2.1*b.step));
+  }
+  points[0].time=0;
+  for(let i=1;i<points.length;i++){
+   const a=points[i-1],b=points[i];
+   b.time=a.time+2000*b.step/(a.speed+b.speed);
+  }
+  return points;
+ }
+ const winding=windingRoad();
+ function windingMotion(ms){
+  let lo=0,hi=winding.length-1;
+  while(hi-lo>1){
+   const mid=(lo+hi)>>1;
+   if(winding[mid].time<=ms)lo=mid;else hi=mid;
+  }
+  const a=winding[lo],b=winding[hi],dt=(b.time-a.time)/1000,elapsed=(ms-a.time)/1000;
+  const lonAccel=(b.speed-a.speed)/dt, speed=a.speed+lonAccel*elapsed;
+  const fraction=(a.speed*elapsed+.5*lonAccel*elapsed**2)/b.step;
+  const curvature=a.curvature+(b.curvature-a.curvature)*fraction;
+  const yaw=Math.atan2(b.x-a.x,b.y-a.y),yawRate=-speed*curvature;
+  return {east:a.x+(b.x-a.x)*fraction,north:a.y+(b.y-a.y)*fraction,speed,lonAccel,
+   latAccel:speed*yawRate,yawRate,yaw};
+ }
  // Example recordings use the same motion model and receiver-time evidence as the live demo.
+ const EXAMPLE_SAMPLE_MS=40;
  function exampleRows(kind){
-  const rows=[],base=Date.UTC(2026,0,1,12),duration=kind==='circuit'?Math.floor(durations[0]/40)*40:kind==='launch'?144000:84000;
+  const rows=[],base=Date.UTC(2026,0,1,12);
+  const duration=kind==='circuit'?durations[0]:kind==='winding'?winding.at(-1).time:kind==='launch'?144000:84000;
+  const boot={circuit:101,rolling:102,launch:103,winding:104}[kind];
   let priorSeq=0;
-  for(let ms=0;ms<=duration;ms+=40){
-   const p=kind==='circuit'?motion(0,ms):kind==='launch'?launchMotion(ms):intervalMotion(ms),seq=ms/40+1;
+  for(let ms=0;ms<=duration;ms+=EXAMPLE_SAMPLE_MS){
+   const p=kind==='circuit'?motion(0,ms):kind==='winding'?windingMotion(ms):kind==='launch'?launchMotion(ms):intervalMotion(ms),seq=ms/EXAMPLE_SAMPLE_MS+1;
    // One deliberate receiver-log gap in the middle interval exercises rejection/export.
    const missing=kind==='rolling'&&ms>=35000&&ms<35240||kind==='launch'&&ms>=58000&&ms<58240;
    const lat=origin.lat+p.north/111320,lon=origin.lon+p.east/(111320*Math.cos(origin.lat*Math.PI/180));
-   rows.push({t:base+ms,deviceTimeMs:ms,gpsBootId:kind==='circuit'?101:kind==='launch'?103:102,sp:p.speed*3.6,ax:-p.lonAccel,ay:p.latAccel,wz:p.yawRate,latg:p.latAccel/9.81,lng:p.lonAccel/9.81,lat,lon,gpsOk:1,gpsAgeMs:0,imuAgeMs:0,gpsSynthetic:1,ekfX:p.east,ekfY:p.north,ekfYaw:p.yaw,gpsCourse:(p.yaw+tau)%tau});
-   if(!missing){rows.push({t:base+ms,rowType:1,gpsSynthetic:1,gpsBootId:kind==='circuit'?101:kind==='launch'?103:102,gpsSeq:seq,gpsHostUs:ms*1000,gpsUtcUs:43200000000+ms*1000,gpsDate:10126,gpsFractionDigits:2,gpsActive:1,gpsAccepted:1,lat,lon,sp:p.speed,gpsCourse:(p.yaw+tau)%tau,gpsMissing:priorSeq?seq-priorSeq-1:0,gpsBoundary:priorSeq?0:1});priorSeq=seq}
+   rows.push({t:base+ms,deviceTimeMs:ms,gpsBootId:boot,sp:p.speed*3.6,ax:-p.lonAccel,ay:p.latAccel,wz:p.yawRate,latg:p.latAccel/9.81,lng:p.lonAccel/9.81,lat,lon,gpsOk:1,gpsAgeMs:0,imuAgeMs:0,gpsSynthetic:1,ekfX:p.east,ekfY:p.north,ekfYaw:p.yaw,gpsCourse:(p.yaw+tau)%tau});
+   if(!missing){rows.push({t:base+ms,rowType:1,gpsSynthetic:1,gpsBootId:boot,gpsSeq:seq,gpsHostUs:ms*1000,gpsUtcUs:43200000000+ms*1000,gpsDate:10126,gpsFractionDigits:2,gpsActive:1,gpsAccepted:1,lat,lon,sp:p.speed,gpsCourse:(p.yaw+tau)%tau,gpsMissing:priorSeq?seq-priorSeq-1:0,gpsBoundary:priorSeq?0:1});priorSeq=seq}
   }
   return rows;
  }
@@ -100,25 +159,31 @@
    // This fixture is sampled every 40 ms. Classify half-second trends,
    // keeping the dashboard replay’s force display on its own existing filter.
    const neighbours=samples.slice(Math.max(0,i-6),i+7);
-   const lon=neighbours.reduce((sum,entry)=>sum+entry.lng,0)/neighbours.length;
-   const lat=neighbours.reduce((sum,entry)=>sum+entry.latg,0)/neighbours.length;
-   return {x:row.ekfX,y:row.ekfY,t:row.deviceTimeMs,lon,lat};
+   const longitudinalG=neighbours.reduce((sum,entry)=>sum+entry.lng,0)/neighbours.length;
+   const lateralG=neighbours.reduce((sum,entry)=>sum+entry.latg,0)/neighbours.length;
+   return {x:row.ekfX,y:row.ekfY,timeMs:row.deviceTimeMs,longitudinalG,lateralG};
   });
   const sections=[];
   for(let i=1;i<points.length;i++){
-   const a=points[i-1],b=points[i],lon=(a.lon+b.lon)/2;
-   const kind=lon>=.10?'accel':lon<=-.10?'brake':'neutral';
+   const a=points[i-1],b=points[i],force=(a.longitudinalG+b.longitudinalG)/2;
+   const kind=force>=.10?'accel':force<=-.10?'brake':'neutral';
    if(sections.at(-1)?.kind!==kind)sections.push({kind,points:[a]});
    sections.at(-1).points.push(b);
   }
   const strongest=measure=>points.reduce((best,point)=>measure(point)>measure(best)?point:best);
-  const events={bend:strongest(row=>Math.abs(row.lat)).t,brake:strongest(row=>-row.lon).t,accel:strongest(row=>row.lon).t};
+  const events={
+   bend:strongest(row=>Math.abs(row.lateralG)).timeMs,
+   brake:strongest(row=>-row.longitudinalG).timeMs,
+   accel:strongest(row=>row.longitudinalG).timeMs,
+  };
   return {points,sections,events};
  }
  function mountDemoRoute(sessionId,rows){
   const section=document.getElementById('demo-replay-route');
   const map=document.getElementById('demo-route-map');
   const jump=document.getElementById('demo-route-event');
+  const inset=document.getElementById('demo-route-inset');
+  const zoom=document.getElementById('demo-route-zoom');
   const seek=document.getElementById('replay-seek');
   const {points,sections,events}=demoRouteData(rows);
   const x=points.map(row=>row.x),y=points.map(row=>row.y);
@@ -126,17 +191,24 @@
   const scale=Math.min(288/(xmax-xmin),198/(ymax-ymin));
   const project=point=>[160+(point.x-(xmin+xmax)/2)*scale,115-(point.y-(ymin+ymax)/2)*scale];
   const line=route=>route.map((point,i)=>`${i?'L':'M'}${project(point).map(value=>value.toFixed(2)).join(',')}`).join('');
-  function svgElement(tag,attributes){
+  function svgElement(tag,attributes,parent=map){
    const node=document.createElementNS('http://www.w3.org/2000/svg',tag);
    for(const [key,value] of Object.entries(attributes))node.setAttribute(key,value);
-   map.appendChild(node);
+   parent.appendChild(node);
    return node;
   }
-  svgElement('path',{class:'bbDemoRouteTrace',d:line(points)});
+  const geometry=svgElement('g',{id:'demo-route-geometry'});
+  svgElement('path',{class:'bbDemoRouteTrace',d:line(points)},geometry);
   for(const {kind,points:segment} of sections){
-   if(kind!=='neutral')svgElement('path',{class:kind==='accel'?'bbDemoAccel':'bbDemoBrake',d:line(segment)});
+   if(kind!=='neutral')svgElement('path',{class:kind==='accel'?'bbDemoAccel':'bbDemoBrake',d:line(segment)},geometry);
   }
-  const cursor=svgElement('circle',{class:'bbDemoRouteCursor',r:6});
+  const cursor=svgElement('circle',{class:'bbDemoRouteCursor',r:10});
+  const detailCursor=inset.querySelector('circle');
+  zoom.onclick=()=>{
+   const show=inset.hasAttribute('hidden');
+   inset.toggleAttribute('hidden',!show);
+   zoom.setAttribute('aria-expanded',String(show));
+  };
   jump.onchange=()=>{
    const time=events[jump.value];
    if(time===undefined)return;
@@ -151,11 +223,14 @@
    }
    if(!show)return;
    if(jump.value && events[jump.value]!==time)jump.value='';
-   const i=Math.min(Math.floor(time/40),points.length-2),a=points[i],b=points[i+1];
-   const f=Math.max(0,Math.min(1,(time-a.t)/(b.t-a.t)));
+   const i=Math.min(Math.floor(time/EXAMPLE_SAMPLE_MS),points.length-2),a=points[i],b=points[i+1];
+   const f=Math.max(0,Math.min(1,(time-a.timeMs)/(b.timeMs-a.timeMs)));
    const position=project({x:a.x+(b.x-a.x)*f,y:a.y+(b.y-a.y)*f});
    cursor.setAttribute('cx',position[0]);
    cursor.setAttribute('cy',position[1]);
+   detailCursor.setAttribute('cx',position[0]);
+   detailCursor.setAttribute('cy',position[1]);
+   inset.setAttribute('viewBox',`${position[0]-49} ${position[1]-36.75} 98 73.5`);
   };
  }
  function recordingSnapshot(uptime=0,boot=demoBoot){
@@ -190,11 +265,12 @@
  }
  async function populateExamples(track){
   if(typeof openDB!=='function')return;
-  const database=await openDB(),circuit=exampleRows('circuit'),rolling=exampleRows('rolling'),launch=exampleRows('launch');
+  const database=await openDB(),circuit=exampleRows('circuit'),rolling=exampleRows('rolling'),launch=exampleRows('launch'),road=exampleRows('winding');
   // New evidence-complete fixture IDs add examples without rewriting old/user rows.
   const circuitId=await seedExampleRecording(database,'SIM · Circuit drive',circuit,'circuit-v7');
   const rollingId=await seedExampleRecording(database,'SIM · Rolling drive + GPS gap',rolling,'rolling-v8');
   const launchId=await seedExampleRecording(database,'SIM · Standing starts + GPS gap',launch,'launch-v1');
+  const windingId=await seedExampleRecording(database,'SIM · Winding drive',road,'winding-v1');
   updatePerformanceRuns(rolling);
   updatePerformanceRuns(launch);
   // Warm the page-session force summary from the simulated lead-in, not invented peaks.
@@ -204,8 +280,8 @@
    let at=Date.UTC(2026,0,1,12);
    durations.slice(0,3).forEach((lapTimeMs,i)=>{at+=Math.round(lapTimeMs);tx.objectStore('lap_history').put({id:'demo-history-v6-'+i,trackId:track.id,sessionId:'demo-history-v6',sessionStart:Date.UTC(2026,0,1,12),timestamp:at,lapTimeMs:Math.round(lapTimeMs),lapNumber:i+1})});
   });
-  document.getElementById('demo-note').textContent='Synthetic circuit, rolling and standing-start examples. Saved GPS evidence includes deliberate gaps. No measured driving data.';
-  return {circuitId,rollingId,launchId,circuit};
+  document.getElementById('demo-note').textContent='Synthetic winding road, circuit, rolling and standing-start examples. Saved GPS evidence includes deliberate gaps. No measured driving data.';
+  return {circuitId,rollingId,launchId,windingId,road};
  }
  window.fetch=(input,options={})=>{
   const url=new URL(String(input),location.href),elapsed=performance.now()-start,c=clock(elapsed);
@@ -278,8 +354,8 @@
    }
    demoTrack=track;if(!drivePreview){await activateTrack(track);armedCycle=clock(performance.now()-start).cycle-1;}
    const examples=await populateExamples(track);
-   if(examples)mountDemoRoute(examples.circuitId,examples.circuit);
-   if(new URL(location.href).searchParams.get('view')==='replay'&&examples&&typeof openRecordingReplay==='function')await openRecordingReplay(examples.circuitId);
+   if(examples)mountDemoRoute(examples.windingId,examples.road);
+   if(new URL(location.href).searchParams.get('view')==='replay'&&examples&&typeof openRecordingReplay==='function')await openRecordingReplay(examples.windingId);
    if(drivePreview){const databaseForDrive=await openDB();await loadLatestDrive(databaseForDrive,await idbPromise(databaseForDrive.transaction('sessions','readonly').objectStore('sessions').getAll()));renderDrive()}
   }catch(error){document.getElementById('demo-note').textContent='Simulated data. Browser storage unavailable; recording and saved tracks require storage access.';console.error(error)}
  });
